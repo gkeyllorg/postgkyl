@@ -94,7 +94,6 @@ import postgkyl.output.plot
 @click.option("-e", "--edgecolors", type=click.STRING,
     help="Set color for cell edges to show grid outline.")
 @click.option("--showgrid/--no-showgrid", default=True, help="Show grid-lines.")
-@click.option("--xkcd", is_flag=True, help="Turns on the xkcd style!")
 @click.option("--hashtag", is_flag=True, help="Turns on the pgkyl hashtag!")
 @click.option("--show/--no-show", default=True,
     help="Turn showing of the plot ON and OFF.")
