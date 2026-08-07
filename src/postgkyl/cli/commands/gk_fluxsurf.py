@@ -34,21 +34,22 @@ def command(ctx, mapc2p, nodes_file, x_idx, nphi, nz_interp, use, tag, label) ->
   toroidal angles (phi), creating a 2-D grid of phi vs z (where z maps
   along the poloidal/theta direction).
 
-  The geometry is found the same way as ``gk_rz``: from the prefix of the
-  first matching dataset's source file, preferring the pointwise
-  '<prefix>-geo_int_nodes.gkyl', falling back to the modal
-  '<prefix>-geo_int_mapc2p.gkyl'.
+  The geometry is found the same way as ``gk_rz``: from each dataset's own
+  source-file prefix, preferring the pointwise '<prefix>-geo_int_nodes.gkyl',
+  falling back to the modal '<prefix>-geo_int_mapc2p.gkyl'. Multiblock data
+  resolves one geometry per '<sim>_b<N>-' block; a '*' in an explicit
+  '-n'/'-m' path stands for the block index.
   """
   targets = [d for d in active_datasets(ctx) if use is None or d.tag == use]
   if not targets:
     return
   # end
 
-  geo = pg.diagnostics.gyrokinetics.rz.resolve_geometry(
-      targets[0].file_name, mapc2p=mapc2p, nodes_file=nodes_file)
-  fs_grid = pg.diagnostics.gyrokinetics.fluxsurf.resolve_flux_surface_grid(
-      targets[0], geo, x_idx=x_idx, nphi=nphi, nz_interp=max(1, nz_interp))
+  fluxsurf = pg.diagnostics.gyrokinetics.fluxsurf
+  grids = fluxsurf.flux_surface_grids(targets, mapc2p=mapc2p,
+      nodes_file=nodes_file, x_idx=x_idx, nphi=nphi,
+      nz_interp=max(1, nz_interp))
 
-  apply(ctx, lambda d: pg.diagnostics.gyrokinetics.fluxsurf.extract_flux_surface(
-      d, fs_grid, tag=tag, label=label), use=use)
+  apply(ctx, lambda d: fluxsurf.extract_flux_surface(
+      d, fluxsurf.grid_for(grids, d), tag=tag, label=label), use=use)
 # end

@@ -27,6 +27,13 @@ from postgkyl.numerics import nodal_to_cell_centered_grid
 _INTERNAL_CTX_KEYS = frozenset({
     "cells", "lower", "upper", "num_comps", "num_dims", "grid_type",
     "value_form", "num_quad", "interpolated", "var_names",
+    # The source file's parsed identity (see io.naming): derived from the
+    # *path*, never stored in the file. Writing it would be actively wrong --
+    # reloading the output under a different name would then find a stale
+    # sim/block in the header, and GDataState's setdefault lets header
+    # metadata win over the parsed name. "frame" is deliberately NOT here:
+    # Gkeyll itself writes that one.
+    "sim", "block", "quantity",
 })
 
 # ctx uses postgkyl's snake_case names; Gkeyll's own meta blob (and anything

@@ -37,12 +37,17 @@ def command(ctx, mapc2p, nodes_file, z_axis, phi_tor, nz_interp, use, tag,
   Assumes DG data (not yet interpolated) has been loaded onto the working
   set by a preceding command.
 
-  The geometry is found from the prefix of the first matching dataset's
-  source file: the pointwise '<prefix>-geo_int_nodes.gkyl' is preferred
-  (exact node coordinates, robust at coarse z resolution), falling back to
-  the modal '<prefix>-geo_int_mapc2p.gkyl'. Use '-n path' to point at a
-  specific nodes file, '-m path' at a specific mapc2p file, or "-m ''" to
-  force the default mapc2p lookup.
+  The geometry is found from each dataset's own source-file prefix: the
+  pointwise '<prefix>-geo_int_nodes.gkyl' is preferred (exact node
+  coordinates, robust at coarse z resolution), falling back to the modal
+  '<prefix>-geo_int_mapc2p.gkyl'. Use '-n path' to point at a specific nodes
+  file, '-m path' at a specific mapc2p file, or "-m ''" to force the default
+  mapc2p lookup.
+
+  Multiblock data is handled per block: '<sim>_b<N>-...' files each resolve
+  their own '<sim>_b<N>-geo_int_nodes.gkyl', so every block lands at its own
+  place on the R-Z plane. In an explicit '-n'/'-m' path a '*' stands for the
+  block index. A following 'plot' draws all the blocks on one figure.
 
   For 3-D (field-aligned) data the field is reconstructed on the poloidal
   plane at toroidal angle --phi-tor (default 0) by interpolating along the
@@ -53,11 +58,13 @@ def command(ctx, mapc2p, nodes_file, z_axis, phi_tor, nz_interp, use, tag,
     return
   # end
 
-  geo = pg.diagnostics.gyrokinetics.rz.resolve_geometry(
-      targets[0].file_name, mapc2p=mapc2p, nodes_file=nodes_file)
-  projection = pg.diagnostics.gyrokinetics.rz.resolve_rz_projection(
-      targets[0], geo, z_axis=z_axis, nz_interp=max(1, nz_interp))
+  rz = pg.diagnostics.gyrokinetics.rz
+  # One projection per *block* (keyed by geometry prefix), not one for the
+  # whole working set: each block of a multiblock run has its own geometry
+  # file. Single-block input resolves exactly once, as before.
+  projections = rz.rz_projections(targets, mapc2p=mapc2p,
+      nodes_file=nodes_file, z_axis=z_axis, nz_interp=max(1, nz_interp))
 
-  apply(ctx, lambda d: pg.diagnostics.gyrokinetics.rz.map_to_rz(
-      d, projection, phi_tor=phi_tor, tag=tag, label=label), use=use)
+  apply(ctx, lambda d: rz.map_to_rz(d, rz.projection_for(projections, d),
+      phi_tor=phi_tor, tag=tag, label=label), use=use)
 # end

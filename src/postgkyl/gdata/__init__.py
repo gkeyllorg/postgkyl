@@ -5,7 +5,7 @@ and the module-level multi-dataset verbs (``collect``/``evaluate``/``relchange``
 from .gdata import GData
 from .load import load
 from .gdatagroup import GDataGroup
-from .verbs import animate, collect, evaluate, plotly_animate, relchange, sort
+from .verbs import animate, collect, evaluate, plot, plotly_animate, relchange, sort
 
 __all__ = ["GData", "load", "GDataGroup", "collect", "evaluate", "relchange",
-    "animate", "plotly_animate", "sort"]
+    "plot", "animate", "plotly_animate", "sort"]

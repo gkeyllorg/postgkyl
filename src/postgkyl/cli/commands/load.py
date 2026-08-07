@@ -70,10 +70,13 @@ def command(ctx, z0, z1, z2, z3, z4, z5, component, tag, label, basis,
       else basis_value_form if basis_value_form is not None
       else ds.value_form)
   for pattern in patterns:
-    for fn in sorted(glob(pattern)):
-      ds.datasets.append(pg.load(fn, tag=tag, label=label, value_form=vform,
-          basis_type=basis_type, poly_order=poly_order, axes=axes,
-          comp=component))
-# end
-    # end
+    loaded = [pg.load(fn, tag=tag, label=label, value_form=vform,
+        basis_type=basis_type, poly_order=poly_order, axes=axes,
+        comp=component) for fn in glob(pattern)]
+    # Natural (numeric-aware) order, via the same one-home sort the ``sort``
+    # verb uses: a plain lexicographic sort would order a glob's matches
+    # '..._b0, _b1, _b10, _b2' and frames '_1, _10, _2', so blocks and frames
+    # would enter the working set out of order.
+    ds.datasets.extend(pg.sort(*loaded))
   # end
+# end

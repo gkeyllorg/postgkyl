@@ -333,9 +333,20 @@ class TestGDataGroup:
 
   def test_broadcast_terminal_verb_returns_a_plain_list(self):
     g = ApiGDataGroup(self._frames())
-    figs = g.plot(show=False)
-    assert isinstance(figs, list)
-    assert len(figs) == 3
+    inputs = g.extract_input()
+    assert isinstance(inputs, list)
+    assert len(inputs) == 3
+  # end
+
+  def test_plot_is_not_broadcast_but_one_shared_figure(self):
+    # A group is a set of datasets that belong together -- above all a
+    # multiblock family -- so .plot() is ONE figure with every member drawn
+    # onto it, not one figure per member.
+    import matplotlib.figure
+
+    g = ApiGDataGroup(self._frames())
+    fig = g.plot(show=False)
+    assert isinstance(fig, matplotlib.figure.Figure)
   # end
 
   def test_broadcast_write_returns_a_list_of_paths(self, tmp_path):

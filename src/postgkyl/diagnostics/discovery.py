@@ -16,13 +16,16 @@ from __future__ import annotations
 
 import glob
 import os
-import re
+
+from postgkyl import io
 
 
 def find_output_stems(extensions: str = "gkyl", path: str = ".") -> dict:
   """Map each extension to the sorted unique Gkeyll filename stems in ``path``.
 
-  Frame indices and a trailing ``_restart`` are stripped from each stem.
+  Frame indices and a trailing ``_restart`` are stripped from each stem by
+  :func:`postgkyl.io.parse_output_name` -- the one home for Gkeyll's naming
+  convention -- rather than by a private regex here.
 
   Args:
     extensions: Comma-separated list of file extensions to scan.
@@ -35,11 +38,7 @@ def find_output_stems(extensions: str = "gkyl", path: str = ".") -> dict:
   for ext in extensions.split(","):
     unique = []
     for fn in glob.glob(f"{path}/*.{ext:s}"):
-      stem = os.path.basename(fn)[: -(len(ext) + 1)]
-      if stem.endswith("_restart"):
-        stem = stem[:-8]
-      # end
-      stem = re.sub(r"_\d+$", "", stem)
+      stem = io.parse_output_name(os.path.basename(fn)).stem
       if stem not in unique:
         unique.append(stem)
       # end

@@ -52,6 +52,7 @@ class GDataState:
       self._grid, self._values = io.read(self._file_name, self.ctx,
           value_form=value_form, basis_type=basis_type,
           poly_order=poly_order, **read_kwargs)
+      self._stamp_output_name()
       # A dynvector/diagnostic file (no "cells" in ctx: no reader ever stamps
       # one without a spatial grid, e.g. a dynvector time series) has no DG
       # basis to speak of -- basis_type/poly_order/value_form genuinely don't
@@ -83,6 +84,37 @@ class GDataState:
       # end
   # end
     # end
+
+  # -------------------------------------------------------------- identity
+  def _stamp_output_name(self) -> None:
+    """Record the file's Gkeyll *identity* (sim, block, quantity, frame) in
+    ``ctx``, parsed once from its path by :mod:`postgkyl.io.naming`.
+
+    Header metadata wins: ``setdefault`` never overwrites a ``frame`` (or
+    anything else) a reader already read out of the file itself. Because
+    ``clone`` copies ``ctx``, the identity survives every verb, so a
+    multiblock family is still recognizable after ``interpolate``/``gk_rz``
+    -- which is what lets terminal verbs draw one field's blocks together
+    (see ``gdatastate.collection.group_blocks``).
+    """
+    name = io.parse_output_name(self._file_name)
+    if name is None:
+      return
+    # end
+    self.ctx.setdefault("sim", name.sim)
+    self.ctx.setdefault("block", name.block)
+    self.ctx.setdefault("quantity", name.quantity)
+    if name.frame is not None:
+      self.ctx.setdefault("frame", name.frame)
+    # end
+  # end
+
+  @property
+  def output_name(self):
+    """This dataset's parsed source-file identity (:class:`postgkyl.io.OutputName`),
+    or ``None`` when it was never read from disk."""
+    return io.parse_output_name(self._file_name)
+  # end
 
   # ------------------------------------------------------------------ tags
   def get_tag(self) -> str:
@@ -355,6 +387,9 @@ class GDataState:
     if "frame" in self.ctx:
       out += f"├─ Frame: {self.ctx['frame']:d}\n"
     # end
+    if self.ctx.get("block") is not None:
+      out += f"├─ Block: {self.ctx['block']:d} (sim '{self.ctx.get('sim', '')}')\n"
+    # end
     out += f"├─ Number of components: {num_comps:d}\n"
     out += f"├─ Number of dimensions: {num_dims:d}\n"
     if lo is not None:
@@ -434,7 +469,8 @@ class GDataState:
   # is file/reader-native metadata (e.g. a .gkyl file's msgpack meta) that
   # still deserves to surface, so it falls through to the generic dump.
   _INFO_HANDLED_CTX_KEYS = frozenset({
-      "time", "frame", "lower", "upper", "cells", "grid_type",
+      "time", "frame", "sim", "block", "quantity",
+      "lower", "upper", "cells", "grid_type",
       "poly_order", "basis_type", "num_comps",
       "value_form", "num_quad", "interpolated",
       "changeset", "builddate", "geometry_type", "geqdsk_sign_convention",

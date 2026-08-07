@@ -763,25 +763,38 @@ class TestAnimateFrameGrouping:
     assert groups[1] == [d0, d2]
   # end
 
-  def test_infers_frame_from_diverging_filename(self):
-    # Gkeyll's multiblock naming convention is <name>_<frame>_b<N>.gkyl: the
-    # frame digit precedes the block digit. With only one frame present
-    # there's nothing to disambiguate frame from block (the block digit is
-    # the *only* thing that varies) -- so this needs at least two frames,
-    # matching how main's ``set_frame`` was actually meant to be used (a
-    # multiblock animation spans more than one frame).
+  def test_groups_blocks_of_each_frame_from_filenames(self):
+    # Gkeyll's real multiblock convention is '<sim>_b<N>-<quantity>_<frame>'
+    # (see the '<name>_b*-' prefix built by diagnostics.gyrokinetics.nodes,
+    # and a real file: rt_gk_multib_sheath_1x2v_p1_b2-geo_int_B3.gkyl).
+    # ctx["frame"] is stamped from that name at load time by io.naming, so
+    # _group_by_frame no longer has to recover it by diffing file names --
+    # each frame's blocks land in one group.
     from postgkyl.cli.commands.animate import _group_by_frame
 
-    names = ["sim_5_b0.gkyl", "sim_5_b1.gkyl", "sim_6_b0.gkyl", "sim_6_b1.gkyl"]
+    names = ["sim_b0-elc_M0_5.gkyl", "sim_b1-elc_M0_5.gkyl",
+             "sim_b0-elc_M0_6.gkyl", "sim_b1-elc_M0_6.gkyl"]
     datasets = [pg.load(DISTF_P2_0).interpolate() for _ in names]
     for d, name in zip(datasets, names):
       d._file_name = name
-      del d.ctx["frame"]
+      parsed = pg.io.parse_output_name(name)
+      d.ctx.update(sim=parsed.sim, block=parsed.block,
+          quantity=parsed.quantity, frame=parsed.frame)
     # end
     groups = _group_by_frame(datasets)
     assert len(groups) == 2
     assert groups[0] == datasets[0:2]
     assert groups[1] == datasets[2:4]
+  # end
+
+  def test_datasets_without_a_frame_stay_in_one_group(self):
+    from postgkyl.cli.commands.animate import _group_by_frame
+
+    d0, d1 = (pg.load(DISTF_P2_0).interpolate() for _ in range(2))
+    for d in (d0, d1):
+      d.ctx.pop("frame", None)
+    # end
+    assert _group_by_frame([d0, d1]) == [[d0, d1]]
   # end
 # end
 

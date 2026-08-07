@@ -10,6 +10,13 @@ FFT-based twist-and-shift binormal projection. Geometry resolution
 :mod:`~postgkyl.diagnostics.gyrokinetics.fluxsurf`, which extracts a
 theta-phi flux surface from the same field-aligned data instead of a
 poloidal cross section.
+
+Geometry is resolved **per block**: a multiblock run writes one
+``'<sim>_b<N>-geo_int_nodes.gkyl'`` per block, so :func:`rz_projections`
+builds one :class:`RzProjection` per block (keyed by
+:func:`geometry_prefix`) and :func:`projection_for` hands each dataset its
+own. Resolving once from the first dataset -- what this module used to do --
+silently drew every block at block 0's position.
 """
 
 from __future__ import annotations
@@ -20,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-from postgkyl import numerics
+from postgkyl import io, numerics
 from postgkyl.gdata import GData
 
 from . import nodes, utils
@@ -63,13 +70,17 @@ class RzProjection:
   phi0_zf: np.ndarray | None = None
 
 
-def _file_prefix(file_name: str | None) -> str | None:
-  """Simulation name prefix a dataset's source file belongs to (the part
-  before the last ``'-'``), used to default-locate its geometry files."""
-  if not file_name:
-    return None
-  # end
-  return os.path.splitext(file_name)[0].rsplit("-", 1)[0]
+def geometry_prefix(file_name: str | None) -> str | None:
+  """The prefix a dataset's geometry files share with its source file.
+
+  For single-block output this is the simulation name; for a multiblock run
+  it is ``'<sim>_b<N>'``, so **each block resolves its own geometry**. Both
+  come straight off :func:`postgkyl.io.parse_output_name` -- the one home for
+  Gkeyll's file-naming convention -- rather than a private ``rsplit('-', 1)``
+  here.
+  """
+  name = io.parse_output_name(file_name)
+  return name.prefix if name is not None else None
 # end
 
 
@@ -173,7 +184,7 @@ def resolve_geometry(file_name: str, *, mapc2p: str | None = None,
     raise ValueError("Pass either mapc2p= or nodes_file=, not both.")
   # end
 
-  prefix = _file_prefix(file_name)
+  prefix = geometry_prefix(file_name)
   if nodes_file is not None:
     path, kind = nodes_file, "nodes"
   elif mapc2p is not None:
@@ -326,6 +337,75 @@ def resolve_rz_projection(first: GData, geo: Geometry, *,
 
   return RzProjection(num_dims=3, r=r, z=z, zc=zc, zf=zf, box=box, wind=wind,
       phi0_zf=phi0_zf)
+# end
+
+
+def per_block_path(path: str | None, block: int | None) -> str | None:
+  """An explicit geometry-file option resolved for one block.
+
+  A ``'*'`` in the path stands for the block index, matching the convention
+  ``gk_nodes``/``diagnostics.gyrokinetics.nodes`` already use for multiblock
+  geometry lookups. Without a ``'*'`` (or without a block) the path is used
+  as given.
+  """
+  if path is None or block is None or "*" not in path:
+    return path
+  # end
+  return path.replace("*", str(block))
+# end
+
+
+def rz_projections(datasets, *, mapc2p: str | None = None,
+    nodes_file: str | None = None, z_axis: float = 0.0,
+    nz_interp: int = 8) -> dict:
+  """Resolve one R-Z projection **per block**, keyed by geometry prefix.
+
+  A multiblock simulation writes one geometry file per block
+  (``'<sim>_b<N>-geo_int_nodes.gkyl'``), so every block must be mapped with
+  its own geometry -- mapping all of them with the first dataset's geometry
+  silently draws every block at block 0's position. Datasets sharing a prefix
+  (the frames of one block) resolve once and reuse the result, so single-block
+  input still reads its geometry exactly once.
+
+  Args:
+    datasets: The (not yet interpolated) datasets about to be mapped.
+    mapc2p: Explicit modal mapc2p geometry file; ``''`` requests the default
+      lookup. A ``'*'`` stands for the block index. Mutually exclusive with
+      ``nodes_file``.
+    nodes_file: Explicit pointwise nodes geometry file; ``'*'`` stands for
+      the block index. Mutually exclusive with ``mapc2p``.
+    z_axis: Vertical position of the magnetic axis (m).
+    nz_interp: 3-D only: parallel (z) up-sampling factor.
+
+  Returns:
+    ``{geometry_prefix: RzProjection}``. Pair it with
+    :func:`projection_for` to look up a dataset's own projection.
+  """
+  projections: dict = {}
+  for data in datasets:
+    key = geometry_prefix(data.file_name)
+    if key in projections:
+      continue
+    # end
+    block = data.ctx.get("block")
+    geo = resolve_geometry(data.file_name,
+        mapc2p=per_block_path(mapc2p, block),
+        nodes_file=per_block_path(nodes_file, block))
+    projections[key] = resolve_rz_projection(data, geo, z_axis=z_axis,
+        nz_interp=nz_interp)
+  # end
+  return projections
+# end
+
+
+def projection_for(projections: dict, data: GData):
+  """The entry of a :func:`rz_projections` mapping that belongs to ``data``.
+
+  Raises:
+    KeyError: if ``data``'s block was not among the datasets the mapping was
+      built from.
+  """
+  return projections[geometry_prefix(data.file_name)]
 # end
 
 

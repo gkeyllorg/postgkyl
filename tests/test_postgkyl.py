@@ -452,7 +452,19 @@ _ALLOWED = {
                                                       # models/ array math they delegated to;
                                                       # operations is now the equation-blind
                                                       # core-verb library only
-    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render"}, # added by
+    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render",
+                    "io"},                            # "io" added by the multiblock
+                                                      # work: discovery.py and
+                                                      # gyrokinetics/rz.py both used to
+                                                      # re-derive Gkeyll's file-naming
+                                                      # convention with private regexes
+                                                      # (a "_\d+$" frame strip; an
+                                                      # rsplit("-", 1) geometry prefix);
+                                                      # both now read io.parse_output_name,
+                                                      # the one home for that convention.
+                                                      # io imports only gpython/numerics,
+                                                      # neither of which imports
+                                                      # diagnostics, so no cycle. Rest added by
                                                       # 10-diagnostics.md: equation-
                                                       # specific compositions (five_moment/
                                                       # ten_moment/mhd/plasma/multispecies/
@@ -482,8 +494,14 @@ _ALLOWED = {
                                                       # so this cannot create a cycle whether
                                                       # or not the edge is ever exercised
     "gdata":  {"gdatastate", "operations", "io"},
-    "":       {"gdata", "operations", "render", "io", "diagnostics", "gpython", "_version"}, # facade:
+    "":       {"gdata", "operations", "render", "io", "gdatastate", "diagnostics",
+               "gpython", "_version"},                # facade:
                                                       # pure re-export of public names;
+                                                      # "gdatastate" is group_blocks, the
+                                                      # multiblock-family partition, which
+                                                      # lives beside flatten_datasets in the
+                                                      # container layer that owns collections
+                                                      # of datasets;
                                                       # "diagnostics" added by
                                                       # 12-diagnostics-loaders.md, which
                                                       # explicitly authorizes the facade

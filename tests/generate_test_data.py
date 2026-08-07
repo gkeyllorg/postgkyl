@@ -287,6 +287,25 @@ def generate_all(out_dir: Path | str) -> None:
             frame=frame,
         )
 
+    # --- multiblock family: 3 blocks x 2 frames of one 2-D field ---
+    # Gkeyll's multiblock naming is '<sim>_b<N>-<quantity>_<frame>.gkyl' (a
+    # real example: rt_gk_multib_sheath_1x2v_p1_b2-geo_int_B3.gkyl). The
+    # blocks tile the x axis into abutting, disjoint domains -- one field on
+    # a decomposed domain, which is what postgkyl must draw as one picture.
+    mb_cells = [8, 6]
+    mb_nc = num_comps("serendipity", 2, 1)
+    for block in range(3):
+        for frame in (0, 1):
+            values = _RNG.standard_normal((*mb_cells, mb_nc)) + block
+            write_gkyl_field(
+                out_dir / f"mb_sim_b{block}-elc_M0_{frame}.gkyl",
+                mb_cells, [float(block), 0.0], [float(block + 1), 1.0], values,
+                poly_order=1,
+                basis_type="serendipity",
+                time=0.1 * frame,
+                frame=frame,
+            )
+
     # --- dynvector (bare time series, e.g. a field-energy history) ---
     # Two components, each a smooth logistic growth-then-saturate curve (one
     # slower-rising than the other) -- long enough (>15700 points) to

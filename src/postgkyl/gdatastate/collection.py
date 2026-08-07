@@ -40,3 +40,64 @@ def flatten_datasets(items) -> list:
   # end
   return out
 # end
+
+
+def _family_key(data) -> tuple | None:
+  """The key identifying "the same field" across a multiblock decomposition,
+  or ``None`` for a dataset that is not part of one.
+
+  Built from the identity ``GDataState`` stamps at load time (``sim``,
+  ``quantity``, ``frame`` -- see ``io.naming``) plus the dataset's ``tag``,
+  so two differently-tagged results of the same source file (e.g. the raw
+  load and a ``gk_rz`` projection of it) never merge. ``block`` is
+  deliberately absent: it is what family members differ by.
+
+  Returning ``None`` for single-block data is the property that keeps every
+  pre-existing pipeline byte-identical -- with no ``_b<N>`` in the file
+  names, every dataset is its own family.
+  """
+  if not isinstance(data, GDataState) or data.ctx.get("block") is None:
+    return None
+  # end
+  return (data.tag, data.ctx.get("sim"), data.ctx.get("quantity"),
+      data.ctx.get("frame"))
+# end
+
+
+def group_blocks(datasets) -> list[list]:
+  """Partition datasets into **block families**: one field's blocks together.
+
+  A family is the set of datasets that agree on ``(tag, sim, quantity,
+  frame)`` and differ only in ``ctx["block"]`` -- i.e. the pieces of one
+  field on a decomposed domain, which terminal verbs (``plot``, ``animate``)
+  should treat as a single thing to draw. Datasets with no block index are
+  each returned as their own singleton family, so single-block input maps
+  1:1 onto the ungrouped list it was before.
+
+  Args:
+    datasets: Datasets, groups, or nested iterables of them (flattened via
+      :func:`flatten_datasets`).
+
+  Returns:
+    A list of lists, in first-appearance order; each family is sorted by
+    ascending block index.
+  """
+  families: dict = {}
+  out: list[list] = []
+  for data in flatten_datasets(datasets):
+    key = _family_key(data)
+    if key is None:
+      out.append([data])
+      continue
+    # end
+    if key not in families:
+      families[key] = []
+      out.append(families[key])
+    # end
+    families[key].append(data)
+  # end
+  for family in families.values():
+    family.sort(key=lambda d: int(d.ctx["block"]))
+  # end
+  return out
+# end

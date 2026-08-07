@@ -10,8 +10,9 @@ owns it and simply gathered here:
 
     load, GData, GDataGroup            <- api/       (fluent surface)
     collect, evaluate, relchange,      <- api/       (module-level multi-dataset
-    animate, plotly_animate, sort                    verbs -- no single ``self``)
-    plot                             <- render/    (multi-dataset rendering)
+    plot, animate, plotly_animate,                   verbs -- no single ``self``)
+    sort
+    group_blocks                     <- gdatastate/ (multiblock family partition)
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
     interpolate, select              <- operations/ (functional verb spellings)
@@ -46,9 +47,10 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
     facade     __init__    re-exports only
 """
 
-from postgkyl.gdata import GData, load, GDataGroup, animate, collect, evaluate, plotly_animate, relchange, sort
+from postgkyl.gdata import (GData, load, GDataGroup, animate, collect, evaluate,
+    plot, plotly_animate, relchange, sort)
 from postgkyl.operations import apply, available_evaluate_operators, info, integrate, interpolate, represent, select
-from postgkyl.render import plot
+from postgkyl.gdatastate import group_blocks
 from postgkyl.io import save
 from postgkyl.diagnostics.gyrokinetics import (
     load_gk_distf, load_gk_quantity, available_quantities as available_gk_quantities)
@@ -56,8 +58,8 @@ from postgkyl._version import version_report
 
 __version__ = "2.0.0"
 
-__all__ = ["GData", "load", "GDataGroup", "plot", "info", "integrate",
-    "interpolate", "select", "represent", "apply", "save",
+__all__ = ["GData", "load", "GDataGroup", "plot", "group_blocks", "info",
+    "integrate", "interpolate", "select", "represent", "apply", "save",
     "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
     "available_evaluate_operators",
     "load_gk_quantity", "load_gk_distf", "available_gk_quantities",

@@ -128,7 +128,8 @@ def interpolated_grid_values(data: GData, *,
   simulation's geometry) alongside its interpolated values.
 
   Args:
-    data: The (not yet interpolated) dataset.
+    data: The dataset. Normally not yet interpolated; an already-interpolated
+      dataset is accepted and used as-is.
     comp: Component to return.
 
   Returns:
@@ -136,7 +137,11 @@ def interpolated_grid_values(data: GData, *,
     dimension), its cell-centered equivalent, and component ``comp``'s
     values on that grid.
   """
-  field = data.interpolate()
+  # Idempotent on purpose: 'pgkyl ... interp gk_rz' is a natural thing to
+  # type, and interpolating twice would run the DG evaluation matrix over
+  # values that are already point values -- silently wrong output rather
+  # than an error.
+  field = data if data.ctx.get("interpolated") else data.interpolate()
   cells = field.values.shape[:-1]
   centers = numerics.nodal_to_cell_centered_grid(field.grid, cells)
   return field.grid, centers, field.values[..., comp]

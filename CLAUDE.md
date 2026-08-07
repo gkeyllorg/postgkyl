@@ -158,6 +158,7 @@ src/postgkyl/
 ├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
 │   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
 │   ├─ gdatastategroup.py     GDataStateGroup
+│   ├─ collection.py     flatten_datasets + group_blocks (multiblock families)
 │   └─ guards.py         shared field-domain guard (backend=="gkyl" -> raise);
 │                        one home for the ".interpolate() first" check reused
 │                        across operations/diagnostics instead of retyped per verb
@@ -165,6 +166,8 @@ src/postgkyl/
 ├─ numerics/           pure NumPy math · 0 internal imports           [LEAF]
 ├─ dg/                 interpolation bridge + modal ops → gpython     [ENGINE]
 ├─ io/                 readers (C-native first) + writer → gpython    [ENGINE]
+│   └─ naming.py         Gkeyll's output-file naming convention: one home
+│                        for `<sim>[_b<N>]-<quantity>[_<frame>].gkyl`
 └─ gpython/            ★ THE FOREIGN FLOOR · compiled shim            [FLOOR]
     ├─ csrc/             _gpythonmodule.c — CPython extension over gkyl_gpython.h
     │                    (the shim itself lives in gkeyll/core/zero/)
@@ -223,7 +226,8 @@ src/postgkyl/
 ║ BACKEND                                                                      ║
 ║   render/ (mpl · plotly · pyvista) — imports gdatastate + numerics; reached  ║
 ║   from operations/plot.py, and pre-authorized from diagnostics/ (program-    ║
-║   scale figures) and the facade (`pg.plot` ← render)                         ║
+║   scale figures). `pg.plot` is `operations.plot` (materialize + render),     ║
+║   accepting many datasets for ONE figure -- see "Multiblock"                 ║
 ╚════════════════════════════╦════════════════════════════════════╦════════════╝
                              │ imports                            │
                              ▼                                    ▼
@@ -321,6 +325,47 @@ has a basis), so the stored numbers are almost certainly modal coefficients
 already, not point values; that assumption is safe enough not to warn about.
 The `gdatastate.py`-level default above only fires when nothing about a
 basis was found at all.
+
+### Multiblock — one field, several blocks
+
+Gkeyll writes a decomposed-domain (multiblock) run as one file per block,
+`<sim>_b<N>-<quantity>_<frame>.gkyl` (real example:
+`rt_gk_multib_sheath_1x2v_p1_b2-geo_int_B3.gkyl`). Those files are **one
+field**, and postgkyl treats them that way without any flag:
+
+- **The fact.** `io/naming.py` is the ONE home for that convention:
+  `parse_output_name(path) -> OutputName(sim, block, quantity, frame)`, plus
+  `.prefix` (`<sim>_b<N>` — what a geometry lookup appends to) and `.stem`.
+  It is pure (never touches the filesystem). `GDataState.__init__` stamps
+  `ctx["sim"]/["block"]/["quantity"]` (and `["frame"]`, only if the header
+  did not already supply it) once, at load. `clone()` copies `ctx`, so the
+  identity survives every verb — a family is still recognizable after
+  `interpolate()`/`gk_rz`. `diagnostics/discovery.py` and
+  `diagnostics/gyrokinetics/rz.py` both read this parser instead of the
+  private `_\d+$`/`rsplit("-", 1)` rules they used to carry (hence the
+  `diagnostics -> io` edge in `_ALLOWED`).
+- **The partition.** `gdatastate/collection.py`'s `group_blocks(datasets)`
+  (re-exported as `pg.group_blocks`) splits a working set into **block
+  families**: datasets agreeing on `(tag, sim, quantity, frame)` and
+  differing only in `block`, sorted by block index. A dataset with
+  `block is None` is always its own singleton, so single-block pipelines are
+  unchanged 1:1.
+- **The terminals.** Verbs still broadcast per block; terminal verbs act on
+  the family. `operations.plot(*datasets)` draws onto ONE figure, and
+  `GDataGroup.plot()` is a non-broadcast terminal that uses it (`pg.plot` is
+  that verb — no longer a bare re-export of `render.plot`). The CLI's `plot`
+  loops over `pg.group_blocks(pool)`, one `pg.plot(*family)` per figure;
+  `animate` groups blocks into per-frame frames automatically. `render.plot`
+  gives co-drawn 2-D datasets one shared per-component color scale and one
+  colorbar per panel, and `spread_axes=False` keeps a family's blocks in the
+  same `--subplots` panel block.
+- **Per-block geometry.** `gk_rz`/`gk_fluxsurf` resolve geometry per block
+  (`rz.rz_projections` / `fluxsurf.flux_surface_grids`, keyed by
+  `geometry_prefix`), not once from the first dataset; a `*` in an explicit
+  `-n`/`-m` path stands for the block index.
+
+`plot -m`/`animate -m` remain as the explicit override: force every active
+dataset onto one figure/frame regardless of what the file names say.
 
 ### `gdatastate/` — the container (`gdatastate/state.py`)
 `GDataState` holds one dataset: a nodal `grid` (list of 1-D edge arrays), values in
@@ -440,7 +485,10 @@ the equation module that uses it.)
   and returns a native `GkylArray`; the pure-Python `GkylReader` is the fallback for
   no-library installs, partial loads, and dynvectors. `save()` supports
   `gkyl`/`txt`/`npy`/`vtk`. Readers fill a plain `ctx` dict and return
-  `(grid, values)` — they never import `gdatastate`.
+  `(grid, values)` — they never import `gdatastate`. `io/naming.py` is the
+  pure (filesystem-free) parser for Gkeyll's output-file naming convention —
+  sim, block index, quantity, frame — the one home every consumer reads (see
+  "Multiblock" above).
 
 ### Leaves — `numerics/` (imports nothing), `gpython/` (the foreign floor)
 - **`numerics/`** — pure NumPy: `idx_parser` (selection strings) and `elementwise`
@@ -472,7 +520,8 @@ overlay. Imports `gdatastate`/`numerics` only; requires interpolated data.
 
 ### `__init__.py` — the facade (pure re-export)
 Gathers the public names from the layer that owns each: `load`/`GData` ← `gdata`,
-`plot` ← `render`, `info` ← `operations`, `save` ← `io`, `load_gk_quantity`/
+`plot` ← `gdata` (the multi-dataset verb, itself `operations.plot`),
+`group_blocks` ← `gdatastate`, `info` ← `operations`, `save` ← `io`, `load_gk_quantity`/
 `load_gk_distf`/`available_gk_quantities` ← `diagnostics.gyrokinetics`. **It
 contains no function or class definitions** (a test enforces this).
 

@@ -18,7 +18,7 @@ from scipy.interpolate import PchipInterpolator
 from postgkyl.gdata import GData
 
 from . import utils
-from .rz import Geometry
+from .rz import Geometry, per_block_path, geometry_prefix, resolve_geometry
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,48 @@ def resolve_flux_surface_grid(first: GData, geo: Geometry, *, x_idx: int = 0,
 
   return FluxSurfaceGrid(x_idx=x_idx, zc=zc, zf=zf, phi_tor_list=phi_tor_list,
       phi_2d=phi_2d)
+# end
+
+
+def flux_surface_grids(datasets, *, mapc2p: str | None = None,
+    nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128,
+    nz_interp: int = 8) -> dict:
+  """Resolve one flux-surface sampling grid **per block**, keyed by geometry
+  prefix -- the :func:`postgkyl.diagnostics.gyrokinetics.rz.rz_projections`
+  counterpart for this diagnostic.
+
+  Each block of a multiblock run has its own geometry file, so it needs its
+  own toroidal-angle sampling grid; datasets sharing a prefix (one block's
+  frames) resolve once.
+
+  Returns:
+    ``{geometry_prefix: FluxSurfaceGrid}``. Pair with :func:`grid_for`.
+  """
+  grids: dict = {}
+  for data in datasets:
+    key = geometry_prefix(data.file_name)
+    if key in grids:
+      continue
+    # end
+    block = data.ctx.get("block")
+    geo = resolve_geometry(data.file_name,
+        mapc2p=per_block_path(mapc2p, block),
+        nodes_file=per_block_path(nodes_file, block))
+    grids[key] = resolve_flux_surface_grid(data, geo, x_idx=x_idx, nphi=nphi,
+        nz_interp=nz_interp)
+  # end
+  return grids
+# end
+
+
+def grid_for(grids: dict, data: GData) -> FluxSurfaceGrid:
+  """The entry of a :func:`flux_surface_grids` mapping belonging to ``data``.
+
+  Raises:
+    KeyError: if ``data``'s block was not among the datasets the mapping was
+      built from.
+  """
+  return grids[geometry_prefix(data.file_name)]
 # end
 
 

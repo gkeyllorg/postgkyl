@@ -1,13 +1,21 @@
 """``plot`` -- terminal verb; render the active datasets.
 
-A faithful port of main's ``commands/plot.py``: every option, and the exact
-per-dataset loop (default: a fresh figure per dataset; ``--figure``/
-``--subplots``/``--multiblock``/``--figure dataset`` target a shared one,
-exactly as before) is preserved. ``render.plot`` (the ``output.plot`` engine)
-is called once per dataset, mirroring main's loop 1:1; this module owns
-figure targeting, the legend-label decision, save/saveframes/batch-mode file
-naming, and the final (single) ``plt.show()`` -- all of which were CLI-layer
-concerns in main too.
+A port of main's ``commands/plot.py``: every option, and the figure-targeting
+rules (default: a fresh figure per unit of work; ``--figure``/``--subplots``/
+``--multiblock``/``--figure dataset`` target a shared one) are preserved.
+This module owns figure targeting, the legend-label decision,
+save/saveframes/batch-mode file naming, and the final (single) ``plt.show()``
+-- all of which were CLI-layer concerns in main too.
+
+The one semantic change from main: the loop runs over **block families**
+(``pg.group_blocks``), not over raw datasets. A multiblock field is one
+field, so its blocks are drawn by a single ``pg.plot(*family)`` call -- one
+figure, one shared color scale, one colorbar, each block on its own patch of
+the domain. Since ``group_blocks`` returns one singleton per dataset when the
+file names carry no ``_b<N>`` index, single-block pipelines run exactly the
+per-dataset loop they always did. ``--multiblock`` survives as the explicit
+override that forces *every* active dataset onto one figure regardless of
+what the file names say.
 """
 
 from __future__ import annotations
@@ -136,7 +144,10 @@ from .._options import show_option, use_option
     "colormap (e.g. '1e-6,2e-6'). Requires --cmap; defaults to the dataset "
     "index if omitted.")
 @click.option("-m", "--multiblock", is_flag=True, default=False,
-    help="Put all blocks (datasets) on the same figure.")
+    help="Force every active dataset onto one figure. Blocks of one "
+    "multiblock field are already drawn together automatically (recognized "
+    "from the '<sim>_b<N>-...' file names), so this is only needed to "
+    "override that -- e.g. to overlay several frames or several fields.")
 @click.pass_context
 def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_col,
     transpose, contour, surface, alpha, clevels, cnlevels, cont_label, quiver, streamline,
@@ -200,13 +211,24 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
     raise click.UsageError("plot: no datasets to plot; load a file first")
   # end
 
-  # When several 2D datasets are drawn into the same figure we switch to
-  # contour mode by default, and give each overlay its own color + legend
-  # entry (rather than letting them obscure one another).
+  # A multiblock field is ONE field: its blocks belong on one figure, sharing
+  # one color scale. group_blocks reads the block identity stamped into ctx at
+  # load time (io.naming); with no '_b<N>' in the file names every dataset is
+  # its own singleton family, so this is a no-op for single-block data.
+  families = pg.group_blocks(pool)
+  if multiblock:
+    families = [pool]  # explicit override: everything onto one figure
+  # end
+
+  # When several *different* fields are drawn into the same figure we switch
+  # to contour mode by default, and give each overlay its own color + legend
+  # entry (rather than letting them obscure one another). Blocks of one field
+  # are exempt: they cover disjoint patches of the domain, so they never
+  # obscure one another and stay a plain pcolormesh mosaic.
   first_cells = pool[0].num_cells
   is_2d = (len(first_cells) - int(np.sum(first_cells <= 1))) == 2
   overlay_2d = (
-      is_2d and len(pool) > 1 and not dataset_fignum
+      is_2d and len(families) > 1 and not dataset_fignum
       and figure is not None
       and not subplots and lineouts is None
       and not quiver and not streamline
@@ -257,7 +279,7 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
     cval_list = [float(v) for v in cval.split(",")]
   # end
   elif cmap:
-    cval_list = list(range(len(pool)))
+    cval_list = list(range(len(families)))
   # end
   cval_min = min(cval_list) if cval_list else None
   cval_max = max(cval_list) if cval_list else None
@@ -265,7 +287,9 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
   num_axes = None
   start_axes = 0
   if subplots:
-    num_axes = int(sum(d.num_comps for d in pool))
+    # One panel block per family (not per dataset): a family's blocks are one
+    # field and share their panels -- hence spread_axes=False on the call.
+    num_axes = int(sum(family[0].num_comps for family in families))
     if figure is None:
       figure = 0
     # end
@@ -288,29 +312,30 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
   # end
 
   file_name = ""
-  for i, d in enumerate(pool):
+  for i, family in enumerate(families):
     fig_target = figure
     if dataset_fignum:
       fig_target = int(i)
-    # end
-    if multiblock:  # puts all blocks on the same figure
-      fig_target = 0
     # end
 
     if legend_labels is not None and i < len(legend_labels):
       label = legend_labels[i]
     # end
     elif len(all_active) > 1 or forcelegend:
-      label = d.get_label()
+      label = family[0].get_label()
     # end
     else:
       label = ""
     # end
+    # A family is one field: label it once. The remaining members draw
+    # unlabelled so a 30-block mosaic does not stamp 30 identical legends.
+    family_labels = [label] + [""] * (len(family) - 1)
 
     cval_value = cval_list[i] if cval_list is not None and i < len(cval_list) else None
 
-    pg.plot(d, args=arg, figure=fig_target, squeeze=squeeze,
+    pg.plot(*family, args=arg, figure=fig_target, squeeze=squeeze,
         transpose=transpose, num_axes=num_axes, start_axes=start_axes,
+        spread_axes=False,
         num_subplot_row=num_subplot_row, num_subplot_col=num_subplot_col,
         streamline=streamline, sdensity=sdensity, quiver=quiver,
         contour=contour, clevels=clevels, cnlevels=cnlevels,
@@ -319,7 +344,7 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
         xmin=xmin, xmax=xmax, xscale=xscale, xshift=xshift,
         ymin=ymin, ymax=ymax, yscale=yscale, yshift=yshift,
         zmin=zmin, zmax=zmax, zscale=zscale, zshift=zshift,
-        relax=relax, style=style, legend=show_legend, labels=[label],
+        relax=relax, style=style, legend=show_legend, labels=family_labels,
         colorbar=True,
         xlabel=xlabel, ylabel=ylabel, clabel=clabel, title=title,
         subplot_titles=subplot_titles, subplot_xlabels=subplot_xlabels,
@@ -331,7 +356,7 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
         cval=cval_value, cval_min=cval_min, cval_max=cval_max, show=False)
 
     if subplots:
-      start_axes += d.num_comps
+      start_axes += family[0].num_comps
     # end
 
     if save or saveas:
@@ -342,12 +367,13 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
         if file_name != "":
           file_name = file_name + "_"
         # end
-        src = getattr(d, "_file_name", "") or ""
+        src = family[0].file_name or ""
         if src:
           file_name = file_name + os.path.basename(src).split(".")[0]
         # end
         else:
-          file_name = file_name + "ev_" + (d.get_label() or f"dataset_{i}").replace(" ", "_")
+          file_name = file_name + "ev_" + (
+              family[0].get_label() or f"dataset_{i}").replace(" ", "_")
         # end
       # end
     # end

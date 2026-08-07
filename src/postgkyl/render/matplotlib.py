@@ -115,8 +115,45 @@ def _nodal_grid(grid: list, cells: np.ndarray) -> list:
 # end
 
 
+def _shared_component_range(states, zshift: float, zscale: float) -> list:
+  """Per-component ``(vmin, vmax)`` across *every* dataset drawn on one figure.
+
+  When several 2-D datasets share one set of axes -- overlaid frames, or the
+  blocks of a multiblock field, each covering its own patch of the domain --
+  each ``pcolormesh`` would otherwise normalize against only its own values,
+  so identical colors would mean different numbers in different patches and
+  the single shared colorbar would be a lie. Computing the range up front
+  makes one color scale describe the whole picture.
+
+  Ranges are computed on the *plotted* values (``(v + zshift) * zscale``).
+  A component that is all-NaN (or absent from a dataset with fewer
+  components) yields ``(None, None)`` -- i.e. defer to Matplotlib.
+  """
+  ranges = []
+  num_comps = max(int(state.values.shape[-1]) for state in states)
+  for comp in range(num_comps):
+    low, high = np.inf, -np.inf
+    for state in states:
+      values = state.values
+      if comp >= values.shape[-1]:
+        continue
+      # end
+      z = (values[..., comp] + zshift) * zscale
+      if not np.any(np.isfinite(z)):
+        continue
+      # end
+      low = min(low, float(np.nanmin(z)))
+      high = max(high, float(np.nanmax(z)))
+    # end
+    ranges.append((low, high) if np.isfinite(low) and low < high else (None, None))
+  # end
+  return ranges
+# end
+
+
 def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     transpose: bool = False, num_axes: int | None = None, start_axes: int = 0,
+    spread_axes: bool = True,
     num_subplot_row: int | None = None, num_subplot_col: int | None = None,
     streamline: bool = False, sdensity: int = 1, quiver: bool = False,
     contour: bool = False, clevels: str | None = None,
@@ -156,6 +193,15 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   then drawn -- overlaid onto the same panels for 1-D, or onto the next
   ``start_axes``-offset block of panels when ``num_axes`` spreads multiple
   datasets' components across one grid (the old ``--subplots`` behaviour).
+  Set ``spread_axes=False`` to keep every dataset in the *same*
+  ``start_axes`` block instead of advancing per dataset -- what the blocks of
+  one multiblock field want, since they are one field and belong in one panel.
+
+  When more than one 2-D dataset is drawn as a ``pcolormesh`` and no explicit
+  ``zmin``/``zmax`` is given, all of them share one per-component color scale
+  (computed across the whole call) and one colorbar per panel, so the
+  colorbar describes every dataset on the axes rather than whichever was
+  drawn last.
 
   Most of the keyword arguments mirror main's ``output.plot``/CLI ``plot``
   1:1 (contour/quiver/streamline/lineouts, shifts/scales, limits, labels,
@@ -384,6 +430,17 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
           # end
         # end
       # end
+    # end
+
+    # One color scale for every dataset drawn here (see
+    # _shared_component_range). Only the plain 2-D pcolormesh path consumes
+    # it: surface/contour/quiver/streamline/lineouts each own their own
+    # normalization, and an explicit zmin/zmax always wins.
+    shared_z = None
+    if (len(states) > 1 and ref_num_dims == 2 and zmin is None and zmax is None
+        and not (surface or contour or quiver or streamline or diverging)
+        and lineouts is None):
+      shared_z = _shared_component_range(states, zshift, zscale)
     # end
 
     # ---- Phase 2: draw each dataset ----
@@ -669,6 +726,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
               comp_zmax = np.abs(z).max()
               comp_zmin = -comp_zmax
             # end
+            elif shared_z is not None and comp < len(shared_z):
+              comp_zmin, comp_zmax = shared_z[comp]
+            # end
             vmax, vmin = comp_zmax, comp_zmin
             norm = None
             if logz:
@@ -685,8 +745,20 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             im = cax.pcolormesh(x, y, z, norm=norm, vmin=vmin, vmax=vmax,
                 edgecolors=edgecolors, linewidth=0.1, shading="auto", *args)
           # end
-          if not color and comp_colorbar and not streamline:
+          # One colorbar per (panel, component), not one per dataset drawn
+          # into it: with several datasets on shared axes (multiblock blocks,
+          # overlays) the per-dataset call used to stack an identical
+          # colorbar per dataset, each shrinking the figure further. They
+          # share one scale now, so the first describes them all. Keying on
+          # the component too keeps ``squeeze``'s several components in one
+          # panel getting their own (genuinely differently scaled) colorbars.
+          drawn = getattr(cax, "_pgkyl_cbar_comps", None)
+          if drawn is None:
+            drawn = cax._pgkyl_cbar_comps = set()
+          # end
+          if not color and comp_colorbar and not streamline and comp not in drawn:
             _pgkyl_colorbar(im, mpl_fig, cax, extend=extend, label=layout_clabel)
+            drawn.add(comp)
         # end
           # end
         else:
@@ -739,7 +811,7 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
         # end
       # end component loop
 
-      if num_axes:
+      if num_axes and spread_axes:
         cur_start_axes += num_comps
     # end
       # end

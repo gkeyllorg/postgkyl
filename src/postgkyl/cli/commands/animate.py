@@ -39,41 +39,26 @@ from .._options import show_option, use_option
 
 
 def _group_by_frame(datasets: list) -> list[list]:
-  """Group ``datasets`` into per-frame lists for ``--multiblock``, sorted by
-  ascending frame index.
+  """Group ``datasets`` into per-frame lists, sorted by ascending frame index.
 
-  Each dataset's ``ctx["frame"]`` is used if already set (e.g. by a reader
-  that stores it natively); otherwise it is inferred from the loaded file
-  name, using Gkeyll's multiblock naming convention -- the frame number is
-  the leading digits at the first position where the loaded files' names
-  diverge (a port of main's ``utils.set_frame``).
+  ``ctx["frame"]`` is authoritative: readers stamp it from the file header,
+  and ``GDataState`` falls back to the ``_<digits>`` suffix of the file name
+  (``io.naming``). This replaces main's ``utils.set_frame``, which recovered
+  a frame index by diffing the loaded file names character by character --
+  a second, weaker home for the same naming convention.
+
+  Datasets with no resolvable frame are all placed in one trailing group
+  rather than crashing, so a mixed pool still animates.
   """
-  missing = [d for d in datasets if d.ctx.get("frame") is None]
-  if missing:
-    files = [d._file_name for d in missing]
-    shortest = min(files, key=len)
-    diverge_at = len(shortest)
-    for f in files:
-      for j in range(len(shortest)):
-        if shortest[j] != f[j]:
-          diverge_at = min(diverge_at, j)
-          break
-        # end
-      # end
-    # end
-    for d, f in zip(missing, files):
-      stem = f.rsplit(".gkyl", 1)[0]
-      d.ctx["frame"] = int(stem[diverge_at:].split("_")[0])
-    # end
-  # end
-
-  groups: dict[int, list] = {}
+  groups: dict = {}
   for d in datasets:
+    frame = d.ctx.get("frame")
     # int(): a reader-native ctx["frame"] may come back as a numpy scalar,
     # which isn't hashable the same way a plain int is.
-    groups.setdefault(int(d.ctx["frame"]), []).append(d)
+    groups.setdefault(int(frame) if frame is not None else None, []).append(d)
   # end
-  return [groups[frame] for frame in sorted(groups)]
+  known = sorted(f for f in groups if f is not None)
+  return [groups[f] for f in known] + ([groups[None]] if None in groups else [])
 # end
 
 
@@ -93,7 +78,9 @@ def _suffixed(path: str | None, suffix: str) -> str | None:
 @click.option("--grouptags", is_flag=True, default=False,
     help="Animate each tag separately instead of mixing tags into one sequence.")
 @click.option("-m", "--multiblock", is_flag=True, default=False,
-    help="Group datasets sharing a frame index into one multi-block frame.")
+    help="Group datasets sharing a frame index into one multi-block frame. "
+    "Automatic when the file names carry a '<sim>_b<N>-' block index; this "
+    "flag forces the grouping for pools that do not.")
 @click.option("--squeeze", is_flag=True, default=False,
     help="Squeeze the components into one panel.")
 @click.option("--nsubplotrow", "num_subplot_row", type=int, default=None,
@@ -284,7 +271,11 @@ def command(ctx, use, grouptags, multiblock, squeeze, num_subplot_row, num_subpl
 
   resolved_show = show and not (saveframes or ds.batch)
 
-  if multiblock:
+  # Blocks of one field belong in one frame, drawn together. The block index
+  # is recognized from the '<sim>_b<N>-...' file names and stamped into ctx at
+  # load time (io.naming), so this needs no flag; --multiblock remains the
+  # explicit override for pools whose names carry no block index.
+  if multiblock or any(d.ctx.get("block") is not None for d in pool):
     groups = _group_by_frame(pool)
     if not color and groups[0][0].num_dims == 1:
       # Keep stitched blocks looking like one continuous curve/mesh instead

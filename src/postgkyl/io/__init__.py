@@ -10,6 +10,7 @@ from __future__ import annotations
 import os.path
 
 from . import mapping
+from .naming import OutputName, parse_output_name
 from .gkyl_c_reader import GkylCReader
 from .gkyl_reader import GkylReader
 from .gkyl_h5_reader import GkylH5Reader
@@ -67,5 +68,6 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
 # end
 
 
-__all__ = ["read", "save", "mapping", "GkylCReader", "GkylReader",
-    "GkylH5Reader", "FlashH5Reader"]
+__all__ = ["read", "save", "mapping", "naming", "OutputName",
+    "parse_output_name", "GkylCReader", "GkylReader", "GkylH5Reader",
+    "FlashH5Reader"]
