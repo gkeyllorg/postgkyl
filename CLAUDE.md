@@ -398,7 +398,9 @@ COMPOSITION tier. One module (or subpackage) per equation model:
 old `apps/trajectory.py`/`tools/calc_*.py`), and `gyrokinetics/` (distf/
 quantity loaders, the quantity registry — Tpar, beta, drift velocities — plus
 its own program-scale analyses: `energy_balance`/`particle_balance`/`nodes`,
-ported from the old `apps/gk_*.py`). Contract: a diagnostic takes loaded
+ported from the old `apps/gk_*.py`, and `rz`/`fluxsurf` — R-Z mapping and
+theta-phi flux-surface extraction for field-aligned data, ported from
+`commands/gk_rz.py`/`commands/gk_fluxsurf.py`). Contract: a diagnostic takes loaded
 data — one or several `GData` — plus physical scalars as keyword-only
 options, and returns `GDataState` (via `_result`, same inplace/tag/label
 contract as a verb) or a Figure; it is built entirely from the public

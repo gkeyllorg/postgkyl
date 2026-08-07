@@ -38,6 +38,10 @@ from .energy_balance import EnergyBalanceTraces, energy_balance_error, gk_energy
 from .particle_balance import ParticleBalanceTraces, gk_particle_balance, particle_balance_error
 from .nodes import GKYL_GEOMETRY_ID, gk_nodes, is_geo_mapc2p, multib_tag, nodes_to_RZ
 
+# PR #214: R-Z mapping + flux-surface extraction for field-aligned data.
+from .rz import Geometry, RzProjection, map_to_rz, resolve_geometry, resolve_rz_projection
+from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surface_grid
+
 __all__ = [
     "load_gk_distf", "resolve_frames",
     "available_quantities", "load_gk_quantity", "gk_quant_registry",
@@ -50,4 +54,6 @@ __all__ = [
     "EnergyBalanceTraces", "energy_balance_error", "gk_energy_balance",
     "ParticleBalanceTraces", "gk_particle_balance", "particle_balance_error",
     "GKYL_GEOMETRY_ID", "gk_nodes", "is_geo_mapc2p", "multib_tag", "nodes_to_RZ",
+    "Geometry", "RzProjection", "map_to_rz", "resolve_geometry", "resolve_rz_projection",
+    "FluxSurfaceGrid", "extract_flux_surface", "resolve_flux_surface_grid",
 ]
