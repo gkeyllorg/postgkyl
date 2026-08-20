@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import click
 
 import postgkyl as pg
@@ -11,13 +13,15 @@ from .._options import label_option, tag_option
 
 _OPERATORS = ", ".join(pg.available_evaluate_operators())
 
+_DATA_TOKEN = re.compile(r"^f(\d*)(?:\[[^\]]*\])?(?:\.\w+)?$")
+
 _HELP = f"""Evaluate an RPN expression over the active datasets.
 
-``f``/``fN`` tokens refer to the N-th active dataset (``f`` == ``f0``),
-e.g. ``evaluate "f0 f1 +"``. Only the active datasets consumed by this
-expression are deactivated; the result is appended to the working set,
-and any other dataset already there (loaded earlier, or deactivated by
-``status``) is left untouched.
+An expression using only bare ``f`` references is evaluated independently
+for every active dataset, e.g. ``evaluate "f grad"`` takes the gradient of
+each one. Explicit ``fN`` tokens combine datasets positionally, e.g.
+``evaluate "f0 f1 +"``. The input datasets are deactivated and the result(s)
+are appended to the working set; datasets already inactive are untouched.
 
 Note: with ``chain=True``, ``--tag``/``--label`` must be given *before*
 CHAIN (``evaluate --tag foo "f0 f1 +"``), not after -- see ``fit``'s docstring.
@@ -37,7 +41,15 @@ def command(ctx, chain, tag, label) -> None:
     raise click.UsageError("evaluate: no datasets to evaluate")
   # end
   try:
-    result = pg.evaluate(chain, *pool, tag=tag, label=label)
+    references = [match for token in chain.split()
+        if (match := _DATA_TOKEN.fullmatch(token)) is not None]
+    map_over_pool = bool(references) and all(not match.group(1) for match in references)
+    if map_over_pool:
+      results = [pg.evaluate(chain, d, tag=tag, label=label) for d in pool]
+    # end
+    else:
+      results = [pg.evaluate(chain, *pool, tag=tag, label=label)]
+    # end
   # end
   except ValueError as err:
     raise click.UsageError(str(err))
@@ -45,5 +57,5 @@ def command(ctx, chain, tag, label) -> None:
   for d in pool:
     set_active(d, False)
   # end
-  ctx.obj.datasets.append(result)
+  ctx.obj.datasets.extend(results)
 # end
