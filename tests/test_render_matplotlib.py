@@ -155,6 +155,131 @@ class TestLogAxes:
 
 
 # --------------------------------------------------------------------------
+# Joined linear/log split panels
+# --------------------------------------------------------------------------
+
+class TestSplitLinearLog:
+  @staticmethod
+  def _split_line(ncomp=1):
+    d = GDataState()
+    # Cell centers are exactly [-2, -1, 0, 1, 2], pinning the split-point
+    # ownership rule (the point itself belongs to the right panel).
+    grid = [np.linspace(-2.5, 2.5, 6)]
+    base = np.array([1.0, 2.0, 3.0, 10.0, 100.0])
+    values = np.stack([base * (comp + 1) for comp in range(ncomp)], axis=-1)
+    d.push(grid, values)
+    return d
+  # end
+
+  def test_each_component_becomes_a_linear_left_log_right_pair(self):
+    fig = backend.plot(self._split_line(ncomp=2), show=False,
+        split_linear_log=True)
+
+    assert len(fig.axes) == 4
+    assert [axis.get_yscale() for axis in fig.axes] == [
+        "linear", "log", "linear", "log"]
+    np.testing.assert_allclose(fig.axes[0].lines[0].get_xdata(), [-2.0, -1.0])
+    np.testing.assert_allclose(fig.axes[1].lines[0].get_xdata(), [0.0, 1.0, 2.0])
+    assert fig.axes[0].get_xlim()[1] == pytest.approx(0.0)
+    assert fig.axes[1].get_xlim()[0] == pytest.approx(0.0)
+  # end
+
+  def test_split_point_and_log_side_are_configurable(self):
+    fig = backend.plot(self._split_line(), show=False, split_linear_log=True,
+        split_point=1.0, split_log_side="left", split_log_base=2)
+
+    left, right = fig.axes
+    assert left.get_yscale() == "log"
+    assert right.get_yscale() == "linear"
+    assert left.yaxis._scale.base == 2
+    np.testing.assert_allclose(left.lines[0].get_xdata(), [-2.0, -1.0, 0.0])
+    np.testing.assert_allclose(right.lines[0].get_xdata(), [1.0, 2.0])
+  # end
+
+  def test_per_component_linear_and_log_limits(self):
+    fig = backend.plot(self._split_line(ncomp=2), show=False,
+        split_linear_log=True,
+        split_linear_ylim=[(0.0, 5.0), (-2.0, 8.0)],
+        split_log_ylim={0: (1.0, 200.0), 1: (2.0, 400.0)})
+
+    assert fig.axes[0].get_ylim() == (0.0, 5.0)
+    assert fig.axes[1].get_ylim() == (1.0, 200.0)
+    assert fig.axes[2].get_ylim() == (-2.0, 8.0)
+    assert fig.axes[3].get_ylim() == (2.0, 400.0)
+  # end
+
+  def test_shared_limit_pair_applies_to_every_component(self):
+    fig = backend.plot(self._split_line(ncomp=2), show=False,
+        split_linear_log=True, split_linear_ylim=(0.0, 10.0))
+    assert fig.axes[0].get_ylim() == (0.0, 10.0)
+    assert fig.axes[2].get_ylim() == (0.0, 10.0)
+  # end
+
+  def test_legend_subplot_uses_log_half_of_logical_subplot(self):
+    a = self._split_line(ncomp=2)
+    b = self._split_line(ncomp=2)
+    fig = backend.plot(a, b, show=False, split_linear_log=True,
+        legend_labels=["a", "b"], legend_subplot=1, split_legend_side="log")
+
+    assert fig.axes[0].get_legend() is None
+    assert fig.axes[1].get_legend() is None
+    assert fig.axes[2].get_legend() is None
+    legend = fig.axes[3].get_legend()
+    assert [text.get_text() for text in legend.get_texts()] == ["a", "b"]
+  # end
+
+  def test_pair_geometry_and_logical_labels(self):
+    fig = backend.plot(self._split_line(), show=False, split_linear_log=True,
+        split_width_ratios=(2.0, 1.0), split_gap=0.05,
+        subplot_titles="density", subplot_ylabels="n", subplot_xlabels="z")
+    left, right = fig.axes
+    assert left.get_position().width / right.get_position().width == pytest.approx(2.0)
+    assert left.get_title() == "density"
+    assert left.get_ylabel() == "n"
+    assert left.get_xlabel() == "z"
+    assert right.yaxis.get_ticks_position() == "right"
+  # end
+
+  def test_left_owns_seam_tick_label_by_default(self):
+    fig = backend.plot(self._split_line(), show=False, split_linear_log=True)
+    left_ticks = fig.axes[0].get_xticks()
+    right_ticks = fig.axes[1].get_xticks()
+    assert left_ticks[-1] == pytest.approx(0.0)
+    assert right_ticks[0] > 0.0
+  # end
+
+  @pytest.mark.parametrize("kwargs, message", [
+      ({"split_log_side": "middle"}, "split_log_side"),
+      ({"split_legend_side": "middle"}, "split_legend_side"),
+      ({"split_width_ratios": (1.0, 0.0)}, "split_width_ratios"),
+      ({"split_gap": -0.1}, "split_gap"),
+      ({"split_log_nonpositive": "drop"}, "split_log_nonpositive"),
+      ({"split_seam_ticklabels": "middle"}, "split_seam_ticklabels"),
+      ({"split_log_base": 1.0}, "split_log_base"),
+  ])
+  def test_invalid_split_options_raise(self, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+      backend.plot(self._split_line(), show=False, split_linear_log=True, **kwargs)
+    # end
+  # end
+
+  def test_split_rejects_2d_transpose_and_logy(self):
+    with pytest.raises(ValueError, match="only supported for 1D"):
+      backend.plot(_field_2d(), show=False, split_linear_log=True)
+    # end
+    with pytest.raises(ValueError, match="transpose"):
+      backend.plot(self._split_line(), show=False, split_linear_log=True,
+          transpose=True)
+    # end
+    with pytest.raises(ValueError, match="logy"):
+      backend.plot(self._split_line(), show=False, split_linear_log=True,
+          logy=True)
+    # end
+  # end
+# end
+
+
+# --------------------------------------------------------------------------
 # value ranges: ymin/ymax (1-D), zmin/zmax (2-D color range)
 # --------------------------------------------------------------------------
 

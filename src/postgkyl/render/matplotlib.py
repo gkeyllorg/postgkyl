@@ -115,6 +115,50 @@ def _nodal_grid(grid: list, cells: np.ndarray) -> list:
 # end
 
 
+def _split_ylim_for_component(limits, comp: int):
+  """Resolve a split-axis y-limit specification for one component.
+
+  ``limits`` may be one ``(min, max)`` pair shared by every component, a
+  sequence of pairs (one per component), or a mapping keyed by component
+  index.  Missing sequence/mapping entries leave that component automatic.
+  """
+  if limits is None:
+    return None
+  # end
+  if isinstance(limits, dict):
+    limits = limits.get(comp)
+    if limits is None:
+      return None
+    # end
+  # end
+  else:
+    try:
+      is_shared_pair = (len(limits) == 2
+          and all(value is None or np.isscalar(value) for value in limits))
+    except TypeError as err:
+      raise TypeError("split y-limits must be a (min, max) pair, a sequence "
+          "of pairs, or a component-indexed mapping") from err
+    # end
+    if not is_shared_pair:
+      if comp >= len(limits):
+        return None
+      # end
+      limits = limits[comp]
+      if limits is None:
+        return None
+      # end
+  # end
+  try:
+    if len(limits) != 2:
+      raise ValueError
+    # end
+  except (TypeError, ValueError) as err:
+    raise ValueError("each split y-limit must be a (min, max) pair") from err
+  # end
+  return tuple(limits)
+# end
+
+
 def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     transpose: bool = False, num_axes: int | None = None, start_axes: int = 0,
     num_subplot_row: int | None = None, num_subplot_col: int | None = None,
@@ -140,6 +184,12 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     subplot_titles: str | None = None, subplot_xlabels: str | None = None,
     subplot_ylabels: str | None = None,
     logx: bool = False, logy: bool = False, logz: bool = False,
+    split_linear_log: bool = False, split_point: float = 0.0,
+    split_log_side: str = "right", split_width_ratios=(1.0, 1.0),
+    split_gap: float = 0.0, split_linear_ylim=None, split_log_ylim=None,
+    split_right_ticks: bool = True, split_legend_side: str = "log",
+    split_log_base: float = 10.0, split_log_nonpositive: str = "clip",
+    split_seam_ticklabels: str = "left",
     fixaspect: bool = False, aspect=None,
     edgecolors: str | None = None, showgrid: bool = True,
     hashtag: bool = False, xkcd: bool = False,
@@ -185,6 +235,19 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   ``legend_labels`` are used verbatim on every component, without an added
   ``_cN`` suffix. ``xkcd`` no longer leaks into Matplotlib's global rcParams
   past this call -- it is scoped to the figure drawn here.
+
+  ``split_linear_log=True`` turns every 1-D component panel into a joined
+  pair split at ``split_point``: coordinates below the point are drawn on the
+  left and coordinates at/above it on the right.  The right side is
+  logarithmic in y by default; ``split_log_side='left'`` reverses which half
+  is logarithmic.  ``split_width_ratios`` and ``split_gap`` control the pair's
+  geometry.  ``split_linear_ylim`` and ``split_log_ylim`` accept either one
+  ``(min, max)`` pair, a sequence of pairs (one per component), or a mapping
+  from component index to pair.  ``split_legend_side`` is ``'linear'``,
+  ``'log'``, ``'left'``, or ``'right'``.  This mode is intentionally limited
+  to 1-D, non-transposed plots.  ``split_seam_ticklabels`` chooses which side
+  owns the label at the joined boundary: ``'left'`` (the default),
+  ``'right'``, ``'both'``, or ``'none'``.
 
   Returns:
     The Matplotlib ``Figure``.
@@ -250,6 +313,65 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     ref_num_dims = len(ref_cells) - int(np.sum(ref_cells <= 1))
     if ref_num_dims > 2:
       raise ValueError("Only 1D and 2D plots are currently supported")
+    # end
+    if split_linear_log:
+      if ref_num_dims != 1:
+        raise ValueError("'split_linear_log' is only supported for 1D plots")
+      # end
+      if transpose:
+        raise ValueError("'split_linear_log' cannot be combined with 'transpose'")
+      # end
+      if logy:
+        raise ValueError("'logy' is redundant with 'split_linear_log'; use "
+            "'split_log_side' to choose the logarithmic half")
+      # end
+      if split_log_side not in {"left", "right"}:
+        raise ValueError("'split_log_side' must be 'left' or 'right'")
+      # end
+      if split_legend_side not in {"linear", "log", "left", "right"}:
+        raise ValueError("'split_legend_side' must be 'linear', 'log', "
+            "'left', or 'right'")
+      # end
+      if split_log_nonpositive not in {"clip", "mask"}:
+        raise ValueError("'split_log_nonpositive' must be 'clip' or 'mask'")
+      # end
+      if split_seam_ticklabels not in {"left", "right", "both", "none"}:
+        raise ValueError("'split_seam_ticklabels' must be 'left', 'right', "
+            "'both', or 'none'")
+      # end
+      try:
+        split_point = float(split_point)
+      except (TypeError, ValueError) as err:
+        raise TypeError("'split_point' must be a finite number") from err
+      # end
+      if not np.isfinite(split_point):
+        raise ValueError("'split_point' must be a finite number")
+      # end
+      try:
+        split_log_base = float(split_log_base)
+      except (TypeError, ValueError) as err:
+        raise TypeError("'split_log_base' must be a number") from err
+      # end
+      if not np.isfinite(split_log_base) or split_log_base <= 0 or split_log_base == 1:
+        raise ValueError("'split_log_base' must be positive and not equal to 1")
+      # end
+      try:
+        split_width_ratios = tuple(float(v) for v in split_width_ratios)
+        if (len(split_width_ratios) != 2 or any(not np.isfinite(v) or v <= 0
+            for v in split_width_ratios)):
+          raise ValueError
+        # end
+      except (TypeError, ValueError) as err:
+        raise ValueError("'split_width_ratios' must contain two positive values") from err
+      # end
+      try:
+        split_gap = float(split_gap)
+      except (TypeError, ValueError) as err:
+        raise TypeError("'split_gap' must be a number") from err
+      # end
+      if not np.isfinite(split_gap) or split_gap < 0:
+        raise ValueError("'split_gap' must be non-negative")
+      # end
     # end
 
     # Surface plots need 3D axes; only meaningful for 2D data.
@@ -334,14 +456,74 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     ref_idx_comps = range(int(np.floor(ref.num_comps / step)))
     layout_num_comps = num_axes if num_axes else len(ref_idx_comps)
 
+    physical_num_axes = (2 * (1 if squeeze else layout_num_comps)
+        if split_linear_log else (1 if squeeze else layout_num_comps))
     if mpl_fig.axes:
       ax = mpl_fig.axes
-      if not squeeze and layout_num_comps > len(ax):
+      if physical_num_axes > len(ax):
         raise ValueError("Trying to plot into figure with not enough axes")
-    # end
+      # end
       # end
     else:
-      if squeeze:  # Plotting into 1 panel
+      if split_linear_log:
+        # Each logical component owns a nested 1x2 GridSpec.  Nesting keeps
+        # the within-pair gap independent from spacing between components.
+        logical_num_axes = 1 if squeeze else layout_num_comps
+        num_rows, num_cols = ((1, 1) if squeeze else
+            subplot_grid(logical_num_axes, num_subplot_row, num_subplot_col))
+        outer = mpl_fig.add_gridspec(num_rows, num_cols)
+        ax = []
+        shared_left = None
+        shared_right = None
+        for logical_idx in range(logical_num_axes):
+          row, col = divmod(logical_idx, num_cols)
+          inner = outer[row, col].subgridspec(1, 2,
+              width_ratios=split_width_ratios, wspace=split_gap)
+          left_ax = mpl_fig.add_subplot(inner[0], sharex=shared_left)
+          right_ax = mpl_fig.add_subplot(inner[1], sharex=shared_right)
+          if shared_left is None:
+            shared_left, shared_right = left_ax, right_ax
+          # end
+          ax.extend((left_ax, right_ax))
+        # end
+
+        if title:
+          mpl_fig.suptitle(title)
+        # end
+        if layout_xlabel:
+          mpl_fig.supxlabel(layout_xlabel)
+        # end
+        if layout_ylabel:
+          mpl_fig.supylabel(layout_ylabel)
+        # end
+        sub_titles = subplot_titles.split(",") if subplot_titles else []
+        sub_xlabels = subplot_xlabels.split(",") if subplot_xlabels else []
+        sub_ylabels = subplot_ylabels.split(",") if subplot_ylabels else []
+        pair_center = (split_width_ratios[0] + split_width_ratios[1]) / (
+            2.0 * split_width_ratios[0])
+        for logical_idx in range(logical_num_axes):
+          left_ax, right_ax = ax[2 * logical_idx:2 * logical_idx + 2]
+          sub_title = (sub_titles[logical_idx]
+              if logical_idx < len(sub_titles) else "")
+          sub_xlabel = (sub_xlabels[logical_idx]
+              if logical_idx < len(sub_xlabels) else "")
+          sub_ylabel = (sub_ylabels[logical_idx]
+              if logical_idx < len(sub_ylabels) else "")
+          left_ax.set_ylabel(sub_ylabel)
+          if sub_xlabel:
+            left_ax.set_xlabel(sub_xlabel)
+            left_ax.xaxis.set_label_coords(pair_center, -0.1)
+          # end
+          if sub_title:
+            left_ax.set_title(sub_title, x=pair_center, y=1.08)
+          # end
+          if split_right_ticks:
+            right_ax.yaxis.tick_right()
+            right_ax.yaxis.set_label_position("right")
+          # end
+        # end
+      # end
+      elif squeeze:  # Plotting into 1 panel
         mpl_fig.subplots(1, 1, subplot_kw=subplot_kw)
         ax = mpl_fig.axes
         ax[0].set_xlabel(layout_xlabel)
@@ -427,6 +609,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
       if num_dims > 2:
         raise ValueError("Only 1D and 2D plots are currently supported")
       # end
+      if split_linear_log and num_dims != 1:
+        raise ValueError("every dataset must be 1D when 'split_linear_log' is set")
+      # end
 
       axes_labels = list(_AXES_LABELS)
       if len(grid) > num_dims:
@@ -464,12 +649,21 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
       idx_comps = range(int(np.floor(num_comps / step)))
 
       for comp in idx_comps:
-        cax = ax[0] if squeeze else ax[comp + cur_start_axes]
+        logical_ax_idx = 0 if squeeze else comp + cur_start_axes
+        if split_linear_log:
+          component_axes = ax[2 * logical_ax_idx:2 * logical_ax_idx + 2]
+          cax = component_axes[0]
+        # end
+        else:
+          cax = ax[logical_ax_idx]
+          component_axes = [cax]
+        # end
         comp_label = (label_prefix if explicit_legend_label else
             (f"{label_prefix:s}_c{comp:d}".strip("_")
              if len(idx_comps) > 1 else label_prefix))
-        comp_legend = (legend and
-            (legend_subplot is None or cax is ax[legend_subplot]))
+        comp_legend = (legend and (legend_subplot is None
+            or (logical_ax_idx == legend_subplot if split_linear_log
+                else cax is ax[legend_subplot])))
         comp_colorbar = colorbar
 
         if num_dims == 1:
@@ -490,8 +684,19 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             # end
             line_color = plt.get_cmap(cmap)(t)
           # end
-          im = cax.plot(x, y, *args, color=line_color, label=comp_label,
-              markersize=markersize)
+          if split_linear_log:
+            left_mask = x < split_point
+            split_masks = (left_mask, ~left_mask)
+            im = []
+            for split_ax, mask in zip(component_axes, split_masks):
+              im.extend(split_ax.plot(x[mask], y[mask], *args,
+                  color=line_color, label=comp_label, markersize=markersize))
+            # end
+          # end
+          else:
+            im = cax.plot(x, y, *args, color=line_color, label=comp_label,
+                markersize=markersize)
+          # end
           # Add a colorbar describing the cval-to-color mapping once per axes.
           if (cmap and cval is not None and comp_colorbar
               and cval_max is not None and cval_min is not None and cval_max != cval_min
@@ -715,49 +920,103 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
           raise ValueError(f"{num_dims:d}D data not supported")
         # end
 
-        cax.grid(showgrid)
+        legend_ax = cax
+        if split_linear_log:
+          if split_legend_side == "left":
+            legend_ax = component_axes[0]
+          # end
+          elif split_legend_side == "right":
+            legend_ax = component_axes[1]
+          # end
+          elif split_legend_side == "linear":
+            legend_ax = component_axes[0 if split_log_side == "right" else 1]
+          # end
+          else:  # log
+            legend_ax = component_axes[0 if split_log_side == "left" else 1]
+          # end
+        # end
         if comp_legend:
-          if getattr(cax, "_pgkyl_handles", None):
+          if getattr(legend_ax, "_pgkyl_handles", None):
             # Overlaid 2D datasets (surface/contour comparison): real legend.
-            cax.legend(handles=cax._pgkyl_handles, loc=legend_loc)
+            legend_ax.legend(handles=legend_ax._pgkyl_handles, loc=legend_loc)
           # end
           elif num_dims == 1 and comp_label != "":
-            cax.legend(loc=legend_loc)
+            legend_ax.legend(loc=legend_loc)
           # end
           elif not (surface and num_dims == 2):
-            cax.text(0.03, 0.96, comp_label,
+            legend_ax.text(0.03, 0.96, comp_label,
                 bbox={"facecolor": "w", "edgecolor": "w", "alpha": 0.8,
                       "boxstyle": "round"},
                 verticalalignment="top", horizontalalignment="left",
-                transform=cax.transAxes)
+                transform=legend_ax.transAxes)
           # end
         # end
-        if hashtag:
-          cax.text(0.97, 0.03, "#pgkyl",
-              bbox={"facecolor": "w", "edgecolor": "w", "alpha": 0.8,
-                    "boxstyle": "round"},
-              verticalalignment="bottom", horizontalalignment="right",
-              transform=cax.transAxes)
+        for side_idx, side_ax in enumerate(component_axes):
+          side_ax.grid(showgrid)
+          if hashtag and (not split_linear_log or side_ax is legend_ax):
+            side_ax.text(0.97, 0.03, "#pgkyl",
+                bbox={"facecolor": "w", "edgecolor": "w", "alpha": 0.8,
+                      "boxstyle": "round"},
+                verticalalignment="bottom", horizontalalignment="right",
+                transform=side_ax.transAxes)
+          # end
+          if logx:
+            side_ax.set_xscale("log")
+          # end
+          if logy:
+            side_ax.set_yscale("log")
+          # end
+          if split_linear_log:
+            is_log_side = ((side_idx == 0 and split_log_side == "left")
+                or (side_idx == 1 and split_log_side == "right"))
+            if is_log_side:
+              side_ax.set_yscale("log", base=split_log_base,
+                  nonpositive=split_log_nonpositive)
+              side_ylim = _split_ylim_for_component(split_log_ylim, comp)
+            # end
+            else:
+              side_ax.set_yscale("linear")
+              side_ylim = _split_ylim_for_component(split_linear_ylim, comp)
+            # end
+          # end
+          else:
+            side_ylim = None
+          # end
+          if num_dims == 1 and not relax:  # this causes troubles with contours
+            side_ax.autoscale(enable=True, axis="x", tight=True)
+            side_ax.autoscale(enable=True, axis="y")
+          # end
+          if split_linear_log:
+            if side_idx == 0:
+              side_ax.set_xlim(xmin, split_point)
+            # end
+            else:
+              side_ax.set_xlim(split_point, xmax)
+            # end
+            if not logx:
+              prune = None
+              if ((split_seam_ticklabels == "left" and side_idx == 1)
+                  or (split_seam_ticklabels == "right" and side_idx == 0)
+                  or split_seam_ticklabels == "none"):
+                prune = "upper" if side_idx == 0 else "lower"
+              # end
+              if prune is not None:
+                side_ax.xaxis.get_major_locator().set_params(prune=prune)
+              # end
+            # end
+          elif xmin is not None or xmax is not None:
+            side_ax.set_xlim(xmin, xmax)
+          # end
+          if ymin is not None or ymax is not None:
+            side_ax.set_ylim(ymin, ymax)
+          # end
+          if side_ylim is not None:
+            side_ax.set_ylim(*side_ylim)
+          # end
+          if fixaspect and not (surface and num_dims == 2):
+            plt.setp(side_ax, aspect=aspect)
+          # end
         # end
-        if logx:
-          cax.set_xscale("log")
-        # end
-        if logy:
-          cax.set_yscale("log")
-        # end
-        if num_dims == 1 and not relax:  # this causes troubles with contours
-          plt.autoscale(enable=True, axis="x", tight=True)
-          plt.autoscale(enable=True, axis="y")
-        # end
-        if xmin is not None or xmax is not None:
-          cax.set_xlim(xmin, xmax)
-        # end
-        if ymin is not None or ymax is not None:
-          cax.set_ylim(ymin, ymax)
-        # end
-        if fixaspect and not (surface and num_dims == 2):
-          plt.setp(cax, aspect=aspect)
-      # end
         # end
       # end component loop
 
