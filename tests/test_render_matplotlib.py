@@ -80,6 +80,28 @@ class TestMultiPanel:
     fig = backend.plot(_field_2d(ncomp=1), show=False)
     assert fig.axes[0].get_title() == ""
   # end
+
+  def test_legend_can_be_limited_to_one_subplot_and_relocated(self):
+    a = _line()
+    b = _line(offset=3.0)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1.0))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1.0))
+
+    fig = backend.plot(a, b, show=False, legend_labels=["first", "second"],
+        legend_subplot=1, legend_loc="lower left")
+
+    assert fig.axes[0].get_legend() is None
+    legend = fig.axes[1].get_legend()
+    assert legend is not None
+    assert legend._loc == 3  # Matplotlib's code for "lower left".
+    assert [text.get_text() for text in legend.get_texts()] == ["first", "second"]
+  # end
+
+  def test_legend_subplot_rejects_an_out_of_range_index(self):
+    with pytest.raises(ValueError, match="between 0 and 0"):
+      backend.plot(_line(), show=False, legend_subplot=1)
+    # end
+  # end
 # end
 
 
@@ -344,7 +366,7 @@ class TestSurface:
 class TestComparisonOverlay:
   def test_contour_comparison_gives_each_dataset_its_own_color_and_legend(self):
     fig = backend.plot(_field_2d(), _field_2d(), show=False,
-        contour=True, comparison=True, labels=["a", "b"])
+        contour=True, comparison=True, legend_labels=["a", "b"])
     ax = fig.axes[0]
     assert ax.get_legend() is not None
     handles = ax.get_legend().legend_handles
@@ -354,7 +376,7 @@ class TestComparisonOverlay:
 
   def test_surface_comparison_gives_each_dataset_its_own_color_and_legend(self):
     fig = backend.plot(_field_2d(), _field_2d(), show=False,
-        surface=True, comparison=True, labels=["a", "b"])
+        surface=True, comparison=True, legend_labels=["a", "b"])
     ax = fig.axes[0]
     assert ax.get_legend() is not None
     assert len(ax.get_legend().legend_handles) == 2

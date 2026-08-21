@@ -319,7 +319,7 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
         xmin=xmin, xmax=xmax, xscale=xscale, xshift=xshift,
         ymin=ymin, ymax=ymax, yscale=yscale, yshift=yshift,
         zmin=zmin, zmax=zmax, zscale=zscale, zshift=zshift,
-        relax=relax, style=style, legend=show_legend, labels=[label],
+        relax=relax, style=style, legend=show_legend, legend_labels=[label],
         colorbar=True,
         xlabel=xlabel, ylabel=ylabel, clabel=clabel, title=title,
         subplot_titles=subplot_titles, subplot_xlabels=subplot_xlabels,

@@ -130,7 +130,10 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     zmin: float | None = None, zmax: float | None = None,
     zscale: float = 1.0, zshift: float = 0.0,
     relax: bool = False, style: str | None = None, rcParams: dict | None = None,
-    legend: bool = True, labels: list | None = None, forcelegend: bool = False,
+    legend: bool = True, legend_labels: list | None = None,
+    legend_subplot: int | None = None,
+    legend_loc: str | int | tuple = "best",
+    forcelegend: bool = False,
     colorbar: bool = True,
     xlabel: str | None = None, ylabel: str | None = None,
     clabel: str | None = None, title: str | None = None,
@@ -176,9 +179,12 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   When several 2-D datasets are overlaid onto the same axes for comparison,
   set ``comparison`` so each surface/contour gets a distinct color and a
   legend entry instead of overlapping and hiding each other. ``alpha``
-  controls the surface transparency. ``xkcd`` no longer leaks into
-  Matplotlib's global rcParams past this call -- it is scoped to the figure
-  drawn here.
+  controls the surface transparency. Set ``legend_subplot`` to a zero-based
+  subplot index to draw the legend only there; ``legend_loc`` accepts any
+  Matplotlib legend location and defaults to ``"best"``. Explicit
+  ``legend_labels`` are used verbatim on every component, without an added
+  ``_cN`` suffix. ``xkcd`` no longer leaks into Matplotlib's global rcParams
+  past this call -- it is scoped to the figure drawn here.
 
   Returns:
     The Matplotlib ``Figure``.
@@ -386,18 +392,32 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
       # end
     # end
 
+    if legend_subplot is not None:
+      num_legend_subplots = 1 if squeeze else layout_num_comps
+      if not isinstance(legend_subplot, int):
+        raise TypeError("'legend_subplot' must be an integer or None")
+      # end
+      if legend_subplot < 0 or legend_subplot >= num_legend_subplots:
+        raise ValueError(
+            f"'legend_subplot' must be between 0 and {num_legend_subplots - 1}")
+      # end
+    # end
+
     # ---- Phase 2: draw each dataset ----
     im = None
     cur_start_axes = start_axes
     for ds_i, data in enumerate(states):
-      if labels is not None and ds_i < len(labels):
-        label_prefix = labels[ds_i]
+      if legend_labels is not None and ds_i < len(legend_labels):
+        label_prefix = legend_labels[ds_i]
+        explicit_legend_label = True
       # end
       elif len(states) > 1 or forcelegend:
         label_prefix = data.get_label()
+        explicit_legend_label = False
       # end
       else:
         label_prefix = ""
+        explicit_legend_label = False
       # end
 
       cells = data.num_cells
@@ -445,9 +465,11 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
 
       for comp in idx_comps:
         cax = ax[0] if squeeze else ax[comp + cur_start_axes]
-        comp_label = (f"{label_prefix:s}_c{comp:d}".strip("_")
-            if len(idx_comps) > 1 else label_prefix)
-        comp_legend = legend
+        comp_label = (label_prefix if explicit_legend_label else
+            (f"{label_prefix:s}_c{comp:d}".strip("_")
+             if len(idx_comps) > 1 else label_prefix))
+        comp_legend = (legend and
+            (legend_subplot is None or cax is ax[legend_subplot]))
         comp_colorbar = colorbar
 
         if num_dims == 1:
@@ -697,10 +719,10 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
         if comp_legend:
           if getattr(cax, "_pgkyl_handles", None):
             # Overlaid 2D datasets (surface/contour comparison): real legend.
-            cax.legend(handles=cax._pgkyl_handles, loc=0)
+            cax.legend(handles=cax._pgkyl_handles, loc=legend_loc)
           # end
           elif num_dims == 1 and comp_label != "":
-            cax.legend(loc=0)
+            cax.legend(loc=legend_loc)
           # end
           elif not (surface and num_dims == 2):
             cax.text(0.03, 0.96, comp_label,

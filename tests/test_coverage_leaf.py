@@ -414,7 +414,7 @@ def test_plot_multi_dataset_1d_with_labels_shows_legend_and_title():
   from postgkyl import render
   a = pg.load(F1).interpolate().select(comp=0)
   b = pg.load(F1).interpolate().select(comp=0)
-  fig = render.plot(a, b, labels=["first", "second"], title="my title", show=False)
+  fig = render.plot(a, b, legend_labels=["first", "second"], title="my title", show=False)
   assert fig is not None
   assert fig._suptitle is not None
   assert fig._suptitle.get_text() == "my title"
