@@ -535,3 +535,49 @@ class TestCvalColoring:
     assert fig.axes[0].lines[0].get_color() == "red"
   # end
 # end
+
+
+# --------------------------------------------------------------------------
+# Explicit colors for 1D lines
+# --------------------------------------------------------------------------
+
+class TestLineColors:
+  def test_color_sequence_assigns_one_color_to_each_dataset(self):
+    fig = backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+        color=["tab:red", "tab:green", "tab:blue"])
+
+    assert [line.get_color() for line in fig.axes[0].lines] == [
+        "tab:red", "tab:green", "tab:blue"]
+  # end
+
+  def test_scalar_color_still_applies_to_every_line(self):
+    fig = backend.plot(_line(), _line(offset=1), show=False, color="purple")
+    assert [line.get_color() for line in fig.axes[0].lines] == ["purple", "purple"]
+  # end
+
+  def test_color_sequence_follows_dataset_then_component_order(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a, b, show=False,
+        color=["red", "orange", "blue", "cyan"])
+
+    assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
+    assert [line.get_color() for line in fig.axes[1].lines] == ["orange", "cyan"]
+  # end
+
+  def test_rgb_tuple_remains_a_single_color(self):
+    rgb = (0.1, 0.2, 0.3)
+    fig = backend.plot(_line(), _line(offset=1), show=False, color=rgb)
+    assert [line.get_color() for line in fig.axes[0].lines] == [rgb, rgb]
+  # end
+
+  def test_color_sequence_length_must_match_line_count(self):
+    with pytest.raises(ValueError, match="2 entries.*3 lines"):
+      backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+          color=["red", "blue"])
+    # end
+  # end
+# end

@@ -19,6 +19,7 @@ file-naming stay a CLI concern, as they were in main.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from contextlib import nullcontext
 
 import matplotlib as mpl
@@ -26,6 +27,7 @@ import matplotlib.font_manager as fm
 import mpl_toolkits.mplot3d  # noqa: F401  (registers the '3d' projection)
 import numpy as np
 from matplotlib import cm, colors, patches
+from matplotlib.typing import ColorType
 
 from postgkyl.gdatastate import flatten_datasets
 
@@ -33,6 +35,33 @@ from ._prep import subplot_grid
 from .style import apply_style
 
 _AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
+
+
+def _normalize_line_colors(color):
+  """Return ``color`` as a per-line tuple, or ``None`` for a scalar color.
+
+  Matplotlib color specifications such as RGB/RGBA tuples are sequences too,
+  so test the complete value before interpreting it as a sequence of colors.
+  """
+  if color is None or colors.is_color_like(color):
+    return None
+  # end
+  if isinstance(color, str):
+    return None  # let Matplotlib report its usual error for an invalid color
+  # end
+  try:
+    line_colors = tuple(color)
+  except TypeError:
+    return None
+  # end
+  if not line_colors:
+    raise ValueError("'color' must not be an empty sequence")
+  # end
+  if not all(colors.is_color_like(line_color) for line_color in line_colors):
+    raise ValueError("every entry in a 'color' sequence must be a valid Matplotlib color")
+  # end
+  return line_colors
+# end
 
 
 def _pgkyl_colorbar(im, fig, ax, *, label: str = "", extend: str | None = None):
@@ -193,7 +222,8 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     fixaspect: bool = False, aspect=None,
     edgecolors: str | None = None, showgrid: bool = True,
     hashtag: bool = False, xkcd: bool = False,
-    color: str | None = None, markersize: float | None = None,
+    color: ColorType | Iterable[ColorType] | None = None,
+    markersize: float | None = None,
     linewidth: float | None = None, linestyle: str | None = None,
     figsize=None, jet: bool = False, cmap: str | None = None,
     cval: float | None = None, cval_min: float | None = None,
@@ -224,6 +254,8 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
   normalization range (typically the min/max of the ``cval`` values across
   all curves), so several curves drawn into the same axes share one scale.
+  ``color`` accepts either one Matplotlib color, applied to every line, or a
+  sequence containing one color for each line in dataset/component order.
 
   For 2-D data, ``surface`` draws a 3D surface instead of a ``pcolormesh``.
   When several 2-D datasets are overlaid onto the same axes for comparison,
@@ -269,6 +301,8 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     # end
   # end
 
+  line_colors = _normalize_line_colors(color)
+
   # ---- Style / global rcParams novelties ----
   apply_style(style) if style else apply_style("postgkyl")
   if rcParams:
@@ -291,7 +325,7 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   else:
     xkcd_cm, xkcd_rc = nullcontext, {}
   # end
-  if color:
+  if color is not None and line_colors is None:
     mpl.rcParams["lines.color"] = color
   # end
   if linewidth:
@@ -313,6 +347,18 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     ref_num_dims = len(ref_cells) - int(np.sum(ref_cells <= 1))
     if ref_num_dims > 2:
       raise ValueError("Only 1D and 2D plots are currently supported")
+    # end
+    if line_colors is not None and ref_num_dims != 1:
+      raise ValueError("a 'color' sequence is only supported for 1D plots")
+    # end
+    if line_colors is not None:
+      component_step = 2 if (streamline or quiver) else 1
+      expected_colors = sum(st.values.shape[-1] // component_step for st in states)
+      if len(line_colors) != expected_colors:
+        raise ValueError(
+            f"'color' contains {len(line_colors)} entries, but the plot has "
+            f"{expected_colors} lines")
+      # end
     # end
     if split_linear_log:
       if ref_num_dims != 1:
@@ -588,6 +634,7 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     # ---- Phase 2: draw each dataset ----
     im = None
     cur_start_axes = start_axes
+    line_color_idx = 0
     for ds_i, data in enumerate(states):
       if legend_labels is not None and ds_i < len(legend_labels):
         label_prefix = legend_labels[ds_i]
@@ -674,7 +721,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             x, y = y, x
           # end
           # Color the line from the colormap when a 'cval' is given (1D only).
-          line_color = color
+          line_color = (line_colors[line_color_idx]
+              if line_colors is not None else color)
+          line_color_idx += 1
           if cmap and cval is not None:
             if cval_max is not None and cval_min is not None and cval_max != cval_min:
               t = (cval - cval_min) / (cval_max - cval_min)
