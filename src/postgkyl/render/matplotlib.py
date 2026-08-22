@@ -12,13 +12,14 @@ datasets sharing one figure: the layout (dimensionality, panel count, default
 labels) comes from the first dataset -- exactly what main's CLI achieved by
 repeating its single-dataset call onto a figure whose axes already exist (see
 ``cli/commands/plot.py``, which calls this once per active dataset, targeting
-a shared or fresh figure exactly as main's loop did). ``show``/``fig`` are the
-only render-time conveniences this layer still owns; save/saveframes/batch
-file-naming stay a CLI concern, as they were in main.
+a shared or fresh figure exactly as main's loop did). Saving now lives here,
+alongside figure construction and display; the CLI only resolves the output
+name when pool-level bookkeeping is required.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from contextlib import nullcontext
 
@@ -35,6 +36,73 @@ from ._prep import subplot_grid
 from .style import apply_style
 
 _AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
+_OUTPUT_EXTENSIONS = (".png", ".pdf")
+
+
+def _default_output_stem(states) -> str:
+  """Best-effort output stem when ``save=True`` has no explicit path."""
+  stems = []
+  for i, data in enumerate(states):
+    file_name = getattr(data, "_file_name", "") or ""
+    if file_name:
+      stem = os.path.basename(file_name).split(".")[0]
+    # end
+    else:
+      label = data.get_label() if hasattr(data, "get_label") else ""
+      stem = label.replace(" ", "_") if label else f"dataset_{i}"
+    # end
+    stems.append(stem)
+  # end
+  return "_".join(stems) or "matplotlib_output"
+# end
+
+
+def _output_paths(save, saveas, states) -> tuple[str, ...]:
+  """Normalize and validate Matplotlib output paths.
+
+  A sequence is accepted so the CLI can preserve combinations such as
+  ``--saveas plot.pdf --saveframes frame`` without saving outside the render
+  backend. Extension-less names retain the historical PNG default.
+  """
+  empty_path = (isinstance(saveas, (str, os.PathLike))
+      and not os.fspath(saveas))
+  if saveas is None or empty_path:
+    if not save:
+      return ()
+    # end
+    paths = [_default_output_stem(states)]
+  # end
+  elif isinstance(saveas, (str, os.PathLike)):
+    paths = [saveas]
+  # end
+  else:
+    try:
+      paths = list(saveas)
+    except TypeError as err:
+      raise TypeError("'saveas' must be a path or an iterable of paths") from err
+    # end
+  # end
+
+  normalized = []
+  for path in paths:
+    try:
+      path = os.fspath(path)
+    except TypeError as err:
+      raise TypeError("every 'saveas' entry must be path-like") from err
+    # end
+    _, ext = os.path.splitext(path)
+    ext = ext.lower()
+    if not ext:
+      path = f"{path}.png"
+    # end
+    elif ext not in _OUTPUT_EXTENSIONS:
+      raise ValueError("Unsupported file format for saving. Supported formats "
+          "are: .png, .pdf")
+    # end
+    normalized.append(path)
+  # end
+  return tuple(normalized)
+# end
 
 
 def _normalize_line_colors(color):
@@ -228,6 +296,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     figsize=None, jet: bool = False, cmap: str | None = None,
     cval: float | None = None, cval_min: float | None = None,
     cval_max: float | None = None,
+    save: bool = False,
+    saveas: str | os.PathLike | Iterable[str | os.PathLike] | None = None,
+    dpi: int = 200,
     show: bool = True, fig=None):
   """Plot one or more datasets onto a shared figure and return it.
 
@@ -245,10 +316,14 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   legend, colorbar, aspect, log axes, xkcd/hashtag/jet, style). ``transpose``
   swaps the horizontal and vertical axes: in 1-D the coordinate moves to the
   vertical axis; in 2-D the data, grid, and default labels are swapped before
-  drawing (shifts/scales keep their screen-axis meaning). ``show``
-  and ``fig`` are new-era conveniences: ``fig`` lets ``render.animate``
-  redraw onto a persistent (cleared) figure across frames; save/saveframes/
-  batch file-naming remain a CLI-layer concern, matching main.
+  drawing (shifts/scales keep their screen-axis meaning). ``save``/``saveas``/
+  ``show`` make the render call self-sufficient: ``saveas`` writes a PNG or
+  PDF according to its extension (an extension-less name defaults to PNG),
+  while ``save=True`` derives a PNG name from the input dataset. ``fig`` lets
+  ``render.animate`` redraw onto a persistent (cleared) figure across frames.
+  A sequence of ``saveas`` paths writes the same figure to each path; this is
+  primarily useful to CLI callers that request both a named output and frame
+  output.
 
   For 1-D data, passing ``cmap`` together with ``cval`` colors the line by
   mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
@@ -1090,6 +1165,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     # end dataset loop
 
     mpl_fig.tight_layout()
+    for output_path in _output_paths(save, saveas, states):
+      mpl_fig.savefig(output_path, dpi=dpi)
+    # end
   if show:
     plt.show()
   # end

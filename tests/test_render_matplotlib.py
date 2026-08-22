@@ -356,6 +356,57 @@ class TestStyleAndRcParams:
 
 
 # --------------------------------------------------------------------------
+# output
+# --------------------------------------------------------------------------
+
+class TestSaving:
+  @pytest.mark.parametrize("extension", [".png", ".pdf"])
+  def test_saveas_writes_supported_formats(self, tmp_path, extension):
+    output = tmp_path / f"figure{extension}"
+    fig = backend.plot(_line(), show=False, saveas=output)
+
+    assert output.exists()
+    assert fig is plt.gcf()
+  # end
+
+  def test_extensionless_saveas_defaults_to_png(self, tmp_path):
+    output = tmp_path / "figure"
+    backend.plot(_line(), show=False, saveas=output)
+
+    assert (tmp_path / "figure.png").exists()
+  # end
+
+  def test_empty_saveas_is_inert(self, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    backend.plot(_line(), show=False, saveas="")
+    assert list(tmp_path.iterdir()) == []
+  # end
+
+  def test_save_true_derives_a_png_name(self, tmp_path, monkeypatch):
+    data = _line()
+    data._file_name = "/input/run.gkyl"
+    monkeypatch.chdir(tmp_path)
+
+    backend.plot(data, show=False, save=True)
+
+    assert (tmp_path / "run.png").exists()
+  # end
+
+  def test_saveas_sequence_writes_each_requested_format(self, tmp_path):
+    outputs = [tmp_path / "figure.png", tmp_path / "figure.pdf"]
+    backend.plot(_line(), show=False, saveas=outputs)
+    assert all(output.exists() for output in outputs)
+  # end
+
+  def test_unsupported_save_extension_raises(self, tmp_path):
+    with pytest.raises(ValueError, match="Supported formats are: .png, .pdf"):
+      backend.plot(_line(), show=False, saveas=tmp_path / "figure.svg")
+    # end
+  # end
+# end
+
+
+# --------------------------------------------------------------------------
 # fig reuse (the hook render.animate needs)
 # --------------------------------------------------------------------------
 

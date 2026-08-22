@@ -54,7 +54,11 @@ class GData(GDataState):
   # end
 
   def plot(self, **kwargs):
-    """Render this dataset (terminal verb). Returns the matplotlib figure."""
+    """Render this dataset and return the Matplotlib figure.
+
+    Pass ``save=True`` for an auto-named PNG or ``saveas=...`` for a PNG/PDF
+    output path; no CLI glue is required.
+    """
     return operations.plot(self, **kwargs)
   # end
 

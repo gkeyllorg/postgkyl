@@ -5,9 +5,9 @@ per-dataset loop (default: a fresh figure per dataset; ``--figure``/
 ``--subplots``/``--multiblock``/``--figure dataset`` target a shared one,
 exactly as before) is preserved. ``render.plot`` (the ``output.plot`` engine)
 is called once per dataset, mirroring main's loop 1:1; this module owns
-figure targeting, the legend-label decision, save/saveframes/batch-mode file
-naming, and the final (single) ``plt.show()`` -- all of which were CLI-layer
-concerns in main too.
+figure targeting, the legend-label decision, pool-level output naming, and the
+final (single) ``plt.show()``. The render backend owns the actual PNG/PDF
+write, consistently with the other rendering commands.
 """
 
 from __future__ import annotations
@@ -115,8 +115,9 @@ from .._options import show_option, use_option
     help="Comma-separated x-axis labels for each subplot. e.g. --subplot-xlabels 'X1,X2,X3'")
 @click.option("--subplot-ylabels", default=None,
     help="Comma-separated y-axis labels for each subplot. e.g. --subplot-ylabels 'Y1,Y2,Y3'")
-@click.option("--save", is_flag=True, default=False, help="Save figure as PNG file.")
-@click.option("--saveas", default=None, help="Name of figure file.")
+@click.option("--save", is_flag=True, default=False, help="Save figure as a PNG file.")
+@click.option("--saveas", default=None,
+    help="Output path; supported formats are PNG and PDF.")
 @click.option("--dpi", type=int, default=200, help="DPI (resolution) for output.")
 @click.option("-e", "--edgecolors", default=None,
     help="Set color for cell edges to show grid outline.")
@@ -287,7 +288,19 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
     # end
   # end
 
-  file_name = ""
+  def output_stem(data, index):
+    src = getattr(data, "_file_name", "") or ""
+    if src:
+      return os.path.basename(src).split(".")[0]
+    # end
+    return "ev_" + (data.get_label() or f"dataset_{index}").replace(" ", "_")
+  # end
+
+  shared_saveas = saveas
+  if save and not shared_saveas:
+    shared_saveas = "_".join(output_stem(d, i) for i, d in enumerate(pool))
+  # end
+
   for i, d in enumerate(pool):
     fig_target = figure
     if dataset_fignum:
@@ -309,6 +322,22 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
 
     cval_value = cval_list[i] if cval_list is not None and i < len(cval_list) else None
 
+    output_paths = []
+    if save or saveas:
+      if fig_target is None:
+        output_paths.append(saveas or output_stem(d, i))
+      # end
+      elif i == len(pool) - 1:
+        output_paths.append(shared_saveas)
+      # end
+    # end
+    if saveframes:
+      output_paths.append(f"{saveframes}_{i}.png")
+    # end
+    if ds.batch and not (save or saveas or saveframes):
+      output_paths.append(f"{ds.prefix}_{i}.png")
+    # end
+
     pg.plot(d, args=arg, figure=fig_target, squeeze=squeeze,
         transpose=transpose, num_axes=num_axes, start_axes=start_axes,
         num_subplot_row=num_subplot_row, num_subplot_col=num_subplot_col,
@@ -328,45 +357,16 @@ def command(ctx, use, figure, squeeze, subplots, num_subplot_row, num_subplot_co
         showgrid=showgrid, hashtag=hashtag, xkcd=xkcd, color=color,
         markersize=markersize, linewidth=linewidth, linestyle=linestyle,
         figsize=parsed_figsize, jet=jet, cmap=cmap,
-        cval=cval_value, cval_min=cval_min, cval_max=cval_max, show=False)
+        cval=cval_value, cval_min=cval_min, cval_max=cval_max,
+        save=bool(output_paths),
+        saveas=(None if not output_paths else
+            output_paths[0] if len(output_paths) == 1 else output_paths),
+        dpi=dpi, show=False)
 
     if subplots:
       start_axes += d.num_comps
     # end
 
-    if save or saveas:
-      if saveas:
-        file_name = saveas
-      # end
-      else:
-        if file_name != "":
-          file_name = file_name + "_"
-        # end
-        src = getattr(d, "_file_name", "") or ""
-        if src:
-          file_name = file_name + os.path.basename(src).split(".")[0]
-        # end
-        else:
-          file_name = file_name + "ev_" + (d.get_label() or f"dataset_{i}").replace(" ", "_")
-        # end
-      # end
-    # end
-    if (save or saveas) and fig_target is None:
-      plt.savefig(str(file_name), dpi=dpi)
-      file_name = ""
-    # end
-
-    if saveframes:
-      plt.savefig(f"{saveframes}_{i}.png", dpi=dpi)
-    # end
-
-    if ds.batch and not (save or saveas or saveframes):
-      plt.savefig(f"{ds.prefix}_{i}.png", dpi=dpi)
-    # end
-  # end
-
-  if (save or saveas) and file_name:
-    plt.savefig(str(file_name), dpi=dpi)
   # end
 
   if show and not (saveframes or ds.batch):

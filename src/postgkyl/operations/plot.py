@@ -22,6 +22,10 @@ if TYPE_CHECKING:
 
 
 def plot(data: "GDataState", **kwargs):
-  """Render a single dataset. Returns the matplotlib figure."""
+  """Render a single dataset and return the Matplotlib figure.
+
+  Pass ``save=True`` for an auto-named PNG or ``saveas=...`` for a PNG/PDF
+  output path; the render backend performs the write.
+  """
   return render.plot(materialize_for_render(data), **kwargs)
 # end

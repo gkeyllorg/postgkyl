@@ -905,6 +905,12 @@ class TestPlotOptionCoverage:
     assert (tmp_path / "frame_1.png").exists()
   # end
 
+  def test_saveas_writes_pdf_through_render_backend(self, tmp_path):
+    output = tmp_path / "figure.pdf"
+    _ok([ENERGY, "plot", "--saveas", str(output)])
+    assert output.exists()
+  # end
+
   def test_show_without_batch_mode_or_saveframes_calls_plt_show(self):
     # Every other plot test in this file passes --batch-mode or --saveframes,
     # so ``plt.show()`` itself was never exercised.

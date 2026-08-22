@@ -4,9 +4,8 @@ Imports only ``gdatastate``/``numerics`` (plus Plotly/Matplotlib themselves),
 mirroring ``matplotlib.py``. Plotly cannot render mathtext, so labels go
 through ``render.labels.latex_to_html`` instead.
 
-Unlike ``matplotlib.py`` (where save/batch file-naming stays a CLI concern,
-``show``/``fig`` being the only render-time conveniences it owns), ``plotly``
-and ``plotly_animate`` own their *entire* save/preview lifecycle here --
+Like ``matplotlib.py``, ``plotly`` and ``plotly_animate`` own their *entire*
+save/preview lifecycle here --
 ``save``/``saveas``/``show`` (plus the rotating-export camera parameters) are
 real parameters of both functions, so e.g. ``pg.load(f).interpolate().plotly(show=True)``
 opens an auto-rotating browser preview with zero CLI glue, exactly as
