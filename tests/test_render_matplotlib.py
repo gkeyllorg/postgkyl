@@ -555,6 +555,18 @@ class TestLineColors:
     assert [line.get_color() for line in fig.axes[0].lines] == ["purple", "purple"]
   # end
 
+  def test_dataset_colors_repeat_across_component_panels(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a, b, show=False, color=["red", "blue"])
+
+    assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
+    assert [line.get_color() for line in fig.axes[1].lines] == ["red", "blue"]
+  # end
+
   def test_color_sequence_follows_dataset_then_component_order(self):
     a = _line()
     b = _line(offset=2)
@@ -575,7 +587,7 @@ class TestLineColors:
   # end
 
   def test_color_sequence_length_must_match_line_count(self):
-    with pytest.raises(ValueError, match="2 entries.*3 lines"):
+    with pytest.raises(ValueError, match="2 entries.*expected either 3.*or 3"):
       backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
           color=["red", "blue"])
     # end

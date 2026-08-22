@@ -255,7 +255,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   normalization range (typically the min/max of the ``cval`` values across
   all curves), so several curves drawn into the same axes share one scale.
   ``color`` accepts either one Matplotlib color, applied to every line, or a
-  sequence containing one color for each line in dataset/component order.
+  sequence containing one color per dataset (reused for all its components).
+  A sequence with one color per individual line is also accepted, in
+  dataset/component order.
 
   For 2-D data, ``surface`` draws a 3D surface instead of a ``pcolormesh``.
   When several 2-D datasets are overlaid onto the same axes for comparison,
@@ -351,13 +353,18 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     if line_colors is not None and ref_num_dims != 1:
       raise ValueError("a 'color' sequence is only supported for 1D plots")
     # end
+    line_colors_by_dataset = False
     if line_colors is not None:
       component_step = 2 if (streamline or quiver) else 1
       expected_colors = sum(st.values.shape[-1] // component_step for st in states)
-      if len(line_colors) != expected_colors:
+      if len(line_colors) == len(states):
+        line_colors_by_dataset = True
+      # end
+      elif len(line_colors) != expected_colors:
         raise ValueError(
-            f"'color' contains {len(line_colors)} entries, but the plot has "
-            f"{expected_colors} lines")
+            f"'color' contains {len(line_colors)} entries; expected either "
+            f"{len(states)} (one per dataset) or {expected_colors} "
+            "(one per line)")
       # end
     # end
     if split_linear_log:
@@ -721,8 +728,15 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             x, y = y, x
           # end
           # Color the line from the colormap when a 'cval' is given (1D only).
-          line_color = (line_colors[line_color_idx]
-              if line_colors is not None else color)
+          if line_colors is None:
+            line_color = color
+          # end
+          elif line_colors_by_dataset:
+            line_color = line_colors[ds_i]
+          # end
+          else:
+            line_color = line_colors[line_color_idx]
+          # end
           line_color_idx += 1
           if cmap and cval is not None:
             if cval_max is not None and cval_min is not None and cval_max != cval_min:
