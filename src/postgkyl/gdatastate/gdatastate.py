@@ -230,11 +230,35 @@ class GDataState:
 
   values = property(get_values, set_values)
 
-  def __getitem__(self, comp):
+  def __getitem__(self, index):
+    """Index values using their ordinary NumPy axis order.
+
+    The value layout is ``(*spatial_axes, component)``, so, for example, a
+    one-dimensional four-component dataset supports ``data[:, 2:4]``.  This
+    deliberately mirrors indexing ``data.values`` rather than treating every
+    subscript as a component-only selector.  A component is selected explicitly with ``data[..., 1]``.
+    """
     if self._values is None:
       raise ValueError("GData values are not loaded; cannot subscript.")
     # end
-    return self.get_values()[..., comp]
+    return self.get_values()[index]
+  # end
+
+  def __setitem__(self, index, value) -> None:
+    """Assign through NumPy-style indexing on NumPy-backed data.
+
+    Native Gkeyll storage is intentionally read-only from Python; use the
+    appropriate operation/kernel, or interpolate first, before mutating it.
+    """
+    if self._values is None:
+      raise ValueError("GData values are not loaded; cannot assign by subscript.")
+    # end
+    if isinstance(self._values, gpython.GkylArray):
+      raise ValueError(
+          "Cannot assign through indexing to native Gkeyll storage; call "
+          ".interpolate() first to obtain mutable NumPy-backed values.")
+    # end
+    self._values[index] = value
   # end
 
   def push(self, grid, values):
