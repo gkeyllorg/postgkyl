@@ -270,7 +270,11 @@ class GData(GDataState):
   __array_priority__ = 100  # ndarray defers to us in mixed ndarray·GData ops
 
   def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-    """Make ``np.sqrt``/``np.add``/... return a GData carrying the grid/ctx."""
+    """Apply NumPy ufuncs while preserving pointwise dataset metadata.
+
+    Pointwise calls such as ``np.sqrt``/``np.add`` return a GData carrying the
+    grid/ctx; reductions such as ``np.max``/``np.sum`` return NumPy results.
+    """
     return operations.arithmetic.apply_ufunc(ufunc, method, *inputs, **kwargs)
   # end
 # end

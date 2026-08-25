@@ -244,13 +244,27 @@ def _modal_scalar(op, data: GDataState, s: float, *, scalar_first: bool):
 
 # ------------------------------------------------------------------- ufuncs
 def apply_ufunc(ufunc, method, *inputs, **kwargs):
-  """Backend for ``GData.__array_ufunc__`` -- keeps the result a dataset.
+  """Backend for ``GData.__array_ufunc__``.
 
   Ufuncs are pointwise, so they are valid wherever the data are point values:
   the NumPy field domain, and the nodal/quad value_forms (computed on the
   views, wrapped back native, staying in-value_form). Modal coefficients
   refuse (via ``_require_operable``): a ufunc has no basis-space meaning.
+
+  Pointwise calls keep the result as a dataset. Reductions return the NumPy
+  scalar/array produced by the ufunc: after an arbitrary axis reduction the
+  original spatial grid no longer necessarily describes the result. This
+  supports NumPy's reduction helpers (``max``, ``min``, ``sum``, ``prod``,
+  ``all``, and ``any``), which dispatch here as ``ufunc.reduce``.
   """
+  if method == "reduce":
+    if len(inputs) != 1 or not isinstance(inputs[0], GDataState):
+      return NotImplemented
+    # end
+    data = inputs[0]
+    data._require_operable()
+    return ufunc.reduce(np.asarray(data.values), **kwargs)
+  # end
   if method != "__call__" or "out" in kwargs:
     return NotImplemented
   # end

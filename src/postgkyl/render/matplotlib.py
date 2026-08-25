@@ -132,6 +132,43 @@ def _normalize_line_colors(color):
 # end
 
 
+def _normalize_linestyles(linestyle, num_datasets: int):
+  """Return one linestyle per dataset, or ``None`` for a scalar style."""
+  if linestyle is None or isinstance(linestyle, str):
+    return None
+  # end
+  # A Matplotlib custom dash pattern, e.g. ``(0, (5, 2))``, is one style
+  # despite being a sequence itself.
+  try:
+    is_dash_pattern = (len(linestyle) == 2 and np.isscalar(linestyle[0])
+        and not isinstance(linestyle[1], str)
+        and all(np.isscalar(value) for value in linestyle[1]))
+  except (TypeError, IndexError):
+    is_dash_pattern = False
+  # end
+  if is_dash_pattern:
+    return None
+  # end
+  try:
+    linestyles = tuple(linestyle)
+  except TypeError:
+    return None
+  # end
+  if not linestyles:
+    raise ValueError("'linestyle' must not be an empty sequence")
+  # end
+  if len(linestyles) == 1:
+    return linestyles * num_datasets
+  # end
+  if len(linestyles) != num_datasets:
+    raise ValueError(
+        f"'linestyle' contains {len(linestyles)} entries; expected either 1 "
+        f"(applied to every dataset) or {num_datasets} (one per dataset)")
+  # end
+  return linestyles
+# end
+
+
 def _pgkyl_colorbar(im, fig, ax, *, label: str = "", extend: str | None = None):
   """The Postgkyl colorbar: appended beside ``ax`` (not shrinking it) via
   ``make_axes_locatable``, instead of stealing width from the panel."""
@@ -292,7 +329,8 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
     hashtag: bool = False, xkcd: bool = False,
     color: ColorType | Iterable[ColorType] | None = None,
     markersize: float | None = None,
-    linewidth: float | None = None, linestyle: str | None = None,
+    linewidth: float | None = None,
+    linestyle: str | Iterable[str] | None = None,
     figsize=None, jet: bool = False, cmap: str | None = None,
     cval: float | None = None, cval_min: float | None = None,
     cval_max: float | None = None,
@@ -332,7 +370,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   ``color`` accepts either one Matplotlib color, applied to every line, or a
   sequence containing one color per dataset (reused for all its components).
   A sequence with one color per individual line is also accepted, in
-  dataset/component order.
+  dataset/component order. ``linestyle`` similarly accepts one style applied
+  to every dataset, or a sequence with one entry per dataset; a one-entry
+  sequence is broadcast to every dataset.
 
   For 2-D data, ``surface`` draws a 3D surface instead of a ``pcolormesh``.
   When several 2-D datasets are overlaid onto the same axes for comparison,
@@ -379,6 +419,7 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   # end
 
   line_colors = _normalize_line_colors(color)
+  line_styles = _normalize_linestyles(linestyle, len(states))
 
   # ---- Style / global rcParams novelties ----
   apply_style(style) if style else apply_style("postgkyl")
@@ -408,7 +449,7 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   if linewidth:
     mpl.rcParams["lines.linewidth"] = linewidth
   # end
-  if linestyle:
+  if linestyle is not None and line_styles is None:
     mpl.rcParams["lines.linestyle"] = linestyle
   # end
 
@@ -822,18 +863,20 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             # end
             line_color = plt.get_cmap(cmap)(t)
           # end
+          line_style = line_styles[ds_i] if line_styles is not None else None
           if split_linear_log:
             left_mask = x < split_point
             split_masks = (left_mask, ~left_mask)
             im = []
             for split_ax, mask in zip(component_axes, split_masks):
               im.extend(split_ax.plot(x[mask], y[mask], *args,
-                  color=line_color, label=comp_label, markersize=markersize))
+                  color=line_color, linestyle=line_style, label=comp_label,
+                  markersize=markersize))
             # end
           # end
           else:
-            im = cax.plot(x, y, *args, color=line_color, label=comp_label,
-                markersize=markersize)
+            im = cax.plot(x, y, *args, color=line_color,
+                linestyle=line_style, label=comp_label, markersize=markersize)
           # end
           # Add a colorbar describing the cval-to-color mapping once per axes.
           if (cmap and cval is not None and comp_colorbar

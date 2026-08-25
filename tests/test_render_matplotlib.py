@@ -644,3 +644,55 @@ class TestLineColors:
     # end
   # end
 # end
+
+
+# --------------------------------------------------------------------------
+# Per-dataset linestyles for 1D lines
+# --------------------------------------------------------------------------
+
+class TestLineStyles:
+  def test_linestyle_sequence_assigns_one_style_to_each_dataset(self):
+    fig = backend.plot(_line(), _line(offset=1), show=False,
+        linestyle=["-", "--"])
+
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
+  # end
+
+  def test_scalar_linestyle_applies_to_every_dataset(self):
+    fig = backend.plot(_line(), _line(offset=1), show=False, linestyle=":")
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == [":", ":"]
+  # end
+
+  def test_single_entry_sequence_applies_to_every_dataset(self):
+    fig = backend.plot(_line(), _line(offset=1), show=False, linestyle=["-."])
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-.", "-."]
+  # end
+
+  def test_dataset_linestyles_repeat_across_component_panels(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a, b, show=False, linestyle=["-", "--"])
+
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
+    assert [line.get_linestyle() for line in fig.axes[1].lines] == ["-", "--"]
+  # end
+
+  def test_dataset_linestyles_apply_to_both_split_axes(self):
+    fig = backend.plot(_line(), _line(offset=1), show=False,
+        linestyle=["-", "--"], split_linear_log=True, split_point=0.5)
+
+    for axis in fig.axes:
+      assert [line.get_linestyle() for line in axis.lines] == ["-", "--"]
+    # end
+  # end
+
+  def test_linestyle_sequence_length_must_match_dataset_count(self):
+    with pytest.raises(ValueError, match="2 entries.*expected either 1.*or 3"):
+      backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+          linestyle=["-", "--"])
+    # end
+  # end
+# end
