@@ -82,7 +82,7 @@ have the most up-to-date version should install Postgkyl from the source code:
 git clone https://github.com/ammarhakim/postgkyl.git
 cd postgkyl
 pip install --upgrade numpy setuptools wheel
-pip install -e .[test] --no-build-isolation
+pip install -e '.[test]' --no-build-isolation
 ```
 
 Alternatively, Postgkyl can be installed directly from [PyPI](https://pypi.org/project/postgkyl/):
@@ -111,7 +111,7 @@ This step needs **network access** (to clone Gkeyll) and **a C compiler**.
 It defaults to `cc`; if your system doesn't have `cc`, set `CC=gcc` (or any compiler you have) before
 installing:
 ```bash
-CC=gcc pip install -e .[test] --no-build-isolation
+CC=gcc pip install -e '.[test]' --no-build-isolation
 ```
 
 **Always install with `--no-build-isolation`** (as above). Without it, `pip`
