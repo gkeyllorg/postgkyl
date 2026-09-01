@@ -12,12 +12,15 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Literal
+from typing import Literal, Protocol
 
 import msgpack
 import numpy as np
 import pyvista as pv
 
+from postgkyl.command_spec import (
+    CommandSpec, Execution, ResultPolicy, Section, command,
+)
 from postgkyl.numerics import nodal_to_cell_centered_grid
 
 # ctx keys that are either structural (already carried by the binary header
@@ -34,7 +37,22 @@ _INTERNAL_CTX_KEYS = frozenset({
 _CTX_TO_META_KEY = {"poly_order": "polyOrder", "basis_type": "basisType"}
 
 
-def save(data, out_name: str = "",
+class _WritableDataset(Protocol):
+  """Read-only dataset surface consumed by the format writers."""
+
+  num_dims: int
+  num_comps: int
+  num_cells: np.ndarray
+  bounds: tuple[np.ndarray, np.ndarray]
+  values: object
+  grid: list
+  ctx: dict
+# end
+
+
+@command(CommandSpec(Section.UTILITY, Execution.TERMINAL_EACH,
+    result=ResultPolicy.VALUE))
+def save(data: _WritableDataset, out_name: str = "",
     extension: Literal["gkyl", "txt", "npy", "vtk"] = "gkyl",
     var_name: str = "CartGridField") -> str:
   """Write ``data`` to ``out_name`` in the requested ``extension``.

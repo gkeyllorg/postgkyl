@@ -18,6 +18,7 @@ import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl import operations, io
+from postgkyl.command_spec import fluent, hidden
 
 from .gdatagroup import GDataGroup
 
@@ -361,4 +362,35 @@ class GData(GDataState):
     """
     return operations.arithmetic.apply_ufunc(ufunc, method, *inputs, **kwargs)
   # end
+# end
+
+
+# Exact operation delegations are mechanical fluent bindings. Their
+# signature, annotations, docstring, command metadata, and canonical identity
+# now have one home in the operation itself.
+for _name in (
+    "interpolate", "local_poly", "gk_rz", "gk_fluxsurf", "select", "integrate",
+    "integrate_axis", "average", "eval_at_coord_proj", "fft", "magsq",
+    "mask", "extract_input", "fit", "differentiate", "map",
+    "growth",
+):
+  setattr(GData, _name, fluent(getattr(
+      operations.gyrokinetics if _name in ("gk_rz", "gk_fluxsurf") else operations,
+      _name)))
+# end
+GData.save = fluent(io.save)
+GData.plot = fluent(operations.plot)
+GData.plotly = fluent(operations.plotly)
+
+for _name, _reason in {
+    "load": "the canonical loader is postgkyl.load",
+    "mul": "Python operators are not stringly exposed as commands",
+    "div": "Python operators are not stringly exposed as commands",
+    "to_modal": "representation shortcuts remain Python-only",
+    "to_nodal": "representation shortcuts remain Python-only",
+    "to_quad": "representation shortcuts remain Python-only",
+    "apply": "requires a Python callable",
+    "val2coord": "the functional operation owns this exceptional group result",
+}.items():
+  hidden(_reason)(GData.__dict__[_name])
 # end

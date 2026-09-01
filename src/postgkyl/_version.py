@@ -16,6 +16,7 @@ import platform
 import subprocess
 
 from postgkyl import gpython
+from postgkyl.command_spec import hidden
 
 _DEPENDENCIES = ("numpy", "scipy", "click", "matplotlib", "msgpack", "plotly", "pyvista")
 
@@ -92,3 +93,7 @@ def version_report(version: str) -> str:
       f"Dependencies:    {_dependency_versions()}",
   ])
 # end
+
+
+hidden("version reporting is handled by the manual --version front end")(
+    version_report)

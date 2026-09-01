@@ -44,6 +44,14 @@ def represent(data: "GDataState", *, to: str, num_quad: int | None = None,
   ``num_quad`` (default ``p+1``) Gauss–Legendre points per dimension;
   ``quad`` -> ``modal`` projects back with the rule the data was made with.
   ``nodal`` <-> ``quad`` composes through modal.
+
+  Args:
+    data: Native dataset to convert.
+    to: Target value representation.
+    num_quad: Gauss points per direction for quadrature representation.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
   """
   if to not in VALUE_FORMS:
     raise ValueError(f"unknown value_form '{to}'; "

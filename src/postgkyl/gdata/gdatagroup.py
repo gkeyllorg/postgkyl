@@ -65,6 +65,7 @@ from __future__ import annotations
 from postgkyl import operations
 from postgkyl.gdatastate.gdatastategroup import GDataStateGroup
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.command_spec import hidden
 
 from . import verbs
 
@@ -168,11 +169,20 @@ class GDataGroup(GDataStateGroup):
 
   def animate(self, **kwargs):
     """Animate the members, one frame each (see ``api.verbs.animate``)."""
-    return verbs.animate(*self._datasets, **kwargs)
+    return verbs.animate(self._datasets, **kwargs)
   # end
 
   def plotly_animate(self, **kwargs):
     """Animate the members with Plotly, one frame each (see ``api.verbs.plotly_animate``)."""
-    return verbs.plotly_animate(*self._datasets, **kwargs)
+    return verbs.plotly_animate(self._datasets, **kwargs)
   # end
+# end
+
+
+for _name in (
+    "load", "with_", "sort", "info", "collect", "evaluate", "animate",
+    "plotly_animate",
+):
+  hidden("the functional callable is the canonical command source")(
+      GDataGroup.__dict__[_name])
 # end

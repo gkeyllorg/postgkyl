@@ -44,6 +44,25 @@ from .nodes import GKYL_GEOMETRY_ID, gk_nodes, is_geo_mapc2p, multib_tag, nodes_
 from .rz import Geometry, RzProjection, gk_rz, map_to_rz, resolve_geometry, resolve_rz_projection
 from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surface_grid
 
+from typing import Annotated
+
+from postgkyl.command_spec import (
+    CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+)
+
+_LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD, selectable=False)
+_REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
+    selectable=False, result=ResultPolicy.VALUE)
+command(_LOAD_SPEC)(load_gk_distf)
+command(_LOAD_SPEC)(load_gk_quantity)
+gk_energy_balance.__annotations__["bflux_files"] = Annotated[
+    dict[str, str] | None, KeyValue()]
+gk_particle_balance.__annotations__["bflux_files"] = Annotated[
+    dict[str, str] | None, KeyValue()]
+for _function in (gk_energy_balance, gk_particle_balance, gk_nodes):
+  command(_REPORT_SPEC)(_function)
+# end
+
 __all__ = [
     "load_gk_distf", "resolve_frames",
     "available_quantities", "load_gk_quantity", "gk_quant_registry",

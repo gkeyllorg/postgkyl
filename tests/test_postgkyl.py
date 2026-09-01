@@ -433,18 +433,19 @@ def test_cli_abbreviation_and_info():
 # Architecture contract: the layering is a strict, cycle-free DAG.
 # --------------------------------------------------------------------------
 _ALLOWED = {
+    "command_spec": set(),                            # frozen CLI metadata; dependency-free leaf
     "gpython":    set(),                                # the foreign floor (only ctypes owner)
     "numerics": set(),
     "dg":     {"gpython"},                              # interpolation bridge + modal ops -> kernels
-    "io":     {"gpython", "numerics"},                  # C-native reader -> gkyl_array_rio;
+    "io":     {"gpython", "numerics", "command_spec"}, # C-native reader -> gkyl_array_rio;
                                                       # writer reuses the pure-math leaf
                                                       # (nodal_to_cell_centered_grid for the
                                                       # vtk writer) instead of duplicating
                                                       # it -- numerics has 0 internal imports,
                                                       # so this cannot create a cycle (layer 04-io)
     "gdatastate": {"io", "gpython"},                    # container holds a GkylArray backend
-    "render": {"gdatastate", "numerics"},
-    "operations": {"gdatastate", "dg", "numerics", "render"}, # data transformations:
+    "render": {"gdatastate", "numerics", "command_spec"},
+    "operations": {"gdatastate", "dg", "numerics", "render", "command_spec"}, # data transformations:
                                                       # the physics verbs (moments/agyro/
                                                       # current/energetics/rotate/
                                                       # transform_frame/laguerre) moved up
@@ -455,7 +456,7 @@ _ALLOWED = {
                                                       # gyrokinetics) own transformations that
                                                       # need domain geometry without deriving
                                                       # a physical conclusion
-    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render"}, # added by
+    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render", "command_spec"}, # added by
                                                       # 10-diagnostics.md: equation-
                                                       # specific compositions (five_moment/
                                                       # ten_moment/mhd/plasma/multispecies/
@@ -484,8 +485,8 @@ _ALLOWED = {
                                                       # neither of which imports diagnostics,
                                                       # so this cannot create a cycle whether
                                                       # or not the edge is ever exercised
-    "gdata":  {"gdatastate", "operations", "io"},
-    "":       {"gdata", "operations", "render", "io", "diagnostics", "gpython", "_version"}, # facade:
+    "gdata":  {"gdatastate", "operations", "io", "command_spec"},
+    "":       {"gdata", "operations", "render", "io", "diagnostics", "gpython", "_version", "command_spec"}, # facade:
                                                       # pure re-export of public names;
                                                       # "diagnostics" added by
                                                       # 12-diagnostics-loaders.md, which
@@ -500,7 +501,7 @@ _ALLOWED = {
                                                       # reads gpython.available()/build_info())
                                                       # -- both source files sit in the same ""
                                                       # layer, so both edges are checked here
-    "cli":    {""},                                   # top surface: pure consumer of the facade
+    "cli":    {"", "command_spec"},                   # top surface: facade + frozen metadata
 }
 _LAYERS = set(_ALLOWED)
 

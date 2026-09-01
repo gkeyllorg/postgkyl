@@ -30,6 +30,7 @@ import numpy as np
 from matplotlib import cm, colors, patches
 from matplotlib.typing import ColorType
 
+from postgkyl.command_spec import hidden
 from postgkyl.gdatastate import flatten_datasets
 
 from ._prep import subplot_grid
@@ -1219,3 +1220,9 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
   # end
   return mpl_fig
 # end
+
+
+hidden(
+    "the generated single-dataset command is owned by operations.plot; "
+    "this multi-dataset renderer also accepts Python-only figure objects",
+)(plot)

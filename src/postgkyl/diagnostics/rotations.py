@@ -155,3 +155,40 @@ def perprotate(array: "GDataState", rotator: "GDataState", *,
       rotate_coords=coords)
   return array._result(grid, values, inplace=inplace, tag=tag, label=label)
 # end
+
+
+def bparrotate(array: "GDataState", field: "GDataState", *,
+    inplace: bool = False, tag: str | None = None,
+    label: str | None = None) -> "GDataState":
+  """Project an array parallel to the magnetic field.
+
+  Args:
+    array: Vector or tensor dataset to project.
+    field: Electromagnetic field whose components 3 through 5 are magnetic.
+    inplace: Mutate and return ``array`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+  """
+  return parrotate(array, field, coords="3:6", inplace=inplace, tag=tag,
+      label=label)
+# end
+
+
+def bperprotate(array: "GDataState", field: "GDataState", *,
+    inplace: bool = False, tag: str | None = None,
+    label: str | None = None) -> "GDataState":
+  """Project an array perpendicular to the magnetic field.
+
+  Args:
+    array: Vector or tensor dataset to project.
+    field: Electromagnetic field whose components 3 through 5 are magnetic.
+    inplace: Mutate and return ``array`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+  """
+  return perprotate(array, field, coords="3:6", inplace=inplace, tag=tag,
+      label=label)
+# end
+
+
+__all__ = ["parrotate", "perprotate", "bparrotate", "bperprotate"]

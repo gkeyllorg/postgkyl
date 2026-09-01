@@ -91,6 +91,9 @@ def integrate_axis(data: "GDataState", axis: int | tuple | str | None = None, *,
     axis: axis (or axes) to integrate over: an ``int``, a ``tuple`` of
       ``int``, a comma-separated string (``"0,1"``), a colon slice string
       (``"0:2"``), or ``None`` (integrate over every axis).
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
 
   Returns:
     A new dataset with the integrated axes collapsed to a single, grid-mean

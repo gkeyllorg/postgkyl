@@ -25,6 +25,13 @@ def local_poly(data: "GDataState", *, npoints: int = 2, inplace: bool = False,
   Basis, polynomial order, and value_form are properties of ``data`` itself,
   fixed at load time, same as ``interpolate``. The result is flagged
   ``interpolated=True`` so it becomes safe for element-wise math.
+
+  Args:
+    data: Dataset containing modal DG coefficients.
+    npoints: Evaluation points in each cell and direction.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
   """
   basis_type = data.ctx.get("basis_type")
   if not basis_type:

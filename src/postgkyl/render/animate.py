@@ -276,6 +276,9 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
   num_frames = len(frames)
   duration = 1.0e3 / fps if fps else float(interval)
   out_file = saveas or "anim.gif"
+  if not os.path.splitext(out_file)[1]:
+    out_file += ".gif"
+  # end
 
   if saveframes:
     frame_files = _save_frames(frames, saveframes, dpi=dpi, figsize=figsize,

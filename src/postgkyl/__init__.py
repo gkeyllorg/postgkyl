@@ -51,9 +51,14 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
 """
 
 from postgkyl.gdata import GData, load, GDataGroup, animate, collect, evaluate, plotly_animate, relchange, sort
-from postgkyl.operations import apply, available_evaluate_operators, info, integrate, interpolate, represent, select
-from postgkyl.operations.gyrokinetics import gk_rz
-from postgkyl.render import plot
+from postgkyl.operations import (
+    apply, available_evaluate_operators, average, differentiate,
+    eval_at_coord_proj, extract_input, fft, fit, grid, growth, info, integrate,
+    integrate_axis, interpolate, local_poly, magsq, map, mask, represent,
+    select, val2coord,
+)
+from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
+from postgkyl.render import plot, pyvista
 from postgkyl.io import save
 from postgkyl.diagnostics.gyrokinetics import (
     load_gk_distf, load_gk_quantity, available_quantities as available_gk_quantities)
@@ -62,8 +67,11 @@ from postgkyl._version import version_report
 __version__ = "2.0.0"
 
 __all__ = ["GData", "load", "GDataGroup", "plot", "info", "integrate",
-    "interpolate", "select", "represent", "apply", "gk_rz", "save",
+    "interpolate", "local_poly", "select", "integrate_axis", "average",
+    "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
+    "extract_input", "fit", "growth", "differentiate", "map",
+    "represent", "apply", "gk_rz", "gk_fluxsurf", "save",
     "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
-    "available_evaluate_operators",
+    "available_evaluate_operators", "pyvista",
     "load_gk_quantity", "load_gk_distf", "available_gk_quantities",
     "__version__", "version_report"]

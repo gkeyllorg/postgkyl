@@ -53,6 +53,9 @@ def average(data: "GDataState", dims, *, weight: "GDataState | None" = None,
       ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
       field (``gkyl_array_average`` takes no field-index argument) -- the
       plain average (dividing by volume) is computed when omitted.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
 
   Returns:
     A new dataset over the surviving dimensions -- or a single degenerate
