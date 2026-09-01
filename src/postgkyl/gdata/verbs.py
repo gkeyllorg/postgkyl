@@ -10,8 +10,8 @@ way ``interpolate``/``select``/``fft``/... are on
 matching :mod:`postgkyl.operations` verb, so the functional spelling
 (``postgkyl.collect(a, b)``) and this module-level fluent spelling can never
 drift apart. :class:`~postgkyl.gdata.gdatagroup.GDataGroup` re-uses these same
-functions for its own ``collect``/``evaluate``/``animate``/``plotly_animate``
-terminal methods.
+functions for its own ``sort``/``collect``/``evaluate``/``animate``/
+``plotly_animate`` methods.
 """
 
 from __future__ import annotations

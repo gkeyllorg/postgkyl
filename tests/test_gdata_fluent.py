@@ -331,6 +331,34 @@ class TestGDataGroup:
     assert len(out) == 3
   # end
 
+  def test_sort_reorders_members_and_preserves_the_group(self):
+    frames = self._frames()
+    names = ("field_10.gkyl", "field_1.gkyl", "field_2.gkyl")
+    for frame, name in zip(frames, names):
+      frame._file_name = name
+    # end
+
+    out = ApiGDataGroup(frames).sort()
+
+    assert isinstance(out, ApiGDataGroup)
+    assert [member.file_name for member in out] == [
+        "field_1.gkyl", "field_2.gkyl", "field_10.gkyl"]
+    assert isinstance(out.select(comp=0), ApiGDataGroup)
+  # end
+
+  def test_sort_accepts_reverse(self):
+    frames = self._frames()
+    names = ("field_10.gkyl", "field_1.gkyl", "field_2.gkyl")
+    for frame, name in zip(frames, names):
+      frame._file_name = name
+    # end
+
+    out = ApiGDataGroup(frames).sort(reverse=True)
+
+    assert [member.file_name for member in out] == [
+        "field_10.gkyl", "field_2.gkyl", "field_1.gkyl"]
+  # end
+
   def test_broadcast_terminal_verb_returns_a_plain_list(self):
     g = ApiGDataGroup(self._frames())
     figs = g.plot(show=False)
