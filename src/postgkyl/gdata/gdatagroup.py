@@ -35,13 +35,14 @@ every member, in order (**broadcasting**):
   unaffected. An attribute missing from any member also raises
   ``AttributeError`` immediately, at access time.
 
-Five verbs are **not** broadcast because they combine the members into a
-single result rather than acting on each independently; these are defined
-explicitly below, delegating to the matching multi-dataset function in
-``operations``/``api.verbs``: ``info`` (one combined summary), ``collect`` (stack
-into one dataset), ``evaluate`` (evaluate an RPN expression over the members),
-``animate`` (one animation, one frame per member), ``plotly_animate`` (one
-Plotly animation, one frame per member) -- matching the deferred worklist
+Six verbs are **not** broadcast because they combine or reorder the members
+into a single result rather than acting on each independently; these are
+defined explicitly below, delegating to the matching multi-dataset function
+in ``operations``/``api.verbs``: ``sort`` (reorder the group), ``info`` (one
+combined summary), ``collect`` (stack into one dataset), ``evaluate``
+(evaluate an RPN expression over the members), ``animate`` (one animation,
+one frame per member), ``plotly_animate`` (one Plotly animation, one frame per
+member) -- matching the deferred worklist
 from layer 05's report (the old ``src_bak`` class's non-broadcast methods
 were exactly ``__getattr__`` broadcasting, ``plot``, ``info``, ``animate``,
 ``plotly_animate``, ``collect``, ``evaluate``). ``plot`` is still not in the
@@ -49,7 +50,7 @@ new ``operations`` verb inventory as a multi-dataset verb, so it stays a
 broadcast (one figure per member, see above); ``plotly`` (single-dataset) is
 now a plain ``GData`` method, so ``group.plotly()`` is already covered by the
 broadcast rule too -- only ``info``/``collect``/``evaluate``/``animate``/
-``plotly_animate`` need the explicit treatment here.
+``plotly_animate`` and ``sort`` need the explicit treatment here.
 
 ``operations.grid`` has no fluent spelling anywhere (not on ``GData``, so not
 broadcast here either) -- see ``api/gdata.py`` for why.
@@ -95,6 +96,11 @@ class GDataGroup(GDataStateGroup):
   # end
 
   __and__ = with_
+
+  def sort(self, *, reverse: bool = False) -> "GDataGroup":
+    """Return a naturally filename-sorted group (see ``operations.sort``)."""
+    return type(self)(verbs.sort(*self._datasets, reverse=reverse))
+  # end
 
   def __getitem__(self, index):
     """Index or slice; a slice returns a group of the same concrete class."""
