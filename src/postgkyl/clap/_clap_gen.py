@@ -160,9 +160,9 @@ def _render_command(cli_name: str, command: click.Command) -> str:
   # installed click version preserves docstring indentation; otherwise the
   # rendered output (and the ``test_clap_in_sync`` check) would differ between
   # environments purely on leading whitespace.
-  doc = "\n".join(
-      line.rstrip() for line in inspect.cleandoc(command.help or "").splitlines())
-  lines = ['    """' + (doc if doc else method)]
+  doc = inspect.cleandoc(command.help or "") or method
+  lines = ['    """']
+  lines.extend(("    " + line).rstrip() for line in doc.splitlines())
   all_params = required + optional
   if all_params:
     lines.append("")

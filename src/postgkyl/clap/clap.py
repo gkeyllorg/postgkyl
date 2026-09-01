@@ -41,18 +41,19 @@ class PgkylSession(_Session):
       tag: str | None = None,
       index: str | None = None,
       focused: bool = False):
-    """Select datasets(s) to pass further down the command chain.
+    """
+    Select datasets(s) to pass further down the command chain.
 
-Datasets are indexed starting 0. Multiple datasets can be selected using a comma
-separated list or a range specifier. Unless '--focused' is selected, all unselected
-datasets will be deactivated.
+    Datasets are indexed starting 0. Multiple datasets can be selected using a comma
+    separated list or a range specifier. Unless '--focused' is selected, all unselected
+    datasets will be deactivated.
 
-'--tag' and '--index' allow to specify tags and indices. The not specified, 'activate'
-applies to all. Both parameters support comma-separated values. '--index' also
-supports slices following the Python conventions, e.g., '3:7' or ':-5:2'.
+    '--tag' and '--index' allow to specify tags and indices. The not specified, 'activate'
+    applies to all. Both parameters support comma-separated values. '--index' also
+    supports slices following the Python conventions, e.g., '3:7' or ':-5:2'.
 
-'info' command (especially with the '-ac' flags) can be helpful when
-activating/deactivating multiple datasets.
+    'info' command (especially with the '-ac' flags) can be helpful when
+    activating/deactivating multiple datasets.
 
     Args:
       tag: (--tag, -t) Tag(s) to apply to (comma-separated).
@@ -67,10 +68,11 @@ activating/deactivating multiple datasets.
       bfield: str = 'field',
       tag: str | None = None,
       label: str | None = None):
-    """Compute a measure of agyrotropy.
+    """
+    Compute a measure of agyrotropy.
 
-Default measure is taken from Swisdak 2015. Optionally computes agyrotropy as
-Frobenius norm of agyrotropic pressure tensor.
+    Default measure is taken from Swisdak 2015. Optionally computes agyrotropy as
+    Frobenius norm of agyrotropic pressure tensor.
 
     Args:
       measure: (--measure, -m) Specify how to calculate agyrotropy.
@@ -148,10 +150,11 @@ Frobenius norm of agyrotropic pressure tensor.
       tmpdir: str | None = None,
       figsize: str | None = None,
       multiblock: bool = False):
-    """Animate the actively loaded dataset and show resulting plots in a loop.
+    """
+    Animate the actively loaded dataset and show resulting plots in a loop.
 
-Typically, the datasets are loaded using wildcard/regex feature of the -f option to
-the main pgkyl executable.
+    Typically, the datasets are loaded using wildcard/regex feature of the -f option to
+    the main pgkyl executable.
 
     Args:
       use: (--use, -u) Specify a tag to plot.
@@ -231,11 +234,12 @@ the main pgkyl executable.
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Collect data from the active datasets and create a new combined dataset.
+    """
+    Collect data from the active datasets and create a new combined dataset.
 
-The time-stamp in each of the active datasets is collected and used as the new X-axis.
-Data can be collected in chunks, in which case several datasets are created, each with
-the chunk-sized pieces collected into each new dataset.
+    The time-stamp in each of the active datasets is collected and used as the new X-axis.
+    Data can be collected in chunks, in which case several datasets are created, each with
+    the chunk-sized pieces collected into each new dataset.
 
     Args:
       sumdata: (-s, --sumdata) Sum data in the collected datasets (retain components).
@@ -251,7 +255,8 @@ the chunk-sized pieces collected into each new dataset.
   def config(self,
       gkylsoft: str | None = None,
       config_file: str | None = None):
-    """Write postgkyl configuration (gkylsoft path) to the config file.
+    """
+    Write postgkyl configuration (gkylsoft path) to the config file.
 
     Args:
       gkylsoft: (--gkylsoft, -g) Path to the gkylsoft directory. Uses GKYLSOFT_DIR env variable if not provided.
@@ -264,7 +269,8 @@ the chunk-sized pieces collected into each new dataset.
       use: str | None = None,
       tag: str = 'current',
       label: str = 'J'):
-    """Accumulate current, sum over species of charge multiplied by flow.
+    """
+    Accumulate current, sum over species of charge multiplied by flow.
 
     Args:
       qbym: (--qbym, -q) Flag for multiplying by charge/mass ratio instead of just charge.
@@ -278,18 +284,19 @@ the chunk-sized pieces collected into each new dataset.
       tag: str | None = None,
       index: str | None = None,
       focused: bool = False):
-    """Select datasets(s) to pass further down the command chain.
+    """
+    Select datasets(s) to pass further down the command chain.
 
-Datasets are indexed starting 0. Multiple datasets can be selected using a comma
-separated list or a range specifier. Unless '--focused' is selected, all unselected
-datasets will be activated.
+    Datasets are indexed starting 0. Multiple datasets can be selected using a comma
+    separated list or a range specifier. Unless '--focused' is selected, all unselected
+    datasets will be activated.
 
-'--tag' and '--index' allow to specify tags and indices. The not specified,
-'deactivate' applies to all. Both parameters support comma-separated values. '--index'
-also supports slices following the Python conventions, e.g., '3:7' or ':-5:2'.
+    '--tag' and '--index' allow to specify tags and indices. The not specified,
+    'deactivate' applies to all. Both parameters support comma-separated values. '--index'
+    also supports slices following the Python conventions, e.g., '3:7' or ':-5:2'.
 
-'info' command (especially with the '-ac' flags) can be helpful when
-activating/deactivating multiple datasets.
+    'info' command (especially with the '-ac' flags) can be helpful when
+    activating/deactivating multiple datasets.
 
     Args:
       tag: (--tag, -t) Tag(s) to apply to (comma-separated).
@@ -310,14 +317,15 @@ activating/deactivating multiple datasets.
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Average a DG field over specified directions.
+    """
+    Average a DG field over specified directions.
 
-Directions to average over are specified using the flags --z0, --z1, ... --z5.
-The output has a reduced dimensionality corresponding to the averaged directions.
+    Directions to average over are specified using the flags --z0, --z1, ... --z5.
+    The output has a reduced dimensionality corresponding to the averaged directions.
 
-The geometric Jacobian <prefix>-geo_int_jacobgeo.gkyl (found next to the dataset)
-is used as the weight if present, giving the weighted average int(f J dx) / int(J dx).
-Override the weight file with --weight, or disable weighting with '--weight none'.
+    The geometric Jacobian <prefix>-geo_int_jacobgeo.gkyl (found next to the dataset)
+    is used as the weight if present, giving the weighted average int(f J dx) / int(J dx).
+    Override the weight file with --weight, or disable weighting with '--weight none'.
 
     Args:
       z0: (--z0) Average over direction 0.
@@ -345,9 +353,10 @@ Override the weight file with --weight, or disable weighting with '--weight none
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Evaluate a DG field at specified coordinates and project onto a lower-dimensional basis.
+    """
+    Evaluate a DG field at specified coordinates and project onto a lower-dimensional basis.
 
-Coordinates specified with --z0, --z1, ... --z5.
+    Coordinates specified with --z0, --z1, ... --z5.
 
     Args:
       z0: (--z0) Physical coord to evaluate in direction 0.
@@ -366,13 +375,14 @@ Coordinates specified with --z0, --z1, ... --z5.
   def dg_local_poly(self,
       use: str | None = None,
       npoints: int = 2):
-    """Generate a discontinuous DG polynomial cellwise representation of the data.
-The modal DG decomposition is evaluated with npoints per cell from one face
-to the other. A NaN is inserted at every cell interface so that, when plotted,
-the curve is broken at each interface and the inter-cell discontinuities of the DG solution
-are visible.
-Example (1D plot of the M0 moment along x at frame 0):
-  pgkyl sim_3x2v_p1-ion_M0_0.gkyl dg-local-poly sel --z1=0.0 --z2=0.0 pl
+    """
+    Generate a discontinuous DG polynomial cellwise representation of the data.
+    The modal DG decomposition is evaluated with npoints per cell from one face
+    to the other. A NaN is inserted at every cell interface so that, when plotted,
+    the curve is broken at each interface and the inter-cell discontinuities of the DG solution
+    are visible.
+    Example (1D plot of the M0 moment along x at frame 0):
+      pgkyl sim_3x2v_p1-ion_M0_0.gkyl dg-local-poly sel --z1=0.0 --z2=0.0 pl
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -389,7 +399,8 @@ Example (1D plot of the M0 moment along x at frame 0):
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Interpolate a derivative of DG data on a uniform mesh.
+    """
+    Interpolate a derivative of DG data on a uniform mesh.
 
     Args:
       basis_type: (--basis_type, -b) Specify DG basis.
@@ -409,7 +420,8 @@ Example (1D plot of the M0 moment along x at frame 0):
       field: str = 'field',
       tag: str = 'energetics',
       label: str = 'E'):
-    """Decomposes the components of the energy (kinetic, thermal, electromagnetic) for a two-species (electron, ion) plasma.
+    """
+    Decomposes the components of the energy (kinetic, thermal, electromagnetic) for a two-species (electron, ion) plasma.
 
     Args:
       elc: (--elc, -e) Tag for electrons.
@@ -426,8 +438,9 @@ Example (1D plot of the M0 moment along x at frame 0):
       variable_name: Literal['density', 'xvel', 'yvel', 'zvel', 'vel', 'pressure', 'ke', 'temp', 'sound', 'mach'] | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Compute Euler (five-moment) primitive and some derived variables
-from fluid conserved variables.
+    """
+    Compute Euler (five-moment) primitive and some derived variables
+    from fluid conserved variables.
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -443,8 +456,9 @@ from fluid conserved variables.
       tag: str | None = None,
       label: str | None = None,
       all: bool = False):
-    """Manipulate datasets using math expressions. Expressions are specified using Reverse Polish Notation (RPN), e.g., 'f[0] f[1] +'.
-Supported operators are:  '+', '-', '*', '/', 'dot', 'sqrt', 'sin', 'cos', 'tan', 'abs', 'avg', 'log', 'log10', 'max', 'min', 'max2', 'min2', 'mean', 'len', 'pow', 'sq', 'exp', 'grad', 'grad2', 'int', 'div', 'curl', 'scale_comp', 'scale_zi_axis'
+    """
+    Manipulate datasets using math expressions. Expressions are specified using Reverse Polish Notation (RPN), e.g., 'f[0] f[1] +'.
+    Supported operators are:  '+', '-', '*', '/', 'dot', 'sqrt', 'sin', 'cos', 'tan', 'abs', 'avg', 'log', 'log10', 'max', 'min', 'max2', 'min2', 'mean', 'len', 'pow', 'sq', 'exp', 'grad', 'grad2', 'int', 'div', 'curl', 'scale_comp', 'scale_zi_axis'
 
     Args:
       chain: (chain)
@@ -456,7 +470,8 @@ Supported operators are:  '+', '-', '*', '/', 'dot', 'sqrt', 'sin', 'cos', 'tan'
 
   def extractinput(self,
       use: str | None = None):
-    """Extract embedded input file from compatible BP files
+    """
+    Extract embedded input file from compatible BP files
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -469,9 +484,10 @@ Supported operators are:  '+', '-', '*', '/', 'dot', 'sqrt', 'sin', 'cos', 'tan'
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Calculate the Fourier Transform or the power-spectral density of input data.
+    """
+    Calculate the Fourier Transform or the power-spectral density of input data.
 
-Only works on 1D data at present.
+    Only works on 1D data at present.
 
     Args:
       psd: (-p, --psd) Limits output to positive frequencies and returns the power spectral density |FT|^2.
@@ -496,22 +512,23 @@ Only works on 1D data at present.
       mapc2p: bool | str | None = None,
       block: int | None = None,
       tag: str = 'f'):
-    """Gyrokinetics: load the distribution function from files containing the
-distribution (f) times one or multiple Jacobians (J). The Jacobians are
-divided out in order to output f. The distribution is interpolated, and
-the interpolation can optionally use mappings to convert from computational
-to physical coordinates.
+    """
+    Gyrokinetics: load the distribution function from files containing the
+    distribution (f) times one or multiple Jacobians (J). The Jacobians are
+    divided out in order to output f. The distribution is interpolated, and
+    the interpolation can optionally use mappings to convert from computational
+    to physical coordinates.
 
-
-Command line example:
-  pgkyl gk-distf -n gk_lorentzian_mirror -s ion -f 0
+    
+    Command line example:
+      pgkyl gk-distf -n gk_lorentzian_mirror -s ion -f 0
 
-
-Script example:
-  import postgkyl as pg
-  from postgkyl.commands import load_gk_distf
+    
+    Script example:
+      import postgkyl as pg
+      from postgkyl.commands import load_gk_distf
 
-  distf = pg.commands.load_gk_distf(name="gk_lorentzian_mirror", species="ion", frame=0)
+      distf = pg.commands.load_gk_distf(name="gk_lorentzian_mirror", species="ion", frame=0)
 
     Args:
       name: (--name, -n) Simulation name prefix (e.g. gk_lorentzian_mirror).
@@ -558,37 +575,38 @@ Script example:
       indent_left: float = 0.0,
       add_width: float = 0.0,
       saveas: str | None = None):
-    """
-Gyrokinetics: Plot the energy balance of a simulation.
-Requires the following files:
-  <simulation_name>-field_energy_dot.gkyl
-  ..._fdot_integrated_moms.gkyl
-  ..._source_integrated_moms.gkyl
-  ..._bflux_<direction><side>_integrated_HamiltonianMoments.gkyl
-where ... means <simulation_name>-<species_name>, and we need these
-files for each species. The last two files above are only needed if
-the simulation had sources or non-periodic boundaries.
-For electromagnetic simulations, the following file is also used
-(if present):
-  <simulation_name>-apar_energy_dot.gkyl
-If the relative error is requested, these are also needed:
-  ..._integrated_moms.gkyl
-  <simulation_name>-field_energy.gkyl
-  <simulation_name>-apar_energy.gkyl  (electromagnetic only)
-  <simulation_name>-dt.gkyl
+    """
+    
+    Gyrokinetics: Plot the energy balance of a simulation.
+    Requires the following files:
+      <simulation_name>-field_energy_dot.gkyl
+      ..._fdot_integrated_moms.gkyl
+      ..._source_integrated_moms.gkyl
+      ..._bflux_<direction><side>_integrated_HamiltonianMoments.gkyl
+    where ... means <simulation_name>-<species_name>, and we need these
+    files for each species. The last two files above are only needed if
+    the simulation had sources or non-periodic boundaries.
+    For electromagnetic simulations, the following file is also used
+    (if present):
+      <simulation_name>-apar_energy_dot.gkyl
+    If the relative error is requested, these are also needed:
+      ..._integrated_moms.gkyl
+      <simulation_name>-field_energy.gkyl
+      <simulation_name>-apar_energy.gkyl  (electromagnetic only)
+      <simulation_name>-dt.gkyl
 
-
-The default assumes these are in the current directory.
-Alternatively, the full path to each file can be specified.
-If passing the full path for the species-specific filed (e.g. --fdot_file)
-pass * for the species name.
+    
+    The default assumes these are in the current directory.
+    Alternatively, the full path to each file can be specified.
+    If passing the full path for the species-specific filed (e.g. --fdot_file)
+    pass * for the species name.
 
-
-If simulation is multiblock, and you wish to specify files manually:
-  1) Pass * for the block index.
-  2) Use --multib/-m to specify desired blocks (or ommit to use all).
+    
+    If simulation is multiblock, and you wish to specify files manually:
+      1) Pass * for the block index.
+      2) Use --multib/-m to specify desired blocks (or ommit to use all).
 
-NOTE: this command cannot be combined with other postgkyl commands.
+    NOTE: this command cannot be combined with other postgkyl commands.
 
     Args:
       name: (--name, -n) Simulation name (also the file prefix, e.g. gk_sheath_1x2v_p1).
@@ -630,12 +648,13 @@ NOTE: this command cannot be combined with other postgkyl commands.
       use: str | None = None,
       tag: str = 'fluxsurf',
       label: str | None = None):
-    """Gyrokinetics: Extract a 2D theta-phi flux surface.
+    """
+    Gyrokinetics: Extract a 2D theta-phi flux surface.
 
-This command extracts data along a specific radial flux surface (constant x)
-for 3D field-aligned data. It achieves this by performing a binormal
-projection over a scan of toroidal angles (phi), creating a 2D grid of
-phi vs z (where z maps along the poloidal/theta direction).
+    This command extracts data along a specific radial flux surface (constant x)
+    for 3D field-aligned data. It achieves this by performing a binormal
+    projection over a scan of toroidal angles (phi), creating a 2D grid of
+    phi vs z (where z maps along the poloidal/theta direction).
 
     Args:
       mapc2p: (--mapc2p, -m) Use a modal mapc2p file as the geometry source instead of the default nodes file.
@@ -659,20 +678,21 @@ phi vs z (where z maps along the poloidal/theta direction).
       tag: str = 'default',
       label: str | None = None,
       extra: str | None = None):
-    """Gyrokinetics: load a pre-named quantity from simulation output files.
+    """
+    Gyrokinetics: load a pre-named quantity from simulation output files.
 
-
-For a list of accepted quantities use:
-  pgkyl gk-load-quantity --qlist
+    
+    For a list of accepted quantities use:
+      pgkyl gk-load-quantity --qlist
 
-
-Command line example:
-  pgkyl gk-load-quantity den -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
+    
+    Command line example:
+      pgkyl gk-load-quantity den -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
 
-
-Script example:
-  from postgkyl.commands.gk_load_quantity import load_gk_quantity
-  gdat = load_gk_quantity("n", "ion", "gk_sheath_2x2v_p1", frame=9)
+    
+    Script example:
+      from postgkyl.commands.gk_load_quantity import load_gk_quantity
+      gdat = load_gk_quantity("n", "ion", "gk_sheath_2x2v_p1", frame=9)
 
     Args:
       quantity: (--quantity, -q) Quantity to plot.
@@ -709,20 +729,21 @@ Script example:
       multib_unicolor: bool = False,
       saveas: str | None = None,
       no_show: bool = False):
-    """
-Gyrokinetics: Plot nodes of the grid, with an option to overlay
-contours of the poloidal flux.
+    """
+    
+    Gyrokinetics: Plot nodes of the grid, with an option to overlay
+    contours of the poloidal flux.
 
-
-The default assumes these are in the current directory.
-Alternatively, the full path to each file can be specified.
+    
+    The default assumes these are in the current directory.
+    Alternatively, the full path to each file can be specified.
 
-
-If simulation is multiblock, and you wish to specify files manually:
-  1) Pass * for the block index.
-  2) Use --multib/-m to specify desired blocks (or ommit to use all).
+    
+    If simulation is multiblock, and you wish to specify files manually:
+      1) Pass * for the block index.
+      2) Use --multib/-m to specify desired blocks (or ommit to use all).
 
-NOTE: this command cannot be combined with other postgkyl commands.
+    NOTE: this command cannot be combined with other postgkyl commands.
 
     Args:
       name: (--name, -n) Simulation name (also the file prefix, e.g. gk_sheath_1x2v_p1).
@@ -773,29 +794,30 @@ NOTE: this command cannot be combined with other postgkyl commands.
       indent_left: float = 0.0,
       add_width: float = 0.0,
       saveas: str | None = None):
-    """
-Gyrokinetics: Plot the particle balance of a given species.
-Requires the following files:
-  ..._fdot_integrated_moms.gkyl
-  ..._source_integrated_moms.gkyl
-  ..._bflux_<direction><side>_integrated_HamiltonianMoments.gkyl
-where ... means <simulation_name>-<species_name>.
-The last two files above are only needed if the simulation had
-sources or non-periodic boundaries. If the relative error is
-requested, these are also needed:
-  ..._integrated_moms.gkyl
-  <simulation_name>-dt.gkyl
+    """
+    
+    Gyrokinetics: Plot the particle balance of a given species.
+    Requires the following files:
+      ..._fdot_integrated_moms.gkyl
+      ..._source_integrated_moms.gkyl
+      ..._bflux_<direction><side>_integrated_HamiltonianMoments.gkyl
+    where ... means <simulation_name>-<species_name>.
+    The last two files above are only needed if the simulation had
+    sources or non-periodic boundaries. If the relative error is
+    requested, these are also needed:
+      ..._integrated_moms.gkyl
+      <simulation_name>-dt.gkyl
 
-
-The default assumes these are in the current directory.
-Alternatively, the full path to each file can be specified.
+    
+    The default assumes these are in the current directory.
+    Alternatively, the full path to each file can be specified.
 
-
-If simulation is multiblock, and you wish to specify files manually:
-  1) Pass * for the block index.
-  2) Use --multib/-m to specify desired blocks (or ommit to use all).
+    
+    If simulation is multiblock, and you wish to specify files manually:
+      1) Pass * for the block index.
+      2) Use --multib/-m to specify desired blocks (or ommit to use all).
 
-NOTE: this command cannot be combined with other postgkyl commands.
+    NOTE: this command cannot be combined with other postgkyl commands.
 
     Args:
       name: (--name, -n) Simulation name (also the file prefix, e.g. gk_sheath_1x2v_p1).
@@ -833,21 +855,22 @@ NOTE: this command cannot be combined with other postgkyl commands.
       label: str | None = None,
       phi_tor: float = 0.0,
       nz_interp: int = 8):
-    """
-Gyrokinetics: Interpolate DG dataset(s) and map them to the R-Z plane.
-Assumes DG data (not yet interpolated) has been loaded onto the stack by a
-preceding command.
+    """
+    
+    Gyrokinetics: Interpolate DG dataset(s) and map them to the R-Z plane.
+    Assumes DG data (not yet interpolated) has been loaded onto the stack by a
+    preceding command.
 
-The geometry is automatically found from the prefix of the first processed
-dataset: the pointwise '<prefix>-geo_int_nodes.gkyl' is preferred (exact node
-coordinates, robust at coarse z resolution), falling back to the modal
-'<prefix>-geo_int_mapc2p.gkyl'. Use '-n path' to point at a specific nodes
-file, '-m path' at a specific mapc2p file, or "-m ''" to force the default
-mapc2p lookup.
+    The geometry is automatically found from the prefix of the first processed
+    dataset: the pointwise '<prefix>-geo_int_nodes.gkyl' is preferred (exact node
+    coordinates, robust at coarse z resolution), falling back to the modal
+    '<prefix>-geo_int_mapc2p.gkyl'. Use '-n path' to point at a specific nodes
+    file, '-m path' at a specific mapc2p file, or "-m ''" to force the default
+    mapc2p lookup.
 
-For 3D (field-aligned) data the field is reconstructed on the poloidal plane at
-toroidal angle --phi-tor (default 0) by interpolating along the binormal
-direction, up-sampled in z (--nz-interp) for smooth surfaces.
+    For 3D (field-aligned) data the field is reconstructed on the poloidal plane at
+    toroidal angle --phi-tor (default 0) by interpolating along the binormal
+    direction, up-sampled in z (--nz-interp) for smooth surfaces.
 
     Args:
       mapc2p: (--mapc2p, -m) Use a modal mapc2p file as the geometry source instead of the default nodes file; pass '' to look up '<prefix>-geo_int_mapc2p.gkyl' from the first processed dataset's prefix.
@@ -866,7 +889,8 @@ direction, up-sampled in z (--nz-interp) for smooth surfaces.
       tag: str | None = None,
       label: str | None = None,
       read: bool | None = None):
-    """Create a dataset out of a grid
+    """
+    Create a dataset out of a grid
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -885,10 +909,11 @@ direction, up-sampled in z (--nz-interp) for smooth surfaces.
       dir: int | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Attempts to compute growth rate (i.e. fit e^(2x)) from DynVector data.
+    """
+    Attempts to compute growth rate (i.e. fit e^(2x)) from DynVector data.
 
-the DynVector is typically an integrated quantity like electric or magnetic field
-energy.
+    the DynVector is typically an integrated quantity like electric or magnetic field
+    energy.
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -903,8 +928,9 @@ energy.
     return self._run(_cmd("growth"), use=use, guess=guess, minn=minn, dataset=dataset, instantaneous=instantaneous, dir=dir, tag=tag, label=label)
 
   def gui(self,
-      path: str = '/home/ah1032/postgkyl/tests/test_data'):
-    """Launch the postgkyl marimo GUI on a data directory.
+      path: str = '/Users/ahoffman/postgkyl/tests/test_data'):
+    """
+    Launch the postgkyl marimo GUI on a data directory.
 
     Args:
       path: (--path, -p) Path to the Gkeyll data directory to open in the GUI (default: the bundled tests/test_data).
@@ -915,7 +941,8 @@ energy.
       use: str | None = None,
       compact: bool = False,
       allsets: bool = False):
-    """Print info of active datasets.
+    """
+    Print info of active datasets.
 
     Args:
       use: (-u, --use) Specify a 'tag' to apply to (default all tags).
@@ -929,7 +956,8 @@ energy.
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """"Integrate data over a specified axis or axes.
+    """
+    "Integrate data over a specified axis or axes.
 
     Args:
       axis: (axis)
@@ -947,7 +975,8 @@ energy.
       tag: str | None = None,
       label: str | None = None,
       read: bool | None = None):
-    """Interpolate DG data onto a uniform mesh.
+    """
+    Interpolate DG data onto a uniform mesh.
 
     Args:
       basis_type: (--basis_type, -b) Specify DG basis.
@@ -965,7 +994,8 @@ energy.
       tm: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Compose PKPM Laguerre coefficients together.
+    """
+    Compose PKPM Laguerre coefficients together.
 
     Args:
       distribution: (--distribution, -f) Specify the PKPM distribution function dataset.
@@ -979,7 +1009,8 @@ energy.
       extensions: str = 'bp,gkyl',
       path: str = '.',
       prefixes: bool = False):
-    """List Gkeyll filename stems in the current directory.
+    """
+    List Gkeyll filename stems in the current directory.
 
     Args:
       extensions: (--extensions, -e) Output file extension(s)
@@ -992,7 +1023,8 @@ energy.
       use: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Calculate the magnitude squared of an input array.
+    """
+    Calculate the magnitude squared of an input array.
 
     Args:
       use: (--use, -u) Specify the tag to integrate.
@@ -1006,7 +1038,8 @@ energy.
       filename: str | None = None,
       lower: float | None = None,
       upper: float | None = None):
-    """Mask data with specified Gkeyll mask file.
+    """
+    Mask data with specified Gkeyll mask file.
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -1023,7 +1056,8 @@ energy.
       variable_name: Literal['density', 'xvel', 'yvel', 'zvel', 'vel', 'Bx', 'By', 'Bz', 'Bi', 'magpressure', 'pressure', 'temp', 'sound', 'mach'] | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Compute ideal MHD primitive and some derived variables from MHD conserved variables.
+    """
+    Compute ideal MHD primitive and some derived variables from MHD conserved variables.
 
 
     Args:
@@ -1042,9 +1076,10 @@ energy.
       field: str | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Compute a measure of agyrotropy. Default measure is taken from
-Swisdak 2015. Optionally computes agyrotropy as Frobenius norm of
-agyrotropic pressure tensor.
+    """
+    Compute a measure of agyrotropy. Default measure is taken from
+    Swisdak 2015. Optionally computes agyrotropy as Frobenius norm of
+    agyrotropic pressure tensor.
 
     Args:
       measure: (--measure, -m) Specify how to calculate agyrotropy.
@@ -1062,7 +1097,8 @@ agyrotropic pressure tensor.
       poly_order: int | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Shortcut to load Gkeyll PKPM data, interpolate, and transform.
+    """
+    Shortcut to load Gkeyll PKPM data, interpolate, and transform.
 
     Args:
       name: (--name, -n) Set the root name for files.
@@ -1147,9 +1183,10 @@ agyrotropic pressure tensor.
       cmap: str | None = None,
       cval: str | None = None,
       multiblock: bool = False):
-    """Plot active datasets, optionally displaying the plot and/or saving it to PNG files.
+    """
+    Plot active datasets, optionally displaying the plot and/or saving it to PNG files.
 
-Plot labels can use a sub-set of LaTeX math commands placed between dollar ($) signs.
+    Plot labels can use a sub-set of LaTeX math commands placed between dollar ($) signs.
 
     Args:
       use: (--use, -u) Specify the tag to plot.
@@ -1230,7 +1267,8 @@ Plot labels can use a sub-set of LaTeX math commands placed between dollar ($) s
   def pr(self,
       use: str | None = None,
       grid: bool = False):
-    """Print the data
+    """
+    Print the data
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -1244,7 +1282,8 @@ Plot labels can use a sub-set of LaTeX math commands placed between dollar ($) s
       comp: str | None = None,
       tag: str = 'rel_change',
       label: str = 'delta'):
-    """Computes the relative change between two datasets
+    """
+    Computes the relative change between two datasets
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -1268,11 +1307,12 @@ Plot labels can use a sub-set of LaTeX math commands placed between dollar ($) s
       label: str | None = None,
       multiblock: bool = False,
       multiframe: bool = False):
-    """Subselect data from the active dataset(s).
+    """
+    Subselect data from the active dataset(s).
 
-This command allows, for example, to choose a specific component of a multi-component
-dataset, select a index or coordinate range. Index ranges can also be specified using
-python slice notation (start:end:stride).
+    This command allows, for example, to choose a specific component of a multi-component
+    dataset, select a index or coordinate range. Index ranges can also be specified using
+    python slice notation (start:end:stride).
 
     Args:
       z0: (--z0) Indices for 0th coord (either int, float, or slice).
@@ -1294,11 +1334,12 @@ python slice notation (start:end:stride).
       file: str | None = None,
       set: tuple[str, ...] = None,
       print: bool = False):
-    """Probe and control the Matplotlib plotting style.
+    """
+    Probe and control the Matplotlib plotting style.
 
-  The list of rcParams is available
-  here:
-https://matplotlib.org/stable/api/matplotlib_configuration_api.html
+      The list of rcParams is available
+      here:
+    https://matplotlib.org/stable/api/matplotlib_configuration_api.html
 
     Args:
       file: (--file, -f) Sets Maplotlib rcParams style file.
@@ -1313,7 +1354,8 @@ https://matplotlib.org/stable/api/matplotlib_configuration_api.html
       gas_gamma: float = 1.6666666666666667,
       tag: str | None = None,
       label: str | None = None):
-    """Extract ten-moment primitive variables from ten-moment conserved variables.
+    """
+    Extract ten-moment primitive variables from ten-moment conserved variables.
 
 
     Args:
@@ -1342,7 +1384,8 @@ https://matplotlib.org/stable/api/matplotlib_configuration_api.html
       zmin: float | None = None,
       zmax: float | None = None,
       use: str | None = None):
-    """Animate a particle trajectory.
+    """
+    Animate a particle trajectory.
 
     Args:
       fixaspect: (--fix-aspect) Enforce the same scaling on both axes.
@@ -1370,7 +1413,8 @@ https://matplotlib.org/stable/api/matplotlib_configuration_api.html
       cdim: int | None = None,
       tag: str | None = None,
       label: str | None = None):
-    """Compose PKPM Laguerre coefficients together.
+    """
+    Compose PKPM Laguerre coefficients together.
 
     Args:
       distribution: (--distribution, -f) Specify the PKPM distribution function.
@@ -1388,11 +1432,12 @@ https://matplotlib.org/stable/api/matplotlib_configuration_api.html
       x: str | None = None,
       y: str | None = None,
       periodic: bool = False):
-    """Given a dataset (typically a DynVector) selects columns from it to create new datasets.
+    """
+    Given a dataset (typically a DynVector) selects columns from it to create new datasets.
 
-For example, you can choose say column 1 to be the X-axis of the new dataset and
-column 2 to be the Y-axis. Multiple columns can be choosen using range specifiers and
-as many datasets are then created.
+    For example, you can choose say column 1 to be the X-axis of the new dataset and
+    column 2 to be the Y-axis. Multiple columns can be choosen using range specifiers and
+    as many datasets are then created.
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
@@ -1409,7 +1454,8 @@ as many datasets are then created.
       momentum: str = 'momentum',
       tag: str = 'velocity',
       label: str = 'velocity'):
-    """velocity
+    """
+    velocity
 
     Args:
       density: (--density, -d) Tag for density.
@@ -1424,11 +1470,12 @@ as many datasets are then created.
       filename: str | None = None,
       mode: Literal['gkyl', 'bp', 'txt', 'npy'] = 'gkyl',
       single: bool = False):
-    """Write active dataset to a file.
+    """
+    Write active dataset to a file.
 
-The output file format can be set with ``--format``, and is Gkeyll's .gkyl by default.
-Files saved as .gkyl or .bp can be later loaded back into pgkyl to further manipulate
-or plot.
+    The output file format can be set with ``--format``, and is Gkeyll's .gkyl by default.
+    Files saved as .gkyl or .bp can be later loaded back into pgkyl to further manipulate
+    or plot.
 
     Args:
       use: (--use, -u) Specify a 'tag' to apply to (default all tags).
