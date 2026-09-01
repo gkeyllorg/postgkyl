@@ -54,6 +54,10 @@ broadcast rule too -- only ``info``/``collect``/``evaluate``/``animate``/
 
 ``operations.grid`` has no fluent spelling anywhere (not on ``GData``, so not
 broadcast here either) -- see ``api/gdata.py`` for why.
+
+``load`` is also explicit rather than broadcast: it is the group's lifecycle
+method, appending newly loaded member(s) to this group and returning ``self``
+so an initially empty group can be assembled fluently.
 """
 
 from __future__ import annotations
@@ -67,6 +71,40 @@ from . import verbs
 
 class GDataGroup(GDataStateGroup):
   """A group whose members' fluent verbs broadcast over the whole group."""
+
+  # ------------------------------------------------------- data lifecycle
+  def load(self, file_name: str, *, tag: str = "default", label: str = "",
+      ctx: dict | None = None, value_form: str | None = None,
+      basis_type: str | None = None, poly_order: int | None = None,
+      **read_kwargs) -> "GDataGroup":
+    """Load and append one file (or a glob) and return this group.
+
+    Successive calls accumulate members, enabling chains such as::
+
+        group = GDataGroup()
+        group.load(frame0).load(frame1).local_poly().collect().plot()
+
+    Loading completes before this group is changed, so a failed read leaves
+    its existing members untouched.  A glob appends every match in natural
+    filename order, with the same options and errors as :func:`postgkyl.load`.
+    """
+    # Same-layer import at call time avoids the construction-time cycle:
+    # gdata.load builds GDataGroup results, while GData imports this class for
+    # fluent group-returning verbs.
+    from .load import load as load_data
+
+    loaded = load_data(file_name, tag=tag, label=label, ctx=ctx,
+        value_form=value_form, basis_type=basis_type,
+        poly_order=poly_order, **read_kwargs)
+    if isinstance(loaded, GDataStateGroup):
+      additions = loaded.datasets
+    # end
+    else:
+      additions = [loaded]
+    # end
+    self._datasets.extend(additions)
+    return self
+  # end
 
   def __getattr__(self, name: str):
     if name.startswith("_"):

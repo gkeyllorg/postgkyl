@@ -23,9 +23,12 @@ owns it and simply gathered here:
     version_report                    <- _version.py  (``pgkyl --version``'s
                                                       commit/build-info report)
 
-Every fluent ``GData`` method delegates to one of these ``operations`` functions, so
-``pg.select(a, z0=0.0)`` and ``a.select(z0=0.0)`` are the same call -- the
-functional and fluent spellings can never drift apart. The rest of the
+Every computational fluent ``GData`` method delegates to one of these
+``operations`` functions, so ``pg.select(a, z0=0.0)`` and
+``a.select(z0=0.0)`` are the same call -- the functional and fluent spellings
+can never drift apart. ``GData.load(...)`` is the one lifecycle method: it
+loads a literal file into an existing object and returns that same object for
+chaining. The rest of the
 equation-blind ``operations`` verb inventory (``fft``, ``magsq``, ``mask``,
 ``val2coord``, ``extract_input``, ``fit``, ``differentiate``, ``integrate_axis``,
 ``map``, plus ``grid`` -- see ``api/gdata.py`` for why ``grid`` has no fluent

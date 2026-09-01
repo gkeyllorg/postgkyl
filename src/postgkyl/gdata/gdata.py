@@ -11,6 +11,7 @@ Inherited from the container (pure state readers): ``info``, ``__array__``,
 
 from __future__ import annotations
 
+from glob import has_magic
 import operator
 
 import numpy as np
@@ -23,6 +24,66 @@ from .gdatagroup import GDataGroup
 
 class GData(GDataState):
   """Fluent dataset: ``pg.load(...).interpolate().select(z0=0.0).plot()``."""
+
+  # ------------------------------------------------------- data lifecycle
+  def load(self, file_name: str, *, tag: str | None = None,
+      label: str | None = None, ctx: dict | None = None,
+      value_form: str | None = None, basis_type: str | None = None,
+      poly_order: int | None = None, **read_kwargs) -> "GData":
+    """Load one file into this dataset in place and return ``self``.
+
+    This is the two-step counterpart of constructing ``GData(file_name)``::
+
+        data = GData()
+        data.load(file_name).local_poly().plot()
+
+    The read is atomic with respect to this object: if it fails, the current
+    grid, values, context, and filename are left unchanged.  A pristine empty
+    dataset's existing ``ctx`` seeds the read unless ``ctx`` is supplied
+    explicitly; reloading an already populated dataset starts from a fresh
+    context so metadata from the previous file cannot leak into the new one.
+    The dataset's existing tag and custom label are preserved unless ``tag``
+    or ``label`` is passed.
+
+    This method accepts one literal filename.  Use :func:`postgkyl.load` for
+    shell-style glob patterns, which produce a ``GDataGroup`` rather than one
+    dataset.
+    """
+    file_name = str(file_name)
+    if not file_name:
+      raise ValueError("GData.load() requires a non-empty filename.")
+    # end
+    if has_magic(file_name):
+      raise ValueError(
+          "GData.load() accepts one literal filename; use pg.load(pattern) "
+          "to load a glob as a GDataGroup.")
+    # end
+
+    if ctx is None and self._grid is None and self._values is None:
+      load_ctx = self.ctx
+    # end
+    else:
+      load_ctx = ctx
+    # end
+
+    # Construct through GDataState so this follows exactly the same reader and
+    # metadata-defaulting path as GData(file_name).  Nothing on ``self`` is
+    # changed until construction succeeds.
+    loaded = GDataState(file_name, ctx=load_ctx, value_form=value_form,
+        basis_type=basis_type, poly_order=poly_order, **read_kwargs)
+    self._grid = loaded._grid
+    self._values = loaded._values
+    self.ctx = loaded.ctx
+    self._file_name = loaded._file_name
+    self._label = loaded._label
+    if tag is not None:
+      self._tag = tag
+    # end
+    if label is not None:
+      self._custom_label = label
+    # end
+    return self
+  # end
 
   # ---------------------------------------------------------- fluent verbs
   def interpolate(self, *, num_interp: int | None = None, inplace: bool = False,

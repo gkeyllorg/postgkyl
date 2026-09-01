@@ -69,7 +69,7 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 # GDataGroup broadcasts every single-dataset verb and explicitly implements the
 # operations that act on the group as a whole. Every multi-dataset operation
 # also has a functional spelling on the top-level ``pg`` facade.
-INSTANCE_VERBS = ["interpolate", "local_poly", "select", "plot", "plotly",
+INSTANCE_VERBS = ["load", "interpolate", "local_poly", "select", "plot", "plotly",
     "save", "mul", "div", "integrate", "integrate_axis", "average",
     "eval_at_coord_proj", "to_modal", "to_nodal", "to_quad", "apply", "fft",
     "magsq", "mask", "val2coord", "extract_input", "fit", "differentiate",
