@@ -276,19 +276,18 @@ def test_cli_plot_without_datasets_raises_usage_error():
 # end
 
 
-def test_cli_plot_batch_mode_default_save_path():
+def test_cli_plot_batch_mode_default_save_path(tmp_path, monkeypatch):
   from click.testing import CliRunner
   from postgkyl.cli.app import cli
 
+  monkeypatch.chdir(tmp_path)
   runner = CliRunner()
-  with runner.isolated_filesystem():
-    result = runner.invoke(cli, [
-        "--batch-mode", "--saveframes-prefix", "myrun",
-        F1, "interp", "sel", "--comp", "0", "plot"])
-    assert result.exit_code == 0, result.output
-    # main's batch-mode file name is "<prefix>_<dataset index>.png".
-    assert os.path.exists("myrun_0.png")
-  # end
+  result = runner.invoke(cli, [
+      "--batch-mode", "--saveframes-prefix", "myrun",
+      F1, "interp", "sel", "--comp", "0", "plot"])
+  assert result.exit_code == 0, result.output
+  # main's batch-mode file name is "<prefix>_<dataset index>.png".
+  assert (tmp_path / "myrun_0.png").exists()
 # end
 
 
