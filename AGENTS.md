@@ -123,11 +123,14 @@ test (see "Import contract"). Arrow = "may import":
 ```
 src/postgkyl/
 │
+├─ command_spec/       frozen command records/decorators · no imports [LEAF]
+│
 ├─ __init__.py          facade · `import postgkyl as pg`              [SURFACE]
 │
-├─ cli/                 Thin Click shells: argv → gdata / diagnostics   [SURFACE]
+├─ cli/                 generated Click surface + generic runtime         [SURFACE]
 │   ├─ app.py
-│   └─ commands/        All the callable commands from the command line
+│   ├─ discovery.py
+│   └─ compiler.py
 │
 ├─ diagnostics/        equation-specific physics · one module        [COMPOSITION]
 │                      per equation model
@@ -241,6 +244,7 @@ src/postgkyl/
                              ▼
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ ENGINE / LEAVES                                                              ║
+║   command_spec/ (frozen command metadata · imports nothing)                 ║
 ║   numerics/ (pure math · imports nothing)                                    ║
 ║   dg/ (interpolation bridge + modal ops)   io/ (readers · writer)            ║
 ╚═════════════╦══════════════════════════════════════╦═════════════════════════╝
