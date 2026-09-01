@@ -293,22 +293,22 @@ class TestPerBlockGeometry:
 class TestMultiblockCli:
   @staticmethod
   def _plot_calls(monkeypatch):
-    """Record how the ``plot`` command batches the working set: one entry per
-    ``pg.plot`` call, holding that call's datasets.
+    """Record how the generated ``plot`` command batches the working set:
+    one entry per render call, holding that call's datasets.
 
     The command closes its figures on the way out when nothing will display
     them, so the call log -- not the surviving figures -- is what says how
     many figures were drawn and which datasets shared each one.
     """
     calls = []
-    real = pg.plot
+    real = pg.render.plot
 
     def spy(*datasets, **kwargs):
       calls.append(list(datasets))
       return real(*datasets, **kwargs)
     # end
 
-    monkeypatch.setattr(pg, "plot", spy)
+    monkeypatch.setattr(pg.render, "plot", spy)
     return calls
   # end
 

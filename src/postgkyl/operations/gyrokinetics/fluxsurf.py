@@ -10,6 +10,7 @@ from scipy.interpolate import PchipInterpolator
 
 from .geometry import (
     Geometry,
+    geometry_prefix,
     _interpolate_component,
     _interpolation_grid,
     _resample_grid,
@@ -18,6 +19,7 @@ from .geometry import (
     _validate_geometry,
     _validate_modal_data,
     _validate_positive_int,
+    per_block_path,
     resolve_geometry,
 )
 
@@ -124,6 +126,34 @@ def extract_flux_surface(data: "GDataState", fs_grid: FluxSurfaceGrid, *,
 # end
 
 
+def flux_surface_grids(datasets, *, mapc2p: str | None = None,
+    nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128,
+    nz_interp: int = 8) -> dict[str | None, FluxSurfaceGrid]:
+  """Build one reusable flux-surface grid per block geometry."""
+  grids: dict[str | None, FluxSurfaceGrid] = {}
+  for data in datasets:
+    key = geometry_prefix(data.file_name)
+    if key in grids:
+      continue
+    # end
+    block = data.ctx.get("block")
+    geometry = resolve_geometry(data.file_name,
+        mapc2p=per_block_path(mapc2p, block),
+        nodes_file=per_block_path(nodes_file, block))
+    grids[key] = resolve_flux_surface_grid(data, geometry, x_idx=x_idx,
+        nphi=nphi, nz_interp=nz_interp)
+  # end
+  return grids
+# end
+
+
+def grid_for(grids: dict[str | None, FluxSurfaceGrid],
+    data: "GDataState") -> FluxSurfaceGrid:
+  """Return the sampling grid belonging to ``data``'s block."""
+  return grids[geometry_prefix(data.file_name)]
+# end
+
+
 def gk_fluxsurf(data: "GDataState", *, mapc2p: str | None = None,
     nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128,
     nz_interp: int = 8, comp: int = 0, inplace: bool = False,
@@ -151,5 +181,7 @@ def gk_fluxsurf(data: "GDataState", *, mapc2p: str | None = None,
 # end
 
 
-__all__ = ["FluxSurfaceGrid", "extract_flux_surface", "gk_fluxsurf",
-    "resolve_flux_surface_grid"]
+__all__ = [
+    "FluxSurfaceGrid", "extract_flux_surface", "flux_surface_grids",
+    "gk_fluxsurf", "grid_for", "resolve_flux_surface_grid",
+]

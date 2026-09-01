@@ -10,6 +10,7 @@ from scipy.interpolate import PchipInterpolator
 
 from .geometry import (
     Geometry,
+    geometry_prefix,
     _interpolate_component,
     _interpolation_grid,
     _resample_grid,
@@ -18,6 +19,7 @@ from .geometry import (
     _validate_geometry,
     _validate_modal_data,
     _validate_positive_int,
+    per_block_path,
     resolve_geometry,
 )
 
@@ -226,6 +228,39 @@ def map_to_rz(data: "GDataState", projection: RzProjection, *,
 # end
 
 
+def rz_projections(datasets, *, mapc2p: str | None = None,
+    nodes_file: str | None = None, z_axis: float = 0.0,
+    nz_interp: int = 8) -> dict[str | None, RzProjection]:
+  """Build one reusable R-Z projection per block geometry.
+
+  Frames from the same block share a projection; distinct blocks resolve
+  their own geometry. A ``'*'`` in an explicit geometry path is replaced by
+  the dataset's block index.
+  """
+  projections: dict[str | None, RzProjection] = {}
+  for data in datasets:
+    key = geometry_prefix(data.file_name)
+    if key in projections:
+      continue
+    # end
+    block = data.ctx.get("block")
+    geometry = resolve_geometry(data.file_name,
+        mapc2p=per_block_path(mapc2p, block),
+        nodes_file=per_block_path(nodes_file, block))
+    projections[key] = resolve_rz_projection(data, geometry, z_axis=z_axis,
+        nz_interp=nz_interp)
+  # end
+  return projections
+# end
+
+
+def projection_for(projections: dict[str | None, RzProjection],
+    data: "GDataState") -> RzProjection:
+  """Return the projection belonging to ``data``'s block."""
+  return projections[geometry_prefix(data.file_name)]
+# end
+
+
 def gk_rz(
     data: "GDataState",
     *,
@@ -287,5 +322,8 @@ def gk_rz(
 # end
 
 
-__all__ = ["Geometry", "RzProjection", "gk_rz", "map_to_rz",
-    "resolve_geometry", "resolve_rz_projection"]
+__all__ = [
+    "Geometry", "RzProjection", "geometry_prefix", "gk_rz", "map_to_rz",
+    "per_block_path", "projection_for", "resolve_geometry",
+    "resolve_rz_projection", "rz_projections",
+]

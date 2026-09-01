@@ -105,6 +105,7 @@ represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 animate.__annotations__["data"] = Annotated[list[GDataState], PipelineInput()]
 plotly_animate.__annotations__["data"] = Annotated[
     list[GDataState], PipelineInput()]
+plot.__annotations__["data"] = Annotated[list[GDataState], PipelineInput()]
 
 for _function in (interpolate, local_poly, select, integrate_axis, average,
     eval_at_coord_proj, fft, magsq, grid, differentiate, map):
@@ -122,7 +123,7 @@ command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(info)
 command(_TERM_EACH)(integrate)
 command(_TERM_EACH)(extract_input)
-command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,
+command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(plot)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(animate)

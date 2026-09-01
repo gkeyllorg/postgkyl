@@ -444,12 +444,12 @@ def _is_dataset(value) -> bool:
 
 
 def _datasets_from_result(result) -> list:
-  if _is_dataset(result):
-    return [result]
-  # end
   members = getattr(result, "datasets", None)
   if members is not None:
     return list(members)
+  # end
+  if _is_dataset(result):
+    return [result]
   # end
   if isinstance(result, (list, tuple)) and all(_is_dataset(item) for item in result):
     return list(result)

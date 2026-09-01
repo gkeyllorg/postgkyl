@@ -10,12 +10,14 @@ before the frames reach :func:`postgkyl.render.animate.animate`.
 from __future__ import annotations
 
 from postgkyl import render
+from postgkyl.gdatastate import group_blocks, group_frames
 from postgkyl.gdatastate.gdatastate import GDataState
 
 from ._materialize import materialize_for_render
 
 
-def animate(data, *, interval: int = 100, fixed_range: bool = True,
+def animate(data, *, multiblock: bool = False, grouptags: bool = False,
+    interval: int = 100, fixed_range: bool = True,
     cutoffglobalrange: float | None = None, notitle: bool = False,
     show: bool = True, save: bool = False, saveas: str | None = None,
     fps: int | None = None, dpi: int | None = None,
@@ -31,6 +33,8 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
 
   Args:
     data: Selected datasets, one per animation frame.
+    multiblock: Force datasets with the same frame index into one frame.
+    grouptags: Build a separate animation for each dataset tag.
     interval: Live-animation delay in milliseconds.
     fixed_range: Hold a constant value range across frames.
     cutoffglobalrange: Central percentile band used for the fixed range.
@@ -44,8 +48,37 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
     nproc: Worker processes used to render frames.
     tmpdir: Parent directory for temporary rendered frames.
   """
+  items = list(data)
+  if grouptags and all(isinstance(item, GDataState) for item in items):
+    import os
+
+    tags: dict[str, list] = {}
+    for item in items:
+      tags.setdefault(item.tag, []).append(item)
+    # end
+
+    def suffixed(path, tag):
+      if path is None:
+        return None
+      # end
+      stem, extension = os.path.splitext(path)
+      return f"{stem}_{tag}{extension}"
+    # end
+
+    return [animate(tagged, multiblock=multiblock, interval=interval,
+        fixed_range=fixed_range, cutoffglobalrange=cutoffglobalrange,
+        notitle=notitle, show=show, save=save,
+        saveas=suffixed(saveas, tag), fps=fps, dpi=dpi,
+        saveframes=suffixed(saveframes, tag), nproc=nproc, tmpdir=tmpdir)
+        for tag, tagged in tags.items()]
+  # end
+
+  if all(isinstance(item, GDataState) for item in items):
+    items = group_frames(items) if multiblock else group_blocks(items)
+  # end
+
   frames = []
-  for item in data:
+  for item in items:
     if isinstance(item, GDataState):
       frames.append(materialize_for_render(item))
     # end

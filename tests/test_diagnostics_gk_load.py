@@ -882,7 +882,7 @@ def _collect_source_files(quant, path, name, species, frame) -> set:
 def _extra_for(quant) -> dict:
   extra = {}
   if quant.is_vector:
-    extra["dir"] = 0
+    extra["direction"] = 0
   # end
   return extra
 # end

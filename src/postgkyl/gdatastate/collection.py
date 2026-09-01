@@ -101,3 +101,20 @@ def group_blocks(datasets) -> list[list]:
   # end
   return out
 # end
+
+
+def group_frames(datasets) -> list[list]:
+  """Group datasets by authoritative ``ctx['frame']`` metadata.
+
+  Known frames are returned in ascending order. Datasets without a frame
+  stay together in one trailing group.
+  """
+  groups: dict[int | None, list] = {}
+  for data in flatten_datasets(datasets):
+    frame = data.ctx.get("frame")
+    groups.setdefault(int(frame) if frame is not None else None, []).append(data)
+  # end
+  known = sorted(frame for frame in groups if frame is not None)
+  return [groups[frame] for frame in known] + (
+      [groups[None]] if None in groups else [])
+# end

@@ -272,7 +272,7 @@ def test_cli_plot_without_datasets_raises_usage_error():
 
   result = CliRunner().invoke(cli, ["plot"])
   assert result.exit_code != 0
-  assert "no datasets to plot" in result.output
+  assert "no datasets selected" in result.output
 # end
 
 
@@ -321,5 +321,5 @@ def test_cli_save_command(tmp_path):
       F1, "interp", "sel", "--comp", "0", "save", "-o", str(out), "-f", "txt"])
   assert result.exit_code == 0, result.output
   assert out.exists()
-  assert "wrote" in result.output
+  assert str(out) in result.output
 # end

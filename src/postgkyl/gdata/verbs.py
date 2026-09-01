@@ -79,7 +79,8 @@ def plot(*datasets, **kwargs):
   importantly a multiblock family, one field split across blocks -- renders
   as a single picture instead of broadcasting into one figure per member.
   """
-  return operations.plot(*datasets, **kwargs)
+  kwargs.setdefault("multiblock", True)
+  return operations.plot(datasets, **kwargs)
 # end
 
 

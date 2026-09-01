@@ -197,5 +197,5 @@ def test_group_compatibility_cli_and_help_section():
   help_text = CliRunner().invoke(cli, ["--help"]).output
   verbs = help_text.split("Diagnostics:", 1)[0]
   diagnostics = help_text.split("Diagnostics:", 1)[1].split("Render:", 1)[0]
-  assert "gk_rz" in verbs and "gk_rz" not in diagnostics
+  assert "gk-rz" in verbs and "gk-rz" not in diagnostics
 # end

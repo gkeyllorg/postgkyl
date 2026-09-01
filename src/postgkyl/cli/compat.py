@@ -46,6 +46,7 @@ OPTION_ALIASES = MappingProxyType({
     }),
     "local-poly": MappingProxyType({
         "--num-points": "--npoints", "-n": "--npoints"}),
+    "plot": MappingProxyType({"-m": "--multiblock"}),
     "map": MappingProxyType({"--mapping-file": "--mapping"}),
     "val2coord": MappingProxyType({"-x": "--x", "-y": "--y"}),
     "ten-moment-agyro": MappingProxyType({"--pressure": "--ptensor"}),
@@ -65,6 +66,11 @@ OPTION_ALIASES = MappingProxyType({
 # pair.  Keeping the implied value in this table makes the translation fully
 # declarative and keeps it out of the execution adapters.
 FLAG_OPTIONS = MappingProxyType({
+    "plot": MappingProxyType({"--no-show": ("--show", "False")}),
+    "animate": MappingProxyType({
+        "--no-show": ("--show", "False"),
+        "--float": ("--fixed-range", "False"),
+    }),
     "plotly": MappingProxyType({"--no-show": ("--show", "False")}),
     "plotly-animate": MappingProxyType({"--no-show": ("--show", "False")}),
     "pyvista": MappingProxyType({

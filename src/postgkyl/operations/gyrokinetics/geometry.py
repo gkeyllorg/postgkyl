@@ -17,6 +17,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 from postgkyl.dg import num_basis
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.io import parse_output_name
 from postgkyl.numerics import nodal_to_cell_centered_grid
 
 from ..interpolate import interpolate
@@ -59,12 +60,23 @@ def is_geo_mapc2p(ctx: dict) -> bool:
 # end
 
 
-def _file_prefix(file_name: str | None) -> str | None:
-  """Return the simulation prefix before a source filename's final ``-``."""
-  if not file_name:
-    return None
+def geometry_prefix(file_name: str | None) -> str | None:
+  """Return the per-block simulation prefix for ``file_name``.
+
+  Parsing is delegated to :mod:`postgkyl.io.naming`, the authoritative home
+  of Gkeyll's output-name convention.
+  """
+  name = parse_output_name(file_name)
+  return name.prefix if name is not None else None
+# end
+
+
+def per_block_path(path: str | None, block: int | None) -> str | None:
+  """Substitute a multiblock index for ``'*'`` in a geometry override."""
+  if path is None or block is None or "*" not in path:
+    return path
   # end
-  return os.path.splitext(str(file_name))[0].rsplit("-", 1)[0]
+  return path.replace("*", str(block))
 # end
 
 
@@ -200,7 +212,11 @@ def resolve_geometry(file_name: str | None, *, mapc2p: str | None = None,
     raise ValueError("Pass either mapc2p= or nodes_file=, not both.")
   # end
 
-  prefix = _file_prefix(file_name)
+  parsed = parse_output_name(file_name)
+  prefix = geometry_prefix(file_name)
+  block = parsed.block if parsed is not None else None
+  nodes_file = per_block_path(nodes_file, block)
+  mapc2p = per_block_path(mapc2p, block)
   if nodes_file is not None:
     path, kind = nodes_file, "nodes"
   elif mapc2p is not None:
@@ -344,4 +360,7 @@ def _same_grid(left: tuple[np.ndarray, ...] | list[np.ndarray],
 # end
 
 
-__all__ = ["GKYL_GEOMETRY_ID", "Geometry", "is_geo_mapc2p", "resolve_geometry"]
+__all__ = [
+    "GKYL_GEOMETRY_ID", "Geometry", "geometry_prefix", "is_geo_mapc2p",
+    "per_block_path", "resolve_geometry",
+]
