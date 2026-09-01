@@ -236,6 +236,22 @@ class TestChainedPipelines:
     assert result.exit_code == 0
   # end
 
+  def test_evaluate_bare_f_maps_over_every_active_dataset(self):
+    result = _ok([ENERGY, ENERGY, "evaluate", "f 2 *", "status"])
+    lines = [line for line in result.output.splitlines() if line.startswith("[")]
+    assert len(lines) == 4
+    assert all("inactive" in line for line in lines[:2])
+    assert all("active" in line for line in lines[2:])
+  # end
+
+  def test_evaluate_explicit_indices_still_combine_into_one_result(self):
+    result = _ok([ENERGY, ENERGY, "evaluate", "f0 f1 +", "status"])
+    lines = [line for line in result.output.splitlines() if line.startswith("[")]
+    assert len(lines) == 3
+    assert all("inactive" in line for line in lines[:2])
+    assert "active" in lines[2]
+  # end
+
   def test_evaluate_requires_at_least_one_dataset(self):
     result = _run(["evaluate", "f 2 *"])
     assert result.exit_code != 0
@@ -900,6 +916,12 @@ class TestPlotOptionCoverage:
     _ok([ENERGY, ENERGY, "plot", "--saveframes", str(prefix)])
     assert (tmp_path / "frame_0.png").exists()
     assert (tmp_path / "frame_1.png").exists()
+  # end
+
+  def test_saveas_writes_pdf_through_render_backend(self, tmp_path):
+    output = tmp_path / "figure.pdf"
+    _ok([ENERGY, "plot", "--saveas", str(output)])
+    assert output.exists()
   # end
 
   def test_show_without_batch_mode_or_saveframes_calls_plt_show(self):

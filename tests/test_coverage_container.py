@@ -112,7 +112,7 @@ def test_bounds_falls_back_to_grid_then_none():
 # end
 
 
-# ------------------------------------------------------------ getitem / copy
+# ------------------------------------------------ getitem / setitem / copy
 def test_getitem_raises_when_empty():
   d = GDataState()
   with pytest.raises(ValueError):
@@ -121,10 +121,31 @@ def test_getitem_raises_when_empty():
 # end
 
 
-def test_getitem_selects_component_when_loaded():
+def test_getitem_uses_numpy_axis_order_when_loaded():
   d = GDataState()
   d.push([np.linspace(0.0, 1.0, 4)], np.arange(6, dtype=float).reshape(3, 2))
-  np.testing.assert_allclose(d[1], [1.0, 3.0, 5.0])
+  np.testing.assert_allclose(d[:, 1], [1.0, 3.0, 5.0])
+  np.testing.assert_allclose(d[1], [2.0, 3.0])
+# end
+
+
+def test_setitem_uses_numpy_axis_order_when_loaded():
+  d = GDataState()
+  d.push([np.linspace(0.0, 1.0, 4)], np.arange(12, dtype=float).reshape(3, 4))
+  d[:, 2:4] *= 5
+  np.testing.assert_allclose(d.values, [
+      [0.0, 1.0, 10.0, 15.0],
+      [4.0, 5.0, 30.0, 35.0],
+      [8.0, 9.0, 50.0, 55.0],
+  ])
+# end
+
+
+def test_setitem_raises_when_empty():
+  d = GDataState()
+  with pytest.raises(ValueError, match="cannot assign"):
+    d[0] = 1.0
+  # end
 # end
 
 

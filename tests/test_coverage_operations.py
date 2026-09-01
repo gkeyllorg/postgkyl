@@ -197,10 +197,32 @@ def test_modal_scalar_rejects_reflected_power():
 
 
 @needs_gkeyll
-def test_apply_ufunc_method_and_out_kwarg_are_rejected():
+def test_apply_ufunc_non_reduction_method_and_out_kwarg_are_rejected():
   a = pg.load(F1).interpolate()
-  assert a.__array_ufunc__(np.add, "reduce", a) is NotImplemented
+  assert a.__array_ufunc__(np.add, "accumulate", a) is NotImplemented
   assert a.__array_ufunc__(np.sqrt, "__call__", a, out=(np.zeros(1),)) is NotImplemented
+# end
+
+
+def test_apply_ufunc_reductions_return_numpy_results():
+  values = np.array([[3.0, 2.0], [-4.0, 5.0], [1.0, -2.0]])
+  a = pg.GData()
+  a.push([np.linspace(0.0, 1.0, 4)], values)
+
+  assert np.max(a) == np.max(values)
+  assert np.min(a) == np.min(values)
+  assert np.sum(a) == np.sum(values)
+  assert np.prod(a) == np.prod(values)
+  np.testing.assert_allclose(np.max(a, axis=0), np.max(values, axis=0))
+  np.testing.assert_allclose(
+      np.sum(a, axis=1, keepdims=True, dtype=np.float64),
+      np.sum(values, axis=1, keepdims=True, dtype=np.float64))
+
+  bool_values = values > 0
+  b = pg.GData()
+  b.push([np.linspace(0.0, 1.0, 4)], bool_values)
+  assert np.all(b) == np.all(bool_values)
+  assert np.any(b) == np.any(bool_values)
 # end
 
 
