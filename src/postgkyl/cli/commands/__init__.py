@@ -91,13 +91,13 @@ COMMAND_SECTIONS: dict[str, list[str]] = {
     "Verbs": [
         "average", "collect", "dg_local_poly", "differentiate", "evalatcoordproj",
         "evaluate", "extractinput", "fft", "fit", "grid", "growth", "integrate",
-        "interpolate", "load", "magsq", "map", "mask", "relchange", "select",
-        "sort", "val2coord",
+        "gk_fluxsurf", "gk_rz", "interpolate", "load", "magsq", "map", "mask",
+        "relchange", "select", "sort", "val2coord",
     ],
     "Diagnostics": [
         "agyro", "bparrotate", "bperprotate", "current", "energetics",
-        "euler", "gk_distf", "gk_energy_balance", "gk_fluxsurf", "gk_load_quantity",
-        "gk_particle_balance", "gk_rz", "gkyl_pkpm", "laguerre_compose",
+        "euler", "gk_distf", "gk_energy_balance", "gk_load_quantity",
+        "gk_particle_balance", "gkyl_pkpm", "laguerre_compose",
         "mhd", "parrotate", "perprotate", "tenmoment", "transform_frame",
         "velocity",
     ],

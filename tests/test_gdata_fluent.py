@@ -4,9 +4,9 @@ single ``self``, a module-level function in ``api.verbs``), the fluent
 ``api.group.GDataGroup`` that broadcasts verbs over its members, and the
 facade re-exports.
 
-Diagnostics (layer 10: five_moment/ten_moment/mhd/plasma/multispecies/
-rotations/kinetic/pkpm/gyrokinetics) are equation-specific and deliberately
-NOT fluent methods -- this file only exercises the equation-blind core verbs.
+Physics diagnostics are deliberately not fluent methods. Domain-specific data
+transformations such as ``gk_rz`` are operations and do belong on the fluent
+surface alongside domain-independent core verbs.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 # GDataGroup broadcasts every single-dataset verb and explicitly implements the
 # operations that act on the group as a whole. Every multi-dataset operation
 # also has a functional spelling on the top-level ``pg`` facade.
-INSTANCE_VERBS = ["load", "interpolate", "local_poly", "select", "plot", "plotly",
+INSTANCE_VERBS = ["load", "interpolate", "local_poly", "gk_rz", "select", "plot", "plotly",
     "save", "mul", "div", "integrate", "integrate_axis", "average",
     "eval_at_coord_proj", "to_modal", "to_nodal", "to_quad", "apply", "fft",
     "magsq", "mask", "val2coord", "extract_input", "fit", "differentiate",

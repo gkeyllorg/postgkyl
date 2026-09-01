@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import click
 
 import postgkyl as pg
@@ -10,21 +12,27 @@ from .._apply import active_datasets, apply
 from .._options import label_option, tag_option, use_option
 
 
+def _default(name: str):
+  """Derive CLI defaults from the authoritative operation signature."""
+  return inspect.signature(pg.gk_rz).parameters[name].default
+# end
+
+
 @click.command("gk_rz")
-@click.option("--mapc2p", "-m", default=None, type=click.STRING,
+@click.option("--mapc2p", "-m", default=_default("mapc2p"), type=click.STRING,
     help="Use a modal mapc2p file as the geometry source instead of the default "
          "nodes file; pass '' to look up '<prefix>-geo_int_mapc2p.gkyl' from the "
          "first processed dataset's prefix.")
-@click.option("--nodes", "-n", "nodes_file", default=None, type=click.STRING,
+@click.option("--nodes", "-n", "nodes_file", default=_default("nodes_file"), type=click.STRING,
     help="Path to a nodal geometry file, overriding the default "
          "'<prefix>-geo_int_nodes.gkyl' lookup.")
-@click.option("--z-axis", "-z", type=float, default=0.0,
+@click.option("--z-axis", "-z", type=float, default=_default("z_axis"),
     help="Vertical position of the magnetic axis (m), added to the geometry Z. "
          "mapc2p files store Z relative to the axis; pass Z_axis from the "
          "simulation input file to plot in machine coordinates.")
-@click.option("--phi-tor", "-p", type=float, default=0.0,
+@click.option("--phi-tor", "-p", type=float, default=_default("phi_tor"),
     help="Toroidal angle (radians) of the poloidal plane to project 3-D data onto.")
-@click.option("--nz-interp", type=int, default=8,
+@click.option("--nz-interp", type=int, default=_default("nz_interp"),
     help="Parallel (z) up-sampling factor used to smooth the projected 3-D surfaces.")
 @use_option
 @tag_option(default="rz")
@@ -53,11 +61,12 @@ def command(ctx, mapc2p, nodes_file, z_axis, phi_tor, nz_interp, use, tag,
     return
   # end
 
-  geo = pg.diagnostics.gyrokinetics.rz.resolve_geometry(
+  gk_ops = pg.operations.gyrokinetics
+  geo = gk_ops.resolve_geometry(
       targets[0].file_name, mapc2p=mapc2p, nodes_file=nodes_file)
-  projection = pg.diagnostics.gyrokinetics.rz.resolve_rz_projection(
-      targets[0], geo, z_axis=z_axis, nz_interp=max(1, nz_interp))
+  projection = gk_ops.resolve_rz_projection(
+      targets[0], geo, z_axis=z_axis, nz_interp=nz_interp)
 
-  apply(ctx, lambda d: pg.diagnostics.gyrokinetics.rz.map_to_rz(
+  apply(ctx, lambda d: gk_ops.map_to_rz(
       d, projection, phi_tor=phi_tor, tag=tag, label=label), use=use)
 # end

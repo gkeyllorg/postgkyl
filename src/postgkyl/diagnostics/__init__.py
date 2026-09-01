@@ -6,7 +6,9 @@ Folds together the old ``models`` (array math) and ``operations`` physics-verb
 here take loaded ``GData``/``GDataState`` (one or several) plus physical
 scalars as keyword-only options, and return a ``GDataState`` (via
 ``_result``) or, in later layers, a ``Figure``. Equation-blind core verbs
-stay in ``operations``; this is the layer that knows what the numbers mean.
+stay in flat ``operations`` modules. Domain-specific transformations live in
+operation subpackages (for example ``operations.gyrokinetics``); this layer
+is reserved for code that knows what field components physically mean.
 
 Layer 12 added the equation-internal loaders: ``gyrokinetics/`` (distribution
 functions + the derived-quantity registry), the shared ``discovery.py``

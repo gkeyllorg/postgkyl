@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import click
 
 import postgkyl as pg
@@ -10,17 +12,30 @@ from .._apply import active_datasets, apply
 from .._options import label_option, tag_option, use_option
 
 
+def _default(function, name: str):
+  """Derive CLI defaults from the authoritative operation signature."""
+  return inspect.signature(function).parameters[name].default
+# end
+
+
 @click.command("gk_fluxsurf")
-@click.option("--mapc2p", "-m", default=None, type=click.STRING,
+@click.option("--mapc2p", "-m",
+    default=_default(pg.operations.gyrokinetics.resolve_geometry, "mapc2p"),
+    type=click.STRING,
     help="Use a modal mapc2p file as the geometry source instead of the default "
          "nodes file.")
-@click.option("--nodes", "-n", "nodes_file", default=None, type=click.STRING,
+@click.option("--nodes", "-n", "nodes_file",
+    default=_default(pg.operations.gyrokinetics.resolve_geometry, "nodes_file"),
+    type=click.STRING,
     help="Path to a nodal geometry file, overriding the default lookup.")
-@click.option("--x-idx", "-x", type=int, default=0,
+@click.option("--x-idx", "-x", type=int,
+    default=_default(pg.operations.gyrokinetics.resolve_flux_surface_grid, "x_idx"),
     help="Cell index in the radial (x) direction representing the flux surface.")
-@click.option("--nphi", type=int, default=128,
+@click.option("--nphi", type=int,
+    default=_default(pg.operations.gyrokinetics.resolve_flux_surface_grid, "nphi"),
     help="Number of toroidal angle (phi) slices.")
-@click.option("--nz-interp", type=int, default=8,
+@click.option("--nz-interp", type=int,
+    default=_default(pg.operations.gyrokinetics.resolve_flux_surface_grid, "nz_interp"),
     help="Parallel (z) up-sampling factor used to smooth the projected 3-D surfaces.")
 @use_option
 @tag_option(default="fluxsurf")
@@ -44,11 +59,12 @@ def command(ctx, mapc2p, nodes_file, x_idx, nphi, nz_interp, use, tag, label) ->
     return
   # end
 
-  geo = pg.diagnostics.gyrokinetics.rz.resolve_geometry(
+  gk_ops = pg.operations.gyrokinetics
+  geo = gk_ops.resolve_geometry(
       targets[0].file_name, mapc2p=mapc2p, nodes_file=nodes_file)
-  fs_grid = pg.diagnostics.gyrokinetics.fluxsurf.resolve_flux_surface_grid(
-      targets[0], geo, x_idx=x_idx, nphi=nphi, nz_interp=max(1, nz_interp))
+  fs_grid = gk_ops.resolve_flux_surface_grid(
+      targets[0], geo, x_idx=x_idx, nphi=nphi, nz_interp=nz_interp)
 
-  apply(ctx, lambda d: pg.diagnostics.gyrokinetics.fluxsurf.extract_flux_surface(
+  apply(ctx, lambda d: gk_ops.extract_flux_surface(
       d, fs_grid, tag=tag, label=label), use=use)
 # end

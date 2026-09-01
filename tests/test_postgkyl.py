@@ -444,14 +444,17 @@ _ALLOWED = {
                                                       # so this cannot create a cycle (layer 04-io)
     "gdatastate": {"io", "gpython"},                    # container holds a GkylArray backend
     "render": {"gdatastate", "numerics"},
-    "operations": {"gdatastate", "dg", "numerics", "render"}, # "models" removed by 10-diagnostics.md:
+    "operations": {"gdatastate", "dg", "numerics", "render"}, # data transformations:
                                                       # the physics verbs (moments/agyro/
                                                       # current/energetics/rotate/
                                                       # transform_frame/laguerre) moved up
                                                       # into diagnostics, folded with the
                                                       # models/ array math they delegated to;
-                                                      # operations is now the equation-blind
-                                                      # core-verb library only
+                                                      # flat modules are equation-blind core
+                                                      # verbs; domain subpackages (currently
+                                                      # gyrokinetics) own transformations that
+                                                      # need domain geometry without deriving
+                                                      # a physical conclusion
     "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render"}, # added by
                                                       # 10-diagnostics.md: equation-
                                                       # specific compositions (five_moment/

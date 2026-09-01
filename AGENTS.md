@@ -140,9 +140,9 @@ src/postgkyl/
 │   │                    delegations to `operations`, shared by GData and GDataGroup
 │   └─ load.py           pg.load(...) → returns a GData
 │
-├─ operations/         one function per verb · the single seam        [VERBS]
-│   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (core verbs
-│   ├─ select.py                                                       only —
+├─ operations/         data transformations · the single seam          [VERBS]
+│   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (flat core
+│   ├─ select.py                                                       verbs are
 │   ├─ plot.py                                                         equation-blind)
 │   ├─ animate.py        terminal: sequence of datasets → render's animation engine
 │   ├─ average.py        terminal-adjacent: weighted average over a dim subset,
@@ -150,7 +150,8 @@ src/postgkyl/
 │   ├─ eval_at_coord_proj.py  terminal-adjacent: eval at coords, project to the
 │   │                    lower-dim basis for survivors, stays modal/gkyl-native
 │   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
-│   └─ _materialize.py   shared modal → NumPy-shadow bridge used by plot/animate
+│   ├─ _materialize.py   shared modal → NumPy-shadow bridge used by plot/animate
+│   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
 │
 ├─ render/             matplotlib · plotly · pyvista → gdatastate/numerics [BACKEND]
 │                      (below operations, which delegates plot() to it)
@@ -212,10 +213,11 @@ src/postgkyl/
                              │ imports                           │ extends
                              ▼                                   │ (subclass)
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║ VERBS · basic data operations                                                ║
+║ VERBS · data transformations                                                 ║
 ║   operations/interpolate.py   def interpolate(d: GDataState) -> GDataState   ║
 ║   operations/select.py                                                       ║
 ║   operations/plot.py          delegates the actual draw call to render       ║
+║   operations/gyrokinetics/     domain-specific geometry transformations       ║
 ╚════════════════════════════╦═══════════════════════════════════╩═════════════╝
                              │ imports                            │
                              ▼                                    │
@@ -359,11 +361,15 @@ of a multi-dataset verb can never drift apart.
 the caller's concrete class, because `_result` builds `type(self)()`. So `operations` never needs
 to import `gdata`, yet the whole fluent chain stays `GData`. See `HIERARCHY_2.md`.
 
-### `operations/` — the verb library (the single seam)
-One module per verb, re-exported from `operations/__init__.py`. Contract:
+### `operations/` — the data-transformation library (the single seam)
+Flat core verbs have one module each and domain transformations live in named
+subpackages exposed from `operations/__init__.py`. Contract:
 `op(data: GDataState, *, ..., inplace=False, tag=None, label=None) -> GDataState`.
-**Equation-blind core verbs only** — an op never knows which equation system
-produced the file; anything that does belongs in `diagnostics/`.
+Flat modules hold equation-blind core verbs. Domain subpackages may know the
+geometry or representation of one equation system while still only
+transforming/re-expressing data; `operations/gyrokinetics/` owns the R-Z and
+flux-surface projections. Code that interprets components to derive a new
+physical conclusion belongs in `diagnostics/`.
 Implemented: `interpolate` (the bridge verb: gkyl-backed in, numpy-backed out),
 `select` (field-domain only), `plot` (delegates to `render`), `info`, `integrate`
 (terminal; runs inside Gkeyll on modal data), `represent`/`apply` (the explicit
@@ -398,9 +404,9 @@ COMPOSITION tier. One module (or subpackage) per equation model:
 old `apps/trajectory.py`/`tools/calc_*.py`), and `gyrokinetics/` (distf/
 quantity loaders, the quantity registry — Tpar, beta, drift velocities — plus
 its own program-scale analyses: `energy_balance`/`particle_balance`/`nodes`,
-ported from the old `apps/gk_*.py`, and `rz`/`fluxsurf` — R-Z mapping and
-theta-phi flux-surface extraction for field-aligned data, ported from
-`commands/gk_rz.py`/`commands/gk_fluxsurf.py`). Contract: a diagnostic takes loaded
+ported from the old `apps/gk_*.py`). R-Z mapping and theta-phi flux-surface
+extraction are gyrokinetic operations; their old diagnostic module paths are
+compatibility aliases for the current major version. Contract: a diagnostic takes loaded
 data — one or several `GData` — plus physical scalars as keyword-only
 options, and returns `GDataState` (via `_result`, same inplace/tag/label
 contract as a verb) or a Figure; it is built entirely from the public
@@ -496,7 +502,7 @@ that groups `pgkyl --help`'s listing under section headers (`COMMAND_SECTIONS` i
 `cli/commands/__init__.py`: Verbs / Diagnostics / Render / Utility) —
 presentation only; every command stays a flat, chainable top-level `click.Command`
 regardless of its section. Each verb is a thin module under `cli/commands/` (40+
-commands: the equation-blind `operations` verbs (including `load`), one per `diagnostics`
+commands: the core and domain-specific `operations` verbs (including `load`), one per `diagnostics`
 equation model (including the gyrokinetic/pkpm loaders), the `render` backends,
 and session utilities — `status`/`print`/`listoutputs`/`save`) that uses
 **only the public API** (`pg.load`/`pg.plot` and `GData` methods) — so `cli`

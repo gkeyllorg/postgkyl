@@ -1,4 +1,4 @@
-"""Small file/geometry helpers shared by the gyrokinetic loaders and the
+"""Small file helpers shared by the gyrokinetic loaders and the
 layer-13 program-scale diagnostics.
 
 Ported from ``src_bak/postgkyl/gk/gk_utils.py``. ``read_gfile``/
@@ -20,9 +20,6 @@ import glob
 import os
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
-
-from postgkyl import numerics
 from postgkyl.gdata import GData
 
 # Maximum number of blocks a multiblock simulation is assumed to have, used
@@ -115,47 +112,6 @@ def read_interpolated_gfile(file_name: str, poly_order: int, basis_type: str,
   values = interpolated.get_values()
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), interpolated
-# end
-
-
-def interpolated_grid_values(data: GData, *,
-    comp: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
-  """Interpolate ``data``'s DG coefficients onto its computational mesh.
-
-  Shared by :mod:`~postgkyl.diagnostics.gyrokinetics.rz` and
-  :mod:`~postgkyl.diagnostics.gyrokinetics.fluxsurf`, which both need a
-  field-aligned dataset's fine computational grid (for sampling the
-  simulation's geometry) alongside its interpolated values.
-
-  Args:
-    data: The (not yet interpolated) dataset.
-    comp: Component to return.
-
-  Returns:
-    ``(edges, centers, values)``: the refined edge grid (one 1-D array per
-    dimension), its cell-centered equivalent, and component ``comp``'s
-    values on that grid.
-  """
-  field = data.interpolate()
-  cells = field.values.shape[:-1]
-  centers = numerics.nodal_to_cell_centered_grid(field.grid, cells)
-  return field.grid, centers, field.values[..., comp]
-# end
-
-
-def resample_grid(values: np.ndarray, src_coords: list[np.ndarray],
-    dst_coords: list[np.ndarray]) -> np.ndarray:
-  """Linearly resample ``values`` (given on the tensor grid ``src_coords``)
-  onto the tensor grid spanned by ``dst_coords``.
-
-  Shared by :mod:`~postgkyl.diagnostics.gyrokinetics.rz` and
-  :mod:`~postgkyl.diagnostics.gyrokinetics.fluxsurf` to sample a
-  geometry field (given on its own grid) onto a dataset's computational
-  grid, or vice versa.
-  """
-  mesh = np.meshgrid(*dst_coords, indexing="ij")
-  return RegularGridInterpolator(tuple(src_coords), values, bounds_error=False,
-      fill_value=None)(tuple(mesh))
 # end
 
 

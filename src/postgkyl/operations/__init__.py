@@ -1,4 +1,4 @@
-"""The verb library -- one function per operation (the single seam).
+"""The data-transformation library -- one function per operation.
 
 Every verb takes a dataset first and returns a dataset (via ``_result``), so the
 fluent ``GData`` methods, the operators, and any CLI all delegate here and can
@@ -10,15 +10,16 @@ on the container backend (Gkeyll kernels for modal data, NumPy for field data);
 ``integrate`` is a terminal verb that runs inside Gkeyll on modal data;
 ``average`` reduces modal data over a dimension subset via
 ``gkyl_array_average``, producing a new lower-dimensional modal dataset;
-``map`` delegates to the grid-mapping engine in ``dg.map``. This is the
-equation-blind core-verb library only -- an op never knows which equation
-system produced the file; equation-specific physics (the former
+``map`` delegates to the grid-mapping engine in ``dg.map``. Flat modules are
+domain-independent core verbs; domain subpackages such as ``gyrokinetics``
+hold transformations that require domain geometry without interpreting field
+components as new physical conclusions. Equation-specific physics (the former
 ``moments``/``agyro``/``current``/``energetics``/``rotate``/
 ``transform_frame``/``laguerre`` verbs, folded with the array math they
 delegated to) lives one layer up, in ``diagnostics``.
 """
 
-from . import arithmetic
+from . import arithmetic, gyrokinetics
 from .interpolate import interpolate
 from .local_poly import local_poly
 from .select import select
@@ -52,4 +53,4 @@ __all__ = ["interpolate", "local_poly", "select", "info", "integrate", "integrat
     "arithmetic", "represent", "apply",
     "fft", "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
     "extract_input", "fit", "differentiate", "evaluate", "available_evaluate_operators",
-    "map"]
+    "map", "gyrokinetics"]

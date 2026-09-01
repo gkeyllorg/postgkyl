@@ -106,6 +106,29 @@ class GData(GDataState):
         inplace=inplace, tag=tag, label=label)
   # end
 
+  def gk_rz(self, *, mapc2p: str | None = None,
+      nodes_file: str | None = None, z_axis: float = 0.0,
+      phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0,
+      inplace: bool = False, tag: str | None = None,
+      label: str | None = None) -> "GData":
+    """Project this gyrokinetic DG field onto a physical R-Z grid.
+
+    The input must be un-interpolated 2-D or 3-D modal data. Geometry is
+    inferred from the source filename, preferring
+    ``<prefix>-geo_int_nodes.gkyl`` and falling back to
+    ``<prefix>-geo_int_mapc2p.gkyl``. ``nodes_file`` and ``mapc2p`` are
+    mutually exclusive overrides. ``z_axis`` is in meters, ``phi_tor`` in
+    radians, ``nz_interp`` is a positive integer, and ``comp`` selects one
+    physical component. ``inplace`` controls replacement; ``tag`` and
+    ``label`` optionally override result metadata. See
+    :func:`postgkyl.operations.gyrokinetics.gk_rz` for returned shapes and
+    complete error behavior.
+    """
+    return operations.gyrokinetics.gk_rz(self, mapc2p=mapc2p,
+        nodes_file=nodes_file, z_axis=z_axis, phi_tor=phi_tor,
+        nz_interp=nz_interp, comp=comp, inplace=inplace, tag=tag, label=label)
+  # end
+
   def select(self, *, comp=None, z0=None, z1=None, z2=None, z3=None, z4=None,
       z5=None, inplace: bool = False, tag: str | None = None,
       label: str | None = None) -> "GData":
