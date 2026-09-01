@@ -65,30 +65,51 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 
 
 # ============================================================ method roster
-# The full equation-blind verb inventory from operations/__init__.py, keyed by its
-# fluent spelling: either a GData instance method, or a module-level function
-# in api.verbs for the verbs that combine several datasets (see the group
-# contract and api/gdata.py's ``grid`` note for the two exceptions).
-INSTANCE_VERBS = ["interpolate", "local_poly", "select", "plot", "save",
-    "mul", "div", "integrate", "integrate_axis", "to_modal", "to_nodal",
-    "to_quad", "apply",
-    "fft", "magsq", "mask", "val2coord", "extract_input", "fit",
-    "differentiate", "map"]
-MODULE_VERBS = ["collect", "evaluate", "relchange", "animate", "sort"]
+# The full public fluent inventory, split by which object owns each operation.
+# GDataGroup broadcasts every single-dataset verb and explicitly implements the
+# operations that act on the group as a whole. Every multi-dataset operation
+# also has a functional spelling on the top-level ``pg`` facade.
+INSTANCE_VERBS = ["interpolate", "local_poly", "select", "plot", "plotly",
+    "save", "mul", "div", "integrate", "integrate_axis", "average",
+    "eval_at_coord_proj", "to_modal", "to_nodal", "to_quad", "apply", "fft",
+    "magsq", "mask", "val2coord", "extract_input", "fit", "differentiate",
+    "map"]
+GROUP_VERBS = ["sort", "collect", "evaluate", "animate", "plotly_animate"]
+MODULE_VERBS = GROUP_VERBS + ["relchange"]
 
 
 class TestMethodInventory:
   def test_every_instance_verb_exists_and_is_callable(self):
+    data = _line()
     for name in INSTANCE_VERBS:
       assert hasattr(pg.GData, name), f"GData has no {name!r} method"
       assert callable(getattr(pg.GData, name))
+      assert callable(getattr(data, name)), f"GData object has no {name!r} method"
     # end
   # end
 
-  def test_every_module_verb_exists_in_api_verbs(self):
+  def test_every_instance_verb_is_available_on_a_group(self):
+    group = ApiGDataGroup([_line()])
+    for name in INSTANCE_VERBS:
+      assert callable(getattr(group, name)), (
+          f"GDataGroup object has no {name!r} method")
+    # end
+  # end
+
+  def test_every_group_verb_is_a_method_and_a_pg_function(self):
+    group = ApiGDataGroup([_line()])
+    for name in GROUP_VERBS:
+      assert callable(getattr(group, name)), (
+          f"GDataGroup object has no {name!r} method")
+      assert callable(getattr(pg, name)), f"postgkyl has no {name!r} function"
+    # end
+  # end
+
+  def test_every_module_verb_exists_in_api_verbs_and_pg(self):
     for name in MODULE_VERBS:
       assert hasattr(api_verbs, name), f"api.verbs has no {name!r} function"
       assert callable(getattr(api_verbs, name))
+      assert getattr(pg, name) is getattr(api_verbs, name)
     # end
   # end
 
