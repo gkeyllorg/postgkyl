@@ -10,8 +10,8 @@ way ``interpolate``/``select``/``fft``/... are on
 matching :mod:`postgkyl.operations` verb, so the functional spelling
 (``postgkyl.collect(a, b)``) and this module-level fluent spelling can never
 drift apart. :class:`~postgkyl.gdata.gdatagroup.GDataGroup` re-uses these same
-functions for its own ``collect``/``evaluate``/``animate``/``plotly_animate``
-terminal methods.
+functions for its own ``sort``/``collect``/``evaluate``/``animate``/
+``plotly_animate`` methods.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from postgkyl import operations
+from postgkyl.command_spec import hidden
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -103,3 +104,14 @@ def plotly_animate(*datasets, **kwargs):
   """
   return operations.plotly_animate(datasets, **kwargs)
 # end
+
+
+# These views are exact aliases: the operation owns the signature, docs, and
+# command metadata. Animation wrappers remain above until their public render
+# signatures are normalized.
+collect = operations.collect
+sort = operations.sort
+evaluate = operations.evaluate
+relchange = operations.relchange
+animate = operations.animate
+plotly_animate = operations.plotly_animate

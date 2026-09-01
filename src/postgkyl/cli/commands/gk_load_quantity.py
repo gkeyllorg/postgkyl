@@ -1,84 +1,38 @@
-"""``gk_load_quantity`` -- load a pre-named gyrokinetic quantity by name."""
-
-from __future__ import annotations
+"""Deprecated module path plus parser retained for legacy callers."""
 
 import re
 
-import click
+from postgkyl.cli.commands import command_named
 
-import postgkyl as pg
-
-from .._options import label_option, tag_option
+command = command_named("gyrokinetics-load-gk-quantity")
 
 
-@click.command("gk_load_quantity")
-@click.option("--quantity", "-q", default=None, help="Registered quantity name.")
-@click.option("--qlist", is_flag=True, default=False,
-    help="List the available quantities and exit.")
-@click.option("--name", "-n", default=None, help="Simulation name prefix.")
-@click.option("--species", "-s", default=None,
-    help="Species name, or a comma-separated list (species-independent quantities: omit).")
-@click.option("--frame", "-f", default=None,
-    help="Frame number, comma-separated list, or 'start:stop[:step]' range; default: all.")
-@click.option("--path", "-p", default="./", help="Directory containing the simulation files.")
-@click.option("--extra", "-e", default=None,
-    help="Extra comma-separated key=value pairs of extra commands, e.g. dir=1,mass=0.1. "
-         "A key may be given one value per species as a comma-separated array, e.g. "
-         "mass=me,mi1,mi2 alongside --species elc,ion1,ion2. Purpose depends on -q.")
-@tag_option(default="default")
-@label_option()
-@click.pass_context
-def command(ctx, quantity, qlist, name, species, frame, path, extra, tag, label) -> None:
-  """Gyrokinetics: load and compute a pre-named quantity by name.
-
-  Use --qlist to print the registered quantity names.
-  """
-  if qlist:
-    click.echo(f"Available quantities: {', '.join(pg.available_gk_quantities())}.")
-    return
+def _number(value: str):
+  try:
+    integer = int(value)
+    return integer if str(integer) == value else float(value)
+  except ValueError:
+    try:
+      return float(value)
+    except ValueError:
+      return value
+    # end
   # end
-  if not quantity or not name:
-    raise click.UsageError("gk_load_quantity: --quantity and --name are required (unless --qlist)")
-  # end
-  datasets = pg.load_gk_quantity(quantity, species, name, frame, path=path,
-      tag=tag, label=label, **_parse_extra(extra))
-  ctx.obj.datasets.extend(datasets)
 # end
 
 
 def _parse_extra(extra: str | None) -> dict:
-  """Parse ``--extra``'s ``key=value,...`` syntax, coercing numeric values.
-
-  Pairs may be separated by commas or whitespace (``mass=1,2 dir=0`` and
-  ``mass=1,2,dir=0`` both work -- needed since a value itself may be a
-  comma-separated array). A value with more than one comma-separated entry
-  is kept as a list, one entry per species in ``--species`` order; a
-  single value stays a scalar and applies to every species.
-  """
-  parsed = {}
+  """Parse legacy comma/space separated quantity key/value pairs."""
   if not extra:
-    return parsed
+    return {}
   # end
-  for pair in re.split(r"[,\s]+(?=[^\s,=]+=)", extra.strip()):
-    key, _, val = pair.partition("=")
-    vals = []
-    for v in val.split(","):
-      v = v.strip()
-      if not v:
-        continue
-      # end
-      try:
-        v = int(v)
-      except ValueError:
-        try:
-          v = float(v)
-        except ValueError:
-          pass
-        # end
-      # end
-      vals.append(v)
-    # end
-    parsed[key.strip()] = vals[0] if len(vals) == 1 else vals
+  matches = list(re.finditer(r"(?:^|[ ,]+)([A-Za-z_]\w*)=", extra))
+  result = {}
+  for index, match in enumerate(matches):
+    end = matches[index + 1].start() if index + 1 < len(matches) else len(extra)
+    raw = extra[match.end():end].strip(" ,")
+    values = [_number(item.strip()) for item in raw.split(",") if item.strip()]
+    result[match.group(1)] = values[0] if len(values) == 1 else values
   # end
-  return parsed
+  return result
 # end

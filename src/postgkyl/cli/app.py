@@ -3,13 +3,14 @@
 The chained syntax mirrors the fluent script API 1:1::
 
     pg.load('f.gkyl').interpolate().select(z0=0).plot()      # script
-    pgkyl   f.gkyl    interp   sel --z0 0  plot        # CLI
+    pgkyl   f.gkyl    interpolate select --z0 0 plot   # CLI
 
 Chaining and callback-before-dispatch are native to ``click.Group(chain=True)``,
 so the only custom code is a small :class:`PgkylGroup.get_command` override for
 command-name abbreviation and treating a bare filename as an implicit ``load``.
-Every command body lives in :mod:`postgkyl.cli.commands` and only uses the public
-API (``pg.load``/``pg.plot`` and ``GData`` methods).
+Scientific commands are compiled from public API callables at import time;
+this module owns only chaining, abbreviation, bare-file dispatch, and session
+policy.
 """
 
 from __future__ import annotations
@@ -20,11 +21,10 @@ import click
 
 from postgkyl import __version__, version_report
 from postgkyl.cli.state import DataSpace
-from postgkyl.cli.commands import COMMANDS, COMMAND_SECTIONS
-
-# Hidden aliases (abbreviation already covers interp->interpolate, sel->select).
-_ALIASES = {"pl": "plot", \
-            "ev": "evaluate"}
+from postgkyl.cli.commands import (
+    COMMANDS, COMMAND_SECTIONS, LEGACY_COMMANDS_BY_NAME,
+)
+from postgkyl.cli.compat import COMMAND_ALIASES, warn_legacy
 
 
 class PgkylGroup(click.Group):
@@ -35,8 +35,17 @@ class PgkylGroup(click.Group):
     if cmd is not None:
       return cmd
     # end
-    if name in _ALIASES:
-      return super().get_command(ctx, _ALIASES[name])
+    if name in LEGACY_COMMANDS_BY_NAME:
+      warn_legacy(ctx, name)
+      return LEGACY_COMMANDS_BY_NAME[name]
+    # end
+    if name in COMMAND_ALIASES:
+      target = COMMAND_ALIASES[name]
+      command = super().get_command(ctx, target)
+      if command is not None:
+        warn_legacy(ctx, name)
+        return command
+      # end
     # end
     matches = [c for c in self.list_commands(ctx) if c.startswith(name)]
     if len(matches) == 1:
@@ -75,9 +84,6 @@ class PgkylGroup(click.Group):
           formatter.write_dl(rows)
   # end
 # end
-        # end
-      # end
-    # end
 
 
 def _print_version(ctx, param, value) -> None:
@@ -107,7 +113,7 @@ def cli(ctx, batch_mode, saveframes_prefix, value_form) -> None:
 
   Datasets are loaded, processed and plotted by chaining commands, e.g.::
 
-      pgkyl file.gkyl interp sel --z0 0 plot
+      pgkyl file.gkyl interpolate select --z0 0 plot
   """
   ctx.obj = DataSpace(batch=batch_mode, prefix=saveframes_prefix,
       value_form=value_form)

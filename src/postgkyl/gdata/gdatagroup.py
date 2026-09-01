@@ -30,24 +30,17 @@ every member, in order (**broadcasting**):
   unaffected. An attribute missing from any member also raises
   ``AttributeError`` immediately, at access time.
 
-Six verbs are **not** broadcast because they combine the members into a
-single result rather than acting on each independently; these are defined
-explicitly below, delegating to the matching multi-dataset function in
-``operations``/``api.verbs``: ``info`` (one combined summary), ``collect`` (stack
-into one dataset), ``evaluate`` (evaluate an RPN expression over the members),
-``plot`` (**one figure**, every member drawn onto it), ``animate`` (one
-animation, one frame per member), ``plotly_animate`` (one Plotly animation,
-one frame per member) -- matching the non-broadcast method set of the old
-``src_bak`` class exactly.
-
-``plot`` is the newest of the six: ``operations.plot`` grew a multi-dataset
-signature (``render.plot`` always had one) so that a group of datasets that
-belong together -- above all a **multiblock family**, one field split across
-blocks -- renders as a single picture. ``plotly`` (single-dataset) is a plain
-``GData`` method, so ``group.plotly()`` is still covered by the broadcast rule.
+The explicit methods below either combine/reorder the members or have
+collection-wide terminal semantics. In particular, ``plot`` draws every
+member on one figure, so a multiblock family remains one physical field.
+``plotly`` is still an ordinary per-dataset verb and therefore broadcasts.
 
 ``operations.grid`` has no fluent spelling anywhere (not on ``GData``, so not
 broadcast here either) -- see ``api/gdata.py`` for why.
+
+``load`` is also explicit rather than broadcast: it is the group's lifecycle
+method, appending newly loaded member(s) to this group and returning ``self``
+so an initially empty group can be assembled fluently.
 """
 
 from __future__ import annotations
@@ -55,12 +48,47 @@ from __future__ import annotations
 from postgkyl import operations
 from postgkyl.gdatastate.gdatastategroup import GDataStateGroup
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.command_spec import hidden
 
 from . import verbs
 
 
 class GDataGroup(GDataStateGroup):
   """A group whose members' fluent verbs broadcast over the whole group."""
+
+  # ------------------------------------------------------- data lifecycle
+  def load(self, file_name: str, *, tag: str = "default", label: str = "",
+      ctx: dict | None = None, value_form: str | None = None,
+      basis_type: str | None = None, poly_order: int | None = None,
+      **read_kwargs) -> "GDataGroup":
+    """Load and append one file (or a glob) and return this group.
+
+    Successive calls accumulate members, enabling chains such as::
+
+        group = GDataGroup()
+        group.load(frame0).load(frame1).local_poly().collect().plot()
+
+    Loading completes before this group is changed, so a failed read leaves
+    its existing members untouched.  A glob appends every match in natural
+    filename order, with the same options and errors as :func:`postgkyl.load`.
+    """
+    # Same-layer import at call time avoids the construction-time cycle:
+    # gdata.load builds GDataGroup results, while GData imports this class for
+    # fluent group-returning verbs.
+    from .load import load as load_data
+
+    loaded = load_data(file_name, tag=tag, label=label, ctx=ctx,
+        value_form=value_form, basis_type=basis_type,
+        poly_order=poly_order, **read_kwargs)
+    if isinstance(loaded, GDataStateGroup):
+      additions = loaded.datasets
+    # end
+    else:
+      additions = [loaded]
+    # end
+    self._datasets.extend(additions)
+    return self
+  # end
 
   def __getattr__(self, name: str):
     if name.startswith("_"):
@@ -90,6 +118,11 @@ class GDataGroup(GDataStateGroup):
   # end
 
   __and__ = with_
+
+  def sort(self, *, reverse: bool = False) -> "GDataGroup":
+    """Return a naturally filename-sorted group (see ``operations.sort``)."""
+    return type(self)(verbs.sort(*self._datasets, reverse=reverse))
+  # end
 
   def __getitem__(self, index):
     """Index or slice; a slice returns a group of the same concrete class."""
@@ -130,11 +163,20 @@ class GDataGroup(GDataStateGroup):
 
   def animate(self, **kwargs):
     """Animate the members, one frame each (see ``api.verbs.animate``)."""
-    return verbs.animate(*self._datasets, **kwargs)
+    return verbs.animate(self._datasets, **kwargs)
   # end
 
   def plotly_animate(self, **kwargs):
     """Animate the members with Plotly, one frame each (see ``api.verbs.plotly_animate``)."""
-    return verbs.plotly_animate(*self._datasets, **kwargs)
+    return verbs.plotly_animate(self._datasets, **kwargs)
   # end
+# end
+
+
+for _name in (
+    "load", "with_", "sort", "info", "plot", "collect", "evaluate", "animate",
+    "plotly_animate",
+):
+  hidden("the functional callable is the canonical command source")(
+      GDataGroup.__dict__[_name])
 # end

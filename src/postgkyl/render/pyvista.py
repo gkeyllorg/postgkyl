@@ -9,20 +9,19 @@ surface from deep inside the library.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
 
 import numpy as np
 import pyvista as pv
 
+from postgkyl.command_spec import (
+    CommandSpec, Execution, ResultPolicy, Section, command,
+)
+from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._prep import resolve_axis_labels, squeeze_collapsed_axes
 from .labels import latex_to_unicode
-
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
-# end
-
 
 def _require_gl_context(action):
   """Run ``action`` (a zero-arg callable), turning a VTK/GL failure into a
@@ -41,7 +40,9 @@ def _require_gl_context(action):
   # end
 
 
-def pyvista(data: "GDataState", *, show: bool = True, spin: bool = True,
+@command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,
+    result=ResultPolicy.SILENT))
+def pyvista(data: GDataState, *, show: bool = True, spin: bool = True,
     max_points_per_axis: int = -1, contour_levels: int = 10,
     is_log: bool = False, is_contour: bool = True, is_shaded: bool = False,
     hide_axes: bool = False, mesh_clip_plane: bool = False,
@@ -49,7 +50,7 @@ def pyvista(data: "GDataState", *, show: bool = True, spin: bool = True,
     cmin: float | None = None, cmax: float | None = None,
     aspect_ratio: tuple[float, float, float] = (1, 1, 1),
     camera_azimuth: float = 0.0, camera_elevation: float = -30.0,
-    opacity: str | float = "sigmoid_4", cmap: str = "inferno",
+    opacity: str = "sigmoid_4", cmap: str = "inferno",
     xlabel: str | None = None, ylabel: str | None = None,
     zlabel: str | None = None, clabel: str = "", title: str | None = "",
     diverging: bool = False, cylindrical_to_cartesian: bool = False,
@@ -80,14 +81,17 @@ def pyvista(data: "GDataState", *, show: bool = True, spin: bool = True,
     mesh_clip_plane: add an interactive clip plane along ``-x``.
     mesh_slice_plane: add an interactive slice plane along ``-x``.
     volume_clip_plane: add an interactive volume clip plane (volume mode).
-    cmin, cmax: color limits; default to the data min/max (log10'd if
-      ``is_log``).
+    cmin: Color-limit lower bound; defaults to the data minimum.
+    cmax: Color-limit upper bound; defaults to the data maximum.
     aspect_ratio: per-axis aspect the grid is normalized to.
-    camera_azimuth, camera_elevation: initial camera angles in degrees.
+    camera_azimuth: Initial camera azimuth in degrees.
+    camera_elevation: Initial camera elevation in degrees.
     opacity: a PyVista opacity preset string, ``"diverging"`` (opaque at
       both ends, transparent in the middle), or a scalar opacity.
     cmap: colormap name; overridden to ``"RdBu_r"`` when ``diverging``.
-    xlabel, ylabel, zlabel: axis labels; auto-derived when ``None``.
+    xlabel: Horizontal-axis label; auto-derived when omitted.
+    ylabel: Vertical-axis label; auto-derived when omitted.
+    zlabel: Third-axis label; auto-derived when omitted.
     clabel: colorbar (scalar bar) title.
     title: text drawn at the top of the render; omitted when ``None``.
     diverging: use the diverging ``"RdBu_r"`` colormap.
@@ -97,11 +101,12 @@ def pyvista(data: "GDataState", *, show: bool = True, spin: bool = True,
     saveas: output path; extension selects the exporter (``.html``,
       ``.png``/``.jpg``/``.jpeg``, ``.pdf``/``.svg``, ``.gltf``, ``.vtksz``).
       Empty string disables saving.
-    xscale, yscale, zscale: multiplicative scales recorded in the axis
-      labels and the displayed bounding-box tick range (the mesh itself is
-      always normalized to ``aspect_ratio``; these only affect what the
-      bounds/labels report as the true physical extent).
-    xshift, yshift, zshift: additive shifts applied the same way.
+    xscale: Multiplicative scale recorded for the horizontal axis.
+    yscale: Multiplicative scale recorded for the vertical axis.
+    zscale: Multiplicative scale recorded for the third axis.
+    xshift: Additive shift applied to the horizontal axis.
+    yshift: Additive shift applied to the vertical axis.
+    zshift: Additive shift applied to the third axis.
     hide_zeros: hide grid points whose scalar value is exactly zero.
 
   Returns:
@@ -114,6 +119,9 @@ def pyvista(data: "GDataState", *, show: bool = True, spin: bool = True,
   """
   _valid_exts = ("", ".html", ".png", ".jpg", ".jpeg", ".pdf", ".svg", ".gltf",
       ".vtksz")
+  if saveas and not os.path.splitext(saveas)[1]:
+    saveas += ".png"
+  # end
   if saveas != "" and not saveas.endswith(_valid_exts[1:]):
     raise ValueError(
         "Unsupported file format for saving. Supported formats are: "

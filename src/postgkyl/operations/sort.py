@@ -7,7 +7,7 @@ from postgkyl.gdatastate import flatten_datasets
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
-def sort(*datasets, reverse: bool = False) -> list[GDataState]:
+def sort(*datasets: GDataState, reverse: bool = False) -> list[GDataState]:
   """Reorder datasets by the natural/numeric sort of their source filename.
 
   Fixes the shell-glob/lexicographic-sort trap where ``field_10.gkyl`` sorts

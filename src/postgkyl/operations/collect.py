@@ -56,7 +56,8 @@ def _collect_group(states: list, start: int, *, sumdata: bool, period: float | N
 # end
 
 
-def collect(*datasets, sumdata: bool = False, period: float | None = None,
+def collect(*datasets: GDataState, sumdata: bool = False,
+    period: float | None = None,
     offset: float = 0.0, chunk: int | None = None, tag: str | None = None,
     label: str | None = None) -> GDataState | list[GDataState]:
   """Collect many single-frame datasets into one with a new leading time axis.

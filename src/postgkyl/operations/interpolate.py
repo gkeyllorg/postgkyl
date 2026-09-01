@@ -20,6 +20,13 @@ def interpolate(data: "GDataState", *, num_interp: int | None = None,
   value_form=...)`` or the CLI's ``-b``/``-p``/``-v``) -- this verb only
   ever reads them off ``data.ctx``. The result is flagged
   ``interpolated=True`` so it becomes safe for element-wise math.
+
+  Args:
+    data: Dataset containing DG coefficients.
+    num_interp: Evaluation points per cell; use the basis default when omitted.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
   """
   basis_type = data.ctx.get("basis_type")
   if not basis_type:

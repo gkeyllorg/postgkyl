@@ -11,18 +11,80 @@ Inherited from the container (pure state readers): ``info``, ``__array__``,
 
 from __future__ import annotations
 
+from glob import has_magic
 import operator
 
 import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl import operations, io
+from postgkyl.command_spec import fluent, hidden
 
 from .gdatagroup import GDataGroup
 
 
 class GData(GDataState):
   """Fluent dataset: ``pg.load(...).interpolate().select(z0=0.0).plot()``."""
+
+  # ------------------------------------------------------- data lifecycle
+  def load(self, file_name: str, *, tag: str | None = None,
+      label: str | None = None, ctx: dict | None = None,
+      value_form: str | None = None, basis_type: str | None = None,
+      poly_order: int | None = None, **read_kwargs) -> "GData":
+    """Load one file into this dataset in place and return ``self``.
+
+    This is the two-step counterpart of constructing ``GData(file_name)``::
+
+        data = GData()
+        data.load(file_name).local_poly().plot()
+
+    The read is atomic with respect to this object: if it fails, the current
+    grid, values, context, and filename are left unchanged.  A pristine empty
+    dataset's existing ``ctx`` seeds the read unless ``ctx`` is supplied
+    explicitly; reloading an already populated dataset starts from a fresh
+    context so metadata from the previous file cannot leak into the new one.
+    The dataset's existing tag and custom label are preserved unless ``tag``
+    or ``label`` is passed.
+
+    This method accepts one literal filename.  Use :func:`postgkyl.load` for
+    shell-style glob patterns, which produce a ``GDataGroup`` rather than one
+    dataset.
+    """
+    file_name = str(file_name)
+    if not file_name:
+      raise ValueError("GData.load() requires a non-empty filename.")
+    # end
+    if has_magic(file_name):
+      raise ValueError(
+          "GData.load() accepts one literal filename; use pg.load(pattern) "
+          "to load a glob as a GDataGroup.")
+    # end
+
+    if ctx is None and self._grid is None and self._values is None:
+      load_ctx = self.ctx
+    # end
+    else:
+      load_ctx = ctx
+    # end
+
+    # Construct through GDataState so this follows exactly the same reader and
+    # metadata-defaulting path as GData(file_name).  Nothing on ``self`` is
+    # changed until construction succeeds.
+    loaded = GDataState(file_name, ctx=load_ctx, value_form=value_form,
+        basis_type=basis_type, poly_order=poly_order, **read_kwargs)
+    self._grid = loaded._grid
+    self._values = loaded._values
+    self.ctx = loaded.ctx
+    self._file_name = loaded._file_name
+    self._label = loaded._label
+    if tag is not None:
+      self._tag = tag
+    # end
+    if label is not None:
+      self._custom_label = label
+    # end
+    return self
+  # end
 
   # ---------------------------------------------------------- fluent verbs
   def interpolate(self, *, num_interp: int | None = None, inplace: bool = False,
@@ -43,6 +105,29 @@ class GData(GDataState):
     properties of this dataset, fixed at load time."""
     return operations.local_poly(self, npoints=npoints,
         inplace=inplace, tag=tag, label=label)
+  # end
+
+  def gk_rz(self, *, mapc2p: str | None = None,
+      nodes_file: str | None = None, z_axis: float = 0.0,
+      phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0,
+      inplace: bool = False, tag: str | None = None,
+      label: str | None = None) -> "GData":
+    """Project this gyrokinetic DG field onto a physical R-Z grid.
+
+    The input must be un-interpolated 2-D or 3-D modal data. Geometry is
+    inferred from the source filename, preferring
+    ``<prefix>-geo_int_nodes.gkyl`` and falling back to
+    ``<prefix>-geo_int_mapc2p.gkyl``. ``nodes_file`` and ``mapc2p`` are
+    mutually exclusive overrides. ``z_axis`` is in meters, ``phi_tor`` in
+    radians, ``nz_interp`` is a positive integer, and ``comp`` selects one
+    physical component. ``inplace`` controls replacement; ``tag`` and
+    ``label`` optionally override result metadata. See
+    :func:`postgkyl.operations.gyrokinetics.gk_rz` for returned shapes and
+    complete error behavior.
+    """
+    return operations.gyrokinetics.gk_rz(self, mapc2p=mapc2p,
+        nodes_file=nodes_file, z_axis=z_axis, phi_tor=phi_tor,
+        nz_interp=nz_interp, comp=comp, inplace=inplace, tag=tag, label=label)
   # end
 
   def select(self, *, comp=None, z0=None, z1=None, z2=None, z3=None, z4=None,
@@ -277,4 +362,35 @@ class GData(GDataState):
     """
     return operations.arithmetic.apply_ufunc(ufunc, method, *inputs, **kwargs)
   # end
+# end
+
+
+# Exact operation delegations are mechanical fluent bindings. Their
+# signature, annotations, docstring, command metadata, and canonical identity
+# now have one home in the operation itself.
+for _name in (
+    "interpolate", "local_poly", "gk_rz", "gk_fluxsurf", "select", "integrate",
+    "integrate_axis", "average", "eval_at_coord_proj", "fft", "magsq",
+    "mask", "extract_input", "fit", "differentiate", "map",
+    "growth",
+):
+  setattr(GData, _name, fluent(getattr(
+      operations.gyrokinetics if _name in ("gk_rz", "gk_fluxsurf") else operations,
+      _name)))
+# end
+GData.save = fluent(io.save)
+GData.plot = fluent(operations.plot)
+GData.plotly = fluent(operations.plotly)
+
+for _name, _reason in {
+    "load": "the canonical loader is postgkyl.load",
+    "mul": "Python operators are not stringly exposed as commands",
+    "div": "Python operators are not stringly exposed as commands",
+    "to_modal": "representation shortcuts remain Python-only",
+    "to_nodal": "representation shortcuts remain Python-only",
+    "to_quad": "representation shortcuts remain Python-only",
+    "apply": "requires a Python callable",
+    "val2coord": "the functional operation owns this exceptional group result",
+}.items():
+  hidden(_reason)(GData.__dict__[_name])
 # end

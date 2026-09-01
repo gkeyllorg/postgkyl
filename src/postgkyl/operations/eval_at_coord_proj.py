@@ -56,6 +56,9 @@ def eval_at_coord_proj(data: "GDataState", eval_dirs, eval_coords, *,
       convention every other native-modal verb here, e.g. ``average``,
       uses -- not a separately mapped/deformed physical grid, which this
       architecture only ever produces post-``interpolate()``).
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
 
   Returns:
     A new dataset over the surviving dimensions -- or a single degenerate

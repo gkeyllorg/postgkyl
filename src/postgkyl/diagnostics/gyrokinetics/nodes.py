@@ -14,37 +14,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from . import utils
+from postgkyl.operations.gyrokinetics.geometry import (
+    GKYL_GEOMETRY_ID,
+    is_geo_mapc2p,
+)
 
-# Mirrors `enum gkyl_geometry_id` in gkeyll/core/zero/gkyl_eqn_type.h -- the
-# ordering is a Gkeyll fact, pinned by tests/test_diagnostics_programs_nodes.py.
-GKYL_GEOMETRY_ID = [
-    "GKYL_GEOMETRY_NONE",
-    "GKYL_GEOMETRY_TOKAMAK",
-    "GKYL_GEOMETRY_MIRROR",
-    "GKYL_GEOMETRY_MAPC2P",
-    "GKYL_GEOMETRY_FROMFILE",
-]
-_MAPC2P_IDX = GKYL_GEOMETRY_ID.index("GKYL_GEOMETRY_MAPC2P")
+from . import utils
 
 _XY_LABEL_FONT_SIZE = 17
 _TITLE_FONT_SIZE = 17
 _TICK_FONT_SIZE = 14
 _COLORBAR_LABEL_FONT_SIZE = 14
-
-
-def is_geo_mapc2p(ctx: dict) -> bool:
-  """Whether ``ctx``'s ``geometry_type`` marks user-supplied MAPC2P geometry.
-
-  Defaults to True when ``geometry_type`` is absent from ``ctx`` (matching
-  ``src_bak``'s assumption that files without geometry metadata come from a
-  mapc2p-based simulation).
-  """
-  if "geometry_type" not in ctx:
-    return True
-  # end
-  return ctx["geometry_type"] == _MAPC2P_IDX
-# end
 
 
 def nodes_to_RZ(nodes: np.ndarray, is_mapc2p: bool) -> tuple[np.ndarray, np.ndarray]:

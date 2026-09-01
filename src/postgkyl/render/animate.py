@@ -212,7 +212,7 @@ def _compile_movie(frame_files: list[str], output_file: str, *,
 
 def animate(data, *, interval: int = 100, fixed_range: bool = True,
     cutoffglobalrange: float | None = None, notitle: bool = False,
-    show: bool = False, save: bool = False, saveas: str | None = None,
+    show: bool = True, save: bool = False, saveas: str | None = None,
     fps: int | None = None, dpi: int | None = None,
     saveframes: str | None = None, figsize=None, nproc: int = 1,
     tmpdir: str | None = None, **plot_kwargs):
@@ -276,6 +276,9 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
   num_frames = len(frames)
   duration = 1.0e3 / fps if fps else float(interval)
   out_file = saveas or "anim.gif"
+  if not os.path.splitext(out_file)[1]:
+    out_file += ".gif"
+  # end
 
   if saveframes:
     frame_files = _save_frames(frames, saveframes, dpi=dpi, figsize=figsize,

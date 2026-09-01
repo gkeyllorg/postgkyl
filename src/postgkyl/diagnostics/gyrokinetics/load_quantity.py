@@ -8,8 +8,9 @@ returns ready datasets. Ported from
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Annotated, TYPE_CHECKING
 
+from postgkyl.command_spec import ChoiceProvider, KeyValue
 from .registry import gk_quant_registry
 
 if TYPE_CHECKING:
@@ -23,9 +24,15 @@ def available_quantities() -> list[str]:
 # end
 
 
-def load_gk_quantity(quantity: str, species: str | None, name: str,
-    frame: str | int | None = None, *, path: str = "./",
-    tag: str = "default", label: str | None = None, **extra) -> list:
+def load_gk_quantity(
+    quantity: Annotated[str, ChoiceProvider(available_quantities)],
+    species: str | None, name: str, frame: str | None = None, *,
+    path: str = "./", tag: str = "default", label: str | None = None,
+    direction: int | None = None, mass: float | None = None,
+    charge: float | None = None, gamma_e: float | None = None,
+    gamma_i: float | None = None, kind: str | None = None,
+    read_options: Annotated[dict[str, str] | None, KeyValue()] = None,
+    ) -> list:
   """Load and compute a pre-named gyrokinetic quantity.
 
   Args:
@@ -39,7 +46,13 @@ def load_gk_quantity(quantity: str, species: str | None, name: str,
     tag: Tag for the output dataset(s); suffixed with the species when more
       than one species is requested.
     label: Label override; defaults to the quantity's registered label.
-    **extra: Extra per-quantity parameters (e.g. ``dir=1``, ``mass=0.1``).
+    direction: Vector direction for quantities that expose components.
+    mass: Species mass used by quantities that require it.
+    charge: Species charge used by quantities that require it.
+    gamma_e: Electron adiabatic index for sound-speed quantities.
+    gamma_i: Ion adiabatic index for sound-speed quantities.
+    kind: Named variant accepted by a quantity provider.
+    read_options: Additional provider options as repeated key/value entries.
 
   Returns:
     A list of computed ``GDataState`` datasets.
@@ -48,6 +61,14 @@ def load_gk_quantity(quantity: str, species: str | None, name: str,
     ValueError: if ``quantity`` is not registered, or it is an
       ``is_multi_species`` quantity requested without a species list.
   """
+  extra = dict(read_options or {})
+  for key, value in (("dir", direction), ("mass", mass), ("charge", charge),
+      ("gamma_e", gamma_e), ("gamma_i", gamma_i), ("kind", kind)):
+    if value is not None:
+      extra[key] = value
+    # end
+  # end
+
   if not gk_quant_registry.has(quantity):
     valid = gk_quant_registry.list()
     raise ValueError(

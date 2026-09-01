@@ -1,4 +1,4 @@
-"""Small file/geometry helpers shared by the gyrokinetic loaders and the
+"""Small file helpers shared by the gyrokinetic loaders and the
 layer-13 program-scale diagnostics.
 
 Ported from ``src_bak/postgkyl/gk/gk_utils.py``. ``read_gfile``/
@@ -20,10 +20,9 @@ import glob
 import os
 
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
-
 from postgkyl import numerics
 from postgkyl.gdata import GData
+from postgkyl.operations.gyrokinetics.geometry import _resample_grid as resample_grid
 
 # Maximum number of blocks a multiblock simulation is assumed to have, used
 # only to bound an open-ended slice request in get_block_indices.
@@ -146,23 +145,6 @@ def interpolated_grid_values(data: GData, *,
   centers = numerics.nodal_to_cell_centered_grid(field.grid, cells)
   return field.grid, centers, field.values[..., comp]
 # end
-
-
-def resample_grid(values: np.ndarray, src_coords: list[np.ndarray],
-    dst_coords: list[np.ndarray]) -> np.ndarray:
-  """Linearly resample ``values`` (given on the tensor grid ``src_coords``)
-  onto the tensor grid spanned by ``dst_coords``.
-
-  Shared by :mod:`~postgkyl.diagnostics.gyrokinetics.rz` and
-  :mod:`~postgkyl.diagnostics.gyrokinetics.fluxsurf` to sample a
-  geometry field (given on its own grid) onto a dataset's computational
-  grid, or vice versa.
-  """
-  mesh = np.meshgrid(*dst_coords, indexing="ij")
-  return RegularGridInterpolator(tuple(src_coords), values, bounds_error=False,
-      fill_value=None)(tuple(mesh))
-# end
-
 
 def set_tick_font_size(ax, size: float) -> None:
   """Set an axes' tick-label and offset-text font size to ``size``."""

@@ -13,7 +13,10 @@ from postgkyl import render
 from ._materialize import materialize_for_render
 
 
-def plotly_animate(data, **kwargs):
+def plotly_animate(data, *, frame_duration: int = 50,
+    transition_duration: int = 0, fromcurrent: bool = True,
+    redraw: bool = True, save: bool = False,
+    saveas: str | None = None, show: bool = False):
   """Animate a flat sequence of datasets, one Plotly frame per dataset.
 
   Every dataset is bridged through :func:`_materialize.materialize_for_render`
@@ -21,7 +24,19 @@ def plotly_animate(data, **kwargs):
   are handled entirely by the render layer, and default to inert -- pass
   ``show=True`` to open the animation in the browser, or
   ``save=True``/``saveas=...`` to write it. Returns the Plotly figure.
+
+  Args:
+    data: Selected datasets, one per animation frame.
+    frame_duration: Duration of each animation frame in milliseconds.
+    transition_duration: Duration of transitions between frames.
+    fromcurrent: Start playback from the current slider frame.
+    redraw: Redraw traces between frames.
+    save: Save the animation to an automatically derived path.
+    saveas: Explicit HTML output path.
+    show: Open the animation in a browser.
   """
   frames = [materialize_for_render(dat) for dat in data]
-  return render.plotly_animate(frames, **kwargs)
+  return render.plotly_animate(frames, frame_duration=frame_duration,
+      transition_duration=transition_duration, fromcurrent=fromcurrent,
+      redraw=redraw, save=save, saveas=saveas, show=show)
 # end

@@ -1,5 +1,4 @@
-"""Gyrokinetic diagnostics: distribution-function + derived-quantity loading
-and physics.
+"""Gyrokinetic diagnostics: loading and equation-specific physics.
 
 The whole gyrokinetic-quantity stack -- naming-convention file resolution
 (``quantity.py``), the derived-quantity physics (``quantities.py``), the
@@ -8,7 +7,9 @@ registry (``registry.py``), and the "physics-ready data by name" entry point
 instruction file's decision record): splitting resolution from physics would
 give gyrokinetics two homes for one piece of equation knowledge. Only the
 equation-blind stem/frame discovery is shared, via
-``postgkyl.diagnostics.discovery``.
+``postgkyl.diagnostics.discovery``. Geometry-only transformations live below
+this physics layer in ``postgkyl.operations.gyrokinetics``; the R-Z and
+flux-surface names exported here are compatibility aliases.
 """
 
 from __future__ import annotations
@@ -38,9 +39,29 @@ from .energy_balance import EnergyBalanceTraces, energy_balance_error, gk_energy
 from .particle_balance import ParticleBalanceTraces, gk_particle_balance, particle_balance_error
 from .nodes import GKYL_GEOMETRY_ID, gk_nodes, is_geo_mapc2p, multib_tag, nodes_to_RZ
 
-# PR #214: R-Z mapping + flux-surface extraction for field-aligned data.
-from .rz import Geometry, RzProjection, map_to_rz, resolve_geometry, resolve_rz_projection
+# Compatibility exports: canonical transformation APIs now live under
+# postgkyl.operations.gyrokinetics. These imports are exact aliases.
+from .rz import Geometry, RzProjection, gk_rz, map_to_rz, resolve_geometry, resolve_rz_projection
 from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surface_grid
+
+from typing import Annotated
+
+from postgkyl.command_spec import (
+    CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+)
+
+_LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD, selectable=False)
+_REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
+    selectable=False, result=ResultPolicy.VALUE)
+command(_LOAD_SPEC)(load_gk_distf)
+command(_LOAD_SPEC)(load_gk_quantity)
+gk_energy_balance.__annotations__["bflux_files"] = Annotated[
+    dict[str, str] | None, KeyValue()]
+gk_particle_balance.__annotations__["bflux_files"] = Annotated[
+    dict[str, str] | None, KeyValue()]
+for _function in (gk_energy_balance, gk_particle_balance, gk_nodes):
+  command(_REPORT_SPEC)(_function)
+# end
 
 __all__ = [
     "load_gk_distf", "resolve_frames",
@@ -54,6 +75,6 @@ __all__ = [
     "EnergyBalanceTraces", "energy_balance_error", "gk_energy_balance",
     "ParticleBalanceTraces", "gk_particle_balance", "particle_balance_error",
     "GKYL_GEOMETRY_ID", "gk_nodes", "is_geo_mapc2p", "multib_tag", "nodes_to_RZ",
-    "Geometry", "RzProjection", "map_to_rz", "resolve_geometry", "resolve_rz_projection",
+    "Geometry", "RzProjection", "gk_rz", "map_to_rz", "resolve_geometry", "resolve_rz_projection",
     "FluxSurfaceGrid", "extract_flux_surface", "resolve_flux_surface_grid",
 ]

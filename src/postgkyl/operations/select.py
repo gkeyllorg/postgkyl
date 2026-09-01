@@ -80,6 +80,19 @@ def select(data: "GDataState", *, comp=None,
   -- pick an integer index for that sibling axis first (in the same call,
   or an earlier one in the chain).
 
+  Args:
+    data: Dataset whose point values are selected.
+    comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+    z0: Selector for coordinate direction 0.
+    z1: Selector for coordinate direction 1.
+    z2: Selector for coordinate direction 2.
+    z3: Selector for coordinate direction 3.
+    z4: Selector for coordinate direction 4.
+    z5: Selector for coordinate direction 5.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
   Raises:
     ValueError: if ``data`` holds native modal DG coefficients (nodal/quad
       value_forms of gkyl-backed data are point values and slice fine),
