@@ -668,6 +668,11 @@ class TestLineStyles:
     assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-.", "-."]
   # end
 
+  def test_omitted_linestyle_does_not_override_plot_format(self):
+    fig = backend.plot(_line(), show=False, args=["--"])
+    assert fig.axes[0].lines[0].get_linestyle() == "--"
+  # end
+
   def test_dataset_linestyles_repeat_across_component_panels(self):
     a = _line()
     b = _line(offset=2)

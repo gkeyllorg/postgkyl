@@ -864,19 +864,22 @@ def plot(*datasets, args: str = "", figure=None, squeeze: bool = False,
             line_color = plt.get_cmap(cmap)(t)
           # end
           line_style = line_styles[ds_i] if line_styles is not None else None
+          line_kwargs = dict(
+              color=line_color, label=comp_label, markersize=markersize)
+          if line_style is not None:
+            line_kwargs["linestyle"] = line_style
+          # end
           if split_linear_log:
             left_mask = x < split_point
             split_masks = (left_mask, ~left_mask)
             im = []
             for split_ax, mask in zip(component_axes, split_masks):
-              im.extend(split_ax.plot(x[mask], y[mask], *args,
-                  color=line_color, linestyle=line_style, label=comp_label,
-                  markersize=markersize))
+              im.extend(split_ax.plot(
+                  x[mask], y[mask], *args, **line_kwargs))
             # end
           # end
           else:
-            im = cax.plot(x, y, *args, color=line_color,
-                linestyle=line_style, label=comp_label, markersize=markersize)
+            im = cax.plot(x, y, *args, **line_kwargs)
           # end
           # Add a colorbar describing the cval-to-color mapping once per axes.
           if (cmap and cval is not None and comp_colorbar
