@@ -442,7 +442,8 @@ def test_cli_chained(tmp_path):
 
   out = tmp_path / "cli.png"
   result = CliRunner().invoke(cli, [
-      "--batch-mode", F1, "interp", "sel", "--comp", "0", "plot", "--saveas", str(out)])
+      F1, "interp", "sel", "--comp", "0", "plot", "--show", "False",
+      "--saveas", str(out)])
   assert result.exit_code == 0, result.output
   assert out.exists()
 # end

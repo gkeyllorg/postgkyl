@@ -8,7 +8,7 @@ from pathlib import Path
 import pydoc
 
 import postgkyl as pg
-from postgkyl.cli.commands import GENERATED_COMMANDS, MODELS
+from postgkyl.cli.app import COMMANDS, MODELS
 from postgkyl.cli.docstrings import parse_docstring
 from postgkyl.gdata.gdata import GData
 
@@ -107,7 +107,7 @@ def test_shared_functional_and_fluent_spellings_are_one_object():
 
 
 def test_cli_help_is_lowered_from_source_docstrings():
-  commands = {command.model.name: command for command in GENERATED_COMMANDS}
+  commands = {model.name: command for model, command in zip(MODELS, COMMANDS)}
   for model in MODELS:
     parsed = parse_docstring(model.canonical,
         required=set(inspect.signature(model.canonical).parameters),

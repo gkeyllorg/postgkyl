@@ -31,7 +31,6 @@ class Execution(Enum):
   TERMINAL_EACH = auto()
   TERMINAL_ALL = auto()
   LOAD = auto()
-  SESSION = auto()
 # end
 
 
@@ -51,7 +50,6 @@ class CommandSpec:
   section: Section
   execution: Execution
   consumes_inputs: bool = False
-  selectable: bool = True
   result: ResultPolicy = ResultPolicy.DATA
   order: int = 0
 
@@ -60,22 +58,15 @@ class CommandSpec:
         self.execution, Execution) or not isinstance(self.result, ResultPolicy):
       raise TypeError("CommandSpec section, execution, and result must be enums")
     # end
-    if not isinstance(self.consumes_inputs, bool) or not isinstance(
-        self.selectable, bool):
-      raise TypeError("CommandSpec boolean fields must be bool values")
+    if not isinstance(self.consumes_inputs, bool):
+      raise TypeError("CommandSpec consumes_inputs must be a bool value")
     # end
     if not isinstance(self.order, int) or isinstance(self.order, bool):
       raise TypeError("CommandSpec order must be an integer")
     # end
     if self.execution is Execution.LOAD:
-      if self.consumes_inputs or self.selectable:
-        raise ValueError("LOAD commands cannot consume or select working-set inputs")
-    # end
-    if self.execution is Execution.SESSION and self.section is not Section.UTILITY:
-      raise ValueError("SESSION commands belong to the Utility section")
-    # end
-    if self.execution is Execution.SESSION and self.selectable:
-      raise ValueError("SESSION commands cannot select working-set inputs")
+      if self.consumes_inputs:
+        raise ValueError("LOAD commands cannot consume working-set inputs")
     # end
     if self.consumes_inputs and self.execution not in (
         Execution.MAP_APPEND, Execution.COMBINE):

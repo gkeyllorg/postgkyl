@@ -49,9 +49,9 @@ from postgkyl.gdata.gdata import GData
 _DIAG_MAP = CommandSpec(Section.DIAGNOSTICS, Execution.MAP_REPLACE)
 _DIAG_COMBINE = CommandSpec(Section.DIAGNOSTICS, Execution.COMBINE,
     consumes_inputs=True)
-_DIAG_LOAD = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD, selectable=False)
+_DIAG_LOAD = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD)
 _DIAG_REPORT = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
-    selectable=False, result=ResultPolicy.VALUE)
+    result=ResultPolicy.VALUE)
 
 
 def _resolve(function) -> None:

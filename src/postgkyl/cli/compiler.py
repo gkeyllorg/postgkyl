@@ -17,8 +17,7 @@ from postgkyl.command_spec import (
     PipelineInput, ResultPolicy, Section, command_spec,
 )
 
-from ._apply import active_datasets, is_active, set_active
-from .docstrings import ParsedDocstring, parse_docstring
+from .docstrings import parse_docstring
 
 
 class CommandCompilationError(ValueError):
@@ -323,12 +322,6 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
         f"{canonical.__module__}.{canonical.__qualname__}: "
         "LOAD commands cannot declare a pipeline receiver")
   # end
-  if spec.execution is Execution.SESSION and len(injected_parameters) != 1:
-    raise CommandCompilationError(
-        f"{canonical.__module__}.{canonical.__qualname__}: "
-        "SESSION commands require exactly one PipelineInput parameter")
-  # end
-
   docs = parse_docstring(canonical,
       required=set(signature.parameters),
       signature_names=set(signature.parameters))
@@ -447,14 +440,14 @@ def _convert(value, codec: TypeCodec):
 
 
 def _resolve_tag(ctx, parameter: str, tag: str):
-  matches = [dataset for dataset in active_datasets(ctx) if dataset.tag == tag]
+  matches = [dataset for dataset in ctx.obj.datasets if dataset.tag == tag]
   if not matches:
     raise click.UsageError(
-        f"--{kebab_case(parameter)}: no active dataset tagged {tag!r}")
+        f"--{kebab_case(parameter)}: no dataset tagged {tag!r}")
   # end
   if len(matches) != 1:
     raise click.UsageError(
-        f"--{kebab_case(parameter)}: tag {tag!r} matches {len(matches)} active datasets")
+        f"--{kebab_case(parameter)}: tag {tag!r} matches {len(matches)} datasets")
   # end
   return matches[0]
 # end
@@ -496,12 +489,8 @@ def _present(value) -> None:
 # end
 
 
-def _selected(ctx, use: str | None) -> list:
-  selected = active_datasets(ctx)
-  if use is not None:
-    selected = [dataset for dataset in selected if dataset.tag == use]
-  # end
-  return selected
+def _selected(ctx) -> list:
+  return list(ctx.obj.datasets)
 # end
 
 
@@ -511,20 +500,7 @@ def _call(model: CommandModel, selected: list, values: dict, ctx):
   referenced: list[object] = []
   for parameter in model.parameters:
     if parameter.injected:
-      if model.spec.execution is Execution.SESSION:
-        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-          raise click.UsageError(
-              f"{model.name}: SESSION input cannot be variadic")
-        # end
-        if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD):
-          args.append(ctx.obj)
-        # end
-        else:
-          kwargs[parameter.name] = ctx.obj
-        # end
-      # end
-      elif parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+      if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
         args.extend(selected)
       # end
       elif parameter.name == "self":
@@ -570,29 +546,9 @@ def _call(model: CommandModel, selected: list, values: dict, ctx):
 
 def execute_model(ctx, model: CommandModel, values: dict):
   """Invoke one model through its generic working-set execution adapter."""
-  use = values.pop("use", None)
-  if model.name == "load" and values.get("value_form") is None:
-    values["value_form"] = getattr(ctx.obj, "value_form", None)
-  # end
-  batch_render = model.section is Section.RENDER and getattr(ctx.obj, "batch", False)
-  batch_default_output = batch_render and not values.get("saveframes")
-  if batch_render:
-    if "show" in values:
-      values["show"] = False
-    # end
-    if batch_default_output and "save" in values and not values["save"]:
-      values["save"] = True
-    # end
-  # end
-  selected = _selected(ctx, use)
+  selected = _selected(ctx)
   execution = model.spec.execution
-  needs_input = execution not in (Execution.LOAD, Execution.SESSION)
-  if execution is Execution.MAP_REPLACE and not selected and use is not None:
-    # Replacing every member of an explicitly selected empty subset is a
-    # no-op.  Commands which append, combine, or present still require an
-    # input because an empty result there is usually a user mistake.
-    return []
-  # end
+  needs_input = execution is not Execution.LOAD
   if needs_input and not selected and not any(p.dataset_ref for p in model.parameters):
     raise click.UsageError(f"{model.name}: no datasets selected")
   # end
@@ -601,12 +557,8 @@ def execute_model(ctx, model: CommandModel, values: dict):
     if execution in (Execution.MAP_REPLACE, Execution.MAP_APPEND,
         Execution.TERMINAL_EACH):
       outputs: list[object] = []
-      for index, dataset in enumerate(selected):
-        call_values = values
-        if batch_render and "saveas" in values and not values["saveas"]:
-          call_values = dict(values, saveas=f"{ctx.obj.prefix}_{index}")
-        # end
-        result, _ = _call(model, [dataset], call_values, ctx)
+      for dataset in selected:
+        result, _ = _call(model, [dataset], values, ctx)
         outputs.append(result)
       # end
       if execution is Execution.MAP_REPLACE:
@@ -617,9 +569,9 @@ def execute_model(ctx, model: CommandModel, values: dict):
       # end
       elif execution is Execution.MAP_APPEND:
         if model.spec.consumes_inputs:
-          for dataset in selected:
-            set_active(dataset, False)
-          # end
+          consumed = {id(dataset) for dataset in selected}
+          ctx.obj.datasets = [dataset for dataset in ctx.obj.datasets
+              if id(dataset) not in consumed]
         # end
         for result in outputs:
           ctx.obj.datasets.extend(_datasets_from_result(result))
@@ -633,11 +585,7 @@ def execute_model(ctx, model: CommandModel, values: dict):
       return outputs
     # end
 
-    call_values = values
-    if batch_default_output and "saveas" in values and not values["saveas"]:
-      call_values = dict(values, saveas=str(ctx.obj.prefix))
-    # end
-    result, referenced = _call(model, selected, call_values, ctx)
+    result, referenced = _call(model, selected, values, ctx)
     if execution is Execution.LOAD:
       ctx.obj.datasets.extend(_datasets_from_result(result))
       if model.spec.result is ResultPolicy.VALUE:
@@ -655,23 +603,15 @@ def execute_model(ctx, model: CommandModel, values: dict):
         return result
       # end
       if model.spec.consumes_inputs:
-        for dataset in (referenced or selected):
-          set_active(dataset, False)
-        # end
-      # end
-      for dataset in result_datasets:
-        set_active(dataset, True)
+        consumed = {id(dataset) for dataset in (referenced or selected)}
+        ctx.obj.datasets = [dataset for dataset in ctx.obj.datasets
+            if id(dataset) not in consumed]
       # end
       ctx.obj.datasets.extend(result_datasets)
       if model.spec.result is ResultPolicy.VALUE:
         _present(result)
       # end
     elif execution is Execution.TERMINAL_ALL:
-      if model.spec.result is ResultPolicy.VALUE:
-        _present(result)
-      # end
-    # end
-    elif execution is Execution.SESSION:
       if model.spec.result is ResultPolicy.VALUE:
         _present(result)
       # end
@@ -713,11 +653,6 @@ def build_click_command(model: CommandModel, *, command_class=click.Command) -> 
     # end
     params.append(click.Option([f"--{kebab_case(parameter.name)}", parameter.name], **attrs))
   # end
-  if model.spec.selectable:
-    params.append(click.Option(["--use", "use"], default=None,
-        help="Select active datasets carrying this tag."))
-  # end
-
   @click.pass_context
   def callback(click_context, **kwargs):
     return execute_model(click_context, model, kwargs)

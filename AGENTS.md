@@ -93,10 +93,10 @@ pgkyl file.gkyl info
 
 # A diagnostics chain (equation-specific physics; see diagnostics/)
 # (diagnostics take NumPy-backed data, so interpolate always runs first)
-pgkyl euler_5m_0.gkyl interpolate euler -v pressure --num-moms 5 plot
+pgkyl euler_5m_0.gkyl interpolate five-moment-pressure --num-moms 5 plot
 
 # An RPN chain over the working set (see operations/evaluate.py)
-pgkyl a.gkyl b.gkyl evaluate "f0 f1 +" interpolate plot
+pgkyl a.gkyl b.gkyl evaluate --chain "f0 f1 +" interpolate plot
 
 # `pgkyl --help` lists every registered command, grouped by section
 # (Verbs / Diagnostics / Render / Utility).
@@ -502,18 +502,15 @@ no ordering dependency on the `__version__` assignment below it.
 
 ### `cli/` — the CLI (chained pipeline on pure Click)
 `cli/app.py` defines `PgkylGroup(click.Group)` with `chain=True`; the chaining loop and
-callback-before-dispatch are **native to Click**. The custom code is a small
-`get_command` override for command-name **abbreviation** (e.g. `interp`→`interpolate`,
-`sel`→`select`) and **bare-filename-as-`load`**, plus a `format_commands` override
-that groups `pgkyl --help`'s listing under section headers (`COMMAND_SECTIONS` in
-`cli/commands/__init__.py`: Verbs / Diagnostics / Render / Utility) —
-presentation only; every command stays a flat, chainable top-level `click.Command`
-regardless of its section. Each verb is a thin module under `cli/commands/` (40+
-commands: the core and domain-specific `operations` verbs (including `load`), one per `diagnostics`
-equation model (including the gyrokinetic/pkpm loaders), the `render` backends,
-and session utilities — `status`/`print`/`listoutputs`/`save`) that uses
-**only the public API** (`pg.load`/`pg.plot` and `GData` methods) — so `cli`
-depends on the facade alone.
+callback-before-dispatch are **native to Click**. At import time it discovers the
+public script API, compiles its `CommandSpec` records, and lowers every record through
+the one generic compiler. There is no `cli/commands/` package and no hand-authored
+subcommand. Python underscores are mechanically rendered as CLI dashes in command and
+option names (`local_poly` → `local-poly`, `num_moms` → `--num-moms`). The custom
+group code handles spelling-only aliases/unambiguous abbreviations and expands a bare
+filename to `load --file-name`; aliases never change a generated command's parameters
+or execution. `format_commands` groups `pgkyl --help` under Verbs / Diagnostics /
+Render / Utility; presentation does not change the flat, chainable inventory.
 `--version` is a custom eager `click.option` (not `click.version_option`, since
 the output is more than one string): its callback calls the facade's
 `version_report(__version__)` (both imported via `from postgkyl import
@@ -526,8 +523,7 @@ gpython-bridge availability, and interpreter/platform/dependency versions.
 `--help` is wired through Click's own group help. The console entry point
 object is `postgkyl.cli.app:cli`.
 
-`load` (bare-filename dispatch) is the one command carrying `-b`/`--basis`
-(a short DG basis code: `ms`/`ns`/`mo`/`mt`/`gkhyb`/`pkpmhyb`), `-p`/
-`--poly-order`, and `-v`/`--value-form` — `basis_type`/`poly_order`/
+`load` (or its bare-filename shorthand) exposes the script parameters
+`--basis-type`, `--poly-order`, and `--value-form` — `basis_type`/`poly_order`/
 `value_form` are properties of the data fixed once here at load time, so no
-other verb command (`interpolate`, `dg_local_poly`, …) repeats them.
+other verb command (`interpolate`, `local-poly`, …) repeats them.

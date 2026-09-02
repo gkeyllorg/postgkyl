@@ -50,9 +50,9 @@ from postgkyl.command_spec import (
     CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
 )
 
-_LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD, selectable=False)
+_LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD)
 _REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
-    selectable=False, result=ResultPolicy.VALUE)
+    result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_gk_distf)
 command(_LOAD_SPEC)(load_gk_quantity)
 gk_energy_balance.__annotations__["bflux_files"] = Annotated[

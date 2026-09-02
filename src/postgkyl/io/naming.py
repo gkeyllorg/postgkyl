@@ -18,7 +18,7 @@ A Gkeyll output file name encodes four facts::
 Before this module the convention was re-derived in three places with three
 slightly different rules (``diagnostics.gyrokinetics.rz._file_prefix``'s
 ``rsplit('-', 1)``, ``diagnostics.discovery.find_output_stems``'s
-``_\\d+$`` strip, and ``cli.commands.animate``'s port of main's
+``_\\d+$`` strip, and the animation operation's port of main's
 ``utils.set_frame``, which recovered a frame index by diffing the loaded file
 names character by character). It lives in ``io`` because it is knowledge
 about Gkeyll's *files*, which is what this layer owns, and because ``io`` is

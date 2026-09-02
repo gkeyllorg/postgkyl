@@ -11,7 +11,9 @@ from click.testing import CliRunner
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.cli.commands import gk_rz as gk_rz_command
+from postgkyl.cli.app import COMMANDS
+
+gk_rz_command = next(command for command in COMMANDS if command.name == "gk-rz")
 from postgkyl.cli.state import DataSpace
 from postgkyl.operations import gyrokinetics as gk_ops
 
@@ -187,8 +189,8 @@ def test_group_compatibility_cli_and_help_section():
   assert old_fluxsurf.extract_flux_surface is gk_ops.extract_flux_surface
 
   space = DataSpace(datasets=[pg.load(F2D)])
-  with click.Context(gk_rz_command.command, obj=space) as ctx:
-    ctx.invoke(gk_rz_command.command, mapc2p=F2D_GEO, nodes_file=None,
+  with click.Context(gk_rz_command, obj=space) as ctx:
+    ctx.invoke(gk_rz_command, mapc2p=F2D_GEO, nodes_file=None,
         z_axis=0.0, phi_tor=0.0, nz_interp=2, use=None, tag="rz", label=None)
   # end
   expected = pg.gk_rz(pg.load(F2D), mapc2p=F2D_GEO, nz_interp=2, tag="rz")

@@ -240,7 +240,8 @@ def test_cli_hidden_alias_pl_resolves_to_plot(tmp_path):
 
   out = tmp_path / "alias.png"
   result = CliRunner().invoke(cli, [
-      "--batch-mode", F1, "interp", "sel", "--comp", "0", "pl", "--saveas", str(out)])
+      F1, "interp", "sel", "--comp", "0", "pl", "--show", "False",
+      "--saveas", str(out)])
   assert result.exit_code == 0, result.output
   assert out.exists()
 # end
@@ -262,7 +263,7 @@ def test_cli_unknown_token_is_neither_command_nor_file():
 
   result = CliRunner().invoke(cli, ["not-a-command-or-file-xyz"])
   assert result.exit_code != 0
-  assert "is not a command name nor a data file" in result.output
+  assert "No such command 'not-a-command-or-file-xyz'" in result.output
 # end
 
 
@@ -276,18 +277,15 @@ def test_cli_plot_without_datasets_raises_usage_error():
 # end
 
 
-def test_cli_plot_batch_mode_default_save_path(tmp_path, monkeypatch):
+def test_cli_has_no_manual_batch_mode(tmp_path, monkeypatch):
   from click.testing import CliRunner
   from postgkyl.cli.app import cli
 
   monkeypatch.chdir(tmp_path)
   runner = CliRunner()
-  result = runner.invoke(cli, [
-      "--batch-mode", "--saveframes-prefix", "myrun",
-      F1, "interp", "sel", "--comp", "0", "plot"])
-  assert result.exit_code == 0, result.output
-  # main's batch-mode file name is "<prefix>_<dataset index>.png".
-  assert (tmp_path / "myrun_0.png").exists()
+  result = runner.invoke(cli, ["--batch-mode", F1, "info"])
+  assert result.exit_code != 0
+  assert "No such option '--batch-mode'" in result.output
 # end
 
 
@@ -318,7 +316,8 @@ def test_cli_save_command(tmp_path):
 
   out = tmp_path / "written.txt"
   result = CliRunner().invoke(cli, [
-      F1, "interp", "sel", "--comp", "0", "save", "-o", str(out), "-f", "txt"])
+      F1, "interp", "sel", "--comp", "0", "save", "--out-name", str(out),
+      "--extension", "txt"])
   assert result.exit_code == 0, result.output
   assert out.exists()
   assert str(out) in result.output

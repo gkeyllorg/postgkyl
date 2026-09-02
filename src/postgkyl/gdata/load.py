@@ -13,7 +13,7 @@ from postgkyl.gdata.gdata import GData
 from postgkyl.gdata.gdatagroup import GDataGroup
 
 
-@command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+@command(CommandSpec(Section.UTILITY, Execution.LOAD))
 def load(file_name: str, *, tag: str = "default", label: str = "",
     ctx: Annotated[dict[str, str] | None, KeyValue()] = None,
     value_form: Literal["modal", "nodal", "quad"] | None = None,

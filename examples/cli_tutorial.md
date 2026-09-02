@@ -26,17 +26,17 @@ pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_
 
 Raw `.gkyl` files hold DG *coefficients*; `interpolate` bridges them onto a
 uniform mesh of plain values, `select` narrows down to one component (or one
-coordinate slice), and `plot` renders it. `--batch-mode` (a top-level flag,
-before the file) turns off the interactive window so this can run headless;
-`--saveas` on `plot` writes a PNG instead.
+coordinate slice), and `plot` renders it. The CLI options are the Python
+parameters with dashes: `--show False` runs headless and `--saveas` writes a
+PNG.
 
 ```bash
-pgkyl --batch-mode tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl \
-    interpolate select --comp 0 plot --saveas out.png
+pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl \
+    interpolate select --comp 0 plot --show False --saveas out.png
 ```
 
-Every verb name has a short abbreviation Click resolves automatically
-(`interp` -> `interpolate`, `sel` -> `select`, `pr` -> `print`, ...):
+Any unambiguous command-name prefix is accepted as a spelling-only alias
+(`interp` -> `interpolate`, `sel` -> `select`):
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl \
@@ -52,18 +52,18 @@ smoothing over them -- useful for shocks or anything with jumps at cell
 boundaries.
 
 ```bash
-pgkyl --batch-mode tests/test_data/generated/distf_p2_0.gkyl \
-    local-poly select --z1 0.0 --z2 0.0 plot --saveas out.png
+pgkyl tests/test_data/generated/distf_p2_0.gkyl \
+    local-poly select --z1 0.0 --z2 0.0 plot --show False --saveas out.png
 ```
 
-## 4. DynVector utilities: `print` and `fit`
+## 4. DynVector inspection and `fit`
 
 `.gkyl` files without a spatial grid (diagnostics like a field-energy history)
-are DynVectors: `print` dumps the raw array, and `fit` fits a model to it
-(here, a straight line to the series vs. time -- the growth-rate use case).
+are DynVectors: `info` summarizes the data, and `fit` fits a model to it (here,
+a straight line to the series vs. time -- the growth-rate use case).
 
 ```bash
-pgkyl tests/test_data/generated/energy_dynvec.gkyl print
+pgkyl tests/test_data/generated/energy_dynvec.gkyl info
 pgkyl tests/test_data/generated/energy_dynvec.gkyl fit --fit-type linear
 ```
 
@@ -78,7 +78,7 @@ indexing datasets themselves -- there is no `f[N]` form.) Data must be
 `interpolate`d first, same as `select`/`plot`.
 
 ```bash
-pgkyl --batch-mode tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_p2_1.gkyl \
+pgkyl tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_p2_1.gkyl \
     interpolate evaluate --chain "f0 f1 -" info
 ```
 
@@ -86,8 +86,8 @@ pgkyl --batch-mode tests/test_data/generated/distf_p2_0.gkyl tests/test_data/gen
 
 `gyrokinetics-load-gk-quantity` loads one of a registry of named gyrokinetic
 quantities (listed in its generated `--quantity` choices) straight from a simulation's naming convention --
-no manual file paths. `--name`/`-n` is the simulation's *name prefix*
-(not a path); `--path`/`-p` is the directory to look in.
+no manual file paths. `--name` is the simulation's *name prefix* (not a path);
+`--path` is the directory to look in.
 
 ```bash
 pgkyl gyrokinetics-load-gk-quantity --help
@@ -96,7 +96,7 @@ pgkyl gyrokinetics-load-gk-quantity --quantity geo_int_jacobtot_inv --species ""
 ```
 
 `gyrokinetics-load-gk-distf` reconstructs a full distribution function from the saved
-`Jf`-times-Jacobian(s) files (here `-n` *does* include the directory, since
+`Jf`-times-Jacobian(s) files (here `--name` *does* include the directory, since
 the simulation name itself includes the directory):
 
 ```bash
@@ -129,20 +129,20 @@ mapped = pg.load(
 
 ## 8. Saving to another format
 
-`save` writes the active dataset(s) out as `gkyl`/`txt`/`npy`/`vtk`.
+`save` writes the current dataset(s) out as `gkyl`/`txt`/`npy`/`vtk`.
 
 ```bash
 pgkyl tests/test_data/generated/distf_p2_0.gkyl save --out-name distf --extension npy
 ```
 
-## 9. The working set: `status`
+## 9. One API-derived command inventory
 
-Every loaded file becomes a dataset in the session's working set; verbs
-after it act on whichever datasets are currently active. `status` lists
-them.
+Every loaded file becomes a dataset in the current chain. The command list is
+compiled from the script API, so `--help` is the authoritative inventory and
+every Python underscore appears as a CLI dash.
 
 ```bash
-pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl status
+pgkyl --help
 ```
 
 ## See also

@@ -310,27 +310,28 @@ class TestMultiblockCli:
 
   def test_plot_draws_all_blocks_on_one_figure(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([MB_GLOB, "interp", "plot", "--no-show"])
+    _ok([MB_GLOB, "interp", "plot", "--show", "False"])
     assert len(calls) == 1
     assert len(calls[0].axes[0].collections) == 3
   # end
 
   def test_two_frames_give_two_figures(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "--no-show"])
+    _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "--show", "False"])
     assert len(calls) == 2
     assert all(len(figure.axes[0].collections) == 3 for figure in calls)
   # end
 
   def test_single_block_data_still_gets_a_figure_per_dataset(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([os.path.join(GEN, "distf_p2_*.gkyl"), "interp", "plot", "--no-show"])
+    _ok([os.path.join(GEN, "distf_p2_*.gkyl"), "interp", "plot", "--show", "False"])
     assert len(calls) == 2
   # end
 
   def test_multiblock_flag_forces_everything_onto_one_figure(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "-m", "--no-show"])
+    _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "--multiblock", "True",
+        "--show", "False"])
     assert len(calls) == 1
     assert len(calls[0].axes[0].collections) == 6
   # end
@@ -344,10 +345,9 @@ class TestMultiblockCli:
     assert blocks == [0, 1, 2]
   # end
 
-  def test_batch_mode_saves_one_png_for_the_field(self, tmp_path):
+  def test_explicit_render_options_save_one_png_for_the_field(self, tmp_path):
     out = tmp_path / "mb"
-    _ok(["--batch-mode", "--saveframes-prefix", str(out), MB_GLOB, "interp",
-        "plot"])
-    assert sorted(p.name for p in tmp_path.glob("*.png")) == ["mb_0.png"]
+    _ok([MB_GLOB, "interp", "plot", "--show", "False", "--saveas", str(out)])
+    assert sorted(p.name for p in tmp_path.glob("*.png")) == ["mb.png"]
   # end
 # end

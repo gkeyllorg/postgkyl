@@ -8,42 +8,47 @@ The chained syntax mirrors the fluent script API 1:1::
 Chaining and callback-before-dispatch are native to ``click.Group(chain=True)``,
 so the only custom code is a small :class:`PgkylGroup.get_command` override for
 command-name abbreviation and treating a bare filename as an implicit ``load``.
-Scientific commands are compiled from public API callables at import time;
-this module owns only chaining, abbreviation, bare-file dispatch, and session
-policy.
+Every subcommand is compiled from a public API callable at import time. This
+module owns only chaining, command aliases, and bare-file dispatch; it
+contains no per-command option or execution definitions.
 """
 
 from __future__ import annotations
 
 from glob import glob
+from types import MappingProxyType
 
 import click
 
 from postgkyl import __version__, version_report
-from postgkyl.cli.state import DataSpace
-from postgkyl.cli.commands import (
-    COMMANDS, COMMAND_SECTIONS, LEGACY_COMMANDS_BY_NAME,
+from postgkyl.cli.compiler import (
+    build_click_command, compile_public_surface, group_by_section,
 )
-from postgkyl.cli.compat import COMMAND_ALIASES, warn_legacy
+from postgkyl.cli.discovery import discover_public_surface
+from postgkyl.cli.state import DataSpace
+
+
+# Compilation validates the complete discovered surface before registration.
+# These aliases add spellings only; they never replace a generated command or
+# alter its options.
+MODELS = compile_public_surface(discover_public_surface())
+COMMANDS = tuple(build_click_command(model) for model in MODELS)
+COMMAND_SECTIONS = group_by_section(MODELS)
+COMMAND_ALIASES = MappingProxyType({"pl": "plot", "ev": "evaluate"})
 
 
 class PgkylGroup(click.Group):
-  """Click's chained group + two conveniences: abbreviation & bare-filename load."""
+  """Click's chained group with spelling-only command aliases."""
 
   def get_command(self, ctx, name):
     cmd = super().get_command(ctx, name)
     if cmd is not None:
       return cmd
     # end
-    if name in LEGACY_COMMANDS_BY_NAME:
-      warn_legacy(ctx, name)
-      return LEGACY_COMMANDS_BY_NAME[name]
-    # end
     if name in COMMAND_ALIASES:
       target = COMMAND_ALIASES[name]
       command = super().get_command(ctx, target)
       if command is not None:
-        warn_legacy(ctx, name)
         return command
       # end
     # end
@@ -54,11 +59,20 @@ class PgkylGroup(click.Group):
     if matches:
       ctx.fail(f"Ambiguous command '{name}': {', '.join(sorted(matches))}")
     # end
-    if glob(name):
-      ctx.obj.in_data_strings.append(name)
-      return super().get_command(ctx, "load")
+    return None
+  # end
+
+  def resolve_command(self, ctx, args):
+    """Expand a bare file pattern to the canonical ``load --file-name`` form."""
+    if args:
+      token = args[0]
+      exact = click.Group.get_command(self, ctx, token)
+      alias = COMMAND_ALIASES.get(token)
+      if exact is None and alias is None and glob(token):
+        args[:1] = ["load", "--file-name", token]
+      # end
     # end
-    ctx.fail(f"'{name}' is not a command name nor a data file")
+    return super().resolve_command(ctx, args)
   # end
 
   def format_commands(self, ctx, formatter) -> None:
@@ -100,29 +114,27 @@ def _print_version(ctx, param, value) -> None:
 @click.option("--version", is_flag=True, expose_value=False, is_eager=True,
     callback=_print_version,
     help="Show version, commit, Gkeyll build info, and exit.")
-@click.option("--batch-mode", "-b", is_flag=True, help="Do not show plots; save them instead.")
-@click.option("--saveframes-prefix", default="pgkyl", help="Output prefix used in batch mode.")
-@click.option("--value-form", "-v", default=None,
-    type=click.Choice(["modal", "nodal", "quad"]),
-    help="Override every loaded file's modal/nodal/quad tag -- for files "
-    "whose header carries DG basis metadata even though the stored values "
-    "are already point values (e.g. a per-cell diagnostic like a CFL rate).")
 @click.pass_context
-def cli(ctx, batch_mode, saveframes_prefix, value_form) -> None:
+def cli(ctx) -> None:
   """Postprocessing and plotting tool for Gkeyll data.
 
   Datasets are loaded, processed and plotted by chaining commands, e.g.::
 
       pgkyl file.gkyl interpolate select --z0 0 plot
   """
-  ctx.obj = DataSpace(batch=batch_mode, prefix=saveframes_prefix,
-      value_form=value_form)
+  ctx.obj = DataSpace()
 # end
 
 
 for _command in COMMANDS:
   cli.add_command(_command)
 # end
+
+
+__all__ = [
+    "COMMANDS", "COMMAND_ALIASES", "COMMAND_SECTIONS", "MODELS", "PgkylGroup",
+    "cli",
+]
 
 
 if __name__ == "__main__":

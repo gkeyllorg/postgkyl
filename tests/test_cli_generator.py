@@ -16,7 +16,7 @@ from postgkyl.command_spec import (
     CliType, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
     ResultPolicy, Section, command,
 )
-from postgkyl.cli.commands import COMMANDS, MODELS
+from postgkyl.cli.app import COMMANDS, MODELS
 from postgkyl.cli.compiler import (
     CodecKind, CommandCompilationError, build_click_command, compile_callable,
 )
@@ -35,7 +35,7 @@ class Format(Enum):
 _CALLS = []
 
 
-@command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False,
+@command(CommandSpec(Section.UTILITY, Execution.LOAD,
     result=ResultPolicy.SILENT))
 def codec_demo(required: int, *, optional: str | None = None,
     enabled: bool = False, mode: Literal["a", "b"] = "a",
@@ -96,7 +96,7 @@ def test_exact_option_projection_and_help_provenance():
 
 
 def test_cli_type_projects_a_broader_python_option():
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
   def projected(*,
       output: Annotated[str | list[str] | None, CliType(str | None)] = None):
     """Project direct-Python options explicitly.
@@ -113,12 +113,12 @@ def test_cli_type_projects_a_broader_python_option():
 
 
 def test_strict_compilation_rejects_missing_docs_and_unknown_types():
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
   def undocumented(value: int):
     """Missing parameter documentation."""
   # end
 
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
   def any_value(value: Any):
     """An unsupported value.
 
@@ -137,7 +137,7 @@ def test_strict_compilation_rejects_missing_docs_and_unknown_types():
 
 
 def test_optional_annotation_does_not_make_a_required_option_optional():
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
   def required_optional(value: str | None):
     """Accept an explicitly nullable required value.
 
@@ -181,43 +181,46 @@ def test_public_inventory_is_total_unique_and_deterministic():
   assert {command_obj.name for command_obj in COMMANDS} >= {
       "interpolate", "five-moment-pressure", "plot", "load",
   }
+  assert {command_obj.name for command_obj in COMMANDS} == {
+      model.name for model in MODELS}
 # end
 
 
 def test_command_spec_rejects_invalid_loader_state():
   with pytest.raises(ValueError, match="LOAD"):
-    CommandSpec(Section.UTILITY, Execution.LOAD)
+    CommandSpec(Section.UTILITY, Execution.LOAD, consumes_inputs=True)
   # end
 # end
 
 
-def test_session_adapter_receives_only_the_dataspace():
+def test_pipeline_input_adapter_receives_the_working_set():
   calls = []
 
-  @command(CommandSpec(Section.UTILITY, Execution.SESSION, selectable=False,
+  @command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
       result=ResultPolicy.VALUE))
-  def session(space: Annotated[object, PipelineInput()], *, value: int = 1):
-    """Inspect session state.
+  def terminal(data: Annotated[list[object], PipelineInput()], *, value: int = 1):
+    """Inspect the pipeline input.
 
     Args:
-      space: Injected command-line session.
+      data: Injected command-line working set.
       value: Value to return.
     """
-    calls.append(space)
+    calls.append(data)
     return value
   # end
 
-  space = DataSpace()
-  result = CliRunner().invoke(build_click_command(compile_callable(session)),
+  member = object()
+  space = DataSpace(datasets=[member])
+  result = CliRunner().invoke(build_click_command(compile_callable(terminal)),
       ["--value", "7"], obj=space)
   assert result.exit_code == 0, result.output
-  assert calls == [space]
+  assert calls == [[member]]
   assert result.output == "7\n"
 # end
 
 
 def test_no_scientific_click_decorators_remain():
-  allowed = {"app.py", "print.py", "status.py"}
+  allowed = {"app.py"}
   root = Path(__file__).parents[1] / "src" / "postgkyl" / "cli"
   offenders = []
   for path in root.rglob("*.py"):
@@ -234,4 +237,34 @@ def test_no_scientific_click_decorators_remain():
     # end
   # end
   assert offenders == []
+# end
+
+
+def test_every_generated_name_is_the_dashed_api_name():
+  discovered = discover_public_surface()
+  assert {item.name for item in discovered} == {model.name for model in MODELS}
+  for item in discovered:
+    assert "_" not in item.name
+  # end
+  for model, command_obj in zip(MODELS, COMMANDS):
+    assert command_obj.name == model.name
+    options = {parameter.name: parameter for parameter in command_obj.params}
+    expected = {parameter.name for parameter in model.parameters
+        if not parameter.injected}
+    assert set(options) == expected
+    for parameter in model.parameters:
+      if not parameter.injected:
+        assert options[parameter.name].opts == [
+            "--" + parameter.name.replace("_", "-")]
+      # end
+    # end
+  # end
+# end
+
+
+def test_cli_has_no_manual_command_package_or_compatibility_layer():
+  root = Path(__file__).parents[1] / "src" / "postgkyl" / "cli"
+  assert not (root / "commands").exists()
+  assert not (root / "compat.py").exists()
+  assert not (root / "legacy.py").exists()
 # end
