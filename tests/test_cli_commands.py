@@ -677,12 +677,14 @@ class TestEvalAtCoordProj:
 
 class TestAnimate:
   @skip_macos_animate_save
-  def test_animate_saveframes(self, tmp_path):
+  def test_animate_saveframes(self, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     prefix = str(tmp_path / "frame")
     _ok(["--batch-mode", DISTF_P2_0, DISTF_P2_1, "interp", "animate",
         "--saveframes", prefix])
     assert os.path.exists(f"{prefix}_0.png")
     assert os.path.exists(f"{prefix}_1.png")
+    assert not (tmp_path / "pgkyl.gif").exists()
   # end
 
   def test_animate_requires_datasets(self):

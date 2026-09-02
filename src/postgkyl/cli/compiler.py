@@ -575,11 +575,12 @@ def execute_model(ctx, model: CommandModel, values: dict):
     values["value_form"] = getattr(ctx.obj, "value_form", None)
   # end
   batch_render = model.section is Section.RENDER and getattr(ctx.obj, "batch", False)
+  batch_default_output = batch_render and not values.get("saveframes")
   if batch_render:
     if "show" in values:
       values["show"] = False
     # end
-    if "save" in values and not values["save"]:
+    if batch_default_output and "save" in values and not values["save"]:
       values["save"] = True
     # end
   # end
@@ -633,7 +634,7 @@ def execute_model(ctx, model: CommandModel, values: dict):
     # end
 
     call_values = values
-    if batch_render and "saveas" in values and not values["saveas"]:
+    if batch_default_output and "saveas" in values and not values["saveas"]:
       call_values = dict(values, saveas=str(ctx.obj.prefix))
     # end
     result, referenced = _call(model, selected, call_values, ctx)

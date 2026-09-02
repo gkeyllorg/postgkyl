@@ -21,7 +21,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`03_diagnostics_five_moment.py`](scripts/03_diagnostics_five_moment.py) | The `diagnostics` layer: equation-specific physics (`postgkyl.diagnostics.five_moment`) on top of a `GData`, on a hand-built Sod shock tube |
 | [`04_gyrokinetics.py`](scripts/04_gyrokinetics.py) | The gyrokinetic diagnostics: `pg.load_gk_quantity` (named moments/geometry, resolved by naming convention) and `pg.load_gk_distf` (full distribution function), on the `rt_gk_tcv_iwl*` fixtures |
 | [`05_gk_rz.py`](scripts/05_gk_rz.py) | The gyrokinetic R-Z operation: one-line fluent and functional calls plus projection reuse over multiple toroidal angles |
-| [`06_mirror_comparison.py`](scripts/06_mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |
+| [`mirror_comparison.py`](scripts/mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |
 
 Run one directly:
 
