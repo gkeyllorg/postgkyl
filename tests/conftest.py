@@ -112,6 +112,16 @@ def _block_gui_popups():
 # end
 
 
+@pytest.fixture(autouse=True)
+def _close_matplotlib_figures():
+  """Release every pyplot-managed figure after each test."""
+  yield
+
+  import matplotlib.pyplot as plt
+  plt.close("all")
+# end
+
+
 def pytest_configure(config: pytest.Config) -> None:
   # A session-scoped autouse *fixture* only actually runs on first request,
   # which lands inside whichever test forks first under macOS CI's --forked
