@@ -113,7 +113,7 @@ test (see "Import contract"). Arrow = "may import":
 > **Keeping the picture honest:** the two diagrams below and the prose after them are a
 > mirror of `tests/test_postgkyl.py::_ALLOWED` — that dict (and the AST walk that checks
 > every real import against it) is the enforced source of truth; this file is only a
-> readable projection of it. The two *can* drift (they already had: `operations/_materialize.py`,
+> readable projection of it. The two *can* drift (they already had:
 > `operations/animate.py`, `operations/average.py`, `operations/eval_at_coord_proj.py`, `operations/local_poly.py`,
 > `gdatastate/guards.py`, `gdata/gdatagroup.py`, and `gdata/verbs.py` existed in the tree before they
 > were added here). Whenever you add a new top-level module file or a new allowed import
@@ -146,25 +146,23 @@ src/postgkyl/
 ├─ operations/         data transformations · the single seam          [VERBS]
 │   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (flat core
 │   ├─ select.py                                                       verbs are
-│   ├─ plot.py                                                         equation-blind)
 │   ├─ animate.py        terminal: sequence of datasets → render's animation engine
 │   ├─ average.py        terminal-adjacent: weighted average over a dim subset,
 │   │                    stays modal/gkyl-native (composes with further verbs)
 │   ├─ eval_at_coord_proj.py  terminal-adjacent: eval at coords, project to the
 │   │                    lower-dim basis for survivors, stays modal/gkyl-native
 │   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
-│   ├─ _materialize.py   shared modal → NumPy-shadow bridge used by plot/animate
 │   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
 │
-├─ render/             matplotlib · plotly · pyvista → gdatastate/numerics [BACKEND]
-│                      (below operations, which delegates plot() to it)
+├─ render/             canonical plot + matplotlib · plotly · pyvista       [BACKEND]
 │
 ├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
 │   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
 │   ├─ gdatastategroup.py     GDataStateGroup
-│   └─ guards.py         shared field-domain guard (backend=="gkyl" -> raise);
+│   ├─ guards.py         shared field-domain guard (backend=="gkyl" -> raise);
 │                        one home for the ".interpolate() first" check reused
 │                        across operations/diagnostics instead of retyped per verb
+│   └─ materialize.py    shared native point-values → NumPy-shadow bridge
 │
 ├─ numerics/           pure NumPy math · 0 internal imports           [LEAF]
 ├─ dg/                 interpolation bridge + modal ops → gpython     [ENGINE]
@@ -206,7 +204,7 @@ src/postgkyl/
 ║   gdata/load.py    pg.load(path) ───────────────────► returns gdata.GData    ║
 ║   gdata/gdata.py   class GData(GDataState):                                  ║
 ║                   interpolate = operations.interpolate (static alias)        ║
-║                   plot = operations.plot (one doc/signature/function)        ║
+║                   plot = operations.plot = render.plot (one function)        ║
 ║   gdata/gdatagroup.py  GDataGroup(gdatastate.GDataStateGroup): broadcasts any verb ║
 ║                  over its members via __getattr__ — no verb body duplicated  ║
 ║   gdata/verbs.py module-level verbs with no single `self` (collect/evaluate/ ║
@@ -219,16 +217,14 @@ src/postgkyl/
 ║ VERBS · data transformations                                                 ║
 ║   operations/interpolate.py   def interpolate(d: GDataState) -> GDataState   ║
 ║   operations/select.py                                                       ║
-║   operations/plot.py          delegates the actual draw call to render       ║
 ║   operations/gyrokinetics/     domain-specific geometry transformations       ║
 ╚════════════════════════════╦═══════════════════════════════════╩═════════════╝
                              │ imports                            │
                              ▼                                    │
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ BACKEND                                                                      ║
-║   render/ (mpl · plotly · pyvista) — imports gdatastate + numerics; reached  ║
-║   from operations/plot.py, and pre-authorized from diagnostics/ (program-    ║
-║   scale figures) and the facade (`pg.plot` ← render)                         ║
+║   render/ (mpl · plotly · pyvista) — owns the canonical plot callable;       ║
+║   `pg.plot`, `GData.plot`, `operations.plot`, and the CLI share its identity ║
 ╚════════════════════════════╦════════════════════════════════════╦════════════╝
                              │ imports                            │
                              ▼                                    ▼
@@ -239,6 +235,7 @@ src/postgkyl/
 ║   gdatastate/guards.py  shared field-domain guard: backend=="gkyl" -> raise  ║
 ║                   the ".interpolate() first" message — one home for a check  ║
 ║                   operations/diagnostics verbs used to retype independently  ║
+║   gdatastate/materialize.py  native nodal/quad → NumPy point-value state     ║
 ╚════════════════════════════╦═════════════════════════════════════════════════╝
                              │ imports
                              ▼
@@ -332,7 +329,7 @@ basis was found at all.
 `GDataState` holds one dataset: a nodal `grid` (list of 1-D edge arrays), values in
 one of the two backends (`gpython.GkylArray` or `np.ndarray`), and metadata in `ctx`.
 It is **verb-less** and imports only downward (`io` to construct itself, `gpython` for
-the backend type). It owns:
+the backend type, and `dg` for shared point-value materialization). It owns:
 - shape properties (`num_dims`/`num_comps`/`num_cells`/`bounds`), `grid`/`values`,
 - `backend` (`"gkyl"`/`"numpy"`) and `native` (the raw `GkylArray` for the kernels),
 - `push`, `clone` (backend-aware deep copy via `type(self)`), and **`_result(...)`** —
@@ -343,6 +340,8 @@ the backend type). It owns:
 `gdatastate/guards.py` centralizes the field-domain check (`backend == "gkyl"` → raise with
 the standard ".interpolate() first" message) that several `operations`/`diagnostics` verbs
 need but that isn't itself a verb, so it lives here rather than in `operations`.
+`gdatastate/materialize.py` owns the shared conversion from native nodal/quad values to
+a NumPy-backed state used by every terminal consumer.
 
 ### `api/` — the fluent surface (`api/gdata.py`, `api/load.py`)
 `class GData(GDataState)` adds the **fluent verb methods** (`.interpolate()`, `.select()`,
@@ -376,7 +375,7 @@ transforming/re-expressing data; `operations/gyrokinetics/` owns the R-Z and
 flux-surface projections. Code that interprets components to derive a new
 physical conclusion belongs in `diagnostics/`.
 Implemented: `interpolate` (the bridge verb: gkyl-backed in, numpy-backed out),
-`select` (field-domain only), `plot` (delegates to `render`), `info`, `integrate`
+`select` (field-domain only), `info`, `integrate`
 (terminal; runs inside Gkeyll on modal data), `represent`/`apply` (the explicit
 value_form verbs behind `.to_modal()/.to_nodal()/.to_quad()/.apply()`),
 `arithmetic` (`binary` + `apply_ufunc`), which **dispatches on `backend`**: modal
@@ -392,12 +391,11 @@ both terminal-adjacent like `represent`: they emit a new, lower-dimensional
 dataset that stays modal/gkyl-native, so it composes with further
 `.to_nodal()`/`.interpolate()`/`.average()`/`.eval_at_coord_proj()` calls
 rather than dropping to NumPy. `local_poly` bridges modal coefficients to a
-discontinuity-preserving plotting mesh, and `animate` is `plot`'s terminal
-sibling for a dataset sequence — both funnel through the shared, private
-`_materialize` helper that does the one "modal must `.interpolate()` first;
-point-value value_forms plot at their true locations" check, so `plot`
-and `animate` can't drift apart on that rule. Verbs wrap the layers below;
-they don't reimplement.
+discontinuity-preserving plotting mesh. `operations.plot` is a direct alias of
+`render.plot`, while animation remains a terminal operation over a sequence.
+All terminal consumers share `gdatastate.materialize_point_values`, so the
+point-value capability rule has one home. Verbs wrap the layers below; they
+don't reimplement.
 
 ### `diagnostics/` — equation-specific physics (COMPOSITION, above `api`)
 The layer that knows what the numbers *mean* — and the ONLY package in the
@@ -478,8 +476,10 @@ the equation module that uses it.)
   capability switch.
 
 ### `render/` — visualization backend (`render/matplotlib.py`)
-`plot(*datasets, ...)` — 1-D lines / 2-D pcolormesh, one panel per component, multi-dataset
-overlay. Imports `gdatastate`/`numerics` only; requires interpolated data.
+`plot(*datasets, ...)` is the one canonical plotting function: 1-D lines / 2-D
+pcolormesh, one panel per component, multi-dataset overlay/grouping, saving,
+display, and every public plot option. The facade, fluent method, operations
+namespace, and generated CLI all point to this same callable.
 
 ### `__init__.py` — the facade (pure re-export)
 Gathers the public names from the layer that owns each: `load`/`GData` ← `gdata`,
