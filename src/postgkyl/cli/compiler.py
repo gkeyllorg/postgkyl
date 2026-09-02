@@ -108,28 +108,10 @@ def _error(fn, parameter: str, message: str) -> CommandCompilationError:
 
 def _unwrap_annotated(annotation):
   markers: list[object] = []
-  while True:
-    metadata = getattr(annotation, "__metadata__", None)
-    if metadata is not None:
-      # Python 3.10 can leave an evaluated ``Annotated`` alias whose
-      # ``__origin__`` points back to the alias instead of its base type.
-      # ``__args__`` is the stable storage for that base across the supported
-      # Python versions; metadata has its own authoritative attribute.
-      args = getattr(annotation, "__args__", ())
-      if not args:
-        break
-      # end
-      annotation = args[0]
-      markers.extend(metadata)
-      continue
-    # end
-    if get_origin(annotation) is Annotated:
-      args = get_args(annotation)
-      annotation = args[0]
-      markers.extend(args[1:])
-      continue
-    # end
-    break
+  while get_origin(annotation) is Annotated:
+    args = get_args(annotation)
+    annotation = args[0]
+    markers.extend(args[1:])
   # end
   return annotation, tuple(markers)
 # end
@@ -258,14 +240,32 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
 
 
 def _type_hints(fn) -> dict[str, object]:
+  annotations = dict(getattr(fn, "__annotations__", {}))
+  deferred = {name: annotation for name, annotation in annotations.items()
+      if isinstance(annotation, str)}
+  if not deferred:
+    return annotations
+  # end
   try:
-    return get_type_hints(fn, include_extras=True)
+    source = types.SimpleNamespace(__annotations__=deferred)
+    resolved = get_type_hints(source,
+        globalns=getattr(fn, "__globals__", None), include_extras=True)
   # end
   except Exception as exc:
     qualname = f"{getattr(fn, '__module__', '<unknown>')}.{getattr(fn, '__qualname__', fn)}"
     raise CommandCompilationError(
         f"{qualname}: annotations could not be resolved: {exc}") from exc
   # end
+  # Concrete annotations installed by an API owner are already resolved.
+  # Evaluating them again is observably broken for
+  # ``Annotated[T | None, ...]`` on Python 3.10, so only deferred strings pass
+  # through ``get_type_hints`` and concrete objects remain authoritative.
+  for name, annotation in annotations.items():
+    if isinstance(annotation, str):
+      annotations[name] = resolved[name]
+    # end
+  # end
+  return annotations
 # end
 
 

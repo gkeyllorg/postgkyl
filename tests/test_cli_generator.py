@@ -134,16 +134,23 @@ def test_optional_annotation_does_not_make_a_required_option_optional():
 # end
 
 
-def test_annotated_alias_unwrap_is_compatible_with_python_310(monkeypatch):
-  """Compile an evaluated alias whose origin points back to itself."""
-  hints = compiler._type_hints(average)
-  alias = hints["weight"]
-  monkeypatch.setattr(alias, "__origin__", alias)
+def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
+  """Keep runtime CLI metadata authoritative over resolved string hints."""
+  original = compiler.get_type_hints
+  evaluated = None
 
-  monkeypatch.setattr(compiler, "_type_hints", lambda fn: hints)
+  def track_evaluated(source, **kwargs):
+    nonlocal evaluated
+    evaluated = source.__annotations__
+    return original(source, **kwargs)
+  # end
+
+  monkeypatch.setattr(compiler, "get_type_hints", track_evaluated)
+
   model = compile_callable(average)
   weight = next(parameter for parameter in model.parameters
       if parameter.name == "weight")
+  assert "weight" not in evaluated
   assert weight.dataset_ref
   assert weight.codec.optional
 # end
