@@ -68,6 +68,24 @@ def test_plot_has_one_canonical_callable():
 # end
 
 
+def test_plotly_has_one_canonical_callable():
+  from postgkyl import operations, render
+
+  assert pg.plotly is render.plotly
+  assert pg.plotly is operations.plotly
+  assert pg.plotly is pg.GData.plotly
+# end
+
+
+def test_pyvista_has_one_canonical_callable():
+  from postgkyl import operations, render
+
+  assert pg.pyvista is render.pyvista
+  assert pg.pyvista is operations.pyvista
+  assert pg.pyvista is pg.GData.pyvista
+# end
+
+
 def test_arithmetic_and_ufunc():
   a = pg.load(F1).interpolate().select(comp=0)
   b = pg.load(F1).interpolate().select(comp=0)

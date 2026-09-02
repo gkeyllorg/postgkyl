@@ -18,8 +18,9 @@ components as new physical conclusions. Equation-specific physics (the former
 ``transform_frame``/``laguerre`` verbs, folded with the array math they
 delegated to) lives one layer up, in ``diagnostics``.
 
-``plot`` is the terminal-rendering exception: this namespace re-exports the
-exact canonical callable from :mod:`postgkyl.render` without wrapping it.
+The terminal renderers (``plot``, ``plotly``, and ``pyvista``) are exceptions:
+this namespace re-exports their exact canonical callables from
+:mod:`postgkyl.render` without wrapping them.
 """
 
 from . import arithmetic, gyrokinetics
@@ -30,9 +31,8 @@ from .info import info
 from .integrate import integrate, integrate_axis
 from .average import average
 from .eval_at_coord_proj import eval_at_coord_proj
-from postgkyl.render import plot
+from postgkyl.render import plot, plotly, pyvista
 from .animate import animate
-from .plotly import plotly
 from .plotly_animate import plotly_animate
 from .represent import apply, represent
 
@@ -84,7 +84,7 @@ for _function in (
     interpolate, local_poly, select, integrate, integrate_axis, average,
     eval_at_coord_proj, fft, magsq, relchange, mask, collect, sort, grid,
     val2coord, extract_input, fit, differentiate, evaluate, map,
-    animate, plotly, plotly_animate, represent, growth,
+    animate, plotly_animate, represent, growth,
 ):
   _resolve_receiver_annotations(_function)
 # end
@@ -127,8 +127,6 @@ command(_TERM_EACH)(integrate)
 command(_TERM_EACH)(extract_input)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(animate)
-command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,
-    result=ResultPolicy.SILENT))(plotly)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(plotly_animate)
 command(_MAP)(represent)
@@ -139,7 +137,7 @@ hidden("registry provider used by evaluate help and validation")(
 
 __all__ = ["interpolate", "local_poly", "select", "info", "integrate", "integrate_axis", "average",
     "eval_at_coord_proj",
-    "plot", "animate", "plotly", "plotly_animate",
+    "plot", "animate", "plotly", "plotly_animate", "pyvista",
     "arithmetic", "represent", "apply",
     "fft", "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
     "extract_input", "fit", "differentiate", "evaluate", "available_evaluate_operators",

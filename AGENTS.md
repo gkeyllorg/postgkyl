@@ -223,8 +223,8 @@ src/postgkyl/
                              ▼                                    │
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ BACKEND                                                                      ║
-║   render/ (mpl · plotly · pyvista) — owns the canonical plot callable;       ║
-║   `pg.plot`, `GData.plot`, `operations.plot`, and the CLI share its identity ║
+║   render/ (mpl · plotly · pyvista) — owns the canonical render callables;    ║
+║   facade, GData, operations, and CLI views share their exact identities      ║
 ╚════════════════════════════╦════════════════════════════════════╦════════════╝
                              │ imports                            │
                              ▼                                    ▼
@@ -391,8 +391,9 @@ both terminal-adjacent like `represent`: they emit a new, lower-dimensional
 dataset that stays modal/gkyl-native, so it composes with further
 `.to_nodal()`/`.interpolate()`/`.average()`/`.eval_at_coord_proj()` calls
 rather than dropping to NumPy. `local_poly` bridges modal coefficients to a
-discontinuity-preserving plotting mesh. `operations.plot` is a direct alias of
-`render.plot`, while animation remains a terminal operation over a sequence.
+discontinuity-preserving plotting mesh. `operations.plot`/`plotly`/`pyvista`
+are direct aliases of their canonical `render` callables, while animation
+remains a terminal operation over a sequence.
 All terminal consumers share `gdatastate.materialize_point_values`, so the
 point-value capability rule has one home. Verbs wrap the layers below; they
 don't reimplement.

@@ -27,24 +27,23 @@ import tempfile
 import time
 import webbrowser
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Annotated
 
 import matplotlib as mpl
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from postgkyl.command_spec import (
+    CliType, CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+)
+from postgkyl.gdatastate import GDataState, materialize_point_values
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._ffmpeg import require_ffmpeg
 from ._prep import resolve_axis_labels, squeeze_collapsed_axes, subplot_grid
 from .labels import latex_to_html
 from .style import DEFAULT_STYLE, apply_style
-
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
-# end
-
 
 def _apply_plot_style(style: str | None, rcParams: dict | None,
     diverging: bool, cmap: str | None, xkcd: bool, *,
@@ -462,7 +461,7 @@ def _scene_axis(label: str | None, log_axis: bool, axis_range, showgrid: bool,
 # end
 
 
-def plotly(data: "GDataState", *, squeeze: bool = False,
+def plotly(data: GDataState, *, squeeze: bool = False,
     num_subplot_row: int | None = None, num_subplot_col: int | None = None,
     scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = "circle",
     diverging: bool = False,
@@ -472,13 +471,15 @@ def plotly(data: "GDataState", *, squeeze: bool = False,
     cmin: float | None = None, cmax: float | None = None,
     cscale: float = 1.0, cshift: float = 0.0,
     clim: tuple[float, float] | None = None,
-    style: str | None = None, rcParams: dict | None = None,
+    style: str | None = None,
+    rcParams: Annotated[dict[str, object] | None,
+        CliType(dict[str, str] | None), KeyValue()] = None,
     background: str = "dark", invert_cmap: bool = False,
     legend: bool = True, label_prefix: str = "", colorbar: bool = True,
     xlabel: str | None = None, ylabel: str | None = None,
     zlabel: str | None = None, clabel: str | None = None, title: str | None = None,
     logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False,
-    aspect: str | float | None = None,
+    aspect: Annotated[str | float | None, CliType(str | None)] = None,
     showgrid: bool = True, hashtag: bool = False, xkcd: bool = False,
     color: str | None = None, opacity: float | None = 1.0,
     scatter_opacity_range: tuple[float, float] | None = None,
@@ -513,23 +514,71 @@ def plotly(data: "GDataState", *, squeeze: bool = False,
   explicitly, since a human running it from a terminal does want to see
   something.
 
-  Args: see ``output/plotly.py``'s docstring in the migrated tree for the
-    per-argument reference; the signature and semantics are unchanged except
-    that ``data`` is a :class:`~postgkyl.gdatastate.gdatastate.GDataState` (not a
-    ``GData | (grid, values)`` tuple), ``figsize`` no longer accepts the
-    CLI's comma-string spelling, and ``num_axes`` (the old CLI's "restrict to
-    this many components" override, orthogonal to ``squeeze``) was dropped --
-    the fluent surface has no CLI comma-string args to parse it out of; use
-    ``.select(comp=...)`` upstream to restrict components instead. ``xscale``/
-    ``yscale``/``zscale`` are ported with identical semantics: they scale
-    the plotted coordinates (and, in surface mode, the height/color value)
-    the same way ``xshift``/``yshift``/``zshift`` do. ``save``/``saveas``/
-    ``show`` and the rotating-export camera parameters were a CLI-only
-    concern in main; they are real parameters here now (see module docstring).
+  Args:
+    data: Point-value dataset to render.
+    squeeze: Draw only the first component and collapse singleton axes.
+    num_subplot_row: Forced row count for multi-component subplot layouts.
+    num_subplot_col: Forced column count for multi-component subplot layouts.
+    scatter: Draw 3-D data as a point cloud instead of a volume.
+    marker_radius: Scatter-marker radius.
+    markerstyle: Plotly scatter-marker symbol.
+    diverging: Center a diverging color range on zero.
+    xscale: Horizontal-coordinate scale factor.
+    xshift: Horizontal-coordinate shift applied before scaling.
+    yscale: Vertical-coordinate scale factor.
+    yshift: Vertical-coordinate shift applied before scaling.
+    zscale: Third-coordinate scale, or 2-D surface-height scale.
+    zshift: Third-coordinate shift, or 2-D surface-height shift.
+    cmin: Color-range lower bound.
+    cmax: Color-range upper bound.
+    cscale: Color-value scale factor.
+    cshift: Color-value shift.
+    clim: Explicit ``(minimum, maximum)`` color range.
+    style: Postgkyl/Matplotlib style used to derive colors.
+    rcParams: Matplotlib configuration overrides used while deriving styles.
+    background: ``"dark"`` or ``"light"`` scene theme.
+    invert_cmap: Reverse the selected colormap.
+    legend: Show labeled traces in the legend.
+    label_prefix: Prefix for component trace names.
+    colorbar: Show the color bar.
+    xlabel: Horizontal-axis label override.
+    ylabel: Vertical-axis label override.
+    zlabel: Third-axis label override.
+    clabel: Color-bar label override.
+    title: Figure-title override.
+    logx: Use a logarithmic horizontal axis.
+    logy: Use a logarithmic vertical axis.
+    logz: Use a logarithmic third axis.
+    logc: Use logarithmic color values.
+    aspect: Scene aspect mode (``auto``, ``cube``, ``data``), or numeric ratio.
+    showgrid: Draw scene grid lines.
+    hashtag: Add a ``#pgkyl`` annotation.
+    xkcd: Derive colors from Matplotlib's XKCD style.
+    color: Replace the colormap with one fixed trace color.
+    opacity: Surface, volume, or marker opacity.
+    scatter_opacity_range: Minimum and maximum opacity encoded in scatter colors.
+    scatter_opacity_log: Map scatter opacity logarithmically.
+    maximum_points_per_axis: Downsample 3-D data to this many points per axis;
+      zero disables downsampling.
+    surface_count: Number of isosurfaces used by volume rendering.
+    xrange: Explicit horizontal-axis range.
+    yrange: Explicit vertical-axis range.
+    zrange: Explicit third-axis range.
+    figsize: Figure width and height in hundreds of pixels.
+    cylindrical_to_cartesian: Interpret 3-D coordinates as ``(R, Z, phi)``.
+    cmap: Matplotlib colormap name.
+    save: Save using a name derived from the input dataset.
+    saveas: Explicit output path.
+    show: Open the saved or temporary HTML preview in a browser.
+    azimuthal_angle: Initial camera azimuth for rotating output.
+    polar_angle: Camera polar angle for rotating output.
+    rotation_period: Seconds per camera revolution for animated output.
+    fps: Frames per second for animated output.
 
   Returns:
     plotly.graph_objects.Figure: the assembled figure.
   """
+  data = materialize_point_values(data)
   theme_colors = _apply_plot_style(style, rcParams, diverging, cmap, xkcd,
       background=background, invert_cmap=invert_cmap)
 
@@ -755,6 +804,10 @@ def plotly(data: "GDataState", *, squeeze: bool = False,
   # end
   return fig
 # end
+
+
+command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,
+    result=ResultPolicy.SILENT))(plotly)
 
 
 def plotly_animate(data_sequence: list["GDataState"],

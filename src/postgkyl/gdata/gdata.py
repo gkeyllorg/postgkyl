@@ -113,6 +113,7 @@ class GData(GDataState):
   save = io.save
   plot = operations.plot
   plotly = operations.plotly
+  pyvista = operations.pyvista
 
   # ``info`` is inherited from GDataState (a pure state reader).
 

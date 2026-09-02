@@ -1,10 +1,10 @@
-"""PyVista rendering backend: 3-D scalar-field volumes and isosurfaces.
+"""Canonical PyVista renderer for 3-D scalar-field volumes and isosurfaces.
 
-Imports only ``gdatastate``/``numerics`` (plus PyVista/NumPy themselves), mirroring
-``matplotlib.py``/``plotly.py``. PyVista needs a working (possibly
-software/off-screen) OpenGL context; every entry point re-raises a
-``RuntimeError`` naming that requirement instead of letting a VTK error
-surface from deep inside the library.
+``pg.pyvista``, ``GData.pyvista``, ``operations.pyvista``, and the generated
+CLI are aliases or lowerings of the one public function in this module.
+PyVista needs a working (possibly software/off-screen) OpenGL context; every
+entry point re-raises a ``RuntimeError`` naming that requirement instead of
+letting a VTK error surface from deep inside the library.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pyvista as pv
 from postgkyl.command_spec import (
     CommandSpec, Execution, ResultPolicy, Section, command,
 )
-from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate import GDataState, materialize_point_values
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._prep import resolve_axis_labels, squeeze_collapsed_axes
@@ -117,6 +117,7 @@ def pyvista(data: GDataState, *, show: bool = True, spin: bool = True,
       extension.
     RuntimeError: PyVista could not obtain a working OpenGL context.
   """
+  data = materialize_point_values(data)
   _valid_exts = ("", ".html", ".png", ".jpg", ".jpeg", ".pdf", ".svg", ".gltf",
       ".vtksz")
   if saveas and not os.path.splitext(saveas)[1]:

@@ -10,8 +10,8 @@ owns it and simply gathered here:
 
     load, GData, GDataGroup            <- api/       (fluent surface)
     collect, evaluate, relchange,      <- api/       (module-level multi-dataset
-    plot, animate, plotly_animate,                   verbs -- no single ``self``)
-    sort
+    animate, plotly_animate, sort                    verbs with no single ``self``)
+    plot, plotly, pyvista              <- render/    (canonical render callables)
     group_blocks                     <- gdatastate/ (multiblock family partition)
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
@@ -46,7 +46,7 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
     leaves     io/         readers (C-native first)    -> gpython
     container  gdatastate/ GDataState {gkyl|numpy} backend
     seam       operations/ one verb each
-    backend    render/     matplotlib
+    backend    render/     Matplotlib, Plotly, PyVista
     fluent     api/        GData(GDataState) + operators   <- above operations
     facade     __init__    re-exports only
 """
@@ -59,7 +59,7 @@ from postgkyl.operations import (
     select, val2coord,
 )
 from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
-from postgkyl.render import plot, pyvista
+from postgkyl.render import plot, plotly, pyvista
 from postgkyl.gdatastate import group_blocks
 from postgkyl.command_spec import hidden
 from postgkyl.io import save
@@ -77,6 +77,6 @@ __all__ = ["GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integ
     "extract_input", "fit", "growth", "differentiate", "map",
     "represent", "apply", "gk_rz", "gk_fluxsurf", "save",
     "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
-    "available_evaluate_operators", "pyvista",
+    "available_evaluate_operators", "plotly", "pyvista",
     "load_gk_quantity", "load_gk_distf", "available_gk_quantities",
     "__version__", "version_report"]
