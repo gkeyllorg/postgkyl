@@ -9,15 +9,13 @@ save/preview lifecycle here --
 ``save``/``saveas``/``show`` (plus the rotating-export camera parameters) are
 real parameters of both functions, so e.g. ``pg.load(f).interpolate().plotly(show=True)``
 opens an auto-rotating browser preview with zero CLI glue, exactly as
-``cli/commands/plotly.py`` now expects (it passes ``show=True`` explicitly,
-matching main's own "show a preview by default" CLI behavior). Both default
-to inert (``show=False``, ``save=False``): a bare call just builds and
-returns the figure -- deliberately so a stray script or unit test calling
-either function never has an unrequested side effect (writing a file to an
-unexpected path, or popping a browser tab). The CLI module stays thin: it
-resolves which of several *active* datasets gets which label/output name
-(inherently pool-level bookkeeping this single-dataset function cannot
-know), then calls straight through.
+the generated CLI (which passes ``show=True`` explicitly to preserve the
+terminal's preview-by-default behavior). Both default to inert
+(``show=False``, ``save=False``): a bare call just builds and returns the
+figure, so a script or unit test never has an unrequested file or browser
+side effect. The generated ``plotly`` command lowers the canonical plotting
+signature directly; there is no backend-specific plotting command or
+operations wrapper.
 """
 
 from __future__ import annotations
