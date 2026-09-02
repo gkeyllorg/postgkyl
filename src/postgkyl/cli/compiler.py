@@ -109,19 +109,27 @@ def _error(fn, parameter: str, message: str) -> CommandCompilationError:
 def _unwrap_annotated(annotation):
   markers: list[object] = []
   while True:
+    metadata = getattr(annotation, "__metadata__", None)
+    if metadata is not None:
+      # Python 3.10 can leave an evaluated ``Annotated`` alias whose
+      # ``__origin__`` points back to the alias instead of its base type.
+      # ``__args__`` is the stable storage for that base across the supported
+      # Python versions; metadata has its own authoritative attribute.
+      args = getattr(annotation, "__args__", ())
+      if not args:
+        break
+      # end
+      annotation = args[0]
+      markers.extend(metadata)
+      continue
+    # end
     if get_origin(annotation) is Annotated:
       args = get_args(annotation)
       annotation = args[0]
       markers.extend(args[1:])
       continue
     # end
-    metadata = getattr(annotation, "__metadata__", None)
-    origin = getattr(annotation, "__origin__", None)
-    if metadata is None or origin is None:
-      break
-    # end
-    annotation = origin
-    markers.extend(metadata)
+    break
   # end
   return annotation, tuple(markers)
 # end

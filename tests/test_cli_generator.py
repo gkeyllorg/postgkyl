@@ -135,17 +135,12 @@ def test_optional_annotation_does_not_make_a_required_option_optional():
 
 
 def test_annotated_alias_unwrap_is_compatible_with_python_310(monkeypatch):
-  """Compile when ``get_origin(Annotated[...])`` exposes the base type."""
-  original_get_origin = compiler.get_origin
+  """Compile an evaluated alias whose origin points back to itself."""
+  hints = compiler._type_hints(average)
+  alias = hints["weight"]
+  monkeypatch.setattr(alias, "__origin__", alias)
 
-  def old_get_origin(annotation):
-    if getattr(annotation, "__metadata__", None) is not None:
-      return annotation.__origin__
-    # end
-    return original_get_origin(annotation)
-  # end
-
-  monkeypatch.setattr(compiler, "get_origin", old_get_origin)
+  monkeypatch.setattr(compiler, "_type_hints", lambda fn: hints)
   model = compile_callable(average)
   weight = next(parameter for parameter in model.parameters
       if parameter.name == "weight")
