@@ -1,4 +1,4 @@
-"""2-D/3-D enstrophy diagnostic.
+"""2-D/3-D five-moment enstrophy diagnostic.
 
 Ported from ``src_bak/postgkyl/tools/calc_enstrophy.py``. Sweeps a family of
 five-moment output frames (density + momentum, ``rho, px, py, pz``) and

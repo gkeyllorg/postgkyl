@@ -18,7 +18,7 @@ of truth for "does the tutorial still work," not just this README.
 | --- | --- |
 | [`01_quickstart.py`](scripts/01_quickstart.py) | `pg.load` → `.interpolate()` → `.select()` → `.plot()` → `.save()`/reload |
 | [`02_arithmetic_and_numpy.py`](scripts/02_arithmetic_and_numpy.py) | Weak DG algebra on raw modal data (`*`, `/`, `+`, `.integrate()`) vs. plain NumPy math after `.interpolate()`, and the guardrail between them |
-| [`03_diagnostics_five_moment.py`](scripts/03_diagnostics_five_moment.py) | The `diagnostics` layer: equation-specific physics (`postgkyl.diagnostics.five_moment`) on top of a `GData`, on a hand-built Sod shock tube |
+| [`03_diagnostics_five_moment.py`](scripts/03_diagnostics_five_moment.py) | The `diagnostics` layer: equation-specific physics (`postgkyl.diagnostics.moments.five_moment`) on top of a `GData`, on a hand-built Sod shock tube |
 | [`04_gyrokinetics.py`](scripts/04_gyrokinetics.py) | The gyrokinetic diagnostics: `pg.load_gk_quantity` (named moments/geometry, resolved by naming convention) and `pg.load_gk_distf` (full distribution function), on the `rt_gk_tcv_iwl*` fixtures |
 | [`05_gk_rz.py`](scripts/05_gk_rz.py) | The gyrokinetic R-Z operation: one-line fluent and functional calls plus projection reuse over multiple toroidal angles |
 | [`mirror_comparison.py`](scripts/mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |

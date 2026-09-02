@@ -1,5 +1,4 @@
-"""Equation-specific physics -- the COMPOSITION tier, one module per equation
-model.
+"""Equation-specific physics grouped by Gkeyll model family.
 
 Folds together the old ``models`` (array math) and ``operations`` physics-verb
 (GData wrapping) layers into a single home per equation system: functions
@@ -10,31 +9,13 @@ stay in flat ``operations`` modules. Domain-specific transformations live in
 operation subpackages (for example ``operations.gyrokinetics``); this layer
 is reserved for code that knows what field components physically mean.
 
-Layer 12 added the equation-internal loaders: ``gyrokinetics/`` (distribution
-functions + the derived-quantity registry), the shared ``discovery.py``
-stem/frame discovery, and ``pkpm.load_pkpm``. Layer 13 extends this package
-further with the program-scale diagnostics: three gyrokinetic programs
-(``gyrokinetics.gk_energy_balance``/``gk_particle_balance``/``gk_nodes``,
-ported from the old ``apps/gk_*.py``) plus ``trajectory``, ``enstrophy``, and
-``ke_dke`` (ported from ``apps/trajectory.py`` and ``tools/calc_*.py``) --
-there is no separate ``loaders/`` package anywhere.
+The four public packages mirror Gkeyll's model families: ``gyrokinetics``,
+``vlasov``, ``pkpm``, and ``moments``. The equation-blind ``discovery`` module
+stays shared at this package root. There is no separate ``loaders`` package;
+each model family owns its loading and program-scale diagnostics.
 """
 
-from . import (
-    five_moment,
-    ten_moment,
-    mhd,
-    plasma,
-    multispecies,
-    rotations,
-    kinetic,
-    pkpm,
-    discovery,
-    gyrokinetics,
-    trajectory,
-    enstrophy,
-    ke_dke,
-)
+from . import discovery, gyrokinetics, moments, pkpm, vlasov
 
 from typing import Annotated, Literal
 
@@ -77,56 +58,57 @@ def _combine(function, dataset_names: tuple[str, ...]) -> None:
 
 
 for _module, _names in (
-    (five_moment, ("density", "xvel", "yvel", "zvel", "vel", "pressure",
+    (moments.five_moment, ("density", "xvel", "yvel", "zvel", "vel", "pressure",
         "ke", "temp", "sound", "mach")),
-    (ten_moment, ("pressure", "ke", "temp", "sound", "mach", "pxx", "pxy",
+    (moments.ten_moment, ("pressure", "ke", "temp", "sound", "mach", "pxx", "pxy",
         "pxz", "pyy", "pyz", "pzz", "pressure_tensor")),
-    (mhd, ("bx", "by", "bz", "bi", "mag_pressure", "pressure", "temp",
+    (moments.mhd, ("bx", "by", "bz", "bi", "mag_pressure", "pressure", "temp",
         "sound", "mach")),
-    (plasma, ("magB", "vt", "omegaC", "omegaP", "d", "lambdaD")),
+    (moments.plasma, ("magB", "vt", "omegaC", "omegaP", "d", "lambdaD")),
 ):
   for _name in _names:
     _map(getattr(_module, _name))
   # end
 # end
 
-_resolve(multispecies.accumulate_current)
+_resolve(moments.multispecies.accumulate_current)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.MAP_APPEND,
-    consumes_inputs=True))(multispecies.accumulate_current)
+    consumes_inputs=True))(moments.multispecies.accumulate_current)
 
 for _function, _datasets in (
-    (five_moment.velocity, ("density", "momentum")),
-    (ten_moment.p_par, ("ptensor", "bfield")),
-    (ten_moment.p_perp, ("ptensor", "bfield")),
-    (ten_moment.agyro, ("ptensor", "bfield")),
-    (ten_moment.mom_agyro, ("species", "field")),
-    (plasma.vA, ("species", "field")),
-    (plasma.rho, ("species", "field")),
-    (plasma.beta, ("species", "field")),
-    (multispecies.energetics, ("elc", "ion", "field")),
-    (rotations.parrotate, ("array", "rotator")),
-    (rotations.perprotate, ("array", "rotator")),
-    (rotations.bparrotate, ("array", "field")),
-    (rotations.bperprotate, ("array", "field")),
-    (kinetic.transform_frame, ("distribution", "bulk")),
+    (moments.five_moment.velocity, ("density", "momentum")),
+    (moments.ten_moment.p_par, ("ptensor", "bfield")),
+    (moments.ten_moment.p_perp, ("ptensor", "bfield")),
+    (moments.ten_moment.agyro, ("ptensor", "bfield")),
+    (moments.ten_moment.mom_agyro, ("species", "field")),
+    (moments.plasma.vA, ("species", "field")),
+    (moments.plasma.rho, ("species", "field")),
+    (moments.plasma.beta, ("species", "field")),
+    (moments.multispecies.energetics, ("elc", "ion", "field")),
+    (moments.rotations.parrotate, ("array", "rotator")),
+    (moments.rotations.perprotate, ("array", "rotator")),
+    (moments.rotations.bparrotate, ("array", "field")),
+    (moments.rotations.bperprotate, ("array", "field")),
+    (vlasov.kinetic.transform_frame, ("distribution", "bulk")),
     (pkpm.laguerre_compose, ("distribution", "variables")),
 ):
   _combine(_function, _datasets)
 # end
 
-ten_moment.agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
-ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
+moments.ten_moment.agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
+moments.ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
 
 for _function in (pkpm.load_pkpm, discovery.find_output_stems,
-    discovery.available_frames, enstrophy.enstrophy, ke_dke.ke_dke):
+    discovery.available_frames, moments.enstrophy.enstrophy,
+    moments.ke_dke.ke_dke):
   _resolve(_function)
   command(_DIAG_LOAD if _function is pkpm.load_pkpm else _DIAG_REPORT)(_function)
 # end
 pkpm.load_pkpm.__annotations__["idx"] = str
 
-_resolve(trajectory.trajectory)
+_resolve(vlasov.trajectory.trajectory)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.TERMINAL_ALL,
-    result=ResultPolicy.VALUE))(trajectory.trajectory)
+    result=ResultPolicy.VALUE))(vlasov.trajectory.trajectory)
 
 for _function in (
     gyrokinetics.load_gk_distf, gyrokinetics.load_gk_quantity,
@@ -160,7 +142,5 @@ for _name in (
 # end
 
 __all__ = [
-    "five_moment", "ten_moment", "mhd", "plasma", "multispecies",
-    "rotations", "kinetic", "pkpm", "discovery", "gyrokinetics",
-    "trajectory", "enstrophy", "ke_dke",
+    "gyrokinetics", "vlasov", "pkpm", "moments", "discovery",
 ]

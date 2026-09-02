@@ -4,7 +4,7 @@ speed, and Mach number.
 
 MHD moment data is laid out ``[rho, mx, my, mz, E, Bx, By, Bz]``: components
 0:4 are shared with the 5-moment layout (density and momentum), so density
-and velocity are reused from :mod:`postgkyl.diagnostics.five_moment`.
+and velocity are reused from :mod:`postgkyl.diagnostics.moments.five_moment`.
 """
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ..gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate.guards import require_field_domain as _require_field_domain
 from .five_moment import _get_density, _get_vx, _get_vy, _get_vz
 from .five_moment import density, xvel, yvel, zvel, vel
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _REASON = ("extracting primitive variables from raw DG coefficients would "

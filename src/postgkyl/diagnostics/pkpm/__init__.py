@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ..gdata.gdata import GData
-from ..gdatastate.guards import require_field_domain as _require_field_domain
-from .kinetic import transform_frame
+from ...gdata.gdata import GData
+from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ..vlasov.kinetic import transform_frame
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _REASON = "composing raw DG coefficients would mix basis functions"
@@ -127,7 +127,7 @@ def load_pkpm(name: str, species: str, idx: "str | int", poly_order: int, *,
   and its companion ``pkpm_vars`` file (whose component 3 is ``T/m`` and
   components 0:3 are the bulk velocity ``(ux, uy, uz)``), interpolates both,
   composes the full distribution function (:func:`laguerre_compose`), and
-  shifts it into the bulk-flow frame (:func:`~postgkyl.diagnostics.kinetic.
+    shifts it into the bulk-flow frame (:func:`~postgkyl.diagnostics.vlasov.kinetic.
   transform_frame`).
 
   Args:
@@ -166,3 +166,6 @@ def load_pkpm(name: str, species: str, idx: "str | int", poly_order: int, *,
   # end
   return out
 # end
+
+
+__all__ = ["laguerre_compose", "load_pkpm"]

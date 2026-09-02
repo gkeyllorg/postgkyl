@@ -132,8 +132,12 @@ src/postgkyl/
 │   ├─ discovery.py
 │   └─ compiler.py
 │
-├─ diagnostics/        equation-specific physics · one module        [COMPOSITION]
-│                      per equation model
+├─ diagnostics/        equation-specific physics · grouped by Gkeyll [COMPOSITION]
+│   ├─ gyrokinetics/   distf/quantity loaders + balance programs
+│   ├─ vlasov/         distribution transforms + trajectories
+│   ├─ pkpm/           Laguerre reconstruction + loader
+│   ├─ moments/        fluid moments, MHD, plasma, rotations + programs
+│   └─ discovery.py    shared equation-blind output discovery
 │
 ├─ gdata/                ★ THE FLUENT SURFACE  (sits ABOVE operations)  [FLUENT API]
 │   ├─ gdata.py          class GData(GDataState) + .interpolate()/.plot()/
@@ -188,11 +192,11 @@ src/postgkyl/
                              ▼                              ▼
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ COMPOSITION                                                                  ║
-║   diagnostics/   ★ EQUATION-SPECIFIC PHYSICS · one module per equation model ║
-║      five_moment.py  density(d), pressure(d, gas_gamma=…), mach(d) …         ║
-║      ten_moment.py   p_par(d, field), agyro(species, field) …                ║
-║      mhd.py · plasma.py · multispecies.py · rotations.py · kinetic.py        ║
-║      pkpm.py         laguerre_compose(…) + load_pkpm(…)                      ║
+║   diagnostics/   ★ EQUATION-SPECIFIC PHYSICS · Gkeyll model families         ║
+║      moments/        five_moment · ten_moment · mhd · plasma · multispecies  ║
+║                      rotations · enstrophy · ke_dke                          ║
+║      vlasov/         kinetic frame transforms · trajectory                   ║
+║      pkpm/           laguerre_compose(…) + load_pkpm(…)                      ║
 ║      gyrokinetics/   load_gk_distf · load_gk_quantity + quantity registry    ║
 ║                      (Tpar, beta, ExB_vel, …) · energy_balance → Figure …    ║
 ║      discovery.py    shared naming-convention stem/frame discovery           ║
@@ -399,17 +403,20 @@ All terminal consumers share `gdatastate.materialize_point_values`, so the
 point-value capability rule has one home. Verbs wrap the layers below; they
 don't reimplement.
 
-### `diagnostics/` — equation-specific physics (COMPOSITION, above `api`)
+### `diagnostics/` — equation-specific physics (COMPOSITION, above `gdata`)
 The layer that knows what the numbers *mean* — and the ONLY package in the
-COMPOSITION tier. One module (or subpackage) per equation model:
-`five_moment`, `ten_moment`, `mhd`, `plasma` (plasma parameters), `multispecies`
-(`energetics`, `accumulate_current`), `rotations` (par/perp to B), `kinetic`
-(frame transforms), `pkpm` (Laguerre reconstruction + `load_pkpm`),
-`trajectory`, `enstrophy`, `ke_dke` (program-scale figures ported from the
-old `apps/trajectory.py`/`tools/calc_*.py`), and `gyrokinetics/` (distf/
-quantity loaders, the quantity registry — Tpar, beta, drift velocities — plus
-its own program-scale analyses: `energy_balance`/`particle_balance`/`nodes`,
-ported from the old `apps/gk_*.py`). R-Z mapping and theta-phi flux-surface
+COMPOSITION tier. Its four packages mirror Gkeyll's model-family folders:
+
+- `moments/` owns `five_moment`, `ten_moment`, `mhd`, `plasma` (plasma
+  parameters), `multispecies` (`energetics`, `accumulate_current`), `rotations`
+  (par/perp to B), and the five-moment `enstrophy`/`ke_dke` frame programs.
+- `vlasov/` owns distribution-function frame transforms (`kinetic`) and
+  particle trajectories (`trajectory`).
+- `pkpm/` owns Laguerre reconstruction and `load_pkpm`.
+- `gyrokinetics/` owns distf/quantity loaders, the quantity registry (Tpar,
+  beta, drift velocities), and `energy_balance`/`particle_balance`/`nodes`.
+
+R-Z mapping and theta-phi flux-surface
 extraction are gyrokinetic operations; their old diagnostic module paths are
 compatibility aliases for the current major version. Contract: a diagnostic takes loaded
 data — one or several `GData` — plus physical scalars as keyword-only
@@ -431,7 +438,7 @@ output-stem/frame discovery, the one home for Gkeyll's file-naming
 convention; equation loaders and programs resolve files through it, never
 with private globbing.
 
-Functions have real names (`five_moment.pressure(d, gas_gamma=…)`), never
+Functions have real names (`moments.five_moment.pressure(d, gas_gamma=…)`), never
 string dispatch; each equation module's `VARIABLES` table maps the CLI's
 quantity-name vocabulary (`"density"`, `"pressure"`, …) to those functions —
 the one home for that vocabulary. These are **free functions, not `GData`

@@ -24,13 +24,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .. import numerics
-from ..gdatastate.guards import require_field_domain as _require_field_domain
+from ... import numerics
+from ...gdatastate.guards import require_field_domain as _require_field_domain
 from .five_moment import _get_density, _get_temp
 from .mhd import _get_mhd_temp
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _REASON = "computing plasma parameters from raw DG coefficients would mix basis functions"

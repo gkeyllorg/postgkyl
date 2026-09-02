@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from .. import numerics
-from ..gdatastate.guards import require_field_domain as _require_field_domain
+from ... import numerics
+from ...gdatastate.guards import require_field_domain as _require_field_domain
 from .five_moment import (
     _get_density, _get_vx, _get_vy, _get_vz,
     _get_p, _get_ke, _get_temp, _get_sound, _get_mach,
@@ -23,7 +23,7 @@ from .five_moment import (
 )
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _REASON = ("extracting primitive variables from raw DG coefficients would "

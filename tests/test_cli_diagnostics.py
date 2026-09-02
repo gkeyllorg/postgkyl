@@ -8,6 +8,7 @@ import pytest
 
 from postgkyl.cli.app import COMMANDS
 from postgkyl.cli.state import DataSpace
+from postgkyl import diagnostics
 from postgkyl.gdata.gdata import GData
 
 
@@ -29,6 +30,18 @@ def _invoke(name, datasets, **kwargs):
     context.invoke(command, **kwargs)
   # end
   return space
+# end
+
+
+def test_diagnostics_follow_gkeyll_model_families():
+  assert diagnostics.__all__ == [
+      "gyrokinetics", "vlasov", "pkpm", "moments", "discovery"]
+  assert diagnostics.moments.five_moment.__name__.endswith(
+      ".moments.five_moment")
+  assert diagnostics.moments.enstrophy.__name__.endswith(
+      ".moments.enstrophy")
+  assert diagnostics.vlasov.kinetic.__name__.endswith(".vlasov.kinetic")
+  assert diagnostics.vlasov.trajectory.__name__.endswith(".vlasov.trajectory")
 # end
 
 

@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.mhd -- MHD B-field, pressure, temperature,
+"""Tests for postgkyl.diagnostics.moments.mhd -- MHD B-field, pressure, temperature,
 sound speed, Mach number, folding the array-math analytic tests (formerly
 tests_models_mhd.py) with the verb-level guard/VARIABLES tests (formerly
 part of tests_ops_moments.py)."""
@@ -12,7 +12,7 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics import mhd
+from postgkyl.diagnostics.moments import mhd
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),
@@ -134,7 +134,7 @@ class TestThermo:
 
 class TestFiveMomentSetReused:
   def test_density_xvel_reused_from_five_moment(self):
-    from postgkyl.diagnostics import five_moment as fm
+    from postgkyl.diagnostics.moments import five_moment as fm
     assert mhd.density is fm.density
     assert mhd.xvel is fm.xvel
     assert mhd.yvel is fm.yvel

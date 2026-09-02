@@ -490,9 +490,9 @@ _ALLOWED = {
                                                       # a physical conclusion
     "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render", "io", "command_spec"}, # added by
                                                       # 10-diagnostics.md: equation-
-                                                      # specific compositions (five_moment/
-                                                      # ten_moment/mhd/plasma/multispecies/
-                                                      # rotations/kinetic/pkpm) wrap core
+                                                      # specific compositions grouped under
+                                                      # gyrokinetics/vlasov/pkpm/moments;
+                                                      # their modules wrap core
                                                       # verbs and state -- none of gdatastate/operations/
                                                       # numerics imports upward, so this
                                                       # cannot create a cycle; "gdata" added by

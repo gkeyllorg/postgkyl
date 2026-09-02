@@ -118,7 +118,11 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
       continue
     # end
     relative = module.__name__.removeprefix("postgkyl.diagnostics.")
-    namespace = relative.split(".", 1)[0].replace("_", "-")
+    # Model-family packages group related diagnostic modules without erasing
+    # each module's public command vocabulary. For example,
+    # diagnostics.moments.five_moment.pressure remains
+    # ``five-moment-pressure`` and cannot collide with ten_moment.pressure.
+    namespace = relative.rsplit(".", 1)[-1].replace("_", "-")
     for name, value in _functions(module):
       if not value.__module__.startswith("postgkyl.diagnostics"):
         # Compatibility re-exports owned by a lower layer keep that owner's

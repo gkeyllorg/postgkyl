@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ..gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate.guards import require_field_domain as _require_field_domain
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _REASON = "rotating raw DG coefficients would mix basis functions"

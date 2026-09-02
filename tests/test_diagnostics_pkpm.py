@@ -45,7 +45,7 @@ class TestLaguerreComposePrivateHelperShape:
   a T/m field that spans both ``x`` and ``vpar`` (``(n, n, 1)``, matching the
   original ``tests_models_laguerre.py`` array-level fixture) -- physically
   unrealistic for PKPM's actual T/m (a configuration-space-only quantity),
-  and it excites the broadcast bug (see ``pkpm.py``'s ``_laguerre_compose``
+  and it excites the broadcast bug (see ``pkpm``'s ``_laguerre_compose``
   docstring note) enough to make the returned array's spatial-axis count
   (4) disagree with its own returned grid's length (3), which
   ``GDataState.push``/``set_grid`` (correctly) refuses to accept. The
@@ -79,7 +79,7 @@ class TestLaguerreComposePrivateHelperShape:
     # extra np.newaxis (`T_m[..., np.newaxis, np.newaxis]`), one more than
     # vperp_3D's single new axis -- inherited verbatim from
     # src_bak/postgkyl/tools/laguerre_compose.py via
-    # postgkyl/diagnostics/pkpm.py's ``_laguerre_compose``, this makes the
+    # postgkyl/diagnostics/pkpm's ``_laguerre_compose``, this makes the
     # returned array 4 spatial axes deep (with a spurious, constant-along-
     # itself extra axis) instead of the 3 the docstring/grid describe; the
     # legacy test corpus never checked this middle shape either, only
@@ -171,7 +171,7 @@ class TestLaguerreCompose:
 # ``load_pkpm`` ever sees it. Following the same technique
 # ``tests_bak/test_gk_load_quantity.py`` used for the (equally ctypes-only)
 # old gk_quantities registry, the synthetic PKPM/pkpm_vars datasets are
-# served in-memory by monkeypatching the ``GData`` name ``pkpm.py`` itself
+# served in-memory by monkeypatching the ``GData`` name in ``pkpm`` itself
 # calls -- this exercises the *real* naming convention, interpolation,
 # ``laguerre_compose``, and ``transform_frame`` pipeline end to end; only
 # the on-disk-file-format step is stubbed.
@@ -238,7 +238,7 @@ class TestLoadPkpm:
     gf_interpolated = gf.interpolate()
     gvars_interpolated = gvars.interpolate()
     composed = pkpm.laguerre_compose(gf_interpolated, gvars_interpolated.select(comp=3))
-    from postgkyl.diagnostics.kinetic import transform_frame
+    from postgkyl.diagnostics.vlasov.kinetic import transform_frame
     expected = transform_frame(composed, gvars_interpolated.select(comp="0:3"), cdim=1)
 
     np.testing.assert_allclose(out.values, expected.values)

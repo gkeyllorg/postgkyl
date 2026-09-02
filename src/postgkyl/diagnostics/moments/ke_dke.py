@@ -1,4 +1,4 @@
-"""Kinetic-energy / dissipation-rate diagnostic.
+"""Five-moment kinetic-energy / dissipation-rate diagnostic.
 
 Ported from ``src_bak/postgkyl/tools/calc_ke_dke.py``. Sweeps a family of
 five-moment output frames (density + momentum, ``rho, px, py, pz``),

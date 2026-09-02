@@ -25,7 +25,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 if TYPE_CHECKING:
-  from ..gdatastate.gdatastate import GDataState
+  from ...gdatastate.gdatastate import GDataState
 # end
 
 _COLORS = ("C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9")

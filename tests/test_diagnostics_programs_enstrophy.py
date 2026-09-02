@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.enstrophy``.
+"""Tests for ``postgkyl.diagnostics.moments.enstrophy``.
 
 Ported from ``src_bak/postgkyl/tools/calc_enstrophy.py`` (no ``tests_bak``
 corpus exists for this tool). The pure per-frame math (``_enstrophy_terms``)
@@ -7,7 +7,7 @@ velocity-gradient tensor are hand-computable exactly (linear-in-coordinate
 components, so ``np.gradient(..., edge_order=2)`` on a uniform grid
 reproduces the analytic derivative exactly); the frame-sweep wiring
 (``enstrophy``) is exercised against a synthetic multi-frame file family
-stubbed through ``postgkyl.diagnostics.enstrophy.GData`` -- the repo ships
+stubbed through ``postgkyl.diagnostics.moments.enstrophy.GData`` -- the repo ships
 no multi-frame 3-D five-moment ``.gkyl`` fixture family for this tool, so no
 real-fixture path is attempted (see this layer's report).
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics import enstrophy as ens
+from postgkyl.diagnostics.moments import enstrophy as ens
 
 
 class _FakeGData:
