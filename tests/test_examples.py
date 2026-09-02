@@ -29,7 +29,11 @@ needs_gkeyll = pytest.mark.skipif(not gpython.available(),
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
-SCRIPTS = sorted(glob.glob(os.path.join(EXAMPLES, "scripts", "[0-9][0-9]_*.py")))
+SCRIPTS = sorted(
+    script
+    for script in glob.glob(os.path.join(EXAMPLES, "scripts", "*.py"))
+    if not os.path.basename(script).startswith("_")
+)
 TUTORIAL = os.path.join(EXAMPLES, "cli_tutorial.md")
 
 

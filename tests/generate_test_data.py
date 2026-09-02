@@ -202,7 +202,7 @@ def _c2p_rotation_values(
 # Analytic four-component 1-D profile
 # ---------------------------------------------------------------------------
 
-def _alpha_convergence_profiles(z: np.ndarray, alpha: float) -> np.ndarray:
+def _mirror_comparison_profiles(z: np.ndarray, alpha: float) -> np.ndarray:
     """Symmetric beam profiles used by the alpha-convergence example.
 
     Density and both temperatures are even in ``z``; parallel velocity is
@@ -345,11 +345,11 @@ def generate_all(out_dir: Path | str) -> None:
     # --- symmetric four-component beam profiles for a convergence plot ---
     profile_lower, profile_upper, profile_cells = -2.5, 2.5, 256
     for alpha, stem in (
-        (2.0e-4, "alpha_convergence_2em4_1d_ms_p1"),
-        (2.0e-5, "alpha_convergence_2em5_1d_ms_p1"),
+        (2.0e-4, "mirror_comparison_2em4_1d_ms_p1"),
+        (2.0e-5, "mirror_comparison_2em5_1d_ms_p1"),
     ):
         values = _project_1d_p1(
-            _alpha_convergence_profiles,
+            _mirror_comparison_profiles,
             profile_lower,
             profile_upper,
             profile_cells,
