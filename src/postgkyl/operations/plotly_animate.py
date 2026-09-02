@@ -1,8 +1,8 @@
 """The ``plotly_animate`` verb -- terminal; hands a sequence of datasets to the
 Plotly render backend's animation engine.
 
-Mirrors ``operations/animate.py``, minus the "a frame may itself be a list of
-datasets drawn together" flexibility: a Plotly animation frame is one
+Unlike the canonical Matplotlib ``render.animate`` callable, a frame may not
+itself be a list of datasets drawn together: a Plotly animation frame is one
 trace-set, so ``data`` is always a flat, one-dataset-per-frame sequence.
 """
 

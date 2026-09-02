@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 import postgkyl as pg
-from postgkyl import gpython, operations
+from postgkyl import gpython, operations, render
 from postgkyl.gdata.gdatagroup import GDataGroup as ApiGDataGroup
 from postgkyl.gdata import verbs as api_verbs
 from postgkyl.gdatastate.gdatastategroup import GDataStateGroup as CoreGDataStateGroup
@@ -510,7 +510,7 @@ class TestFacade:
     assert pg.collect is api_verbs.collect
     assert pg.evaluate is api_verbs.evaluate
     assert pg.relchange is api_verbs.relchange
-    assert pg.animate is api_verbs.animate
+    assert pg.animate is render.animate is operations.animate is api_verbs.animate
     assert pg.sort is api_verbs.sort
   # end
 # end

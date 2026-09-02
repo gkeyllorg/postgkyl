@@ -114,7 +114,7 @@ test (see "Import contract"). Arrow = "may import":
 > mirror of `tests/test_postgkyl.py::_ALLOWED` — that dict (and the AST walk that checks
 > every real import against it) is the enforced source of truth; this file is only a
 > readable projection of it. The two *can* drift (they already had:
-> `operations/animate.py`, `operations/average.py`, `operations/eval_at_coord_proj.py`, `operations/local_poly.py`,
+> `operations/average.py`, `operations/eval_at_coord_proj.py`, `operations/local_poly.py`,
 > `gdatastate/guards.py`, `gdata/gdatagroup.py`, and `gdata/verbs.py` existed in the tree before they
 > were added here). Whenever you add a new top-level module file or a new allowed import
 > edge, update `_ALLOWED` and this section in the same commit — don't let the picture
@@ -151,7 +151,6 @@ src/postgkyl/
 ├─ operations/         data transformations · the single seam          [VERBS]
 │   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (flat core
 │   ├─ select.py                                                       verbs are
-│   ├─ animate.py        terminal: sequence of datasets → render's animation engine
 │   ├─ average.py        terminal-adjacent: weighted average over a dim subset,
 │   │                    stays modal/gkyl-native (composes with further verbs)
 │   ├─ eval_at_coord_proj.py  terminal-adjacent: eval at coords, project to the
@@ -159,7 +158,7 @@ src/postgkyl/
 │   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
 │   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
 │
-├─ render/             canonical matplotlib · plotly · pyvista callables   [BACKEND]
+├─ render/             canonical plot/animate · plotly · pyvista callables [BACKEND]
 │
 ├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
 │   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
@@ -228,7 +227,7 @@ src/postgkyl/
                              ▼                                    │
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ BACKEND                                                                      ║
-║   render/ (mpl · plotly · pyvista) — owns the canonical render callables;    ║
+║   render/ (mpl plot/animate · plotly · pyvista) — canonical callables;       ║
 ║   facade, GData, operations, and CLI views share their exact identities      ║
 ╚════════════════════════════╦════════════════════════════════════╦════════════╝
                              │ imports                            │
@@ -396,9 +395,9 @@ both terminal-adjacent like `represent`: they emit a new, lower-dimensional
 dataset that stays modal/gkyl-native, so it composes with further
 `.to_nodal()`/`.interpolate()`/`.average()`/`.eval_at_coord_proj()` calls
 rather than dropping to NumPy. `local_poly` bridges modal coefficients to a
-discontinuity-preserving plotting mesh. `operations.plot`/`plotly`/`pyvista`
-are direct aliases of their canonical `render` callables, while animation
-remains a terminal operation over a sequence.
+discontinuity-preserving plotting mesh.
+`operations.plot`/`animate`/`plotly`/`pyvista` are direct aliases of their
+canonical `render` callables.
 All terminal consumers share `gdatastate.materialize_point_values`, so the
 point-value capability rule has one home. Verbs wrap the layers below; they
 don't reimplement.

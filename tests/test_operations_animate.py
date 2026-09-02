@@ -1,6 +1,5 @@
-"""Tests for the ``animate`` verb -- modal-bridging + delegation to
-``render.animate.animate`` (mirrors ``tests/test_coverage_leaf.py``'s
-treatment of ``render.plot``)."""
+"""Tests for the canonical ``render.animate`` callable through its exact
+``operations.animate`` alias (mirrors the aliases of ``render.plot``)."""
 
 from __future__ import annotations
 

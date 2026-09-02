@@ -1,20 +1,31 @@
-"""Animation: ``FuncAnimation`` / saved frames / ffmpeg movie compile.
+"""The canonical Matplotlib animation callable and its private helpers.
 
-Isolated from ``matplotlib.py`` because it owns the one external-process
-dependency in this layer -- ``ffmpeg`` -- reached through Matplotlib's
-``FFMpegWriter``/``Animation.save``. Every entry point that needs it resolves
-a binary via ``_ffmpeg.require_ffmpeg`` up front and raises a clear
+``pg.animate``, ``operations.animate``, and the generated CLI all resolve to
+the one public function in this module. It owns dataset grouping and
+materialization as well as ``FuncAnimation`` / saved frames / movie compile.
+
+The module is separate from ``matplotlib.py`` because it owns the one
+external-process dependency in this layer -- ``ffmpeg`` -- reached through
+Matplotlib's ``FFMpegWriter``/``Animation.save``. Every entry point that needs
+it resolves a binary via ``_ffmpeg.require_ffmpeg`` up front and raises a clear
 ``RuntimeError`` instead of failing deep inside the writer.
 """
 
 from __future__ import annotations
 
 import os.path
-from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from typing import Annotated, TYPE_CHECKING
 
 import numpy as np
 
-from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.command_spec import (
+    CliType, CommandSpec, Execution, PipelineInput, ResultPolicy, Section,
+    command,
+)
+from postgkyl.gdatastate import (
+    GDataState, group_blocks, group_frames, materialize_point_values,
+)
 
 from . import matplotlib as backend
 from ._ffmpeg import require_ffmpeg
@@ -27,10 +38,14 @@ if TYPE_CHECKING:
 _VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv")
 
 
-def _normalize_frames(data) -> list[list["GDataState"]]:
-  """One frame per item; a bare dataset becomes a single-dataset frame."""
-  frames = [[item] if isinstance(item, GDataState) else list(item)
-            for item in data]
+def _normalize_frames(data, *, multiblock: bool = False) -> list[list["GDataState"]]:
+  """Group a flat input when requested and materialize every frame dataset."""
+  items = list(data)
+  if items and all(isinstance(item, GDataState) for item in items):
+    items = group_frames(items) if multiblock else group_blocks(items)
+  # end
+  frames = [([materialize_point_values(item)] if isinstance(item, GDataState)
+      else [materialize_point_values(dat) for dat in item]) for item in items]
   if not frames:
     raise ValueError("animate: no datasets to animate.")
   # end
@@ -210,23 +225,30 @@ def _compile_movie(frame_files: list[str], output_file: str, *,
 # end
 
 
-def animate(data, *, interval: int = 100, fixed_range: bool = True,
+@command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
+    result=ResultPolicy.SILENT))
+def animate(data: Annotated[
+        Iterable[GDataState | Iterable[GDataState]], PipelineInput()], *,
+    multiblock: bool = False, grouptags: bool = False,
+    interval: int = 100, fixed_range: bool = True,
     cutoffglobalrange: float | None = None, notitle: bool = False,
     show: bool = True, save: bool = False, saveas: str | None = None,
     fps: int | None = None, dpi: int | None = None,
-    saveframes: str | None = None, figsize=None, nproc: int = 1,
-    tmpdir: str | None = None, **plot_kwargs):
+    saveframes: str | None = None,
+    figsize: Annotated[tuple[float, float] | str | None,
+        CliType(tuple[float, float] | None)] = None,
+    nproc: int = 1, tmpdir: str | None = None):
   """Animate a sequence of frames, one frame per dataset (or dataset group).
 
   Args:
     data: a flat iterable of datasets (each becomes a single-dataset frame),
       or an iterable of frames where each frame is itself a list of
       datasets drawn together (overlaid, as in ``matplotlib.plot``).
+    multiblock: Force datasets with the same frame index into one frame.
+    grouptags: Build a separate animation for each dataset tag.
     interval: live-animation delay between frames, in milliseconds.
     fixed_range: hold a constant value/color scale across every frame
-      (``ymin``/``ymax``/``zmin``/``zmax``, unless already given in
-      ``plot_kwargs``); scaled by ``plot_kwargs``' ``yscale``/``zscale`` to
-      match what actually gets drawn.
+      (``ymin``/``ymax``/``zmin``/``zmax``).
     cutoffglobalrange: clip the fixed range to this central percentile band
       (see ``_frame_value_range``); ``None`` uses the true min/max.
     notitle: suppress the per-frame frame/time title.
@@ -246,7 +268,6 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
     tmpdir: directory for the temporary frame directory used when ``nproc``
       is greater than 1 and ``saveframes`` is not given (frames are written
       there, compiled into the output, then discarded).
-    **plot_kwargs: forwarded to ``matplotlib.plot`` for every frame.
 
   Returns:
     The list of written frame paths when ``saveframes`` is set; otherwise
@@ -259,7 +280,31 @@ def animate(data, *, interval: int = 100, fixed_range: bool = True,
       extension.
     RuntimeError: saving to a video container without ffmpeg on ``PATH``.
   """
-  frames = _normalize_frames(data)
+  items = list(data)
+  if items and grouptags and all(isinstance(item, GDataState) for item in items):
+    tags: dict[str, list[GDataState]] = {}
+    for item in items:
+      tags.setdefault(item.tag, []).append(item)
+    # end
+
+    def suffixed(path, tag):
+      if path is None:
+        return None
+      # end
+      stem, extension = os.path.splitext(path)
+      return f"{stem}_{tag}{extension}"
+    # end
+
+    return [animate(tagged, multiblock=multiblock, interval=interval,
+        fixed_range=fixed_range, cutoffglobalrange=cutoffglobalrange,
+        notitle=notitle, show=show, save=save,
+        saveas=suffixed(saveas, tag), fps=fps, dpi=dpi,
+        saveframes=suffixed(saveframes, tag), figsize=figsize, nproc=nproc,
+        tmpdir=tmpdir) for tag, tagged in tags.items()]
+  # end
+
+  frames = _normalize_frames(items, multiblock=multiblock)
+  plot_kwargs = {}
   plot_kwargs["notitle"] = notitle
 
   if fixed_range:

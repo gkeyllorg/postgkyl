@@ -18,7 +18,7 @@ components as new physical conclusions. Equation-specific physics (the former
 ``transform_frame``/``laguerre`` verbs, folded with the array math they
 delegated to) lives one layer up, in ``diagnostics``.
 
-The terminal renderers (``plot``, ``plotly``, and ``pyvista``) are exceptions:
+The terminal renderers (``plot``, ``animate``, ``plotly``, and ``pyvista``) are exceptions:
 this namespace re-exports their exact canonical callables from
 :mod:`postgkyl.render` without wrapping them.
 """
@@ -31,8 +31,7 @@ from .info import info
 from .integrate import integrate, integrate_axis
 from .average import average
 from .eval_at_coord_proj import eval_at_coord_proj
-from postgkyl.render import plot, plotly, pyvista
-from .animate import animate
+from postgkyl.render import animate, plot, plotly, pyvista
 from .plotly_animate import plotly_animate
 from .represent import apply, represent
 
@@ -84,7 +83,7 @@ for _function in (
     interpolate, local_poly, select, integrate, integrate_axis, average,
     eval_at_coord_proj, fft, magsq, relchange, mask, collect, sort, grid,
     val2coord, extract_input, fit, differentiate, evaluate, map,
-    animate, plotly_animate, represent, growth,
+    plotly_animate, represent, growth,
 ):
   _resolve_receiver_annotations(_function)
 # end
@@ -105,7 +104,6 @@ fit.__annotations__["guess"] = str | None
 map.__annotations__["data"] = GDataState
 map.__annotations__["mapping"] = str
 represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
-animate.__annotations__["data"] = Annotated[list[GDataState], PipelineInput()]
 plotly_animate.__annotations__["data"] = Annotated[
     list[GDataState], PipelineInput()]
 
@@ -125,8 +123,6 @@ command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(info)
 command(_TERM_EACH)(integrate)
 command(_TERM_EACH)(extract_input)
-command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
-    result=ResultPolicy.SILENT))(animate)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(plotly_animate)
 command(_MAP)(represent)

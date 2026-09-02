@@ -2,14 +2,14 @@
 compile.
 
 Builds frames directly as ``GDataState`` (no shim dependency needed for the
-render-layer tests; ``operations.animate``'s modal bridging is covered separately in
-``tests/test_ops_animate.py``). ``ffmpeg``-dependent tests are skipped
-cleanly when it is not on ``PATH``.
+render-layer tests. ``ffmpeg``-dependent tests are skipped cleanly when it is
+not on ``PATH``.
 """
 
 from __future__ import annotations
 
 import os
+from importlib import import_module
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,7 +19,7 @@ import pytest
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.render import _ffmpeg
-from postgkyl.render import animate as anim_mod
+anim_mod = import_module("postgkyl.render.animate")
 
 needs_ffmpeg = pytest.mark.skipif(_ffmpeg.resolve_ffmpeg() is None,
     reason="ffmpeg not found on PATH or via imageio-ffmpeg")
@@ -124,6 +124,26 @@ class TestLiveAnimation:
     anim = anim_mod.animate(grouped, show=False)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2
+  # end
+
+  def test_multiblock_groups_equal_frame_indices(self):
+    from matplotlib.animation import FuncAnimation
+    grouped = [_line_frame(0.0), _line_frame(0.5)]
+    anim = anim_mod.animate(grouped, multiblock=True, show=False)
+    assert isinstance(anim, FuncAnimation)
+    assert anim._save_count == 1
+  # end
+
+  def test_grouptags_builds_one_animation_per_tag(self):
+    from matplotlib.animation import FuncAnimation
+    frames = _three_frames()
+    frames[0].tag = "left"
+    frames[1].tag = "left"
+    frames[2].tag = "right"
+    animations = anim_mod.animate(frames, grouptags=True, show=False)
+    assert len(animations) == 2
+    assert all(isinstance(anim, FuncAnimation) for anim in animations)
+    assert [anim._save_count for anim in animations] == [2, 1]
   # end
 
   def test_show_true_does_not_raise_on_agg(self):
