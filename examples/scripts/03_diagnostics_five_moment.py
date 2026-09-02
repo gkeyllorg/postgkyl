@@ -20,8 +20,6 @@ Run directly:
 
 from __future__ import annotations
 
-import os
-
 import matplotlib
 matplotlib.use("Agg")
 
@@ -30,9 +28,9 @@ import numpy as np
 import postgkyl as pg
 from postgkyl.diagnostics import five_moment as fm
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.environ.get("PGKYL_EXAMPLE_OUTPUT", os.path.join(HERE, "output"))
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+from _example_paths import TEST_DATA, prepare_output_dir
+
+OUTPUT_DIR = prepare_output_dir()
 
 GAS_GAMMA = 5.0 / 3.0
 
@@ -63,17 +61,16 @@ print("Mach number at rest:                  ", mach.values.ravel()[0])
 
 # Raw modal DG coefficients have no "density"/"pressure" until interpolated
 # -- the diagnostics layer refuses the same way ``operations`` verbs do.
-ROOT = os.path.dirname(os.path.dirname(HERE))
-modal = pg.load(os.path.join(ROOT, "tests", "test_data", "generated", "1d_ms_p1.gkyl"))
+modal = pg.load(TEST_DATA / "generated" / "1d_ms_p1.gkyl")
 try:
   fm.density(modal)
 except ValueError as exc:
   print("fm.density(modal) refuses:", exc)
 
 fig = density.plot(title="density (Sod shock tube)", show=False)
-fig.savefig(os.path.join(OUTPUT_DIR, "03_diagnostics_density.png"))
+fig.savefig(OUTPUT_DIR / "03_diagnostics_density.png")
 
 fig = pressure.plot(title="pressure (Sod shock tube)", show=False)
-fig.savefig(os.path.join(OUTPUT_DIR, "03_diagnostics_pressure.png"))
+fig.savefig(OUTPUT_DIR / "03_diagnostics_pressure.png")
 
 print("03_diagnostics_five_moment: OK")

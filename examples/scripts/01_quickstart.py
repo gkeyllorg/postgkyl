@@ -21,18 +21,15 @@ Run directly:
 
 from __future__ import annotations
 
-import os
-
 import matplotlib
 matplotlib.use("Agg")  # headless-safe; drop this line to see the plot windows
 
 import postgkyl as pg
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
-DATA = os.path.join(ROOT, "tests", "test_data", "generated", "2d_c2p_rot45_ms_p1.gkyl")
-OUTPUT_DIR = os.environ.get("PGKYL_EXAMPLE_OUTPUT", os.path.join(HERE, "output"))
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+from _example_paths import TEST_DATA, prepare_output_dir
+
+DATA = TEST_DATA / "generated" / "2d_c2p_rot45_ms_p1.gkyl"
+OUTPUT_DIR = prepare_output_dir()
 
 # 1. Load -- raw DG coefficients, native to Gkeyll. This 2D file carries a
 #    2-component vector field (a rotated coordinate map).
@@ -47,7 +44,7 @@ print("interpolated:", repr(field))
 #     field, and plot it.
 comp0 = field.select(comp=0)
 fig = comp0.plot(title="x-component", show=False)
-png_path = os.path.join(OUTPUT_DIR, "01_quickstart_comp0.png")
+png_path = OUTPUT_DIR / "01_quickstart_comp0.png"
 fig.savefig(png_path)
 print("saved plot:", png_path)
 
@@ -57,13 +54,13 @@ print("saved plot:", png_path)
 #     away when rendering).
 lineout = field.select(z1=0.5)
 fig = lineout.plot(title="lineout at y=0.5", show=False)
-lineout_path = os.path.join(OUTPUT_DIR, "01_quickstart_lineout.png")
+lineout_path = OUTPUT_DIR / "01_quickstart_lineout.png"
 fig.savefig(lineout_path)
 print("saved plot:", lineout_path)
 
 # 4. Save / reload round trip -- writing an interpolated field to ``.gkyl``
 #    and reading it back recovers the same values exactly.
-gkyl_path = comp0.save(os.path.join(OUTPUT_DIR, "01_quickstart_out.gkyl"))
+gkyl_path = comp0.save(str(OUTPUT_DIR / "01_quickstart_out.gkyl"))
 reloaded = pg.load(gkyl_path)
 print("round-tripped through", gkyl_path)
 

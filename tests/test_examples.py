@@ -29,7 +29,7 @@ needs_gkeyll = pytest.mark.skipif(not gpython.available(),
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
-SCRIPTS = sorted(glob.glob(os.path.join(EXAMPLES, "scripts", "*.py")))
+SCRIPTS = sorted(glob.glob(os.path.join(EXAMPLES, "scripts", "[0-9][0-9]_*.py")))
 TUTORIAL = os.path.join(EXAMPLES, "cli_tutorial.md")
 
 
@@ -76,6 +76,7 @@ class TestTutorialScripts:
   @pytest.mark.parametrize("script", SCRIPTS, ids=[os.path.basename(s) for s in SCRIPTS])
   def test_script_runs_clean(self, script, tmp_path, monkeypatch):
     monkeypatch.setenv("PGKYL_EXAMPLE_OUTPUT", str(tmp_path))
+    monkeypatch.syspath_prepend(os.path.dirname(script))
     runpy.run_path(script, run_name="__main__")
   # end
 # end

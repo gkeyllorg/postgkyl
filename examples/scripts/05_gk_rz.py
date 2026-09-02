@@ -6,8 +6,6 @@ Run directly:
 
 from __future__ import annotations
 
-import os
-
 import matplotlib
 matplotlib.use("Agg")
 import numpy as np
@@ -15,19 +13,16 @@ import numpy as np
 import postgkyl as pg
 from postgkyl.operations import gyrokinetics as gk_ops
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
-DATA = os.path.join(ROOT, "tests", "test_data")
-OUTPUT_DIR = os.environ.get("PGKYL_EXAMPLE_OUTPUT", os.path.join(HERE, "output"))
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+from _example_paths import TEST_DATA, prepare_output_dir
 
-FIELD = os.path.join(DATA, "rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
-data = pg.load(FIELD)
+OUTPUT_DIR = prepare_output_dir()
+
+data = pg.load(TEST_DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
 
 # The common path: geometry is inferred from FIELD's simulation prefix.
 mapped = data.gk_rz(z_axis=0.0, phi_tor=0.0, nz_interp=2)
 fig = mapped.plot(show=False)
-fig.savefig(os.path.join(OUTPUT_DIR, "05_gk_rz.png"))
+fig.savefig(OUTPUT_DIR / "05_gk_rz.png")
 
 # The functional spelling is the identical operation.
 functional = pg.gk_rz(data, z_axis=0.0, phi_tor=0.0, nz_interp=2)

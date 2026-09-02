@@ -17,8 +17,6 @@ Run directly:
 
 from __future__ import annotations
 
-import os
-
 import matplotlib
 matplotlib.use("Agg")
 
@@ -26,11 +24,11 @@ import numpy as np
 
 import postgkyl as pg
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
+from _example_paths import TEST_DATA
+
 # A coordinate-map field: strictly positive everywhere, so weak division
 # never divides near zero (see the note on ``back`` below).
-DATA = os.path.join(ROOT, "tests", "test_data", "generated", "2d_c2p_stretch_ms_p1.gkyl")
+DATA = TEST_DATA / "generated" / "2d_c2p_stretch_ms_p1.gkyl"
 
 # ----------------------------------------------------------- modal algebra
 a = pg.load(DATA)
