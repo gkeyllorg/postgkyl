@@ -108,10 +108,20 @@ def _error(fn, parameter: str, message: str) -> CommandCompilationError:
 
 def _unwrap_annotated(annotation):
   markers: list[object] = []
-  while get_origin(annotation) is Annotated:
-    args = get_args(annotation)
-    annotation = args[0]
-    markers.extend(args[1:])
+  while True:
+    if get_origin(annotation) is Annotated:
+      args = get_args(annotation)
+      annotation = args[0]
+      markers.extend(args[1:])
+      continue
+    # end
+    metadata = getattr(annotation, "__metadata__", None)
+    origin = getattr(annotation, "__origin__", None)
+    if metadata is None or origin is None:
+      break
+    # end
+    annotation = origin
+    markers.extend(metadata)
   # end
   return annotation, tuple(markers)
 # end

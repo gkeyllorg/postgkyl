@@ -11,6 +11,7 @@ import click
 from click.testing import CliRunner
 import pytest
 
+import postgkyl.cli.compiler as compiler
 from postgkyl.command_spec import (
     CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput, ResultPolicy,
     Section, command,
@@ -22,6 +23,7 @@ from postgkyl.cli.compiler import (
 from postgkyl.cli.discovery import discover_public_surface
 from postgkyl.cli.docstrings import DocstringError
 from postgkyl.cli.state import DataSpace
+from postgkyl.operations import average
 
 
 class Format(Enum):
@@ -129,6 +131,26 @@ def test_optional_annotation_does_not_make_a_required_option_optional():
 
   model = compile_callable(required_optional)
   assert model.parameters[0].required
+# end
+
+
+def test_annotated_alias_unwrap_is_compatible_with_python_310(monkeypatch):
+  """Compile when ``get_origin(Annotated[...])`` exposes the base type."""
+  original_get_origin = compiler.get_origin
+
+  def old_get_origin(annotation):
+    if getattr(annotation, "__metadata__", None) is not None:
+      return annotation.__origin__
+    # end
+    return original_get_origin(annotation)
+  # end
+
+  monkeypatch.setattr(compiler, "get_origin", old_get_origin)
+  model = compile_callable(average)
+  weight = next(parameter for parameter in model.parameters
+      if parameter.name == "weight")
+  assert weight.dataset_ref
+  assert weight.codec.optional
 # end
 
 
