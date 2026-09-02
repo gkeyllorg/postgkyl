@@ -18,7 +18,7 @@ import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl import operations, io
-from postgkyl.command_spec import hidden
+from postgkyl.cli_spec import hidden
 
 from .gdatagroup import GDataGroup
 

@@ -18,7 +18,7 @@ import msgpack
 import numpy as np
 import pyvista as pv
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, Execution, ResultPolicy, Section, command,
 )
 from postgkyl.numerics import nodal_to_cell_centered_grid

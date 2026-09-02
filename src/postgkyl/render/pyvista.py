@@ -14,7 +14,7 @@ import os
 import numpy as np
 import pyvista as pv
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, Execution, ResultPolicy, Section, command,
 )
 from postgkyl.gdatastate import GDataState, materialize_point_values

@@ -55,7 +55,7 @@ from .map import map
 # there is no registration side effect or CLI import here.
 from typing import Annotated, Literal
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, DatasetRef, Execution, ResultPolicy, Section, command, hidden,
 )
 from postgkyl.gdatastate.gdatastate import GDataState

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, TYPE_CHECKING
 
-from postgkyl.command_spec import ChoiceProvider, KeyValue
+from postgkyl.cli_spec import ChoiceProvider, KeyValue
 from .registry import gk_quant_registry
 
 if TYPE_CHECKING:

@@ -16,7 +16,7 @@ import platform
 import subprocess
 
 from postgkyl import gpython
-from postgkyl.command_spec import hidden
+from postgkyl.cli_spec import hidden
 
 _DEPENDENCIES = ("numpy", "scipy", "click", "matplotlib", "msgpack", "plotly", "pyvista")
 

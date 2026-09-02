@@ -464,11 +464,11 @@ def test_cli_abbreviation_and_info():
 # Architecture contract: the layering is a strict, cycle-free DAG.
 # --------------------------------------------------------------------------
 _ALLOWED = {
-    "command_spec": set(),                            # frozen CLI metadata; dependency-free leaf
+    "cli_spec": set(),                                # frozen CLI metadata; dependency-free leaf
     "gpython":    set(),                                # the foreign floor (only ctypes owner)
     "numerics": set(),
     "dg":     {"gpython"},                              # interpolation bridge + modal ops -> kernels
-    "io":     {"gpython", "numerics", "command_spec"}, # C-native reader -> gkyl_array_rio;
+    "io":     {"gpython", "numerics", "cli_spec"}, # C-native reader -> gkyl_array_rio;
                                                       # writer reuses the pure-math leaf
                                                       # (nodal_to_cell_centered_grid for the
                                                       # vtk writer) instead of duplicating
@@ -476,8 +476,8 @@ _ALLOWED = {
                                                       # so this cannot create a cycle (layer 04-io)
     "gdatastate": {"io", "gpython", "dg"},              # state plus the shared native
                                                       # point-value materialization bridge
-    "render": {"gdatastate", "numerics", "command_spec"},
-    "operations": {"gdatastate", "dg", "io", "numerics", "render", "command_spec"}, # data transformations:
+    "render": {"gdatastate", "numerics", "cli_spec"},
+    "operations": {"gdatastate", "dg", "io", "numerics", "render", "cli_spec"}, # data transformations:
                                                       # the physics verbs (moments/agyro/
                                                       # current/energetics/rotate/
                                                       # transform_frame/laguerre) moved up
@@ -488,7 +488,7 @@ _ALLOWED = {
                                                       # gyrokinetics) own transformations that
                                                       # need domain geometry without deriving
                                                       # a physical conclusion
-    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render", "io", "command_spec"}, # added by
+    "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render", "io", "cli_spec"}, # added by
                                                       # 10-diagnostics.md: equation-
                                                       # specific compositions grouped under
                                                       # gyrokinetics/vlasov/pkpm/moments;
@@ -517,9 +517,9 @@ _ALLOWED = {
                                                       # neither of which imports diagnostics,
                                                       # so this cannot create a cycle whether
                                                       # or not the edge is ever exercised
-    "gdata":  {"gdatastate", "operations", "io", "command_spec"},
+    "gdata":  {"gdatastate", "operations", "io", "cli_spec"},
     "":       {"gdata", "operations", "render", "io", "gdatastate",
-               "diagnostics", "gpython", "_version", "command_spec"}, # facade:
+               "diagnostics", "gpython", "_version", "cli_spec"}, # facade:
                                                       # pure re-export of public names;
                                                       # "gdatastate" is group_blocks, the
                                                       # multiblock-family partition, which
@@ -539,14 +539,18 @@ _ALLOWED = {
                                                       # reads gpython.available()/build_info())
                                                       # -- both source files sit in the same ""
                                                       # layer, so both edges are checked here
-    "cli":    {"", "command_spec"},                   # top surface: facade + frozen metadata
+    "cli":    {"", "cli_spec"},                       # top surface: facade + frozen metadata
 }
 _LAYERS = set(_ALLOWED)
 
 
 def _layer(path, pkg_root):
   parts = os.path.relpath(path, pkg_root).split(os.sep)
-  return parts[0] if len(parts) > 1 else ""
+  if len(parts) > 1:
+    return parts[0]
+  # end
+  module = os.path.splitext(parts[0])[0]
+  return module if module in _LAYERS else ""
 # end
 
 
@@ -719,6 +723,14 @@ def test_build_edges_flags_a_disallowed_import(tmp_path):
   _write_module(pkg_root, "badlayer", "mod.py", "import postgkyl.operations\n")
   _, violations = _build_edges(pkg_root)
   assert any("badlayer" in v and "operations" in v for v in violations)
+# end
+
+
+def test_build_edges_classifies_a_flat_leaf_module(tmp_path):
+  pkg_root = str(tmp_path / "postgkyl")
+  _write_module(pkg_root, "", "cli_spec.py", "import postgkyl.operations\n")
+  _, violations = _build_edges(pkg_root)
+  assert any("cli_spec.py [cli_spec] -> [operations]" in v for v in violations)
 # end
 
 

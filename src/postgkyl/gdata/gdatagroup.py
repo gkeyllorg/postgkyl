@@ -48,7 +48,7 @@ from __future__ import annotations
 from postgkyl import operations
 from postgkyl.gdatastate.gdatastategroup import GDataStateGroup
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.command_spec import hidden
+from postgkyl.cli_spec import hidden
 
 from . import verbs
 

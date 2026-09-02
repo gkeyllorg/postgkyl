@@ -46,7 +46,7 @@ from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surfac
 
 from typing import Annotated
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
 )
 

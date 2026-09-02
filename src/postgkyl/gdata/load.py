@@ -6,7 +6,7 @@ from glob import glob, has_magic
 from typing import Annotated, Literal
 
 from postgkyl import operations
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, Execution, KeyValue, Section, command,
 )
 from postgkyl.gdata.gdata import GData

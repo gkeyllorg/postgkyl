@@ -19,7 +19,7 @@ from . import discovery, gyrokinetics, moments, pkpm, vlasov
 
 from typing import Annotated, Literal
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CommandSpec, DatasetRef, Execution, ResultPolicy, Section, command,
     command_spec, hidden, hidden_spec,
 )

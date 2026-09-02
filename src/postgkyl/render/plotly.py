@@ -32,7 +32,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CliType, CommandSpec, Execution, KeyValue, PipelineInput, ResultPolicy,
     Section, command,
 )

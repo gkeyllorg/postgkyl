@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin, get_typ
 
 import click
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     ChoiceProvider, CliType, CommandSpec, DatasetRef, Execution, KeyValue,
     PipelineInput, ResultPolicy, Section, command_spec,
 )

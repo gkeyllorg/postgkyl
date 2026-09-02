@@ -19,7 +19,7 @@ from typing import Annotated, TYPE_CHECKING
 
 import numpy as np
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CliType, CommandSpec, Execution, PipelineInput, ResultPolicy, Section,
     command,
 )

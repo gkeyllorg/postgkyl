@@ -62,7 +62,7 @@ from postgkyl.operations import (
 from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
-from postgkyl.command_spec import hidden
+from postgkyl.cli_spec import hidden
 from postgkyl.io import save
 from postgkyl.diagnostics.gyrokinetics import (
     load_gk_distf, load_gk_quantity, available_quantities as available_gk_quantities)

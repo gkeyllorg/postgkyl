@@ -12,7 +12,7 @@ from click.testing import CliRunner
 import pytest
 
 import postgkyl.cli.compiler as compiler
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CliType, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
     ResultPolicy, Section, command,
 )

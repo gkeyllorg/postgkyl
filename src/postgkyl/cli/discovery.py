@@ -7,7 +7,7 @@ import inspect
 from types import ModuleType
 
 import postgkyl
-from postgkyl.command_spec import command_spec, hidden_spec
+from postgkyl.cli_spec import command_spec, hidden_spec
 
 
 class SurfaceClassificationError(ValueError):

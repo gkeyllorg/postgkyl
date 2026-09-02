@@ -12,7 +12,7 @@ from .fluxsurf import (
     resolve_flux_surface_grid,
 )
 
-from postgkyl.command_spec import CommandSpec, Execution, Section, command, hidden
+from postgkyl.cli_spec import CommandSpec, Execution, Section, command, hidden
 from postgkyl.gdatastate.gdatastate import GDataState
 
 gk_rz.__globals__.setdefault("GDataState", GDataState)

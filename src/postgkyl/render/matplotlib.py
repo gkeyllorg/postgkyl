@@ -20,7 +20,7 @@ from matplotlib import cm, colors, patches
 from matplotlib.figure import Figure
 from matplotlib.typing import ColorType
 
-from postgkyl.command_spec import (
+from postgkyl.cli_spec import (
     CliType, CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
 )
 from postgkyl.gdatastate import (
