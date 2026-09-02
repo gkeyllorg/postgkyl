@@ -158,20 +158,25 @@ def gk_energy_balance(
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice
       of block indices (see :func:`~postgkyl.diagnostics.gyrokinetics.utils.
       get_block_indices`).
-    field_dot_file, apar_dot_file, fdot_file, source_file, f_file,
-    field_file, apar_file, dt_file: Explicit path overrides for the
-      corresponding file family; ``*`` stands for the block index (and, for
-      the per-species families, the species name after it). Default to the
-      naming convention when ``None``.
+    field_dot_file: Explicit field-energy derivative path override.
+    apar_dot_file: Explicit parallel-vector-potential energy derivative path.
+    fdot_file: Explicit distribution derivative moments path override.
+    source_file: Explicit source moments path override.
     bflux_files: Optional per-boundary path overrides, keyed by
       ``"<direction><side>"`` (e.g. ``"xlower"``); unlisted boundaries use
       the naming convention.
+    f_file: Explicit integrated distribution moments path override.
+    field_file: Explicit field-energy path override.
+    apar_file: Explicit parallel-vector-potential energy path override.
+    dt_file: Explicit time-step history path override. In path overrides,
+      ``*`` stands for block index and, for per-species files, species name.
     logy: Log-scale the y axis.
     absy: Take the absolute value of every trace before plotting.
-    xlabel, ylabel, title: Axis/figure text; ``ylabel``/``title`` default to
-      a formula/description when ``None``.
-    indent_left, add_width: Shift/widen the axes (matplotlib figure-fraction
-      units).
+    xlabel: Horizontal-axis label.
+    ylabel: Vertical-axis label; use the derived formula when ``None``.
+    title: Figure title; use the balance description when ``None``.
+    indent_left: Horizontal axes-position adjustment in figure units.
+    add_width: Axes-width adjustment in figure units.
     show: Call ``plt.show()`` before returning.
     saveas: If given, save the figure to this path.
 

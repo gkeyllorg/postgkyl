@@ -7,7 +7,7 @@ import inspect
 from types import ModuleType
 
 import postgkyl
-from postgkyl.command_spec import canonical_callable, command_spec, hidden_spec
+from postgkyl.command_spec import command_spec, hidden_spec
 
 
 class SurfaceClassificationError(ValueError):
@@ -145,11 +145,11 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
     # end
   # end
 
-  # A fluent view and facade function may mechanically point at the same
-  # canonical operation and command name. Keep one deterministic view.
+  # A fluent view and facade function may be aliases of the same operation.
+  # Keep one deterministic view.
   unique: dict[tuple[str, int], DiscoveredCallable] = {}
   for item in found:
-    key = (item.name, id(canonical_callable(item.callable)))
+    key = (item.name, id(item.callable))
     unique.setdefault(key, item)
   # end
   return tuple(sorted(unique.values(), key=lambda item: (item.name, item.public_path)))

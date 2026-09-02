@@ -76,7 +76,14 @@ def _dependency_versions() -> str:
 
 
 def version_report(version: str) -> str:
-  """The full ``pgkyl --version`` text."""
+  """Build the full ``pgkyl --version`` report.
+
+  Args:
+    version: Installed postgkyl version string.
+
+  Returns:
+    A multiline environment and build report suitable for bug reports.
+  """
   build = gpython.build_info()
   bridge = "available" if gpython.available() else "unavailable"
   if build is not None:

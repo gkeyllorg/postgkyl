@@ -36,8 +36,6 @@ from . import (
     ke_dke,
 )
 
-import inspect
-import re
 from typing import Annotated, Literal
 
 from postgkyl.command_spec import (
@@ -56,32 +54,6 @@ _DIAG_REPORT = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
     selectable=False, result=ResultPolicy.VALUE)
 
 
-def _complete_command_doc(function) -> None:
-  """Give legacy short diagnostic docs one complete canonical Args block."""
-  doc = inspect.getdoc(function) or function.__name__.replace("_", " ").capitalize() + "."
-  parameters = tuple(inspect.signature(function).parameters.values())
-  documented = set(re.findall(
-      r"^\s{2,}(\*{0,2}[A-Za-z_]\w*)(?:\s*\([^)]*\))?:", doc,
-      flags=re.MULTILINE))
-  documented = {name.lstrip("*") for name in documented}
-  if {parameter.name for parameter in parameters} <= documented:
-    return
-  # end
-  pieces = doc.split("\n\n", 1)
-  first = pieces[0]
-  entries = []
-  for parameter in parameters:
-    display = parameter.name
-    entries.append(f"  {display}: Value for ``{display}``.")
-  # end
-  function.__doc__ = first + "\n\nArgs:\n" + "\n".join(entries)
-  if len(pieces) > 1:
-    function.__doc__ += "\n\nNotes:\n" + "\n".join(
-        "  " + line for line in pieces[1].splitlines())
-  # end
-# end
-
-
 def _resolve(function) -> None:
   function.__globals__.setdefault("GDataState", GDataState)
   function.__globals__.setdefault("_GDataState", GDataState)
@@ -91,7 +63,6 @@ def _resolve(function) -> None:
 
 def _map(function) -> None:
   _resolve(function)
-  _complete_command_doc(function)
   command(_DIAG_MAP)(function)
 # end
 
@@ -101,7 +72,6 @@ def _combine(function, dataset_names: tuple[str, ...]) -> None:
   for name in dataset_names:
     function.__annotations__[name] = Annotated[GDataState, DatasetRef()]
   # end
-  _complete_command_doc(function)
   command(_DIAG_COMBINE)(function)
 # end
 
@@ -121,7 +91,6 @@ for _module, _names in (
 # end
 
 _resolve(multispecies.accumulate_current)
-_complete_command_doc(multispecies.accumulate_current)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.MAP_APPEND,
     consumes_inputs=True))(multispecies.accumulate_current)
 
@@ -151,13 +120,11 @@ ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"
 for _function in (pkpm.load_pkpm, discovery.find_output_stems,
     discovery.available_frames, enstrophy.enstrophy, ke_dke.ke_dke):
   _resolve(_function)
-  _complete_command_doc(_function)
   command(_DIAG_LOAD if _function is pkpm.load_pkpm else _DIAG_REPORT)(_function)
 # end
 pkpm.load_pkpm.__annotations__["idx"] = str
 
 _resolve(trajectory.trajectory)
-_complete_command_doc(trajectory.trajectory)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.TERMINAL_ALL,
     result=ResultPolicy.VALUE))(trajectory.trajectory)
 
@@ -167,7 +134,6 @@ for _function in (
     gyrokinetics.gk_nodes,
 ):
   _resolve(_function)
-  _complete_command_doc(_function)
 # end
 
 

@@ -101,6 +101,20 @@ def apply(data: "GDataState", fn, *, num_quad: int | None = None,
   points, apply ``fn`` to the values, project back onto the basis. The result
   stays modal and gkyl-native; the projection is exact when ``fn(f)·b_j`` has
   degree ≤ 2·num_quad−1 -- raise ``num_quad`` to de-alias.
+
+  Args:
+    data: Native modal dataset to transform.
+    fn: Python callable applied to the quadrature-point values.
+    num_quad: Gauss points per dimension; defaults to ``poly_order + 1``.
+    inplace: Mutate and return ``data`` instead of creating a dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A modal dataset containing the projected pointwise result.
+
+  Raises:
+    ValueError: If ``data`` is not native modal data or lacks basis metadata.
   """
   basis_type, ndim, poly_order = _native_basis(data)
   if data.ctx.get("value_form", "modal") != "modal":

@@ -159,6 +159,26 @@ be called manually from the root Postgkyl directory simply by using:
 pytest [-v]
 ```
 
+## API and CLI documentation
+
+Public command documentation lives on the Python function that implements the
+operation. The equivalent `GData` spelling is a class-body alias to that same
+function, so editor hover help, `help(pg.interpolate)`,
+`help(data.interpolate)`, and `pgkyl interpolate --help` cannot maintain
+separate descriptions.
+The installed distribution includes a `py.typed` marker so language servers
+consume these inline signatures and aliases from a virtual environment too.
+
+Command docstrings use `Args:` entries in Google style. Every CLI-visible
+parameter needs one entry; command compilation rejects missing, duplicate, or
+unknown parameter documentation. `tests/test_documentation.py` additionally
+checks the public Python surface, static fluent aliases, source/runtime
+docstring identity, and deterministic CLI lowering. Run it directly with:
+
+```bash
+pytest tests/test_documentation.py
+```
+
 ## Authors
 
 The full list of authors can be found [here](AUTHORS.md).

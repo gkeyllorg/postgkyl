@@ -205,12 +205,12 @@ src/postgkyl/
 ║                                                                              ║
 ║   gdata/load.py    pg.load(path) ───────────────────► returns gdata.GData    ║
 ║   gdata/gdata.py   class GData(GDataState):                                  ║
-║                   def interpolate(self): return operations.interpolate(self) ║
-║                      def plot(self):   return operations.plot(self)          ║
+║                   interpolate = operations.interpolate (static alias)        ║
+║                   plot = operations.plot (one doc/signature/function)        ║
 ║   gdata/gdatagroup.py  GDataGroup(gdatastate.GDataStateGroup): broadcasts any verb ║
 ║                  over its members via __getattr__ — no verb body duplicated  ║
 ║   gdata/verbs.py module-level verbs with no single `self` (collect/evaluate/ ║
-║                  relchange/animate) — one-line delegations to operations,    ║
+║                  relchange/animate) — direct aliases to operations,          ║
 ║                  shared by GData and GDataGroup so spellings can't drift     ║
 ╚════════════════════════════╦═══════════════════════════════════╦═════════════╝
                              │ imports                           │ extends
@@ -348,7 +348,8 @@ need but that isn't itself a verb, so it lives here rather than in `operations`.
 `class GData(GDataState)` adds the **fluent verb methods** (`.interpolate()`, `.select()`,
 `.plot()`, `.save()`, `.info` inherited) and the **computing operators**
 (`+ - * / **`, reflected, `__neg__`/`__abs__`, `__array_ufunc__`). Because it lives
-*above* `operations`, these are plain top-level delegations — no lazy imports. `pg.load(...)`
+*above* `operations`, exact verbs are static class-body aliases to their canonical
+operation — no wrapper, runtime `setattr`, or lazy import. `pg.load(...)`
 returns a `GData`.
 
 `gdata/gdatagroup.py` mirrors the same move one level up: `class GDataGroup(gdatastate.GDataStateGroup)`
@@ -356,8 +357,8 @@ adds broadcasting — any attribute not defined on the class is resolved by `__g
 looked up on every member, so a verb call broadcasts across the whole group without a
 single verb body being duplicated. `gdata/verbs.py` holds the handful of verbs that
 combine *several* datasets and so have no single `self` to hang off of a class —
-`collect`, `evaluate`, `relchange`, `animate` — each a one-line delegation to the
-matching `operations` function; `GData` and `GDataGroup` both call through these same
+`collect`, `evaluate`, `relchange`, `animate` — each a direct alias to the matching
+`operations` function; `GData` and `GDataGroup` both call through these same
 module-level functions for their own methods, so the functional and fluent spellings
 of a multi-dataset verb can never drift apart.
 

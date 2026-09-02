@@ -267,6 +267,15 @@ def yvel(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """y velocity: y momentum (component 2) over density.
 
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the y velocity.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -280,6 +289,15 @@ def zvel(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """z velocity: z momentum (component 3) over density.
 
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the z velocity.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -292,6 +310,15 @@ def zvel(data: "GDataState", *, inplace: bool = False,
 def vel(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Velocity vector ``(vx, vy, vz)``: momentum (1:4) over density.
+
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A three-component dataset of the fluid velocity.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -335,6 +362,18 @@ def ke(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Kinetic (bulk-flow) energy density from fluid moment data.
 
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    gas_gamma: Adiabatic index, used only for 5-moment data.
+    num_moms: Number of moments (5 or 10); inferred from component count
+      when ``None``.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the bulk-flow energy density.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
       ``None`` and cannot be inferred.
@@ -350,6 +389,18 @@ def temp(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     num_moms: int | None = None, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Temperature ``T = p / rho`` from fluid moment data.
+
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    gas_gamma: Adiabatic index, used only for 5-moment data.
+    num_moms: Number of moments (5 or 10); inferred from component count
+      when ``None``.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the temperature.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
@@ -367,6 +418,18 @@ def sound(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    gas_gamma: Adiabatic index.
+    num_moms: Number of moments (5 or 10); inferred from component count
+      when ``None``.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the sound speed.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
       ``None`` and cannot be inferred.
@@ -382,6 +445,18 @@ def mach(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     num_moms: int | None = None, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Sonic Mach number ``M = |v| / c_s``.
+
+  Args:
+    data: Fluid moment data; must be NumPy-backed.
+    gas_gamma: Adiabatic index used to compute the sound speed.
+    num_moms: Number of moments (5 or 10); inferred from component count
+      when ``None``.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the Mach number.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is

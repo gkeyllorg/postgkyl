@@ -9,9 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from functools import update_wrapper
-import inspect
-from typing import Callable, Generic, TypeVar
+from typing import Callable
 
 
 class Section(Enum):
@@ -149,7 +147,6 @@ class CliHidden:
 
 _COMMAND_ATTR = "__postgkyl_command_spec__"
 _HIDDEN_ATTR = "__postgkyl_cli_hidden__"
-_CANONICAL_ATTR = "__postgkyl_canonical_callable__"
 
 
 def command(spec: CommandSpec):
@@ -200,61 +197,8 @@ def hidden_spec(fn) -> CliHidden | None:
 # end
 
 
-def canonical_callable(fn):
-  """Return the operation underlying a mechanically bound fluent method."""
-  return getattr(fn, _CANONICAL_ATTR, fn)
-# end
-
-
-F = TypeVar("F", bound=Callable)
-
-
-class _FluentBinding(Generic[F]):
-  """Descriptor that binds an operation's leading dataset parameter."""
-
-  def __init__(self, operation: F):
-    self.operation = operation
-    update_wrapper(self, operation)
-    setattr(self, _CANONICAL_ATTR, canonical_callable(operation))
-    signature = inspect.signature(operation)
-    parameters = tuple(signature.parameters.values())
-    if not parameters:
-      raise TypeError("fluent() requires an operation with a dataset receiver")
-    # end
-    receiver = parameters[0].replace(name="self", annotation=inspect.Parameter.empty)
-    self.__signature__ = signature.replace(parameters=(receiver, *parameters[1:]))
-  # end
-
-  def __get__(self, instance, owner=None):
-    if instance is None:
-      return self
-    # end
-
-    def bound(*args, **kwargs):
-      return self.operation(instance, *args, **kwargs)
-    # end
-    update_wrapper(bound, self.operation)
-    setattr(bound, _CANONICAL_ATTR, canonical_callable(self.operation))
-    signature = inspect.signature(self)
-    bound.__signature__ = signature.replace(
-        parameters=tuple(signature.parameters.values())[1:])
-    return bound
-  # end
-
-  def __call__(self, receiver, *args, **kwargs):
-    return self.operation(receiver, *args, **kwargs)
-  # end
-# end
-
-
-def fluent(operation: F) -> F:
-  """Bind an operation as a method while preserving its public contract."""
-  return _FluentBinding(operation)  # type: ignore[return-value]
-# end
-
-
 __all__ = [
     "ChoiceProvider", "CliHidden", "CommandSpec", "DatasetRef", "Execution",
-    "KeyValue", "PipelineInput", "ResultPolicy", "Section", "canonical_callable",
-    "command", "command_spec", "fluent", "hidden", "hidden_spec",
+    "KeyValue", "PipelineInput", "ResultPolicy", "Section", "command",
+    "command_spec", "hidden", "hidden_spec",
 ]

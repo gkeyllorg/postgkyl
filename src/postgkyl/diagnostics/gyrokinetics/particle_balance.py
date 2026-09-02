@@ -124,16 +124,21 @@ def gk_particle_balance(
     multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice
       of block indices.
-    fdot_file, source_file, f_file, dt_file: Explicit path overrides; ``*``
-      stands for the block index. Default to the naming convention when
-      ``None``.
+    fdot_file: Explicit distribution derivative moments path override.
+    source_file: Explicit source moments path override.
     bflux_files: Optional per-boundary path overrides, keyed by
       ``"<direction><side>"``; unlisted boundaries use the naming
       convention.
+    f_file: Explicit integrated distribution moments path override.
+    dt_file: Explicit time-step history path override. In path overrides,
+      ``*`` stands for the block index.
     logy: Log-scale the y axis.
     absy: Take the absolute value of every trace before plotting.
-    xlabel, ylabel, title: Axis/figure text.
-    indent_left, add_width: Shift/widen the axes (figure-fraction units).
+    xlabel: Horizontal-axis label.
+    ylabel: Vertical-axis label.
+    title: Figure title.
+    indent_left: Horizontal axes-position adjustment in figure units.
+    add_width: Axes-width adjustment in figure units.
     show: Call ``plt.show()`` before returning.
     saveas: If given, save the figure to this path.
 

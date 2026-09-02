@@ -39,7 +39,15 @@ def _paragraph(lines: list[str]) -> str:
 # end
 
 
-def parse_docstring(obj, *, exposed: set[str] | None = None,
+def _narrative(lines: list[str]) -> str:
+  """Return prose preceding the first structured docstring section."""
+  end = next((index for index, line in enumerate(lines)
+      if _SECTION.match(line)), len(lines))
+  return "\n".join(lines[:end]).strip()
+# end
+
+
+def parse_docstring(obj, *, required: set[str] | None = None,
     signature_names: set[str] | None = None) -> ParsedDocstring:
   """Parse and validate one canonical callable's command documentation."""
   qualname = f"{getattr(obj, '__module__', '<unknown>')}.{getattr(obj, '__qualname__', obj)}"
@@ -104,12 +112,13 @@ def parse_docstring(obj, *, exposed: set[str] | None = None,
     names = ", ".join(sorted(unknown))
     raise DocstringError(f"{qualname}: documented parameter(s) absent from signature: {names}")
   # end
-  for name in sorted(exposed or ()):
+  for name in sorted(required or ()):
     if name not in entries:
-      raise DocstringError(f"{qualname}: exposed parameter {name!r} is undocumented")
+      raise DocstringError(f"{qualname}: parameter {name!r} is undocumented")
     # end
   # end
-  return ParsedDocstring(summary=summary, long_help=doc, parameters=entries)
+  return ParsedDocstring(
+      summary=summary, long_help=_narrative(lines), parameters=entries)
 # end
 
 

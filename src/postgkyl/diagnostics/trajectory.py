@@ -120,9 +120,14 @@ def trajectory(
     numframes: Number of animation frames; ``None`` uses one frame per
       sample. When given, samples are subsampled evenly (by
       ``floor(num_samples / numframes)``).
-    xmin, xmax, ymin, ymax, zmin, zmax: Optional per-axis bounds; points
-      outside are masked (not drawn) rather than clipped.
-    elevation, azimuth: Initial 3-D view angles.
+    xmin: Optional lower x bound; outside points are masked.
+    xmax: Optional upper x bound; outside points are masked.
+    ymin: Optional lower y bound; outside points are masked.
+    ymax: Optional upper y bound; outside points are masked.
+    zmin: Optional lower z bound; outside points are masked.
+    zmax: Optional upper z bound; outside points are masked.
+    elevation: Initial 3-D elevation angle in degrees.
+    azimuth: Initial 3-D azimuth angle in degrees.
 
   Returns:
     The ``FuncAnimation``.

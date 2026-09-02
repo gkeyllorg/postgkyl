@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from enum import Enum
-import inspect
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -14,7 +13,7 @@ import pytest
 
 from postgkyl.command_spec import (
     CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput, ResultPolicy,
-    Section, canonical_callable, command, fluent,
+    Section, command,
 )
 from postgkyl.cli.commands import COMMANDS, MODELS
 from postgkyl.cli.compiler import (
@@ -130,28 +129,6 @@ def test_optional_annotation_does_not_make_a_required_option_optional():
 
   model = compile_callable(required_optional)
   assert model.parameters[0].required
-# end
-
-
-def test_fluent_binding_preserves_the_canonical_contract():
-  @command(CommandSpec(Section.VERBS, Execution.MAP_REPLACE))
-  def operation(data: object, *, count: int = 1):
-    """Repeat a data operation.
-
-    Args:
-      data: Pipeline dataset.
-      count: Repetition count.
-    """
-    return data, count
-  # end
-
-  class Surface:
-    repeat = fluent(operation)
-  # end
-
-  assert canonical_callable(Surface.repeat) is operation
-  assert tuple(inspect.signature(Surface.repeat).parameters) == ("self", "count")
-  assert Surface().repeat(count=3)[1] == 3
 # end
 
 

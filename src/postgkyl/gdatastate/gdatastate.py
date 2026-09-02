@@ -118,10 +118,12 @@ class GDataState:
 
   # ------------------------------------------------------------------ tags
   def get_tag(self) -> str:
+    """Return the short identifier used to select this dataset."""
     return self._tag
   # end
 
   def set_tag(self, tag: str = "") -> None:
+    """Replace the dataset tag when ``tag`` is nonempty."""
     if tag:
       self._tag = tag
   # end
@@ -130,10 +132,12 @@ class GDataState:
   tag = property(get_tag, set_tag)
 
   def get_label(self) -> str:
+    """Return the custom label, falling back to the generated label."""
     return self._custom_label or self._label
   # end
 
   def set_label(self, label: str) -> None:
+    """Set the generated display label."""
     self._label = label
   # end
 
@@ -148,6 +152,7 @@ class GDataState:
 
   # ------------------------------------------------------------- shape info
   def get_num_cells(self) -> np.ndarray:
+    """Return the cell count in each spatial dimension."""
     if self.ctx.get("cells") is not None:
       return np.asarray(self.ctx["cells"])
     # end
@@ -160,6 +165,7 @@ class GDataState:
   num_cells = property(get_num_cells)
 
   def get_num_comps(self) -> int:
+    """Return the number of physical components per cell."""
     if self.ctx.get("num_comps"):
       return int(self.ctx["num_comps"])
     # end
@@ -175,6 +181,7 @@ class GDataState:
   num_comps = property(get_num_comps)
 
   def get_num_dims(self) -> int:
+    """Return the number of spatial dimensions."""
     if self.ctx.get("cells") is not None:
       return len(self.ctx["cells"])
     # end
@@ -187,6 +194,7 @@ class GDataState:
   num_dims = property(get_num_dims)
 
   def get_bounds(self) -> Tuple[np.ndarray, np.ndarray]:
+    """Return arrays containing the lower and upper spatial bounds."""
     if "lower" in self.ctx and "upper" in self.ctx:
       return np.asarray(self.ctx["lower"]), np.asarray(self.ctx["upper"])
     # end
@@ -202,15 +210,18 @@ class GDataState:
   bounds = property(get_bounds)
 
   def get_grid_type(self) -> str:
+    """Return the grid classification, defaulting to ``"uniform"``."""
     return self.ctx.get("grid_type", "uniform")
   # end
 
   # --------------------------------------------------------- grid / values
   def get_grid(self) -> list:
+    """Return the coordinate array for each spatial dimension."""
     return self._grid
   # end
 
   def set_grid(self, grid: list) -> None:
+    """Replace the coordinate arrays and update their stored bounds."""
     self._grid = grid
     # ``len(grid)`` (not ``get_num_dims()``) on purpose: for a gkyl-backed
     # dataset, num_dims reads ctx["cells"], which a dimension-reducing verb
@@ -248,6 +259,7 @@ class GDataState:
   # end
 
   def set_values(self, values) -> None:
+    """Replace stored values and update cell/component metadata."""
     self._values = values
     if isinstance(values, gpython.GkylArray):
       # Cell layout is not derivable from the flat native array; it comes from

@@ -107,10 +107,12 @@ def load_gk_distf(
     block_idx: Use block-specific files with a ``_b<idx>`` prefix.
     num_interp: Interpolate onto a general mesh of the specified amount
       (default: ``poly_order + 1`` points per cell).
-    jf_file, mapc2p_vel_file, jacobvel_file, mc2nu_file, mapc2p_file,
-    jacobtot_inv_file: Explicit filename overrides; each defaults to the
-      standard naming convention derived from ``name``/``species``/
-      ``block_idx`` when omitted.
+    jf_file: Explicit saved-distribution filename override.
+    mapc2p_vel_file: Explicit velocity-coordinate mapping filename override.
+    jacobvel_file: Explicit velocity-space Jacobian filename override.
+    mc2nu_file: Explicit field-aligned coordinate mapping filename override.
+    mapc2p_file: Explicit configuration-space mapping filename override.
+    jacobtot_inv_file: Explicit inverse total-Jacobian filename override.
 
   Returns:
     A :class:`~postgkyl.gdata.gdata.GData` holding the interpolated

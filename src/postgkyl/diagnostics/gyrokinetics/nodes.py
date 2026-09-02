@@ -140,9 +140,14 @@ def gk_nodes(
     fixaspect: Enforce equal R/Z scaling (unused placeholder kept for
       interface symmetry with the old CLI's ``--fix_aspect``; the figure is
       already built to the data's aspect ratio).
-    xlim, ylim: Optional axis limits.
-    xlabel, ylabel, zlabel, title: Axis/figure/colorbar text.
-    indent_left, add_width: Shift/widen the axes (figure-fraction units).
+    xlim: Optional horizontal-axis limits.
+    ylim: Optional vertical-axis limits.
+    xlabel: Horizontal-axis label.
+    ylabel: Vertical-axis label.
+    zlabel: Poloidal-flux colorbar label.
+    title: Figure title.
+    indent_left: Horizontal axes-position adjustment in figure units.
+    add_width: Axes-width adjustment in figure units.
     multib_unicolor: Use one color for every block instead of cycling.
     show: Call ``plt.show()`` before returning.
     saveas: If given, save the figure to this path.

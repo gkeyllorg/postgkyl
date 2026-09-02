@@ -283,6 +283,16 @@ def pressure(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
   """Scalar pressure (trace of the pressure tensor over three) from
   10-moment fluid data.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    gas_gamma: Unused compatibility parameter.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the scalar pressure.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -297,6 +307,16 @@ def ke(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Kinetic (bulk-flow) energy density from 10-moment fluid data.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    gas_gamma: Unused compatibility parameter.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the bulk-flow energy density.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -313,6 +333,16 @@ def temp(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     label: str | None = None) -> "GDataState":
   """Temperature ``T = p / rho`` from 10-moment fluid data.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    gas_gamma: Unused compatibility parameter.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the temperature.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -327,6 +357,16 @@ def sound(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)`` from 10-moment data.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    gas_gamma: Adiabatic index used in the sound speed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the sound speed.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -343,6 +383,16 @@ def mach(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     label: str | None = None) -> "GDataState":
   """Sonic Mach number ``M = |v| / c_s`` from 10-moment data.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    gas_gamma: Adiabatic index used in the sound speed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the Mach number.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -357,6 +407,15 @@ def pxx(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_xx`` pressure-tensor component.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_xx``.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -369,6 +428,15 @@ def pxx(data: "GDataState", *, inplace: bool = False,
 def pxy(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_xy`` pressure-tensor component.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_xy``.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -383,6 +451,15 @@ def pxz(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_xz`` pressure-tensor component.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_xz``.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -395,6 +472,15 @@ def pxz(data: "GDataState", *, inplace: bool = False,
 def pyy(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_yy`` pressure-tensor component.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_yy``.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -409,6 +495,15 @@ def pyz(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_yz`` pressure-tensor component.
 
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_yz``.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -421,6 +516,15 @@ def pyz(data: "GDataState", *, inplace: bool = False,
 def pzz(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """``P_zz`` pressure-tensor component.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``P_zz``.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -435,6 +539,15 @@ def pressure_tensor(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Full symmetric pressure tensor
   ``(P_xx, P_xy, P_xz, P_yy, P_yz, P_zz)``.
+
+  Args:
+    data: Ten-moment fluid data; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A six-component dataset of the symmetric pressure tensor.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).

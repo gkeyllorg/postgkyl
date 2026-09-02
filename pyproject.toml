@@ -71,6 +71,7 @@ version = {attr = "postgkyl.__version__"}
 where = ["src/"]
 
 [tool.setuptools.package-data]
+"postgkyl" = ["py.typed"]
 "postgkyl.render" = ["*.mplstyle", "*.js"]
 # the compiled bridge (scripts/build_gpython.sh) + the extension source; the
 # gpython shim itself lives in the gkeyll repo (GKEYLL_C_SHIM.md)

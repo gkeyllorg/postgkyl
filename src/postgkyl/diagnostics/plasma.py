@@ -305,6 +305,17 @@ def omegaC(field: "GDataState", *, mass: float = 1.0, charge: float = 1.0,
     label: str | None = None) -> "GDataState":
   """Cyclotron (gyro) frequency ``omega_c = |q| * |B| / m``.
 
+  Args:
+    field: EM field data providing ``Bx, By, Bz``; must be NumPy-backed.
+    mass: Particle mass.
+    charge: Particle charge; only its magnitude affects the result.
+    inplace: Mutate and return ``field`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the cyclotron frequency.
+
   Raises:
     ValueError: if ``field`` is native modal (gkyl-backed).
   """
@@ -318,6 +329,18 @@ def omegaP(species: "GDataState", *, mass: float = 1.0, charge: float = 1.0,
     epsilon_0: float = 1.0, inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Plasma frequency ``omega_p = sqrt(q**2 * n / (m**2 * epsilon_0))``.
+
+  Args:
+    species: Fluid moment data providing mass density; must be NumPy-backed.
+    mass: Particle mass.
+    charge: Particle charge.
+    epsilon_0: Vacuum permittivity.
+    inplace: Mutate and return ``species`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the plasma frequency.
 
   Raises:
     ValueError: if ``species`` is native modal (gkyl-backed).
@@ -333,6 +356,19 @@ def d(species: "GDataState", *, mass: float = 1.0, charge: float = 1.0,
     epsilon_0: float = 1.0, mu_0: float = 1.0, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Inertial (skin-depth) length ``d = c / omega_p``.
+
+  Args:
+    species: Fluid moment data providing mass density; must be NumPy-backed.
+    mass: Particle mass.
+    charge: Particle charge.
+    epsilon_0: Vacuum permittivity.
+    mu_0: Vacuum permeability used in ``c = 1/sqrt(epsilon_0*mu_0)``.
+    inplace: Mutate and return ``species`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the inertial length.
 
   Raises:
     ValueError: if ``species`` is native modal (gkyl-backed).
@@ -350,6 +386,23 @@ def lambdaD(species: "GDataState", *, gas_gamma: float = 5.0 / 3.0,
     inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Debye length ``lambda_D = v_th / omega_p``.
+
+  Args:
+    species: Fluid moment data; must be NumPy-backed.
+    gas_gamma: Adiabatic index used to compute thermal velocity.
+    num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
+    mass: Particle mass.
+    charge: Particle charge.
+    epsilon_0: Vacuum permittivity used in the plasma frequency.
+    mu_0: Vacuum permeability forwarded to thermal-velocity calculation.
+    sqrt2: Use the ``sqrt(2*T/m)`` thermal-velocity convention; the extra
+      factor is removed from the returned conventional Debye length.
+    inplace: Mutate and return ``species`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the Debye length.
 
   Raises:
     ValueError: if ``species`` is native modal (gkyl-backed).
@@ -369,6 +422,24 @@ def rho(species: "GDataState", field: "GDataState", *,
     label: str | None = None) -> "GDataState":
   """Gyroradius (Larmor radius) ``rho = v_th / omega_c``.
 
+  Args:
+    species: Fluid moment data used for thermal velocity; must be
+      NumPy-backed.
+    field: EM field data used for cyclotron frequency; must be NumPy-backed.
+    gas_gamma: Adiabatic index used to compute thermal velocity.
+    num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
+    mass: Particle mass.
+    charge: Particle charge.
+    mu_0: Vacuum permeability forwarded to thermal-velocity calculation.
+    sqrt2: Select the thermal-velocity convention; the result is normalized
+      to the ``sqrt(2*T/m)`` convention either way.
+    inplace: Mutate and return ``species`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the gyroradius.
+
   Raises:
     ValueError: if either input is native modal (gkyl-backed).
   """
@@ -387,6 +458,23 @@ def beta(species: "GDataState", field: "GDataState", *,
     inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Plasma beta ``v_th**2 / v_A**2``.
+
+  Args:
+    species: Fluid moment data used for thermal velocity and density; must
+      be NumPy-backed.
+    field: EM field data used for Alfven velocity; must be NumPy-backed.
+    gas_gamma: Adiabatic index used to compute thermal velocity.
+    num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
+    mass: Particle mass.
+    mu_0: Vacuum permeability.
+    sqrt2: Select the thermal-velocity convention; the result is normalized
+      to the ``sqrt(2*T/m)`` convention either way.
+    inplace: Mutate and return ``species`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of plasma beta.
 
   Raises:
     ValueError: if either input is native modal (gkyl-backed).

@@ -121,6 +121,15 @@ def bx(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """x magnetic-field component (component 5 of MHD data).
 
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``Bx``.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -133,6 +142,15 @@ def bx(data: "GDataState", *, inplace: bool = False,
 def by(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """y magnetic-field component (component 6 of MHD data).
+
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``By``.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -147,6 +165,15 @@ def bz(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """z magnetic-field component (component 7 of MHD data).
 
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of ``Bz``.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -159,6 +186,15 @@ def bz(data: "GDataState", *, inplace: bool = False,
 def bi(data: "GDataState", *, inplace: bool = False,
     tag: str | None = None, label: str | None = None) -> "GDataState":
   """Magnetic-field vector ``(Bx, By, Bz)`` (components 5:8).
+
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A three-component dataset of the magnetic field.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -173,6 +209,16 @@ def mag_pressure(data: "GDataState", *, mu_0: float = 1.0,
     inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Magnetic pressure ``p_B = 0.5 * (Bx**2 + By**2 + Bz**2) / mu_0``.
+
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    mu_0: Vacuum permeability.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the magnetic pressure.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -189,6 +235,17 @@ def pressure(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
   """Thermal (gas) pressure
   ``p = (gas_gamma - 1) * (E - 0.5*rho*|v|**2 - p_B)``.
 
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    gas_gamma: Adiabatic index.
+    mu_0: Vacuum permeability used in the magnetic energy.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the thermal pressure.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -203,6 +260,17 @@ def temp(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     mu_0: float = 1.0, inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Temperature ``T = p / rho``.
+
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    gas_gamma: Adiabatic index.
+    mu_0: Vacuum permeability used to compute the pressure.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the temperature.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
@@ -219,6 +287,17 @@ def sound(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     label: str | None = None) -> "GDataState":
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    gas_gamma: Adiabatic index.
+    mu_0: Vacuum permeability used to compute the pressure.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the sound speed.
+
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
@@ -233,6 +312,17 @@ def mach(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     mu_0: float = 1.0, inplace: bool = False, tag: str | None = None,
     label: str | None = None) -> "GDataState":
   """Sonic Mach number ``M = |v| / c_s``.
+
+  Args:
+    data: MHD conserved variables; must be NumPy-backed.
+    gas_gamma: Adiabatic index.
+    mu_0: Vacuum permeability used to compute the pressure.
+    inplace: Mutate and return ``data`` instead of a new dataset.
+    tag: Optional tag for the returned dataset.
+    label: Optional label for the returned dataset.
+
+  Returns:
+    A single-component dataset of the Mach number.
 
   Raises:
     ValueError: if ``data`` is native modal (gkyl-backed).

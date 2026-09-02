@@ -13,6 +13,7 @@ tests/test_data/generated/
 # ignore package sources under src/ and fixtures under tests/)
 /*.gkyl
 /*.md
+!/AGENTS.md
 /*.py
 !/setup.py
 /*.json

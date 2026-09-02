@@ -18,7 +18,7 @@ import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl import operations, io
-from postgkyl.command_spec import fluent, hidden
+from postgkyl.command_spec import hidden
 
 from .gdatagroup import GDataGroup
 
@@ -87,81 +87,32 @@ class GData(GDataState):
   # end
 
   # ---------------------------------------------------------- fluent verbs
-  def interpolate(self, *, num_interp: int | None = None, inplace: bool = False,
-      tag: str | None = None, label: str | None = None) -> "GData":
-    """Interpolate DG coefficients onto a uniform mesh (see ``operations.interpolate``).
-
-    Basis, polynomial order, and value_form are properties of this dataset,
-    fixed at load time -- this method never re-specifies them.
-    """
-    return operations.interpolate(self, num_interp=num_interp,
-        inplace=inplace, tag=tag, label=label)
-  # end
-
-  def local_poly(self, *, npoints: int = 2, inplace: bool = False,
-      tag: str | None = None, label: str | None = None) -> "GData":
-    """Evaluate the DG polynomial cell-by-cell onto a discontinuity-preserving
-    plotting mesh (see ``operations.local_poly``). Basis/order/value_form are
-    properties of this dataset, fixed at load time."""
-    return operations.local_poly(self, npoints=npoints,
-        inplace=inplace, tag=tag, label=label)
-  # end
-
-  def gk_rz(self, *, mapc2p: str | None = None,
-      nodes_file: str | None = None, z_axis: float = 0.0,
-      phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0,
-      inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Project this gyrokinetic DG field onto a physical R-Z grid.
-
-    The input must be un-interpolated 2-D or 3-D modal data. Geometry is
-    inferred from the source filename, preferring
-    ``<prefix>-geo_int_nodes.gkyl`` and falling back to
-    ``<prefix>-geo_int_mapc2p.gkyl``. ``nodes_file`` and ``mapc2p`` are
-    mutually exclusive overrides. ``z_axis`` is in meters, ``phi_tor`` in
-    radians, ``nz_interp`` is a positive integer, and ``comp`` selects one
-    physical component. ``inplace`` controls replacement; ``tag`` and
-    ``label`` optionally override result metadata. See
-    :func:`postgkyl.operations.gyrokinetics.gk_rz` for returned shapes and
-    complete error behavior.
-    """
-    return operations.gyrokinetics.gk_rz(self, mapc2p=mapc2p,
-        nodes_file=nodes_file, z_axis=z_axis, phi_tor=phi_tor,
-        nz_interp=nz_interp, comp=comp, inplace=inplace, tag=tag, label=label)
-  # end
-
-  def select(self, *, comp=None, z0=None, z1=None, z2=None, z3=None, z4=None,
-      z5=None, inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Subselect coordinates/components (see ``operations.select``)."""
-    return operations.select(self, comp=comp, z0=z0, z1=z1, z2=z2, z3=z3, z4=z4,
-        z5=z5, inplace=inplace, tag=tag, label=label)
-  # end
-
-  def plot(self, **kwargs):
-    """Render this dataset and return the Matplotlib figure.
-
-    Pass ``save=True`` for an auto-named PNG or ``saveas=...`` for a PNG/PDF
-    output path; no CLI glue is required.
-    """
-    return operations.plot(self, **kwargs)
-  # end
-
-  def plotly(self, **kwargs):
-    """Render this dataset with Plotly (terminal verb; see ``operations.plotly``).
-
-    ``d.plotly()`` alone just builds and returns the figure; pass
-    ``show=True`` to open an auto-rotating browser preview, or
-    ``save=True``/``saveas=...`` to write it instead -- no CLI glue needed
-    either way (see ``render.plotly``'s docstring).
-    """
-    return operations.plotly(self, **kwargs)
-  # end
-
-  def save(self, out_name: str = "", extension: str = "gkyl") -> str:
-    """Write this dataset to disk (see ``io.save``)."""
-    return io.save(self, out_name=out_name, extension=extension)
-  # end
+  # These are ordinary class-body aliases, not wrappers or runtime setattr
+  # calls. Python binds the leading dataset argument as ``self``. The alias
+  # keeps the signature, annotations, docstring, command metadata, and
+  # implementation in one canonical function while remaining discoverable by
+  # static language servers such as VS Code/Pylance.
+  interpolate = operations.interpolate
+  local_poly = operations.local_poly
+  gk_rz = operations.gyrokinetics.gk_rz
+  gk_fluxsurf = operations.gyrokinetics.gk_fluxsurf
+  select = operations.select
+  integrate = operations.integrate
+  integrate_axis = operations.integrate_axis
+  average = operations.average
+  eval_at_coord_proj = operations.eval_at_coord_proj
+  fft = operations.fft
+  magsq = operations.magsq
+  mask = operations.mask
+  extract_input = operations.extract_input
+  fit = operations.fit
+  growth = operations.growth
+  differentiate = operations.differentiate
+  map = operations.map
+  apply = operations.apply
+  save = io.save
+  plot = operations.plot
+  plotly = operations.plotly
 
   # ``info`` is inherited from GDataState (a pure state reader).
 
@@ -176,58 +127,6 @@ class GData(GDataState):
   def div(self, other) -> "GData":
     """Weak (DG) divide -- runs inside Gkeyll on modal data."""
     return operations.arithmetic.binary(operator.truediv, self, other)
-  # end
-
-  def integrate(self, *, op: str = "none"):
-    """Grid integral of modal data via ``gkyl_array_integrate`` (terminal).
-
-    ``op`` is ``"none"``, ``"abs"``, or ``"sq"``; returns a float (one field)
-    or a NumPy array (one value per field)."""
-    return operations.integrate(self, op=op)
-  # end
-
-  def integrate_axis(self, axis: int | tuple | str | None = None, *,
-      inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Trapezoidal integral over one or more axes of point-value data
-    (see ``operations.integrate_axis``); a new (reduced) dataset, like ``.select()``.
-
-    Works on already-interpolated (NumPy) data or a native nodal/quad
-    value_form; raw modal DG coefficients raise -- convert explicitly
-    first (``.interpolate()``/``.to_nodal()``/``.to_quad()``).
-    """
-    return operations.integrate_axis(self, axis, inplace=inplace, tag=tag, label=label)
-  # end
-
-  def average(self, dims, *, weight: "GData | None" = None,
-      inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Weighted (or plain) average of modal data over ``dims`` via
-    ``gkyl_array_average`` (see ``operations.average``).
-
-    Runs inside Gkeyll on native modal (pre-``interpolate()``) data, unlike
-    ``integrate_axis``; produces a new, lower-dimensional dataset, still
-    modal and gkyl-native (so it composes with further ``.average()``/
-    ``.to_nodal()``/``.interpolate()`` calls, unlike the terminal
-    ``.integrate()``).
-    """
-    return operations.average(self, dims, weight=weight, inplace=inplace, tag=tag,
-        label=label)
-  # end
-
-  def eval_at_coord_proj(self, eval_dirs, eval_coords, *,
-      inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Evaluate modal data at physical coordinates in ``eval_dirs`` and
-    project onto the surviving directions' target basis, via
-    ``gkyl_dg_eval_at_coord_proj`` (see ``operations.eval_at_coord_proj``).
-
-    Runs inside Gkeyll on native modal (pre-``interpolate()``) data, like
-    ``.average()``; produces a new, lower-dimensional dataset, still modal
-    and gkyl-native.
-    """
-    return operations.eval_at_coord_proj(self, eval_dirs, eval_coords,
-        inplace=inplace, tag=tag, label=label)
   # end
 
   # --------------------------------------------- value_form changes (explicit)
@@ -248,36 +147,7 @@ class GData(GDataState):
     return operations.represent(self, to="quad", num_quad=num_quad, **kwargs)
   # end
 
-  def apply(self, fn, *, num_quad: int | None = None, **kwargs) -> "GData":
-    """Pointwise ``fn`` via quadrature (modal -> quad -> fn -> modal), e.g.
-    ``d.apply(np.sqrt)``. The explicit spelling of nonlinear pointwise math
-    on DG data; raise ``num_quad`` to de-alias."""
-    return operations.apply(self, fn, num_quad=num_quad, **kwargs)
-  # end
-
   # ------------------------------------------------- field-domain analysis
-  # Equation-blind core verbs from layers 07-09 (``operations/__init__.py``), each a
-  # one-line delegation to its matching ``operations`` function.
-  def fft(self, *, psd: bool = False, iso: bool = False, inplace: bool = False,
-      tag: str | None = None, label: str | None = None) -> "GData":
-    """Fourier transform / power spectral density (see ``operations.fft``)."""
-    return operations.fft(self, psd=psd, iso=iso, inplace=inplace, tag=tag, label=label)
-  # end
-
-  def magsq(self, *, coords: str = "0:3", inplace: bool = False,
-      tag: str | None = None, label: str | None = None) -> "GData":
-    """Magnitude squared of a vector field (see ``operations.magsq``)."""
-    return operations.magsq(self, coords=coords, inplace=inplace, tag=tag, label=label)
-  # end
-
-  def mask(self, mask_data: "GData | None" = None, *, lower: float | None = None,
-      upper: float | None = None, inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Mask values by a mask dataset or numeric thresholds (see ``operations.mask``)."""
-    return operations.mask(self, mask_data, lower=lower, upper=upper, inplace=inplace,
-        tag=tag, label=label)
-  # end
-
   def val2coord(self, *, x: str, y: str, periodic: bool = False,
       tag: str | None = None, label: str | None = None) -> "GDataGroup":
     """Build new (x, y) datasets from DynVector columns (see ``operations.val2coord``).
@@ -288,40 +158,6 @@ class GData(GDataState):
     """
     return GDataGroup(operations.val2coord(self, x=x, y=y, periodic=periodic,
         tag=tag, label=label))
-  # end
-
-  def extract_input(self) -> str:
-    """Decode the input file embedded in ``ctx`` (see ``operations.extract_input``);
-    a terminal verb returning a plain ``str`` (``""`` if none is embedded)."""
-    return operations.extract_input(self)
-  # end
-
-  def fit(self, fit_type: str, *, guess=None, window: bool = False,
-      min_n: int | None = None, inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Fit a model to this dataset (see ``operations.fit``).
-
-    ``window=True`` fits only the best-scoring leading window of a 1D
-    series -- the growth-rate use case, e.g. ``d.fit('exp2', window=True)``.
-    """
-    return operations.fit(self, fit_type, guess=guess, window=window, min_n=min_n,
-        inplace=inplace, tag=tag, label=label)
-  # end
-
-  def differentiate(self, *, direction: int | None = None, inplace: bool = False,
-      tag: str | None = None, label: str | None = None) -> "GData":
-    """Numerical gradient of field-domain data (see ``operations.differentiate``)."""
-    return operations.differentiate(self, direction=direction, inplace=inplace, tag=tag,
-        label=label)
-  # end
-
-  def map(self, mapping: "str | GData", *, space: str = "conf",
-      basis_type: str | None = None, poly_order: int | None = None,
-      inplace: bool = False, tag: str | None = None,
-      label: str | None = None) -> "GData":
-    """Deform this dataset's grid by evaluating a coordinate map (see ``operations.map``)."""
-    return operations.map(self, mapping, space=space, basis_type=basis_type,
-        poly_order=poly_order, inplace=inplace, tag=tag, label=label)
   # end
 
   # Note: no fluent ``grid`` method. ``GData.grid`` (inherited from
@@ -365,23 +201,6 @@ class GData(GDataState):
 # end
 
 
-# Exact operation delegations are mechanical fluent bindings. Their
-# signature, annotations, docstring, command metadata, and canonical identity
-# now have one home in the operation itself.
-for _name in (
-    "interpolate", "local_poly", "gk_rz", "gk_fluxsurf", "select", "integrate",
-    "integrate_axis", "average", "eval_at_coord_proj", "fft", "magsq",
-    "mask", "extract_input", "fit", "differentiate", "map",
-    "growth",
-):
-  setattr(GData, _name, fluent(getattr(
-      operations.gyrokinetics if _name in ("gk_rz", "gk_fluxsurf") else operations,
-      _name)))
-# end
-GData.save = fluent(io.save)
-GData.plot = fluent(operations.plot)
-GData.plotly = fluent(operations.plotly)
-
 for _name, _reason in {
     "load": "the canonical loader is postgkyl.load",
     "mul": "Python operators are not stringly exposed as commands",
@@ -389,7 +208,6 @@ for _name, _reason in {
     "to_modal": "representation shortcuts remain Python-only",
     "to_nodal": "representation shortcuts remain Python-only",
     "to_quad": "representation shortcuts remain Python-only",
-    "apply": "requires a Python callable",
     "val2coord": "the functional operation owns this exceptional group result",
 }.items():
   hidden(_reason)(GData.__dict__[_name])

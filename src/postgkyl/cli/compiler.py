@@ -14,7 +14,7 @@ import click
 
 from postgkyl.command_spec import (
     ChoiceProvider, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
-    ResultPolicy, Section, canonical_callable, command_spec,
+    ResultPolicy, Section, command_spec,
 )
 
 from ._apply import active_datasets, is_active, set_active
@@ -257,7 +257,7 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
   if spec is None:
     raise CommandCompilationError(f"{fn!r} has no CommandSpec")
   # end
-  canonical = canonical_callable(fn)
+  canonical = fn
   signature = inspect.signature(canonical)
   hints = _type_hints(canonical)
   raw: list[tuple[inspect.Parameter, object, tuple[object, ...], bool, bool]] = []
@@ -307,8 +307,7 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
         "SESSION commands require exactly one PipelineInput parameter")
   # end
 
-  exposed = {parameter.name for parameter, _, _, injected, _ in raw if not injected}
-  docs = parse_docstring(canonical, exposed=exposed,
+  docs = parse_docstring(canonical, required=set(signature.parameters),
       signature_names=set(signature.parameters))
   models: list[ParameterModel] = []
   for parameter, base, markers, injected, is_dataset_ref in raw:
