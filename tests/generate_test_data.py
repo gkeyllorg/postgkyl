@@ -199,6 +199,75 @@ def _c2p_rotation_values(
 
 
 # ---------------------------------------------------------------------------
+# Analytic four-component 1-D profile
+# ---------------------------------------------------------------------------
+
+def _alpha_convergence_profiles(z: np.ndarray, alpha: float) -> np.ndarray:
+    """Symmetric beam profiles used by the alpha-convergence example.
+
+    Density and both temperatures are even in ``z``; parallel velocity is
+    odd.  ``alpha`` introduces a small, pedestal-localized difference so the
+    two generated datasets remain close enough to read as a convergence
+    comparison.  Components are already in the plotting units used by the
+    example: m^-3, m/s, keV, and keV.
+    """
+    if alpha <= 0.0:
+        raise ValueError("alpha must be positive")
+
+    radius = np.abs(z)
+    sensitivity = np.log10(alpha / 2.0e-5)
+    pedestal = np.exp(-((radius - 0.86) / 0.16) ** 2)
+
+    density = (
+        1.01e13
+        + 2.45e19 / (1.0 + np.exp((radius - 0.92) / 0.08))
+        + 4.5e18 * np.exp(-(radius / 0.55) ** 4)
+    )
+    velocity = (
+        1.30e6 * np.tanh(z / 0.05)
+        / (1.0 + np.exp((0.82 - radius) / 0.05))
+    )
+    t_parallel = (
+        0.101
+        + 11.8 / (1.0 + np.exp((radius - 0.90) / 0.10))
+        + 0.4 * np.exp(-((radius - 0.55) / 0.15) ** 2)
+    )
+    t_perpendicular = (
+        0.101
+        + 20.8 / (1.0 + np.exp((radius - 0.98) / 0.13))
+        + 10.0 * np.exp(-((radius - 0.86) / 0.10) ** 2)
+    )
+
+    return np.stack([
+        density * (1.0 - 0.025 * sensitivity * pedestal),
+        velocity * (1.0 + 0.020 * sensitivity * pedestal),
+        t_parallel * (1.0 + 0.035 * sensitivity * pedestal),
+        t_perpendicular * (1.0 + 0.030 * sensitivity * pedestal),
+    ], axis=-1)
+
+
+def _project_1d_p1(fn, lower: float, upper: float, cells: int, *args) -> np.ndarray:
+    """Cellwise L2 projection of a vector-valued analytic function onto p1.
+
+    The 1-D modal serendipity basis is ``(1/sqrt(2), sqrt(3/2)*xi)`` on
+    ``[-1, 1]``.  Eight-point Gauss quadrature resolves the smooth analytic
+    profiles well within each cell.  The result is field-blocked as Gkeyll
+    expects: ``[f0_mode0, f0_mode1, f1_mode0, ...]``.
+    """
+    xi, weights = np.polynomial.legendre.leggauss(8)
+    dz = (upper - lower) / cells
+    centers = lower + (np.arange(cells) + 0.5) * dz
+    z = centers[:, None] + 0.5 * dz * xi[None, :]
+    samples = fn(z, *args)
+    basis = np.stack([
+        np.full_like(xi, 1.0 / np.sqrt(2.0)),
+        np.sqrt(3.0 / 2.0) * xi,
+    ], axis=-1)
+    coefficients = np.einsum("cqf,qb,q->cfb", samples, basis, weights)
+    return coefficients.reshape(cells, -1)
+
+
+# ---------------------------------------------------------------------------
 # Configuration tables
 # ---------------------------------------------------------------------------
 
@@ -271,6 +340,26 @@ def generate_all(out_dir: Path | str) -> None:
             cells, comp_lo, comp_hi, values,
             poly_order=poly_order,
             basis_type=basis_type,
+        )
+
+    # --- symmetric four-component beam profiles for a convergence plot ---
+    profile_lower, profile_upper, profile_cells = -2.5, 2.5, 256
+    for alpha, stem in (
+        (2.0e-4, "alpha_convergence_2em4_1d_ms_p1"),
+        (2.0e-5, "alpha_convergence_2em5_1d_ms_p1"),
+    ):
+        values = _project_1d_p1(
+            _alpha_convergence_profiles,
+            profile_lower,
+            profile_upper,
+            profile_cells,
+            alpha,
+        )
+        write_gkyl_field(
+            out_dir / f"{stem}.gkyl",
+            [profile_cells], [profile_lower], [profile_upper], values,
+            poly_order=1,
+            basis_type="serendipity",
         )
 
     # --- two-frame distribution-like family (shared grid, one file per frame) ---
