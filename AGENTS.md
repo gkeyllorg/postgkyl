@@ -136,7 +136,8 @@ src/postgkyl/
 │                      per equation model
 │
 ├─ gdata/                ★ THE FLUENT SURFACE  (sits ABOVE operations)  [FLUENT API]
-│   ├─ gdata.py          class GData(GDataState) + .interpolate()/.plot()
+│   ├─ gdata.py          class GData(GDataState) + .interpolate()/.plot()/
+│   │                    .plotly()/.pyvista()
 │   ├─ gdatagroup.py     fluent GDataGroup: broadcasts verbs over its members
 │   ├─ verbs.py          module-level fluent verbs with no single `self`
 │   │                    (collect/evaluate/relchange/animate) — one-line
@@ -154,7 +155,7 @@ src/postgkyl/
 │   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
 │   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
 │
-├─ render/             canonical plot + matplotlib · plotly · pyvista       [BACKEND]
+├─ render/             canonical matplotlib · plotly · pyvista callables   [BACKEND]
 │
 ├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
 │   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
@@ -204,7 +205,7 @@ src/postgkyl/
 ║   gdata/load.py    pg.load(path) ───────────────────► returns gdata.GData    ║
 ║   gdata/gdata.py   class GData(GDataState):                                  ║
 ║                   interpolate = operations.interpolate (static alias)        ║
-║                   plot = operations.plot = render.plot (one function)        ║
+║                   plot/plotly/pyvista = operations = render (one each)       ║
 ║   gdata/gdatagroup.py  GDataGroup(gdatastate.GDataStateGroup): broadcasts any verb ║
 ║                  over its members via __getattr__ — no verb body duplicated  ║
 ║   gdata/verbs.py module-level verbs with no single `self` (collect/evaluate/ ║
