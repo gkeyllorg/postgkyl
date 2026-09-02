@@ -13,9 +13,9 @@ the generated CLI (which passes ``show=True`` explicitly to preserve the
 terminal's preview-by-default behavior). Both default to inert
 (``show=False``, ``save=False``): a bare call just builds and returns the
 figure, so a script or unit test never has an unrequested file or browser
-side effect. The generated ``plotly`` command lowers the canonical plotting
-signature directly; there is no backend-specific plotting command or
-operations wrapper.
+side effect. The generated ``plotly`` and ``plotly_animate`` commands lower
+their canonical render signatures directly; there is no backend-specific
+plotting command or operations wrapper.
 """
 
 from __future__ import annotations
@@ -33,7 +33,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from postgkyl.command_spec import (
-    CliType, CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+    CliType, CommandSpec, Execution, KeyValue, PipelineInput, ResultPolicy,
+    Section, command,
 )
 from postgkyl.gdatastate import GDataState, materialize_point_values
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
@@ -808,11 +809,13 @@ command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,
     result=ResultPolicy.SILENT))(plotly)
 
 
-def plotly_animate(data_sequence: list["GDataState"],
+@command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
+    result=ResultPolicy.SILENT))
+def plotly_animate(data: Annotated[list[GDataState], PipelineInput()], *,
     frame_labels: list[str] | None = None, frame_duration: int = 50,
     transition_duration: int = 0, fromcurrent: bool = True,
     redraw: bool = True, save: bool = False, saveas: str | None = None,
-    show: bool = False, **plot_kwargs):
+    show: bool = False):
   """Build a Plotly animation figure from a sequence of datasets.
 
   Renders the first dataset with :func:`plotly` to create the base figure,
@@ -826,16 +829,29 @@ def plotly_animate(data_sequence: list["GDataState"],
   never rotates the camera on save) in the browser; both default to inert,
   so a bare call just builds and returns the figure (see :func:`plotly`'s
   docstring for why). The per-frame :func:`plotly` calls below always render
-  with ``save=False, show=False`` regardless of ``plot_kwargs``: only *this*
-  function's own save/preview, on the assembled animation, should ever hit
-  disk or a browser tab.
+  with ``save=False, show=False``: only *this* function's own save/preview,
+  on the assembled animation, should ever hit disk or a browser tab.
+
+  Args:
+    data: Selected datasets, one per animation frame.
+    frame_labels: Optional label for each frame and slider step.
+    frame_duration: Duration of each animation frame in milliseconds.
+    transition_duration: Duration of transitions between frames.
+    fromcurrent: Start playback from the current slider frame.
+    redraw: Redraw traces between frames.
+    save: Save the animation as ``plotly_animate.html``.
+    saveas: Explicit HTML output path.
+    show: Open the animation in a browser.
+
+  Returns:
+    plotly.graph_objects.Figure: the assembled animation.
   """
+  data_sequence = list(data)
   if not data_sequence:
     raise ValueError("plotly_animate requires at least one dataset")
   # end
 
-  frame_plot_kwargs = dict(plot_kwargs, save=False, saveas=None, show=False)
-  base_fig = plotly(data_sequence[0], **frame_plot_kwargs)
+  base_fig = plotly(data_sequence[0], save=False, saveas=None, show=False)
   num_traces = len(base_fig.data)
 
   if frame_labels is None:
@@ -850,7 +866,7 @@ def plotly_animate(data_sequence: list["GDataState"],
     if idx == 0:
       continue
     # end
-    frame_fig = plotly(dat, **frame_plot_kwargs)
+    frame_fig = plotly(dat, save=False, saveas=None, show=False)
     if len(frame_fig.data) != num_traces:
       raise ValueError(
           "All animation frames must produce the same number of traces; "

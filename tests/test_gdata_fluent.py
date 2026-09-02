@@ -511,6 +511,8 @@ class TestFacade:
     assert pg.evaluate is api_verbs.evaluate
     assert pg.relchange is api_verbs.relchange
     assert pg.animate is render.animate is operations.animate is api_verbs.animate
+    assert (pg.plotly_animate is render.plotly_animate
+        is operations.plotly_animate is api_verbs.plotly_animate)
     assert pg.sort is api_verbs.sort
   # end
 # end

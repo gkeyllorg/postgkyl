@@ -20,8 +20,8 @@ from postgkyl import operations
 
 
 # Exact aliases: implementation, signature, annotations, docstring, and command
-# metadata remain on the canonical callable (``render`` owns ``plot`` and
-# ``animate``).
+# metadata remain on the canonical callable (``render`` owns ``plot``,
+# ``animate``, and ``plotly_animate``).
 collect = operations.collect
 sort = operations.sort
 evaluate = operations.evaluate

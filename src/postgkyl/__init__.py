@@ -9,9 +9,10 @@ The facade is **pure re-export** -- every public name is defined in the layer th
 owns it and simply gathered here:
 
     load, GData, GDataGroup            <- api/       (fluent surface)
-    collect, evaluate, relchange,      <- api/       (module-level multi-dataset
-    plotly_animate, sort                             verbs with no single ``self``)
-    plot, animate, plotly, pyvista     <- render/    (canonical render callables)
+    collect, evaluate, relchange, sort <- api/       (module-level multi-dataset
+                                                      verbs with no single ``self``)
+    plot, animate, plotly,             <- render/    (canonical render callables)
+    plotly_animate, pyvista
     group_blocks                     <- gdatastate/ (multiblock family partition)
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
@@ -51,7 +52,7 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
     facade     __init__    re-exports only
 """
 
-from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, plotly_animate, relchange, sort
+from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, relchange, sort
 from postgkyl.operations import (
     apply, available_evaluate_operators, average, differentiate,
     eval_at_coord_proj, extract_input, fft, fit, grid, growth, info, integrate,
@@ -59,7 +60,7 @@ from postgkyl.operations import (
     select, val2coord,
 )
 from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
-from postgkyl.render import animate, plot, plotly, pyvista
+from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
 from postgkyl.command_spec import hidden
 from postgkyl.io import save

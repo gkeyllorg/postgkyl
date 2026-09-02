@@ -158,7 +158,7 @@ src/postgkyl/
 │   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
 │   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
 │
-├─ render/             canonical plot/animate · plotly · pyvista callables [BACKEND]
+├─ render/             canonical plot/animate · plotly/plotly_animate · pyvista [BACKEND]
 │
 ├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
 │   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
@@ -227,7 +227,7 @@ src/postgkyl/
                              ▼                                    │
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ BACKEND                                                                      ║
-║   render/ (mpl plot/animate · plotly · pyvista) — canonical callables;       ║
+║   render/ (mpl plot/animate · plotly/plotly_animate · pyvista) — canonical;    ║
 ║   facade, GData, operations, and CLI views share their exact identities      ║
 ╚════════════════════════════╦════════════════════════════════════╦════════════╝
                              │ imports                            │
@@ -396,8 +396,8 @@ dataset that stays modal/gkyl-native, so it composes with further
 `.to_nodal()`/`.interpolate()`/`.average()`/`.eval_at_coord_proj()` calls
 rather than dropping to NumPy. `local_poly` bridges modal coefficients to a
 discontinuity-preserving plotting mesh.
-`operations.plot`/`animate`/`plotly`/`pyvista` are direct aliases of their
-canonical `render` callables.
+`operations.plot`/`animate`/`plotly`/`plotly_animate`/`pyvista` are direct
+aliases of their canonical `render` callables.
 All terminal consumers share `gdatastate.materialize_point_values`, so the
 point-value capability rule has one home. Verbs wrap the layers below; they
 don't reimplement.
