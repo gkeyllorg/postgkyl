@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -91,11 +92,27 @@ _SCALARS = {
     bool: CodecKind.BOOLEAN,
     Path: CodecKind.PATH,
 }
+_RESERVED_SHORT_OPTIONS = frozenset({"h"})
 
 
 def kebab_case(name: str) -> str:
   """Apply the sole canonical Python-to-CLI name transformation."""
   return name.replace("_", "-")
+# end
+
+
+def _short_option_names(parameters: tuple[ParameterModel, ...]) -> dict[str, str]:
+  """Return unambiguous one-letter option names for exposed parameters."""
+  candidates = {
+      parameter.name: kebab_case(parameter.name)[0]
+      for parameter in parameters if not parameter.injected
+  }
+  counts = Counter(candidates.values())
+  return {
+      name: f"-{candidate}"
+      for name, candidate in candidates.items()
+      if counts[candidate] == 1 and candidate not in _RESERVED_SHORT_OPTIONS
+  }
 # end
 
 
@@ -630,6 +647,7 @@ def execute_model(ctx, model: CommandModel, values: dict):
 def build_click_command(model: CommandModel, *, command_class=click.Command) -> click.Command:
   """Lower an immutable model to a Click command."""
   params: list[click.Parameter] = []
+  short_options = _short_option_names(model.parameters)
   for parameter in model.parameters:
     if parameter.injected:
       continue
@@ -651,7 +669,12 @@ def build_click_command(model: CommandModel, *, command_class=click.Command) -> 
       # end
       attrs["default"] = default
     # end
-    params.append(click.Option([f"--{kebab_case(parameter.name)}", parameter.name], **attrs))
+    declarations = [f"--{kebab_case(parameter.name)}"]
+    if parameter.name in short_options:
+      declarations.append(short_options[parameter.name])
+    # end
+    declarations.append(parameter.name)
+    params.append(click.Option(declarations, **attrs))
   # end
   @click.pass_context
   def callback(click_context, **kwargs):

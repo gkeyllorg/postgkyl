@@ -79,6 +79,27 @@ def test_fluent_chain_uses_dashed_command_and_option_names():
 # end
 
 
+def test_select_gets_only_conflict_free_short_options():
+  select = next(command for command in COMMANDS if command.name == "select")
+  options = {option.name: option.opts for option in select.params}
+  assert options == {
+      "comp": ["--comp", "-c"],
+      "z0": ["--z0"],
+      "z1": ["--z1"],
+      "z2": ["--z2"],
+      "z3": ["--z3"],
+      "z4": ["--z4"],
+      "z5": ["--z5"],
+      "inplace": ["--inplace", "-i"],
+      "tag": ["--tag", "-t"],
+      "label": ["--label", "-l"],
+  }
+  result = _ok(FIELD, "interpolate", "select", "-c", "0", "-t", "chosen",
+      "info")
+  assert result.output.startswith("(chosen#0)")
+# end
+
+
 def test_api_underscores_are_not_cli_spellings():
   assert _run(DISTF, "local_poly").exit_code != 0
   assert _run(DISTF, "local-poly", "--num_points", "3").exit_code != 0

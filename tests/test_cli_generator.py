@@ -89,9 +89,45 @@ def test_exact_option_projection_and_help_provenance():
       "--required", "--optional", "--enabled", "--mode", "--format",
       "--paths", "--pair", "--values",
   }
+  options = {option.name: option.opts for option in command_obj.params}
+  assert options == {
+      "required": ["--required", "-r"],
+      "optional": ["--optional", "-o"],
+      "enabled": ["--enabled", "-e"],
+      "mode": ["--mode", "-m"],
+      "format": ["--format", "-f"],
+      "paths": ["--paths"],
+      "pair": ["--pair"],
+      "values": ["--values", "-v"],
+  }
   assert next(p for p in command_obj.params if p.name == "required").help \
       == "Required integer value."
   assert command_obj.short_help == "Exercise every lossless command codec."
+# end
+
+
+def test_short_options_require_a_unique_initial_and_reserve_help():
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
+  def collisions(*, alpha: int = 0, another: int = 0,
+      beta_value: int = 0, hidden: int = 0):
+    """Exercise shorthand conflict handling.
+
+    Args:
+      alpha: First conflicting option.
+      another: Second conflicting option.
+      beta_value: Unambiguous option.
+      hidden: Option whose initial belongs to help.
+    """
+  # end
+
+  command_obj = build_click_command(compile_callable(collisions))
+  options = {option.name: option.opts for option in command_obj.params}
+  assert options == {
+      "alpha": ["--alpha"],
+      "another": ["--another"],
+      "beta_value": ["--beta-value", "-b"],
+      "hidden": ["--hidden"],
+  }
 # end
 
 
@@ -252,10 +288,15 @@ def test_every_generated_name_is_the_dashed_api_name():
     expected = {parameter.name for parameter in model.parameters
         if not parameter.injected}
     assert set(options) == expected
+    initials = [parameter.name[0] for parameter in model.parameters
+        if not parameter.injected]
     for parameter in model.parameters:
       if not parameter.injected:
-        assert options[parameter.name].opts == [
-            "--" + parameter.name.replace("_", "-")]
+        expected_opts = ["--" + parameter.name.replace("_", "-")]
+        if initials.count(parameter.name[0]) == 1 and parameter.name[0] != "h":
+          expected_opts.append("-" + parameter.name[0])
+        # end
+        assert options[parameter.name].opts == expected_opts
       # end
     # end
   # end

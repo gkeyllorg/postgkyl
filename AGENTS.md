@@ -507,7 +507,10 @@ public script API, compiles its `CommandSpec` records, and lowers every record t
 the one generic compiler. There is no `cli/commands/` package and no hand-authored
 subcommand. Python underscores are mechanically rendered as CLI dashes in command and
 option names (`local_poly` → `local-poly`, `num_moms` → `--num-moms`). The custom
-group code handles spelling-only aliases/unambiguous abbreviations and expands a bare
+compiler also adds a one-letter option (`--num-moms` → `-n`) when that initial is
+unique within the command; conflicting initials receive no short option and `-h` is
+reserved for help. The custom group code handles spelling-only aliases/unambiguous
+abbreviations and expands a bare
 filename to `load --file-name`; aliases never change a generated command's parameters
 or execution. `format_commands` groups `pgkyl --help` under Verbs / Diagnostics /
 Render / Utility; presentation does not change the flat, chainable inventory.
