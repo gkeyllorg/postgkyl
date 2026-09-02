@@ -35,7 +35,7 @@ from postgkyl import dg
 from postgkyl.numerics import calculus, curvilinear
 
 from ._curvilinear import curvilinear_blocks
-from ._materialize import materialize_for_render
+from postgkyl.gdatastate import materialize_point_values
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -107,7 +107,7 @@ def integrate_axis(data: "GDataState", axis: int | tuple | str | None = None, *,
       (``.map(space="conf")``) block's dimensions.
   """
   data._require_operable()  # the one home for "is this point-value data"
-  shadow = materialize_for_render(data)
+  shadow = materialize_point_values(data)
   grid = list(shadow.grid)
   values = shadow.values
   axes = calculus.parse_axis(axis, len(grid))

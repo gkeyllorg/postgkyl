@@ -17,6 +17,7 @@ import glob
 import os
 
 import matplotlib.figure
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from click.testing import CliRunner
@@ -293,22 +294,17 @@ class TestPerBlockGeometry:
 class TestMultiblockCli:
   @staticmethod
   def _plot_calls(monkeypatch):
-    """Record how the generated ``plot`` command batches the working set:
-    one entry per render call, holding that call's datasets.
-
-    The command closes its figures on the way out when nothing will display
-    them, so the call log -- not the surviving figures -- is what says how
-    many figures were drawn and which datasets shared each one.
-    """
+    """Record figures made by the one canonical plot call."""
     calls = []
-    real = pg.render.plot
+    real = plt.figure
 
-    def spy(*datasets, **kwargs):
-      calls.append(list(datasets))
-      return real(*datasets, **kwargs)
+    def spy(*args, **kwargs):
+      figure = real(*args, **kwargs)
+      calls.append(figure)
+      return figure
     # end
 
-    monkeypatch.setattr(pg.render, "plot", spy)
+    monkeypatch.setattr(plt, "figure", spy)
     return calls
   # end
 
@@ -316,28 +312,27 @@ class TestMultiblockCli:
     calls = self._plot_calls(monkeypatch)
     _ok([MB_GLOB, "interp", "plot", "--no-show"])
     assert len(calls) == 1
-    assert [d.ctx["block"] for d in calls[0]] == [0, 1, 2]
+    assert len(calls[0].axes[0].collections) == 3
   # end
 
   def test_two_frames_give_two_figures(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
     _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "--no-show"])
     assert len(calls) == 2
-    assert [{d.ctx["frame"] for d in c} for c in calls] == [{0}, {1}]
-    assert all(len(c) == 3 for c in calls)
+    assert all(len(figure.axes[0].collections) == 3 for figure in calls)
   # end
 
   def test_single_block_data_still_gets_a_figure_per_dataset(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
     _ok([os.path.join(GEN, "distf_p2_*.gkyl"), "interp", "plot", "--no-show"])
-    assert [len(c) for c in calls] == [1, 1]
+    assert len(calls) == 2
   # end
 
   def test_multiblock_flag_forces_everything_onto_one_figure(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
     _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "-m", "--no-show"])
     assert len(calls) == 1
-    assert len(calls[0]) == 6
+    assert len(calls[0].axes[0].collections) == 6
   # end
 
   def test_load_orders_blocks_naturally(self):

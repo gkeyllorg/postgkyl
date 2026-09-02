@@ -1,7 +1,6 @@
 """The ``plotly`` verb -- terminal; hands the dataset to the Plotly render backend.
 
-Mirrors ``operations/plot.py``: point-value forms (nodal/quad) plot
-directly via ``materialize_for_render``; raw modal coefficients refuse (the
+Point-value forms (nodal/quad) materialize directly; raw modal coefficients refuse (the
 user chooses ``.interpolate()``, ``.to_nodal()``, or ``.to_quad()`` first).
 """
 
@@ -11,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from postgkyl import render
 
-from ._materialize import materialize_for_render
+from postgkyl.gdatastate import materialize_point_values
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -91,7 +90,7 @@ def plotly(data: "GDataState", *, squeeze: bool = False,
     rotation_period: Camera rotation period for animated exports.
     fps: Frames per second for animated exports.
   """
-  return render.plotly(materialize_for_render(data), squeeze=squeeze,
+  return render.plotly(materialize_point_values(data), squeeze=squeeze,
       scatter=scatter, marker_radius=marker_radius, markerstyle=markerstyle,
       diverging=diverging, xscale=xscale, xshift=xshift, yscale=yscale,
       yshift=yshift, zscale=zscale, zshift=zshift, cmin=cmin, cmax=cmax,

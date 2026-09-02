@@ -272,7 +272,7 @@ class TestMultiDatasetLabel:
   def test_label_prefix_uses_dataset_label(self):
     a, b = _line(), _line(offset=3.0)
     a.label, b.label = "first", "second"
-    fig = backend.plot(a, b, show=False)
+    fig = backend.plot(a, b, multiblock=True, show=False)
     texts = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
     assert "first" in texts and "second" in texts
   # end
@@ -490,7 +490,7 @@ class TestXlim:
 class TestNumAxesAcrossDatasets:
   def test_cur_start_axes_advances_between_datasets(self):
     a, b = _field_2d(ncomp=1), _field_2d(ncomp=1)
-    fig = backend.plot(a, b, show=False, num_axes=2)
+    fig = backend.plot(a, b, multiblock=True, show=False, num_axes=2)
     assert len(fig.axes[0].collections) == 1
     assert len(fig.axes[1].collections) == 1
   # end

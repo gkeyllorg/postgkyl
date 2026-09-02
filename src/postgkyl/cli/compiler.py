@@ -13,8 +13,8 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin, get_typ
 import click
 
 from postgkyl.command_spec import (
-    ChoiceProvider, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
-    ResultPolicy, Section, command_spec,
+    ChoiceProvider, CliType, CommandSpec, DatasetRef, Execution, KeyValue,
+    PipelineInput, ResultPolicy, Section, command_spec,
 )
 
 from ._apply import active_datasets, is_active, set_active
@@ -132,22 +132,26 @@ def _optional(annotation):
 
 
 def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
-  annotation, optional = _optional(annotation)
-  if annotation in (Any, inspect.Parameter.empty):
-    raise _error(fn, name, "missing or Any annotation")
-  # end
   providers = [marker for marker in markers if isinstance(marker, ChoiceProvider)]
   key_values = [marker for marker in markers if isinstance(marker, KeyValue)]
+  cli_types = [marker for marker in markers if isinstance(marker, CliType)]
   unknown = [marker for marker in markers if not isinstance(
-      marker, (ChoiceProvider, KeyValue, DatasetRef, PipelineInput))]
+      marker, (ChoiceProvider, CliType, KeyValue, DatasetRef, PipelineInput))]
   if unknown:
     raise _error(fn, name, f"unsupported Annotated marker {unknown[0]!r}")
   # end
-  if len(providers) > 1 or len(key_values) > 1:
+  if len(providers) > 1 or len(key_values) > 1 or len(cli_types) > 1:
     raise _error(fn, name, "duplicate Annotated codec marker")
   # end
   if providers and key_values:
     raise _error(fn, name, "ChoiceProvider and KeyValue cannot be combined")
+  # end
+  if cli_types:
+    annotation = cli_types[0].annotation
+  # end
+  annotation, optional = _optional(annotation)
+  if annotation in (Any, inspect.Parameter.empty):
+    raise _error(fn, name, "missing or Any annotation")
   # end
 
   if providers:
@@ -325,7 +329,8 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
         "SESSION commands require exactly one PipelineInput parameter")
   # end
 
-  docs = parse_docstring(canonical, required=set(signature.parameters),
+  docs = parse_docstring(canonical,
+      required=set(signature.parameters),
       signature_names=set(signature.parameters))
   models: list[ParameterModel] = []
   for parameter, base, markers, injected, is_dataset_ref in raw:

@@ -13,8 +13,8 @@ import pytest
 
 import postgkyl.cli.compiler as compiler
 from postgkyl.command_spec import (
-    CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput, ResultPolicy,
-    Section, command,
+    CliType, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
+    ResultPolicy, Section, command,
 )
 from postgkyl.cli.commands import COMMANDS, MODELS
 from postgkyl.cli.compiler import (
@@ -92,6 +92,23 @@ def test_exact_option_projection_and_help_provenance():
   assert next(p for p in command_obj.params if p.name == "required").help \
       == "Required integer value."
   assert command_obj.short_help == "Exercise every lossless command codec."
+# end
+
+
+def test_cli_type_projects_a_broader_python_option():
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD, selectable=False))
+  def projected(*,
+      output: Annotated[str | list[str] | None, CliType(str | None)] = None):
+    """Project direct-Python options explicitly.
+
+    Args:
+      output: One command-line output path.
+    """
+  # end
+
+  model = compile_callable(projected)
+  assert [parameter.name for parameter in model.parameters] == ["output"]
+  assert model.parameters[0].codec.python_type is str
 # end
 
 

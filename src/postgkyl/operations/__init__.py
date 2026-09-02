@@ -17,6 +17,9 @@ components as new physical conclusions. Equation-specific physics (the former
 ``moments``/``agyro``/``current``/``energetics``/``rotate``/
 ``transform_frame``/``laguerre`` verbs, folded with the array math they
 delegated to) lives one layer up, in ``diagnostics``.
+
+``plot`` is the terminal-rendering exception: this namespace re-exports the
+exact canonical callable from :mod:`postgkyl.render` without wrapping it.
 """
 
 from . import arithmetic, gyrokinetics
@@ -27,7 +30,7 @@ from .info import info
 from .integrate import integrate, integrate_axis
 from .average import average
 from .eval_at_coord_proj import eval_at_coord_proj
-from .plot import plot
+from postgkyl.render import plot
 from .animate import animate
 from .plotly import plotly
 from .plotly_animate import plotly_animate
@@ -80,7 +83,7 @@ _TERM_ALL = CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
 for _function in (
     interpolate, local_poly, select, integrate, integrate_axis, average,
     eval_at_coord_proj, fft, magsq, relchange, mask, collect, sort, grid,
-    val2coord, extract_input, fit, differentiate, evaluate, map, plot,
+    val2coord, extract_input, fit, differentiate, evaluate, map,
     animate, plotly, plotly_animate, represent, growth,
 ):
   _resolve_receiver_annotations(_function)
@@ -105,7 +108,6 @@ represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 animate.__annotations__["data"] = Annotated[list[GDataState], PipelineInput()]
 plotly_animate.__annotations__["data"] = Annotated[
     list[GDataState], PipelineInput()]
-plot.__annotations__["data"] = Annotated[list[GDataState], PipelineInput()]
 
 for _function in (interpolate, local_poly, select, integrate_axis, average,
     eval_at_coord_proj, fft, magsq, grid, differentiate, map):
@@ -123,8 +125,6 @@ command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(info)
 command(_TERM_EACH)(integrate)
 command(_TERM_EACH)(extract_input)
-command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
-    result=ResultPolicy.SILENT))(plot)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(animate)
 command(CommandSpec(Section.RENDER, Execution.TERMINAL_EACH,

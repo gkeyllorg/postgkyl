@@ -136,16 +136,9 @@ class GDataGroup(GDataStateGroup):
     return operations.info(*self._datasets, header=header)
   # end
 
-  def plot(self, **kwargs):
-    """Draw every member onto **one** figure (see ``api.verbs.plot``).
-
-    Not a broadcast: a group is a set of datasets that belong together, so
-    ``group.plot()`` is one picture, not one per member. For a multiblock
-    family this is the whole field on a single set of axes, each block on
-    its own patch of the domain.
-    """
-    return verbs.plot(*self._datasets, **kwargs)
-  # end
+  # Binding the canonical variadic function passes this iterable group as its
+  # first input; render.plot flattens it and keeps group calls on one figure.
+  plot = verbs.plot
 
   def collect(self, *, sumdata: bool = False, period: float | None = None,
       offset: float = 0.0, chunk: int | None = None, tag: str | None = None,
@@ -174,7 +167,7 @@ class GDataGroup(GDataStateGroup):
 
 
 for _name in (
-    "load", "with_", "sort", "info", "plot", "collect", "evaluate", "animate",
+    "load", "with_", "sort", "info", "collect", "evaluate", "animate",
     "plotly_animate",
 ):
   hidden("the functional callable is the canonical command source")(

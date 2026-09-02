@@ -87,7 +87,8 @@ class TestMultiPanel:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1.0))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1.0))
 
-    fig = backend.plot(a, b, show=False, legend_labels=["first", "second"],
+    fig = backend.plot(a, b, multiblock=True, show=False,
+        legend_labels=["first", "second"],
         legend_subplot=1, legend_loc="lower left")
 
     assert fig.axes[0].get_legend() is None
@@ -218,7 +219,7 @@ class TestSplitLinearLog:
   def test_legend_subplot_uses_log_half_of_logical_subplot(self):
     a = self._split_line(ncomp=2)
     b = self._split_line(ncomp=2)
-    fig = backend.plot(a, b, show=False, split_linear_log=True,
+    fig = backend.plot(a, b, multiblock=True, show=False, split_linear_log=True,
         legend_labels=["a", "b"], legend_subplot=1, split_legend_side="log")
 
     assert fig.axes[0].get_legend() is None
@@ -413,9 +414,9 @@ class TestSaving:
 class TestFigureReuse:
   def test_reusing_a_figure_clears_previous_axes(self):
     fig = plt.figure()
-    backend.plot(_line(), show=False, fig=fig)
+    backend.plot(_line(), show=False, figure=fig, clear=True)
     first_axes_id = id(fig.axes[0])
-    backend.plot(_line(offset=5.0), show=False, fig=fig)
+    backend.plot(_line(offset=5.0), show=False, figure=fig, clear=True)
     assert len(fig.axes) == 1
     assert id(fig.axes[0]) != first_axes_id
   # end
@@ -541,7 +542,7 @@ class TestSurface:
 
 class TestComparisonOverlay:
   def test_contour_comparison_gives_each_dataset_its_own_color_and_legend(self):
-    fig = backend.plot(_field_2d(), _field_2d(), show=False,
+    fig = backend.plot(_field_2d(), _field_2d(), multiblock=True, show=False,
         contour=True, comparison=True, legend_labels=["a", "b"])
     ax = fig.axes[0]
     assert ax.get_legend() is not None
@@ -551,7 +552,7 @@ class TestComparisonOverlay:
   # end
 
   def test_surface_comparison_gives_each_dataset_its_own_color_and_legend(self):
-    fig = backend.plot(_field_2d(), _field_2d(), show=False,
+    fig = backend.plot(_field_2d(), _field_2d(), multiblock=True, show=False,
         surface=True, comparison=True, legend_labels=["a", "b"])
     ax = fig.axes[0]
     assert ax.get_legend() is not None
@@ -594,7 +595,8 @@ class TestCvalColoring:
 
 class TestLineColors:
   def test_color_sequence_assigns_one_color_to_each_dataset(self):
-    fig = backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+    fig = backend.plot(_line(), _line(offset=1), _line(offset=2),
+        multiblock=True, show=False,
         color=["tab:red", "tab:green", "tab:blue"])
 
     assert [line.get_color() for line in fig.axes[0].lines] == [
@@ -602,7 +604,8 @@ class TestLineColors:
   # end
 
   def test_scalar_color_still_applies_to_every_line(self):
-    fig = backend.plot(_line(), _line(offset=1), show=False, color="purple")
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True,
+        show=False, color="purple")
     assert [line.get_color() for line in fig.axes[0].lines] == ["purple", "purple"]
   # end
 
@@ -612,7 +615,8 @@ class TestLineColors:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
 
-    fig = backend.plot(a, b, show=False, color=["red", "blue"])
+    fig = backend.plot(a, b, multiblock=True, show=False,
+        color=["red", "blue"])
 
     assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
     assert [line.get_color() for line in fig.axes[1].lines] == ["red", "blue"]
@@ -624,7 +628,7 @@ class TestLineColors:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
 
-    fig = backend.plot(a, b, show=False,
+    fig = backend.plot(a, b, multiblock=True, show=False,
         color=["red", "orange", "blue", "cyan"])
 
     assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
@@ -633,13 +637,15 @@ class TestLineColors:
 
   def test_rgb_tuple_remains_a_single_color(self):
     rgb = (0.1, 0.2, 0.3)
-    fig = backend.plot(_line(), _line(offset=1), show=False, color=rgb)
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True,
+        show=False, color=rgb)
     assert [line.get_color() for line in fig.axes[0].lines] == [rgb, rgb]
   # end
 
   def test_color_sequence_length_must_match_line_count(self):
     with pytest.raises(ValueError, match="2 entries.*expected either 3.*or 3"):
-      backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+      backend.plot(_line(), _line(offset=1), _line(offset=2),
+          multiblock=True, show=False,
           color=["red", "blue"])
     # end
   # end
@@ -652,19 +658,21 @@ class TestLineColors:
 
 class TestLineStyles:
   def test_linestyle_sequence_assigns_one_style_to_each_dataset(self):
-    fig = backend.plot(_line(), _line(offset=1), show=False,
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True, show=False,
         linestyle=["-", "--"])
 
     assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
   # end
 
   def test_scalar_linestyle_applies_to_every_dataset(self):
-    fig = backend.plot(_line(), _line(offset=1), show=False, linestyle=":")
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True,
+        show=False, linestyle=":")
     assert [line.get_linestyle() for line in fig.axes[0].lines] == [":", ":"]
   # end
 
   def test_single_entry_sequence_applies_to_every_dataset(self):
-    fig = backend.plot(_line(), _line(offset=1), show=False, linestyle=["-."])
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True,
+        show=False, linestyle=["-."])
     assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-.", "-."]
   # end
 
@@ -679,14 +687,15 @@ class TestLineStyles:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
 
-    fig = backend.plot(a, b, show=False, linestyle=["-", "--"])
+    fig = backend.plot(a, b, multiblock=True, show=False,
+        linestyle=["-", "--"])
 
     assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
     assert [line.get_linestyle() for line in fig.axes[1].lines] == ["-", "--"]
   # end
 
   def test_dataset_linestyles_apply_to_both_split_axes(self):
-    fig = backend.plot(_line(), _line(offset=1), show=False,
+    fig = backend.plot(_line(), _line(offset=1), multiblock=True, show=False,
         linestyle=["-", "--"], split_linear_log=True, split_point=0.5)
 
     for axis in fig.axes:
@@ -696,7 +705,8 @@ class TestLineStyles:
 
   def test_linestyle_sequence_length_must_match_dataset_count(self):
     with pytest.raises(ValueError, match="2 entries.*expected either 1.*or 3"):
-      backend.plot(_line(), _line(offset=1), _line(offset=2), show=False,
+      backend.plot(_line(), _line(offset=1), _line(offset=2),
+          multiblock=True, show=False,
           linestyle=["-", "--"])
     # end
   # end

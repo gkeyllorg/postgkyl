@@ -1,6 +1,6 @@
 """Tests for the ``animate`` verb -- modal-bridging + delegation to
 ``render.animate.animate`` (mirrors ``tests/test_coverage_leaf.py``'s
-treatment of ``operations.plot``)."""
+treatment of ``render.plot``)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class TestAnimateVerb:
 
   def test_modal_frames_are_materialized_first(self):
     """A raw (non-interpolated) modal dataset is bridged through its NumPy
-    shadow (nodal value_form), just like ``operations.plot``."""
+    shadow (nodal value_form), just like ``render.plot``."""
     from matplotlib.animation import FuncAnimation
     a = pg.load(F1D).to_nodal()
     b = pg.load(F1D).to_nodal()

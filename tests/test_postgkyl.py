@@ -56,6 +56,18 @@ def test_golden_script_2d():
 # end
 
 
+def test_plot_has_one_canonical_callable():
+  from postgkyl import operations, render
+  from postgkyl.gdata import verbs
+
+  assert pg.plot is render.plot
+  assert pg.plot is operations.plot
+  assert pg.plot is pg.GData.plot
+  assert pg.plot is pg.GDataGroup.plot
+  assert pg.plot is verbs.plot
+# end
+
+
 def test_arithmetic_and_ufunc():
   a = pg.load(F1).interpolate().select(comp=0)
   b = pg.load(F1).interpolate().select(comp=0)
@@ -443,7 +455,8 @@ _ALLOWED = {
                                                       # vtk writer) instead of duplicating
                                                       # it -- numerics has 0 internal imports,
                                                       # so this cannot create a cycle (layer 04-io)
-    "gdatastate": {"io", "gpython"},                    # container holds a GkylArray backend
+    "gdatastate": {"io", "gpython", "dg"},              # state plus the shared native
+                                                      # point-value materialization bridge
     "render": {"gdatastate", "numerics", "command_spec"},
     "operations": {"gdatastate", "dg", "io", "numerics", "render", "command_spec"}, # data transformations:
                                                       # the physics verbs (moments/agyro/

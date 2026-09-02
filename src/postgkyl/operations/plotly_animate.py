@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from postgkyl import render
 
-from ._materialize import materialize_for_render
+from postgkyl.gdatastate import materialize_point_values
 
 
 def plotly_animate(data, *, frame_duration: int = 50,
@@ -19,7 +19,8 @@ def plotly_animate(data, *, frame_duration: int = 50,
     saveas: str | None = None, show: bool = False):
   """Animate a flat sequence of datasets, one Plotly frame per dataset.
 
-  Every dataset is bridged through :func:`_materialize.materialize_for_render`
+  Every dataset is bridged through
+  :func:`postgkyl.gdatastate.materialize_point_values`
   first (see ``render.plotly.plotly_animate``). ``save``/``saveas``/``show``
   are handled entirely by the render layer, and default to inert -- pass
   ``show=True`` to open the animation in the browser, or
@@ -35,7 +36,7 @@ def plotly_animate(data, *, frame_duration: int = 50,
     saveas: Explicit HTML output path.
     show: Open the animation in a browser.
   """
-  frames = [materialize_for_render(dat) for dat in data]
+  frames = [materialize_point_values(dat) for dat in data]
   return render.plotly_animate(frames, frame_duration=frame_duration,
       transition_duration=transition_duration, fromcurrent=fromcurrent,
       redraw=redraw, save=save, saveas=saveas, show=show)

@@ -93,7 +93,7 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
     # end
     kwargs["title"] = " ".join(parts)
   # end
-  return backend.plot(*frame, fig=fig, show=False, **kwargs)
+  return backend.plot(*frame, figure=fig, clear=True, show=False, **kwargs)
 # end
 
 

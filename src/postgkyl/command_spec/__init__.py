@@ -113,6 +113,14 @@ class PipelineInput:
 
 
 @dataclass(frozen=True)
+class CliType:
+  """Lossless CLI input type for a broader direct-Python annotation."""
+
+  annotation: object
+# end
+
+
+@dataclass(frozen=True)
 class ChoiceProvider:
   """Obtain an option's choices from the API registry returned by provider."""
 
@@ -198,7 +206,7 @@ def hidden_spec(fn) -> CliHidden | None:
 
 
 __all__ = [
-    "ChoiceProvider", "CliHidden", "CommandSpec", "DatasetRef", "Execution",
-    "KeyValue", "PipelineInput", "ResultPolicy", "Section", "command",
-    "command_spec", "hidden", "hidden_spec",
+    "ChoiceProvider", "CliHidden", "CliType", "CommandSpec", "DatasetRef",
+    "Execution", "KeyValue", "PipelineInput", "ResultPolicy", "Section",
+    "command", "command_spec", "hidden", "hidden_spec",
 ]
