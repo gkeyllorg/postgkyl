@@ -39,6 +39,7 @@ def collect(ctx, **kwargs):
     grid = [[]]
     cnt = 0
     label = None
+    value_coords = None
 
     for i, dat in data.iterator(tag, enum=True):
       cnt += 1
@@ -65,6 +66,9 @@ def collect(ctx, **kwargs):
       # end
       if not grid[-1]:
         grid[-1] = dat.get_grid().copy()
+        if value_coords is None:
+          value_coords = dat.ctx.get("value_coords")
+        # end
       # end
       label = dat.get_custom_label()
     # end
@@ -108,6 +112,10 @@ def collect(ctx, **kwargs):
 
       out = GData(tag=out_tag, label=label, comp_grid=ctx.obj["compgrid"])
       out.push(grid[i], values[i])
+      if value_coords is not None and not kwargs["sumdata"]:
+        # Realign with the new grid, useful for gk-rz collect.
+        out.ctx["value_coords"] = [None] + list(value_coords)
+      # end
       data.add(out)
     # end
   # end
