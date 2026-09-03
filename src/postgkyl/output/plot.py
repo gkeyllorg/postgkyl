@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from matplotlib import cm
 from matplotlib import colors
+from matplotlib import ticker
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from typing import Tuple, TYPE_CHECKING
 import matplotlib as mpl
@@ -80,6 +81,8 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
     linewidth: float | None = None, linestyle: float | None = None,
     figsize: tuple | None = None,
     jet: bool = False, cmap: str | None = None,
+    cval: float | None = None, cval_min: float | None = None,
+    cval_max: float | None = None, cval_label: str | None = None,
     **kwargs):
   """Plots Gkeyll data.
 
@@ -115,6 +118,18 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
   # comparing results with literature
   if bool(jet):
     mpl.rcParams["image.cmap"] = "jet"
+  # end
+
+  # For 1D data, individual curves can be colored according to a scalar value
+  # (e.g., the frame number) mapped onto the colormap.
+  cval_norm = None
+  if cval is not None and cval_min is not None and cval_max is not None and not bool(color):
+    if cval_min == cval_max:  # a single curve would otherwise be un-normalizable
+      cval_norm = colors.Normalize(vmin=cval_min - 0.5, vmax=cval_max + 0.5, clip=True)
+    else:
+      cval_norm = colors.Normalize(vmin=cval_min, vmax=cval_max, clip=True)
+    # end
+    cval_cmap = plt.get_cmap(cmap or mpl.rcParams["image.cmap"])
   # end
 
   if not bool(color) and not isinstance(data, tuple):
@@ -359,7 +374,18 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
       if transpose:  # put the coordinate on the vertical axis
         x, y = y, x
       # end
-      im = cax.plot(x, y, *args, color=color, label=label, markersize=markersize)
+      line_color = cval_cmap(cval_norm(cval)) if cval_norm is not None else color
+      im = cax.plot(x, y, *args, color=line_color, label=label, markersize=markersize)
+
+      # Only one colorbar per panel, no matter how many datasets are overlaid
+      if cval_norm is not None and colorbar and not getattr(cax, "_pgkyl_cval_colorbar", False):
+        mappable = cm.ScalarMappable(norm=cval_norm, cmap=cval_cmap)
+        cbar = pgkyl_colorbar(mappable, fig, cax, label=cval_label or "")
+        if float(cval_min).is_integer() and float(cval_max).is_integer():
+          cbar.ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+        # end
+        cax._pgkyl_cval_colorbar = True
+      # end
 
     elif num_dims == 2:
       extend = None

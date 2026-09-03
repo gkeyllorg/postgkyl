@@ -1,9 +1,36 @@
 import click
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 
 from postgkyl.utils import verb_print
 import postgkyl.output.plot
+
+
+def _get_frames(datasets: list) -> list | None:
+  """Returns the frame number of each dataset, or None when they are unusable.
+
+  The frame stored in the file metadata is authoritative but it is not always
+  meaningful (it is missing for data synthesized by 'ev' and it is stale for copied
+  or renamed files), so the trailing '_<frame>' of the Gkeyll file name is used as a
+  backup. Frames which are not all unique cannot discriminate between the datasets
+  and are reported as unusable.
+  """
+  candidates = [[dat.ctx.get("frame") for dat in datasets]]
+
+  from_file_name = []
+  for dat in datasets:
+    match = re.search(r"_(\d+)\.[^.]+$", dat.get_file_name() or "")
+    from_file_name.append(int(match.group(1)) if match else None)
+  # end
+  candidates.append(from_file_name)
+
+  for frames in candidates:
+    if all(frame is not None for frame in frames) and len(set(frames)) == len(frames):
+      return frames
+    # end
+  # end
+  return None
 
 
 @click.command()
@@ -105,7 +132,8 @@ import postgkyl.output.plot
     help="Override default colormap with a valid matplotlib cmap.")
 @click.option("--cval", type=click.STRING, default=None,
     help="For 1D plots, comma-separated values mapping each curve onto the colormap "
-    "(e.g. '1e-6,2e-6'). Requires --cmap; defaults to the dataset index if omitted.")
+    "(e.g. '1e-6,2e-6'). Requires --cmap; defaults to the frame number (or the dataset "
+    "index when no frame numbers can be found) if omitted.")
 @click.option("-m", "--multiblock", is_flag=True, default=False)
 @click.pass_context
 def plot(ctx, **kwargs):
@@ -180,7 +208,8 @@ def plot(ctx, **kwargs):
   # When several 2D datasets are drawn into the same figure we switch to contour mode.
   num_datasets = sum(1 for _ in ctx.obj["data"].iterator(kwargs["use"]))
   first_dat = next(ctx.obj["data"].iterator(kwargs["use"]), None)
-  is_2d = first_dat is not None and first_dat.get_num_dims(squeeze=True) == 2
+  num_dims = first_dat.get_num_dims(squeeze=True) if first_dat is not None else None
+  is_2d = num_dims == 2
   overlay_2d = (
       is_2d and num_datasets > 1 and not dataset_fignum
       and kwargs["figure"] is not None
@@ -245,13 +274,28 @@ def plot(ctx, **kwargs):
 
   # Colormap based line coloring for 1D plots.
   cval_list = None
+  cval_label = kwargs["clabel"]
   if kwargs["cval"]:
     cval_list = [float(v) for v in kwargs["cval"].split(",")]
-  elif kwargs["cmap"]:
-    num_datasets = sum(1 for _ in ctx.obj["data"].iterator(kwargs["use"]))
-    cval_list = list(range(num_datasets))
+  elif kwargs["cmap"] and num_dims == 1 and num_datasets > 1:
+    # Color each curve by its frame number, falling back to the dataset index only
+    # when no usable frames can be found.
+    frames = _get_frames(list(ctx.obj["data"].iterator(kwargs["use"])))
+    if frames is not None:
+      cval_list = [float(frame) for frame in frames]
+      if cval_label is None:
+        cval_label = "frame"
+      # end
+    else:
+      verb_print(ctx, "plot: no usable frame numbers for coloring; using dataset index")
+      cval_list = [float(i) for i in range(num_datasets)]
+      if cval_label is None:
+        cval_label = "dataset"
+      # end
+    # end
   # end
   del kwargs["cval"]
+  kwargs["cval_label"] = cval_label
   if cval_list:
     kwargs["cval_min"] = min(cval_list)
     kwargs["cval_max"] = max(cval_list)
