@@ -471,6 +471,9 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
           colorbar = False
         # end
         nodal_grid = _get_nodal_grid(grid, cells)
+        if nodal_grid[0].ndim > 1:  # curvilinear (e.g. gk-rz) grid
+          nodal_grid = [g.transpose() for g in nodal_grid]
+        # end
         x = (nodal_grid[0] + xshift) * xscale
         y = (nodal_grid[1] + yshift) * yscale
         z = (values[..., comp].transpose() + zshift) * zscale
@@ -486,7 +489,8 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
         if len(nodal_grid[0].shape) == 1:
           x = (nodal_grid[0][skip2::skip] + xshift)*xscale
           y = (nodal_grid[1][skip2::skip] + yshift)*yscale
-        else:
+        else:  # curvilinear (e.g. gk-rz) grid
+          nodal_grid = [g.transpose() for g in nodal_grid]
           x = (nodal_grid[0][skip2::skip, skip2::skip] + xshift)*xscale
           y = (nodal_grid[1][skip2::skip, skip2::skip] + yshift)*yscale
         # end
@@ -504,6 +508,9 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
           ).transpose()
         # end
         nodal_grid = _get_nodal_grid(grid, cells)
+        if nodal_grid[0].ndim > 1:  # curvilinear (e.g. gk-rz) grid
+          nodal_grid = [g.transpose() for g in nodal_grid]
+        # end
         x = (nodal_grid[0] + xshift)*xscale
         y = (nodal_grid[1] + yshift)*yscale
         z1 = (values[..., 2 * comp].transpose() + zshift)*zscale
