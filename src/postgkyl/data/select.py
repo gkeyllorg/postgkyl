@@ -37,6 +37,8 @@ def select(data: GData, comp: int | str | None = None,
   if not uniform_grid:
     grid_idx = [slice(0, grid[d].shape[d]) for d in range(num_dims)]
   # end
+  # Handle gk-rz selection.
+  value_coords = None if uniform_grid else data.ctx.get("value_coords")
 
   # Loop for coordinates
   for d, z in enumerate(zs):
@@ -48,12 +50,15 @@ def select(data: GData, comp: int | str | None = None,
       #  #end
       ##end
       if uniform_grid:
-        len_grid = grid[d].shape[0]
+        lookup = grid[d]
+      elif value_coords is not None and value_coords[d] is not None:
+        lookup = value_coords[d]
       else:
-        len_grid = grid[d].shape[d]
+        lookup = grid[d]
       # end
+      len_grid = lookup.shape[0] if lookup.ndim == 1 else lookup.shape[d]
       is_matching = values.shape[d] == len_grid
-      idx = idx_parser.idx_parser(z, grid[d], is_matching)
+      idx = idx_parser.idx_parser(z, lookup, is_matching)
       if isinstance(idx, int):
         # when 'slice' is used instead of an integer
         # number, numpy array is not squeezed after
@@ -80,7 +85,15 @@ def select(data: GData, comp: int | str | None = None,
     values_idx[-1] = idx_parser.idx_parser(comp)
   # end
   values_out = values[tuple(values_idx)]
+  new_value_coords = None
   if not uniform_grid:
+    # Handle gk-rz selection.
+    if value_coords is not None:
+      new_value_coords = [
+        vc[grid_idx[d]] if vc is not None else None
+        for d, vc in enumerate(value_coords)
+      ]
+    # end
     for d in range(num_dims):
       grid[d] = grid[d][tuple(grid_idx)]
     # end
@@ -93,5 +106,8 @@ def select(data: GData, comp: int | str | None = None,
 
   if overwrite:
     data.push(grid, values_out)
+    if new_value_coords is not None:
+      data.ctx["value_coords"] = new_value_coords
+    # end
   #end
   return grid, values_out

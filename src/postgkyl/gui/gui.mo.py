@@ -340,10 +340,15 @@ def _(
             lo, up = dat.get_bounds()
             ncells = dat.get_num_cells()
             ndim = dat.get_num_dims()
-            dims = [
-                {"lo": float(lo[i]), "up": float(up[i]), "n": int(ncells[i])}
-                for i in range(ndim)
-            ]
+            # This handle better axis for gk-rz plots select.
+            value_coords = dat.ctx.get("value_coords")
+            dims = []
+            for i in range(ndim):
+                if value_coords is not None and value_coords[i] is not None:
+                    d_lo, d_up = float(value_coords[i].min()), float(value_coords[i].max())
+                else:
+                    d_lo, d_up = float(lo[i]), float(up[i])
+                dims.append({"lo": d_lo, "up": d_up, "n": int(ncells[i])})
             return {"ok": True, "ndim": ndim, "dims": dims,
                     "ncomps": int(dat.get_num_comps())}
         except Exception as exc:
@@ -600,7 +605,7 @@ def _(
             if not field_dropdown.value:
                 return None, "", "", "Select a data directory and field on the left."
             if info["type"] == "series":
-                src = (f"{info['stem']}_*.gkyl" if all_frames.value
+                src = (f"{info['stem']}_[0-9]*.gkyl" if all_frames.value
                        else f"{info['stem']}_{frame_slider.value}.gkyl")
             else:
                 src = info["path"]

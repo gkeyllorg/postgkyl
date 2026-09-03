@@ -178,8 +178,11 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
 
   # Squeeze the data (get rid of "collapsed" dimensions)
   axes_labels = ["$z_0$", "$z_1$", "$z_2$", "$z_3$", "$z_4$", "$z_5$"]
+  # Handle the case where gk-rz is selected and we want to plot against the poloidal coordinate.
+  value_coords = None if isinstance(data, tuple) else data.ctx.get("value_coords")
   if len(grid) > num_dims:
     idx = []
+    orig_num_dims = len(grid)
     for dim, g in enumerate(grid):
       if cells[dim] <= 1:
         idx.append(dim)
@@ -187,6 +190,7 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
       grid[dim] = g.squeeze()
     # end
     if bool(idx):
+      keep_dims = [d for d in range(orig_num_dims) if d not in idx]
       for i in reversed(idx):
         grid.pop(i)
       # end
@@ -198,9 +202,15 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
 
       # c2p grids
       if len(grid[0].shape) > 1:
-        for d in range(num_dims):
-          for i in reversed(idx):
-            grid[d] = np.mean(grid[d], axis=i)
+        for pos, orig_d in enumerate(keep_dims):
+          if value_coords is not None and orig_d < len(value_coords) and value_coords[orig_d] is not None:
+            grid[pos] = value_coords[orig_d]
+            lower[pos] = np.min(grid[pos])
+            upper[pos] = np.max(grid[pos])
+          else:
+            for i in reversed(idx):
+              grid[pos] = np.mean(grid[pos], axis=i)
+            # end
           # end
         # end
       # end

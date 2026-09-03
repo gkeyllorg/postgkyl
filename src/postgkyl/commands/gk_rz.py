@@ -237,6 +237,8 @@ def gk_rz(ctx, **kwargs):
       R = _sample(majorR, geo_coords, field_grid)
       Z = _sample(vertZ, geo_coords, field_grid)
       out = GData(tag=kwargs["tag"], label=kwargs["label"], ctx=dat.ctx)
+      # Used to allow 'select' after gk-rz.
+      out.ctx["value_coords"] = list(field_grid)
       out.push([R, Z], vals[..., np.newaxis])
       data.add(out)
       dat.deactivate()
@@ -308,6 +310,9 @@ def gk_rz(ctx, **kwargs):
     _, vals = _interp(dat)
     proj = _fft_poloidal_project(vals, zc, box, wind, phi0_zf, zf, phi_tor)
     out = GData(tag=kwargs["tag"], label=kwargs["label"], ctx=dat.ctx)
+    # Rrz, Zrz are curvilinear; expose the logical (x, z) coordinates used to
+    # build them so 'select' can search by value.
+    out.ctx["value_coords"] = [xn, zf_edges]
     out.push([Rrz, Zrz], proj[..., np.newaxis])
     data.add(out)
     dat.deactivate()
