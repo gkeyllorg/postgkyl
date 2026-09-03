@@ -98,10 +98,7 @@ def cli(ctx, **kwargs):
   ctx.obj["start_time"] = time.time()  # Timings are written in the verbose mode
   if kwargs["verbose"]:
     ctx.obj["verbose"] = True
-    # Monty Python references should be a part of any Python code
-    verb_print(ctx, "This is Postgkyl running in verbose mode!")
-    verb_print(ctx, "Spam! Spam! Spam! Spam! Lovely Spam! Lovely Spam!")
-    verb_print(ctx, "And now for something completelly different...")
+    verb_print(ctx, "This is Postgkyl running in verbose mode.")
   else:
     ctx.obj["verbose"] = False
   # end
