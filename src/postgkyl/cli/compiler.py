@@ -14,8 +14,8 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin, get_typ
 import click
 
 from postgkyl.cli_spec import (
-    ChoiceProvider, CliType, CommandSpec, DatasetRef, Execution, KeyValue,
-    PipelineInput, ResultPolicy, Section, command_spec,
+    ChoiceProvider, CliArgument, CliType, CommandSpec, DatasetRef, Execution,
+    KeyValue, PipelineInput, ResultPolicy, Section, command_spec,
 )
 
 from .docstrings import parse_docstring
@@ -63,6 +63,7 @@ class ParameterModel:
   default: object
   injected: bool = False
   dataset_ref: bool = False
+  argument: bool = False
 # end
 
 
@@ -80,6 +81,51 @@ class CommandModel:
   @property
   def section(self) -> Section:
     return self.spec.section
+  # end
+# end
+
+
+class _DocumentedArgument(click.Argument):
+  """Click argument which retains its API parameter's help text."""
+
+  def __init__(self, param_decls, *, help: str | None = None, **attrs):
+    super().__init__(param_decls, **attrs)
+    self.help = help
+  # end
+
+  def get_help_record(self, ctx):
+    if not self.help:
+      return None
+    # end
+    return self.make_metavar(ctx), self.help
+  # end
+# end
+
+
+class _GeneratedCommand(click.Command):
+  """Render positional parameter docs separately from option docs."""
+
+  def format_options(self, ctx, formatter) -> None:
+    arguments = []
+    options = []
+    for parameter in self.get_params(ctx):
+      record = parameter.get_help_record(ctx)
+      if record is None:
+        continue
+      # end
+      target = arguments if isinstance(parameter, click.Argument) else options
+      target.append(record)
+    # end
+    if arguments:
+      with formatter.section("Arguments"):
+        formatter.write_dl(arguments)
+      # end
+    # end
+    if options:
+      with formatter.section("Options"):
+        formatter.write_dl(options)
+      # end
+    # end
   # end
 # end
 
@@ -105,7 +151,8 @@ def _short_option_names(parameters: tuple[ParameterModel, ...]) -> dict[str, str
   """Return unambiguous one-letter option names for exposed parameters."""
   candidates = {
       parameter.name: kebab_case(parameter.name)[0]
-      for parameter in parameters if not parameter.injected
+      for parameter in parameters
+      if not parameter.injected and not parameter.argument
   }
   counts = Counter(candidates.values())
   return {
@@ -152,7 +199,8 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
   key_values = [marker for marker in markers if isinstance(marker, KeyValue)]
   cli_types = [marker for marker in markers if isinstance(marker, CliType)]
   unknown = [marker for marker in markers if not isinstance(
-      marker, (ChoiceProvider, CliType, KeyValue, DatasetRef, PipelineInput))]
+      marker, (ChoiceProvider, CliArgument, CliType, KeyValue, DatasetRef,
+          PipelineInput))]
   if unknown:
     raise _error(fn, name, f"unsupported Annotated marker {unknown[0]!r}")
   # end
@@ -298,7 +346,9 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
   canonical = fn
   signature = inspect.signature(canonical)
   hints = _type_hints(canonical)
-  raw: list[tuple[inspect.Parameter, object, tuple[object, ...], bool, bool]] = []
+  raw: list[
+      tuple[inspect.Parameter, object, tuple[object, ...], bool, bool, bool]
+  ] = []
   for index, parameter in enumerate(signature.parameters.values()):
     if parameter.kind is inspect.Parameter.VAR_KEYWORD:
       raise _error(canonical, parameter.name, "**kwargs is not representable")
@@ -330,7 +380,25 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
     if is_dataset_ref and injected:
       raise _error(canonical, parameter.name, "cannot be both DatasetRef and PipelineInput")
     # end
-    raw.append((parameter, base, markers, injected, is_dataset_ref))
+    is_argument = any(isinstance(marker, CliArgument) for marker in markers)
+    if sum(isinstance(marker, CliArgument) for marker in markers) > 1:
+      raise _error(canonical, parameter.name, "duplicate CliArgument marker")
+    # end
+    if is_argument and injected:
+      raise _error(canonical, parameter.name,
+          "cannot be both CliArgument and PipelineInput")
+    # end
+    if is_argument and is_dataset_ref:
+      raise _error(canonical, parameter.name,
+          "cannot be both CliArgument and DatasetRef")
+    # end
+    if is_argument and parameter.kind not in (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD):
+      raise _error(canonical, parameter.name,
+          "CliArgument requires a positional Python parameter")
+    # end
+    raw.append((parameter, base, markers, injected, is_dataset_ref, is_argument))
   # end
 
   injected_parameters = [item for item in raw if item[3]]
@@ -343,18 +411,23 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
       required=set(signature.parameters),
       signature_names=set(signature.parameters))
   models: list[ParameterModel] = []
-  for parameter, base, markers, injected, is_dataset_ref in raw:
+  for parameter, base, markers, injected, is_dataset_ref, is_argument in raw:
     required = parameter.default is inspect.Parameter.empty
     default = None if required else parameter.default
     codec = None
     if not injected:
       codec = (TypeCodec(CodecKind.STRING, str, optional=not required)
           if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+      if is_argument and (codec.multiple or codec.nargs != 1):
+        raise _error(canonical, parameter.name,
+            "CliArgument currently supports scalar values only")
+      # end
     # end
     models.append(ParameterModel(
         name=parameter.name, kind=parameter.kind, annotation=base, codec=codec,
         help=docs.parameters.get(parameter.name), required=required,
-        default=default, injected=injected, dataset_ref=is_dataset_ref))
+        default=default, injected=injected, dataset_ref=is_dataset_ref,
+        argument=is_argument))
   # end
 
   command_name = name or kebab_case(getattr(canonical, "__name__", ""))
@@ -644,7 +717,8 @@ def execute_model(ctx, model: CommandModel, values: dict):
 # end
 
 
-def build_click_command(model: CommandModel, *, command_class=click.Command) -> click.Command:
+def build_click_command(model: CommandModel, *,
+    command_class=_GeneratedCommand) -> click.Command:
   """Lower an immutable model to a Click command."""
   params: list[click.Parameter] = []
   short_options = _short_option_names(model.parameters)
@@ -654,6 +728,19 @@ def build_click_command(model: CommandModel, *, command_class=click.Command) -> 
     # end
     codec = parameter.codec
     assert codec is not None
+    if parameter.argument:
+      attrs = dict(type=_click_scalar(codec), required=parameter.required)
+      if not parameter.required:
+        default = parameter.default
+        if codec.kind is CodecKind.ENUM and isinstance(default, Enum):
+          default = default.value
+        # end
+        attrs["default"] = default
+      # end
+      params.append(_DocumentedArgument(
+          [parameter.name], help=parameter.help, **attrs))
+      continue
+    # end
     attrs = dict(
         type=_click_scalar(codec), required=parameter.required,
         help=parameter.help, show_default=not parameter.required,

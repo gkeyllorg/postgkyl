@@ -96,7 +96,7 @@ pgkyl file.gkyl info
 pgkyl euler_5m_0.gkyl interpolate five-moment-pressure --num-moms 5 plot
 
 # An RPN chain over the working set (see operations/evaluate.py)
-pgkyl a.gkyl b.gkyl evaluate --chain "f0 f1 +" interpolate plot
+pgkyl a.gkyl b.gkyl evaluate "f0 f1 +" interpolate plot
 
 # `pgkyl --help` lists every registered command, grouped by section
 # (Verbs / Diagnostics / Render / Utility).

@@ -16,6 +16,7 @@ DATA = ROOT / "tests" / "test_data"
 FIELD = DATA / "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl"
 DISTF = DATA / "generated" / "distf_p2_0.gkyl"
 ENERGY = DATA / "generated" / "energy_dynvec.gkyl"
+FIELD_3D = DATA / "generated" / "3d_ms_p1.gkyl"
 
 
 def _run(*args):
@@ -113,9 +114,12 @@ def test_boolean_options_preserve_the_script_signature():
 # end
 
 
-def test_required_script_parameters_are_required_options():
-  assert _run(ENERGY, "evaluate", "f 2 *").exit_code != 0
-  _ok(ENERGY, "evaluate", "--chain", "f 2 *", "info")
+def test_declared_cli_arguments_are_positional():
+  _ok(ENERGY, "ev", "f0 2 *", "info")
+  assert _run(ENERGY, "evaluate", "--chain", "f 2 *").exit_code != 0
+
+  _ok(FIELD_3D, "interpolate", "integrate-axis", "2", "info")
+  assert _run(FIELD, "interpolate", "integrate-axis", "--axis", "0").exit_code != 0
 # end
 
 

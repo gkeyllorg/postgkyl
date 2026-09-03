@@ -56,7 +56,8 @@ from .map import map
 from typing import Annotated, Literal
 
 from postgkyl.cli_spec import (
-    CommandSpec, DatasetRef, Execution, ResultPolicy, Section, command, hidden,
+    CliArgument, CliType, CommandSpec, DatasetRef, Execution, ResultPolicy,
+    Section, command, hidden,
 )
 from postgkyl.gdatastate.gdatastate import GDataState
 
@@ -90,7 +91,9 @@ for _function in (
 select.__annotations__.update(comp=str | None, z0=str | None, z1=str | None,
     z2=str | None, z3=str | None, z4=str | None, z5=str | None)
 integrate.__annotations__["op"] = Literal["none", "abs", "sq"]
-integrate_axis.__annotations__["axis"] = str | None
+integrate_axis.__annotations__["axis"] = Annotated[
+    int | tuple | str | None, CliType(str | None), CliArgument()]
+evaluate.__annotations__["chain"] = Annotated[str, CliArgument()]
 average.__annotations__["dims"] = list[int]
 average.__annotations__["weight"] = Annotated[GDataState | None, DatasetRef()]
 eval_at_coord_proj.__annotations__.update(

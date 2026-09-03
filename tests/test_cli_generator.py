@@ -13,8 +13,8 @@ import pytest
 
 import postgkyl.cli.compiler as compiler
 from postgkyl.cli_spec import (
-    CliType, CommandSpec, DatasetRef, Execution, KeyValue, PipelineInput,
-    ResultPolicy, Section, command,
+    CliArgument, CliType, CommandSpec, DatasetRef, Execution, KeyValue,
+    PipelineInput, ResultPolicy, Section, command,
 )
 from postgkyl.cli.app import COMMANDS, MODELS
 from postgkyl.cli.compiler import (
@@ -187,6 +187,52 @@ def test_optional_annotation_does_not_make_a_required_option_optional():
 # end
 
 
+def test_cli_argument_marker_projects_only_the_declared_parameter_positionally():
+  calls = []
+
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD,
+      result=ResultPolicy.SILENT))
+  def positional(value: Annotated[str, CliArgument()], *, suffix: str = ""):
+    """Accept one positional CLI value.
+
+    Args:
+      value: Required positional value.
+      suffix: Optional suffix.
+    """
+    calls.append(value + suffix)
+  # end
+
+  command_obj = build_click_command(compile_callable(positional))
+  assert isinstance(command_obj.params[0], click.Argument)
+  assert isinstance(command_obj.params[1], click.Option)
+  help_text = CliRunner().invoke(command_obj, ["--help"]).output
+  assert "Arguments:" in help_text
+  assert "VALUE  Required positional value." in help_text
+  result = CliRunner().invoke(command_obj, ["hello", "--suffix", "!"],
+      obj=DataSpace())
+  assert result.exit_code == 0, result.output
+  assert calls == ["hello!"]
+  assert CliRunner().invoke(command_obj, ["--value", "hello"],
+      obj=DataSpace()).exit_code != 0
+# end
+
+
+def test_cli_argument_marker_requires_a_positional_python_parameter():
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
+  def invalid(*, value: Annotated[str, CliArgument()]):
+    """Reject a positional CLI marker on a keyword-only API parameter.
+
+    Args:
+      value: Invalid positional projection.
+    """
+  # end
+
+  with pytest.raises(CommandCompilationError, match="positional Python"):
+    compile_callable(invalid)
+  # end
+# end
+
+
 def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
   """Keep runtime CLI metadata authoritative over resolved string hints."""
   original = compiler.get_type_hints
@@ -289,12 +335,19 @@ def test_every_generated_name_is_the_dashed_api_name():
         if not parameter.injected}
     assert set(options) == expected
     initials = [parameter.name[0] for parameter in model.parameters
-        if not parameter.injected]
+        if not parameter.injected and not parameter.argument]
     for parameter in model.parameters:
       if not parameter.injected:
-        expected_opts = ["--" + parameter.name.replace("_", "-")]
-        if initials.count(parameter.name[0]) == 1 and parameter.name[0] != "h":
-          expected_opts.append("-" + parameter.name[0])
+        if parameter.argument:
+          assert isinstance(options[parameter.name], click.Argument)
+          expected_opts = [parameter.name]
+        # end
+        else:
+          assert isinstance(options[parameter.name], click.Option)
+          expected_opts = ["--" + parameter.name.replace("_", "-")]
+          if initials.count(parameter.name[0]) == 1 and parameter.name[0] != "h":
+            expected_opts.append("-" + parameter.name[0])
+          # end
         # end
         assert options[parameter.name].opts == expected_opts
       # end

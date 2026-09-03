@@ -79,7 +79,7 @@ indexing datasets themselves -- there is no `f[N]` form.) Data must be
 
 ```bash
 pgkyl tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_p2_1.gkyl \
-    interpolate evaluate --chain "f0 f1 -" info
+    interpolate evaluate "f0 f1 -" info
 ```
 
 ## 6. Gyrokinetics: pre-named quantities and distribution functions

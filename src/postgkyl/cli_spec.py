@@ -112,6 +112,12 @@ class CliType:
 
 
 @dataclass(frozen=True)
+class CliArgument:
+  """Expose this API parameter as a positional command-line argument."""
+# end
+
+
+@dataclass(frozen=True)
 class ChoiceProvider:
   """Obtain an option's choices from the API registry returned by provider."""
 
@@ -197,7 +203,7 @@ def hidden_spec(fn) -> CliHidden | None:
 
 
 __all__ = [
-    "ChoiceProvider", "CliHidden", "CliType", "CommandSpec", "DatasetRef",
-    "Execution", "KeyValue", "PipelineInput", "ResultPolicy", "Section",
-    "command", "command_spec", "hidden", "hidden_spec",
+    "ChoiceProvider", "CliArgument", "CliHidden", "CliType", "CommandSpec",
+    "DatasetRef", "Execution", "KeyValue", "PipelineInput", "ResultPolicy",
+    "Section", "command", "command_spec", "hidden", "hidden_spec",
 ]

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 
 def integrate(data: "GDataState", *, op: str = "none"):
-  """``int dx op(f)`` over the whole grid, one value per field component.
+  """ Integrate over the whole grid, one value per field component.
 
   Args:
     data: a gkyl-backed (native modal) dataset.
@@ -81,7 +81,7 @@ def integrate(data: "GDataState", *, op: str = "none"):
 
 def integrate_axis(data: "GDataState", axis: int | tuple | str | None = None, *,
     inplace: bool = False, tag: str | None = None, label: str | None = None):
-  """``int dz`` over one or more axes of point-value data (non-terminal).
+  """ Integrate over one or more axes of point-value data (non-terminal).
 
   Args:
     data: point-value dataset -- already-interpolated (NumPy) data, or a
