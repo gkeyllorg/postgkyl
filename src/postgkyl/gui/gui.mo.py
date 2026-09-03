@@ -459,7 +459,7 @@ def _(mo):
     surface = mo.ui.checkbox(label="surface")
     contour = mo.ui.checkbox(label="contour")
     fixaspect = mo.ui.checkbox(label="fix aspect")
-    showgrid = mo.ui.checkbox(label="grid")
+    showgrid = mo.ui.checkbox(label="grid", value=True)
     logx = mo.ui.checkbox(label="logx")
     logy = mo.ui.checkbox(label="logy")
     logz = mo.ui.checkbox(label="logz")
