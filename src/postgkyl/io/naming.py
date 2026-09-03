@@ -37,7 +37,7 @@ from dataclasses import dataclass
 
 # The multiblock block index: Gkeyll writes "<sim>_b<N>-<quantity>.gkyl"
 # (see the ``name + '_b*-'`` prefix built by ``diagnostics.gyrokinetics.nodes``
-# and main's ``gk_nodes``). Digits are required, so a simulation legitimately
+# and main's ``nodes``). Digits are required, so a simulation legitimately
 # named e.g. "gk_beta_scan" is never mistaken for block "eta_scan".
 _BLOCK_RE = re.compile(r"^(?P<sim>.*)_b(?P<block>\d+)$")
 

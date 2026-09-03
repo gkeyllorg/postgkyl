@@ -118,8 +118,9 @@ def test_declared_cli_arguments_are_positional():
   _ok(ENERGY, "ev", "f0 2 *", "info")
   assert _run(ENERGY, "evaluate", "--chain", "f 2 *").exit_code != 0
 
-  _ok(FIELD_3D, "interpolate", "integrate-axis", "2", "info")
-  assert _run(FIELD, "interpolate", "integrate-axis", "--axis", "0").exit_code != 0
+  _ok(FIELD_3D, "integrate", "2", "info")
+  assert _run(FIELD_3D, "integrate", "--axis", "2").exit_code != 0
+  assert _run(FIELD_3D, "integrate-axis", "2").exit_code != 0
 # end
 
 

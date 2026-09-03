@@ -21,8 +21,7 @@ owns it and simply gathered here:
     represent, apply                 <- operations/ (value_form verbs)
     available_evaluate_operators     <- operations/ (``evaluate``'s RPN token vocabulary)
     save                             <- io/        (file output)
-    load_gk_quantity,                <- diagnostics/gyrokinetics/
-    load_gk_distf, available_gk_quantities        (equation-internal loaders)
+    gyrokinetics                    <- diagnostics/ (equation namespace)
     version_report                    <- _version.py  (``pgkyl --version``'s
                                                       commit/build-info report)
 
@@ -33,7 +32,7 @@ can never drift apart. ``GData.load(...)`` is the one lifecycle method: it
 loads a literal file into an existing object and returns that same object for
 chaining. The rest of the
 domain-independent ``operations`` verb inventory (``fft``, ``magsq``, ``mask``,
-``val2coord``, ``extract_input``, ``fit``, ``differentiate``, ``integrate_axis``,
+``val2coord``, ``extract_input``, ``fit``, ``differentiate``, ``integrate``,
 ``map``, plus ``grid`` -- see ``api/gdata.py`` for why ``grid`` has no fluent
 spelling) is reachable as a ``GData`` fluent method and via
 ``postgkyl.operations.<verb>``; this facade does not additionally promote each one to
@@ -56,7 +55,7 @@ from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, relchange
 from postgkyl.operations import (
     apply, available_evaluate_operators, average, differentiate,
     eval_at_coord_proj, extract_input, fft, fit, grid, growth, info, integrate,
-    integrate_axis, interpolate, local_poly, magsq, map, mask, represent,
+    interpolate, local_poly, magsq, map, mask, represent,
     select, val2coord,
 )
 from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
@@ -64,8 +63,7 @@ from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
 from postgkyl.cli_spec import hidden
 from postgkyl.io import save
-from postgkyl.diagnostics.gyrokinetics import (
-    load_gk_distf, load_gk_quantity, available_quantities as available_gk_quantities)
+from postgkyl.diagnostics import gyrokinetics
 from postgkyl._version import version_report
 
 __version__ = "2.0.0"
@@ -73,11 +71,10 @@ __version__ = "2.0.0"
 hidden("collection helper is a Python API, not a pipeline command")(group_blocks)
 
 __all__ = ["GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integrate",
-    "interpolate", "local_poly", "select", "integrate_axis", "average",
+    "interpolate", "local_poly", "select", "average",
     "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
     "extract_input", "fit", "growth", "differentiate", "map",
     "represent", "apply", "gk_rz", "gk_fluxsurf", "save",
     "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
-    "available_evaluate_operators", "plotly", "pyvista",
-    "load_gk_quantity", "load_gk_distf", "available_gk_quantities",
+    "available_evaluate_operators", "plotly", "pyvista", "gyrokinetics",
     "__version__", "version_report"]

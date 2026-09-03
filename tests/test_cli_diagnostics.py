@@ -6,6 +6,7 @@ import click
 import numpy as np
 import pytest
 
+import postgkyl as pg
 from postgkyl.cli.app import COMMANDS
 from postgkyl.cli.state import DataSpace
 from postgkyl import diagnostics
@@ -45,6 +46,34 @@ def test_diagnostics_follow_gkeyll_model_families():
 # end
 
 
+def test_gyrokinetic_diagnostics_use_concise_python_names():
+  functions = (
+      diagnostics.gyrokinetics.energy_balance,
+      diagnostics.gyrokinetics.nodes,
+      diagnostics.gyrokinetics.particle_balance,
+      diagnostics.gyrokinetics.load_distf,
+      diagnostics.gyrokinetics.load_quantity,
+  )
+  assert tuple(function.__name__ for function in functions) == (
+      "energy_balance", "nodes", "particle_balance", "load_distf",
+      "load_quantity",
+  )
+  assert pg.gyrokinetics is diagnostics.gyrokinetics
+  assert pg.gyrokinetics.available_quantities() == (
+      diagnostics.gyrokinetics.available_quantities())
+  for bare_name in ("load_distf", "load_quantity", "available_gk_quantities"):
+    assert not hasattr(pg, bare_name)
+  # end
+  for old_name in (
+      "gk_energy_balance", "gk_nodes", "gk_particle_balance",
+      "load_gk_distf", "load_gk_quantity",
+  ):
+    assert not hasattr(diagnostics.gyrokinetics, old_name)
+    assert not hasattr(pg, old_name)
+  # end
+# end
+
+
 def test_only_canonical_diagnostic_names_are_registered():
   assert "rotations-bparrotate" in COMMAND_BY_NAME
   assert "five-moment-pressure" in COMMAND_BY_NAME
@@ -52,9 +81,19 @@ def test_only_canonical_diagnostic_names_are_registered():
   assert "multispecies-energetics" in COMMAND_BY_NAME
   assert "kinetic-transform-frame" in COMMAND_BY_NAME
   assert "pkpm-laguerre-compose" in COMMAND_BY_NAME
+  for name in (
+      "gyrokinetics-energy-balance", "gyrokinetics-nodes",
+      "gyrokinetics-particle-balance", "gyrokinetics-load-distf",
+      "gyrokinetics-load-quantity",
+  ):
+    assert name in COMMAND_BY_NAME
+  # end
   for old_name in (
       "bparrotate", "agyro", "energetics", "euler", "tenmoment", "mhd",
       "transform_frame", "laguerre_compose",
+      "gyrokinetics-gk-energy-balance", "gyrokinetics-gk-nodes",
+      "gyrokinetics-gk-particle-balance", "gyrokinetics-load-gk-distf",
+      "gyrokinetics-load-gk-quantity",
   ):
     assert old_name not in COMMAND_BY_NAME
   # end

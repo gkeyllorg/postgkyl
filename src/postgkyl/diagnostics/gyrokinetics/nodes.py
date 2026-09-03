@@ -94,7 +94,7 @@ def _parse_levels(clevels: str | None, cnlevels: int) -> np.ndarray | int:
 # end
 
 
-def gk_nodes(
+def nodes(
     name: str,
     *,
     path: str = "./",

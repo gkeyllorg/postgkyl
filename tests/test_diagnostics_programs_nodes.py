@@ -6,7 +6,7 @@ exists for this app). The pure geometry helpers (``is_geo_mapc2p``,
 unconditionally; the node-plotting figure path is exercised against
 synthetic node arrays stubbed through ``utils.GData`` (single- and
 multi-block). The poloidal-flux (``psi_file``) and wall overlays additionally
-call ``GData.interpolate()`` on a *real* modal DG field (``gk_nodes`` hardcodes
+call ``GData.interpolate()`` on a *real* modal DG field (``nodes`` hardcodes
 ``poly_order=2``/basis ``"mt"`` for the psi read) -- the repo ships no
 interpolatable p2-tensor poloidal-flux fixture, so that branch is skipped
 loudly rather than faked.
@@ -16,6 +16,7 @@ Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_nodes.py -v
 
 from __future__ import annotations
 
+import importlib
 import os
 
 import matplotlib
@@ -24,8 +25,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import nodes
 from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+
+nodes = importlib.import_module("postgkyl.diagnostics.gyrokinetics.nodes")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")
@@ -184,7 +186,7 @@ def stub(monkeypatch):
 def _square_nodes(nx=3, ny=3):
   """A simple 2-D mapc2p node grid: a regular (nx, ny) square in the X-Y
   plane, with Z varying along x (so both the R and Z extents -- and hence
-  ``gk_nodes``'s figure aspect ratio -- are nonzero and finite)."""
+  ``nodes``'s figure aspect ratio -- are nonzero and finite)."""
   x = np.linspace(1.0, 2.0, nx)
   y = np.linspace(0.0, 1.0, ny)
   xx, yy = np.meshgrid(x, y, indexing="ij")
@@ -201,7 +203,7 @@ class TestGkNodesSynthetic:
   def test_single_block_no_overlays(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0), np.arange(3.0)], _square_nodes())
-    fig = nodes.gk_nodes("sim", path=path)
+    fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
       assert len(fig.axes) == 1
@@ -217,7 +219,7 @@ class TestGkNodesSynthetic:
     block1 = _square_nodes() + 5.0  # shifted far away in R and Z
     stub.add(f"{path}sim_b0-nodes.gkyl", [np.arange(3.0)] * 2, block0)
     stub.add(f"{path}sim_b1-nodes.gkyl", [np.arange(3.0)] * 2, block1)
-    fig = nodes.gk_nodes("sim", path=path, multib="0,1")
+    fig = nodes.nodes("sim", path=path, multib="0,1")
     try:
       assert fig is not None
     # end
@@ -233,7 +235,7 @@ class TestGkNodesSynthetic:
     rz_nodes[..., 1] = np.linspace(-1.0, 1.0, 3)[None, :]
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, rz_nodes,
         ctx={"geometry_type": 1})
-    fig = nodes.gk_nodes("sim", path=path)
+    fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
     # end
@@ -247,7 +249,7 @@ class TestGkNodesSynthetic:
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     wall_path = tmp_path / "wall.csv"
     wall_path.write_text("0.0,0.0\n1.0,1.0\n2.0,0.0\n")
-    fig = nodes.gk_nodes("sim", path=path, wall_file="wall.csv")
+    fig = nodes.nodes("sim", path=path, wall_file="wall.csv")
     try:
       assert fig is not None
     # end
@@ -260,7 +262,7 @@ class TestGkNodesSynthetic:
     path = str(tmp_path) + "/"
     abs_file = f"{path}custom_nodes.gkyl"
     stub.add(abs_file, [np.arange(3.0)] * 2, _square_nodes())
-    fig = nodes.gk_nodes("sim", path=path, nodes_file=abs_file)
+    fig = nodes.nodes("sim", path=path, nodes_file=abs_file)
     try:
       assert fig is not None
     # end
@@ -273,7 +275,7 @@ class TestGkNodesSynthetic:
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     out_path = str(tmp_path / "out.png")
-    fig = nodes.gk_nodes("sim", path=path, xlim=(0.0, 2.0), ylim=(-1.0, 1.0),
+    fig = nodes.nodes("sim", path=path, xlim=(0.0, 2.0), ylim=(-1.0, 1.0),
         saveas=out_path)
     try:
       assert fig.axes[0].get_xlim() == (0.0, 2.0)
@@ -291,7 +293,7 @@ class TestGkNodesSynthetic:
     nodes_1d[:, 0] = np.linspace(1.0, 2.0, 4)
     nodes_1d[:, 2] = np.linspace(0.0, 1.0, 4)
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(4.0)], nodes_1d)
-    fig = nodes.gk_nodes("sim", path=path)
+    fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
     # end
@@ -304,7 +306,7 @@ class TestGkNodesSynthetic:
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     calls = []
     monkeypatch.setattr(plt, "show", lambda: calls.append(True))
-    fig = nodes.gk_nodes("sim", path=path, show=True)
+    fig = nodes.nodes("sim", path=path, show=True)
     try:
       assert calls == [True]
     # end
@@ -332,7 +334,7 @@ class TestGkNodesPsiOverlay:
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     self._add_psi(stub, path)
-    fig = nodes.gk_nodes("sim", path=path, psi_file="sim-psi.gkyl")
+    fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl")
     try:
       assert len(fig.axes) == 2
     # end
@@ -344,7 +346,7 @@ class TestGkNodesPsiOverlay:
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     self._add_psi(stub, path)
-    fig = nodes.gk_nodes("sim", path=path, psi_file="sim-psi.gkyl", contour=True)
+    fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", contour=True)
     try:
       assert len(fig.axes) == 2
     # end
@@ -356,7 +358,7 @@ class TestGkNodesPsiOverlay:
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     self._add_psi(stub, path)
-    fig = nodes.gk_nodes("sim", path=path, psi_file="sim-psi.gkyl", clevels="0.5")
+    fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", clevels="0.5")
     try:
       assert len(fig.axes) == 1
     # end
@@ -370,7 +372,7 @@ class TestGkNodesPsiOverlay:
     abs_psi = f"{path}custom_psi.gkyl"
     psi_grid = [np.linspace(0.0, 3.0, 4), np.linspace(-1.0, 1.0, 3)]
     stub.add(abs_psi, psi_grid, np.ones((3, 2)))
-    fig = nodes.gk_nodes("sim", path=path, psi_file=abs_psi)
+    fig = nodes.nodes("sim", path=path, psi_file=abs_psi)
     try:
       assert len(fig.axes) == 2
     # end
@@ -383,7 +385,7 @@ class TestGkNodesPsiOverlay:
 
 class TestGkNodesPsiOverlayRealFixtures:
   """The psi overlay calls ``GData.interpolate()`` on a real modal DG field
-  (``gk_nodes`` hardcodes ``poly_order=2``, basis ``"mt"``/tensor, and never
+  (``nodes`` hardcodes ``poly_order=2``, basis ``"mt"``/tensor, and never
   selects a single component before handing the interpolated array straight
   to ``pcolormesh``/``contour``) -- skipped loudly since the repo's one
   matching-basis fixture, ``tests/test_data/generated/2d_mt_p2.gkyl``, is a
@@ -403,7 +405,7 @@ class TestGkNodesPsiOverlayRealFixtures:
           "psi-overlay assertion here")
     # end
     pytest.skip(
-        f"'{candidate}' has {num_comps} components; gk_nodes(psi_file=...) "
+        f"'{candidate}' has {num_comps} components; nodes(psi_file=...) "
         "never selects a single component before pcolormesh/contour, so "
         "this fixture cannot exercise that path meaningfully. See "
         "TestGkNodesSynthetic for the node-plotting coverage instead.")

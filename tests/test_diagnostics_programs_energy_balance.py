@@ -17,6 +17,7 @@ Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_energy_balance.py -v
 
 from __future__ import annotations
 
+import importlib
 import os
 
 import matplotlib
@@ -25,8 +26,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import energy_balance as eb
 from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+
+eb = importlib.import_module(
+    "postgkyl.diagnostics.gyrokinetics.energy_balance")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")
@@ -180,7 +183,7 @@ class TestGkEnergyBalanceSynthetic:
 
   def test_full_path_with_src_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path)
-    fig, traces = eb.gk_energy_balance("sim", ["ion"], path=path)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
     try:
       assert traces.src is not None
       assert traces.bflux_tot is not None
@@ -196,7 +199,7 @@ class TestGkEnergyBalanceSynthetic:
 
   def test_missing_source_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, with_src=False, with_bflux=False)
-    fig, traces = eb.gk_energy_balance("sim", ["ion"], path=path)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
     try:
       assert traces.src is None
       assert traces.bflux_tot is None
@@ -208,7 +211,7 @@ class TestGkEnergyBalanceSynthetic:
 
   def test_electromagnetic_branch(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, with_apar=True)
-    fig, traces = eb.gk_energy_balance("sim", ["ion"], path=path)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
     try:
       assert traces.apar_dot is not None
     # end
@@ -219,13 +222,13 @@ class TestGkEnergyBalanceSynthetic:
 
   def test_multi_species_sums(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, species=("ion", "elc"))
-    fig, traces = eb.gk_energy_balance("sim", ["ion", "elc"], path=path)
+    fig, traces = eb.energy_balance("sim", ["ion", "elc"], path=path)
     try:
       # Two identical species contributions sum to double a single one.
       single_dir = tmp_path / "single"
       single_dir.mkdir()
       single_path = _build_sim(stub, single_dir, species=("ion",))
-      _, single_traces = eb.gk_energy_balance("sim", ["ion"], path=single_path)
+      _, single_traces = eb.energy_balance("sim", ["ion"], path=single_path)
       np.testing.assert_allclose(traces.fdot, 2 * single_traces.fdot)
     # end
     finally:
@@ -249,7 +252,7 @@ class TestGkEnergyBalanceSynthetic:
     dt_vals = np.full((n - 1, 1), 0.2)
     stub.add(f"{path}sim-dt.gkyl", dt_time, dt_vals)
 
-    fig, traces = eb.gk_energy_balance("sim", ["ion"], path=path, relative_error=True)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path, relative_error=True)
     try:
       assert traces.mom_err is None
       assert traces.mom_err_norm is not None
@@ -276,7 +279,7 @@ class TestGkEnergyBalanceSynthetic:
     stub.add(f"{path}sim-dt.gkyl", dt_time, np.full((n - 1, 1), 0.2))
 
     out_path = str(tmp_path / "out.png")
-    fig, traces = eb.gk_energy_balance(
+    fig, traces = eb.energy_balance(
         "sim", ["ion"], path=path, relative_error=True, absy=True, logy=True,
         saveas=out_path)
     try:
@@ -310,7 +313,7 @@ class TestGkEnergyBalanceSynthetic:
     dt_time = np.linspace(0.0, 1.0, n - 1)
     stub.add(f"{path}sim-dt.gkyl", dt_time, np.full((n - 1, 1), 0.2))
 
-    fig, traces = eb.gk_energy_balance("sim", ["ion"], path=path, relative_error=True)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path, relative_error=True)
     try:
       # No TypeError, and the electromagnetic term is correctly excluded
       # (has_apar-gated) -- matches the electrostatic relative-error formula.
@@ -325,7 +328,7 @@ class TestGkEnergyBalanceSynthetic:
   def test_missing_required_field_dot_file_raises(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     with pytest.raises(FileNotFoundError, match="field_energy_dot"):
-      eb.gk_energy_balance("sim", ["ion"], path=path)
+      eb.energy_balance("sim", ["ion"], path=path)
   # end
     # end
 
@@ -335,7 +338,7 @@ class TestGkEnergyBalanceSynthetic:
     time = np.linspace(0.0, 1.0, n)
     stub.add(f"{path}sim-field_energy_dot.gkyl", time, np.zeros((n, 1)))
     with pytest.raises(FileNotFoundError, match="fdot_integrated_moms"):
-      eb.gk_energy_balance("sim", ["ion"], path=path)
+      eb.energy_balance("sim", ["ion"], path=path)
   # end
     # end
 
@@ -348,7 +351,7 @@ class TestGkEnergyBalanceSynthetic:
     override_name = f"{path}custom_bflux.gkyl"
     stub.add(override_name, time, override_vals)
 
-    fig, traces = eb.gk_energy_balance(
+    fig, traces = eb.energy_balance(
         "sim", ["ion"], path=path, bflux_files={"xlower": "custom_bflux.gkyl"},
         absy=True, logy=True, show=True)
     try:

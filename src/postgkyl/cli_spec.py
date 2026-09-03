@@ -27,6 +27,7 @@ class Execution(Enum):
 
   MAP_REPLACE = auto()
   MAP_APPEND = auto()
+  MAP_OR_TERMINAL_EACH = auto()
   COMBINE = auto()
   TERMINAL_EACH = auto()
   TERMINAL_ALL = auto()

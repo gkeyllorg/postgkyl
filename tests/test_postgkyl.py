@@ -329,9 +329,7 @@ def test_conversions_are_always_explicit():
   with pytest.raises(ValueError):
     q.interpolate()                                   # interp needs modal
   # end
-  with pytest.raises(ValueError):
-    n.integrate()                                # integrate needs modal
-  # end
+  assert n.integrate() is not None               # point values integrate in-place in form
   with pytest.raises(ValueError):
     np.sqrt(a)                                   # ufuncs have no modal meaning
   # end
@@ -415,9 +413,8 @@ def test_integrate_via_gkeyll():
                      for f in range(v.shape[-1] // nb)])
   assert np.allclose(result, manual)
   assert np.all(a.integrate(op="abs") >= np.abs(result) * (1 - 1e-12))
-  with pytest.raises(ValueError):
-    a.interpolate().integrate()                       # field domain: not a modal verb
-  # end
+  point_result = a.interpolate().integrate()
+  assert np.allclose(point_result, result)
 # end
 
 
@@ -529,8 +526,8 @@ _ALLOWED = {
                                                       # "diagnostics" added by
                                                       # 12-diagnostics-loaders.md, which
                                                       # explicitly authorizes the facade
-                                                      # re-exporting load_gk_quantity etc. so
-                                                      # pg.load_gk_quantity(...) keeps working;
+                                                      # re-exporting the gyrokinetics namespace
+                                                      # for pg.gyrokinetics.load_quantity(...);
                                                       # "_version" is __init__.py's own import
                                                       # of _version.py's version_report (`pgkyl
                                                       # --version`'s commit/build-info report),

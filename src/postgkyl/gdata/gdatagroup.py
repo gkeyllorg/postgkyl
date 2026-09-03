@@ -18,8 +18,8 @@ every member, in order (**broadcasting**):
   member's result is a ``GDataState`` (or subclass), the results are wrapped
   in a *new* group of the caller's own concrete class, so chains stay fluent:
   ``group.interpolate().select(z0=0.0)``. Otherwise -- a terminal verb whose result is
-  not a dataset (``.write()`` -> one path per member, ``.integrate()`` ->
-  one float per member, ``.extract_input()`` -> one string per member, ...)
+  not a dataset (``.write()`` -> one path per member, full ``.integrate()`` ->
+  one value per member, ``.extract_input()`` -> one string per member, ...)
   -- a plain ``list`` of the per-member results is returned, in member order.
 - If the attribute is a *non-callable* value on every member (a property such
   as ``num_dims`` or ``backend``), it resolves immediately to a plain

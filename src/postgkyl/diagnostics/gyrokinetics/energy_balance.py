@@ -111,7 +111,7 @@ def _resolve(path: str, override: str | None, default: str,
 # end
 
 
-def gk_energy_balance(
+def energy_balance(
     name: str,
     species: list[str],
     *,

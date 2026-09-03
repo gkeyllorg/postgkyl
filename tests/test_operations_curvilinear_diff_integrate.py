@@ -127,9 +127,9 @@ class TestIntegrateCurvilinear:
         cells=cells)
     field = mapped._result(mapped.grid, np.ones(tuple(cells) + (1,)))
 
-    total = operations.integrate_axis(field, "0,1")
+    total = operations.integrate(field, "0,1")
     expected_area = (upper[0] - lower[0]) * (upper[1] - lower[1])
-    np.testing.assert_allclose(total.values[..., 0], expected_area, rtol=1e-6)
+    np.testing.assert_allclose(total, expected_area, rtol=1e-6)
   # end
 
   def test_shear_area_matches_determinant(self):
@@ -141,17 +141,17 @@ class TestIntegrateCurvilinear:
         upper=upper, cells=cells)
     field = mapped._result(mapped.grid, np.ones(tuple(cells) + (1,)))
 
-    total = operations.integrate_axis(field, "0,1")
+    total = operations.integrate(field, "0,1")
     det = abs(a00 * a11 - a01 * a10)
     expected_area = det * (upper[0] - lower[0]) * (upper[1] - lower[1])
-    np.testing.assert_allclose(total.values[..., 0], expected_area, rtol=1e-6)
+    np.testing.assert_allclose(total, expected_area, rtol=1e-6)
   # end
 
   def test_partial_block_reduction_raises(self):
     mapped, x, y = _linear_map_dataset(1.0, 0.3, -0.2, 1.0)
     field = mapped._result(mapped.grid, (x + y)[..., np.newaxis])
     with pytest.raises(ValueError, match="curvilinear"):
-      operations.integrate_axis(field, "0")
+      operations.integrate(field, "0")
     # end
   # end
 # end

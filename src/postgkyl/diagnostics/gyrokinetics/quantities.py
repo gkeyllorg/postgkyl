@@ -49,7 +49,7 @@ def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
   ``kwargs[key]`` may be a single value (applies to every species) or a
   list/tuple with one entry per species, indexed by ``kwargs
   ['species_idx']`` -- the position :meth:`~postgkyl.diagnostics.
-  gyrokinetics.quantity.GkQuantity.fetch_multi`/``load_gk_quantity`` stamp
+  gyrokinetics.quantity.GkQuantity.fetch_multi`/``load_quantity`` stamp
   onto ``extra`` for the species currently being resolved.
   """
   if key in kwargs:
@@ -435,7 +435,8 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
 def fetch_c_s(gdatas, **kwargs):
   """Sound speed (m/s), combining the electrons and every ion species.
   ``gdatas`` has one ``[M0, temp]`` source list per species, in the order
-  requested, e.g. ``pgkyl gk_load_quantity -q c_s -s elc,ion1,ion2 ...``.
+  requested, e.g. ``pgkyl gyrokinetics-load-quantity --quantity c_s
+  --species elc,ion1,ion2 ...``.
   Electrons and ions are told apart by the sign of each species' charge
   attribute, so the species may be named anything.
 
@@ -593,21 +594,21 @@ def fetch_diamag_vel(gdatas, **kwargs):
 # --------------------------------------------------------- phase space (f)
 def load_distf(gdatas, **kwargs):
   """Loader for the registry ``distf`` quantity: wraps
-  :func:`~postgkyl.diagnostics.gyrokinetics.distf.load_gk_distf` with
+  :func:`~postgkyl.diagnostics.gyrokinetics.distf.load_distf` with
   defaults tailored to registry use (never interpolate further, convert
   velocity coordinates by default). Extra keyword overrides (via
   ``**extra`` on :func:`~postgkyl.diagnostics.gyrokinetics.load_quantity.
-  load_gk_quantity`): ``suffix``, ``c2p_vel``, ``mc2nu``, ``mapc2p``,
+  load_quantity`): ``suffix``, ``c2p_vel``, ``mc2nu``, ``mapc2p``,
   ``block``.
   """
-  from .distf import load_gk_distf
+  from .distf import load_distf
   from .utils import dict_get_bool
 
   prefix = kwargs.get("path", "").rstrip("/") + "/" + kwargs.get("name", "")
   extra = {k: v for k, v in kwargs.items()
            if k not in ("path", "name", "species", "frame")}
 
-  return load_gk_distf(
+  return load_distf(
       name=prefix, species=kwargs.get("species", ""),
       frame=int(kwargs.get("frame", 0)),
       suffix=str(extra.get("suffix", "")),

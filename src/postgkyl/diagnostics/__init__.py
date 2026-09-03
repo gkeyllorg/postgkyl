@@ -111,9 +111,9 @@ command(CommandSpec(Section.DIAGNOSTICS, Execution.TERMINAL_ALL,
     result=ResultPolicy.VALUE))(vlasov.trajectory.trajectory)
 
 for _function in (
-    gyrokinetics.load_gk_distf, gyrokinetics.load_gk_quantity,
-    gyrokinetics.gk_energy_balance, gyrokinetics.gk_particle_balance,
-    gyrokinetics.gk_nodes,
+    gyrokinetics.load_distf, gyrokinetics.load_quantity,
+    gyrokinetics.energy_balance, gyrokinetics.particle_balance,
+    gyrokinetics.nodes,
 ):
   _resolve(_function)
 # end

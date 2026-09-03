@@ -31,6 +31,7 @@ needs_gkeyll = pytest.mark.skipif(not gpython.available(),
 
 DATA = os.path.join(ROOT, "tests", "test_data")
 F1 = os.path.join(DATA, "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl")
+F3 = os.path.join(DATA, "generated", "3d_ms_p1.gkyl")
 
 
 def _dynvec_dataset(tmp_path, time, values):
@@ -446,66 +447,75 @@ def test_average_tag_and_label_and_inplace():
 # end
 
 
-# ======================================================= operations.integrate_axis
+# ============================================================= operations.integrate
 @needs_gkeyll
-def test_integrate_axis_rejects_raw_modal_data():
-  a = pg.load(F1)
-  with pytest.raises(ValueError, match="modal DG coefficients"):
-    a.integrate_axis(0)
-  # end
+def test_integrate_partial_modal_stays_native_and_exact():
+  a = pg.load(F3)
+  reduced = a.integrate(2)
+  assert reduced.backend == "gkyl"
+  assert reduced.ctx["value_form"] == "modal"
+  assert reduced.num_dims == 2
+  np.testing.assert_allclose(reduced.integrate(), a.integrate(), rtol=1e-12)
 # end
 
 
-def test_integrate_axis_on_interpolated_data_collapses_the_axis():
-  a = pg.load(F1).interpolate()
-  before = a.num_cells[0]
-  r = a.integrate_axis(0)
-  assert r.num_cells[0] == 1
-  assert before > 1  # sanity: the axis actually had more than one cell
+def test_integrate_partial_point_data_removes_the_axis():
+  a = pg.load(F3).interpolate()
+  r = a.integrate(2)
+  assert r.num_dims == 2
+  assert r.num_cells.tolist() == list(a.num_cells[:2])
   assert r.ctx.get("interpolated") is True
 # end
 
 
-def test_integrate_axis_matches_manual_trapezoidal_sum():
-  a = pg.load(F1).interpolate()
-  r = a.integrate_axis(0)
-  dz = np.diff(a.grid[0])
-  expected = np.tensordot(dz, np.asarray(a.values), axes=([0], [0]))
-  np.testing.assert_allclose(np.asarray(r.values)[0], expected)
+def test_integrate_partial_point_data_matches_manual_sum():
+  a = pg.load(F3).interpolate()
+  r = a.integrate(2)
+  dz = np.diff(a.grid[2])
+  expected = np.tensordot(np.asarray(a.values), dz, axes=([2], [0]))
+  np.testing.assert_allclose(np.asarray(r.values), expected)
 # end
 
 
-def test_integrate_axis_default_integrates_every_axis():
+def test_integrate_point_default_is_a_full_terminal_integral():
   a = pg.load(F1).interpolate()
-  r = a.integrate_axis()
-  assert all(n == 1 for n in r.num_cells)
+  result = a.integrate()
+  assert isinstance(result, np.ndarray)
+  assert result.shape == (a.num_comps,)
 # end
 
 
 @needs_gkeyll
-def test_integrate_axis_on_native_nodal_representation():
+def test_integrate_partial_on_native_nodal_representation():
   # A gkyl-native nodal/quad dataset materializes to its true point grid
   # before integrating -- same bridge ``plot`` uses (Doctrine V: one home).
-  nodal = pg.load(F1).to_nodal()
-  r = nodal.integrate_axis(0)
+  nodal = pg.load(F3).to_nodal()
+  r = nodal.integrate(2)
   assert r.backend == "numpy"
-  assert r.num_cells[0] == 1
+  assert r.num_dims == 2
   assert r.ctx.get("value_form") is None  # stale tag cleared, not "nodal"
 # end
 
 
-def test_integrate_axis_tag_and_label():
-  a = pg.load(F1).interpolate()
-  r = a.integrate_axis(0, tag="reduced", label="my label")
+def test_integrate_partial_tag_and_label():
+  a = pg.load(F3).interpolate()
+  r = a.integrate(2, tag="reduced", label="my label")
   assert r.tag == "reduced"
   assert r.label == "my label"
-  assert a.num_cells[0] > 1  # original left untouched (inplace=False default)
+  assert a.num_dims == 3  # original left untouched (inplace=False default)
 # end
 
 
-def test_integrate_axis_inplace_mutates_the_dataset():
-  a = pg.load(F1).interpolate()
-  out = a.integrate_axis(0, inplace=True)
+def test_integrate_partial_inplace_mutates_the_dataset():
+  a = pg.load(F3).interpolate()
+  out = a.integrate(2, inplace=True)
   assert out is a
-  assert a.num_cells[0] == 1
+  assert a.num_dims == 2
+# end
+
+
+def test_integrate_full_rejects_partial_result_options():
+  a = pg.load(F1).interpolate()
+  with pytest.raises(ValueError, match="partial integration"):
+    a.integrate(tag="not-a-dataset")
 # end

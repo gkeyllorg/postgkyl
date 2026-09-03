@@ -7,7 +7,7 @@ smoke test, using the same "synthetic constant DG field + monkeypatched
 ``GData``" technique) and the ``TestResolveFrames``/``TestLoadGkDistf``
 classes of ``tests_bak/test_loader.py`` (``pg.load.gk_distf``'s dispatch
 tests do not port: this architecture has no ``pg.load`` namespace object --
-``load_gk_distf``/``resolve_frames`` are plain free functions, tested
+``load_distf``/``resolve_frames`` are plain free functions, tested
 directly). Real end-to-end coverage uses the ``rt_gk_tcv_iwl*`` fixtures
 staged in ``tests/test_data`` for this layer.
 """
@@ -24,7 +24,7 @@ from postgkyl.gdata import GData
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.diagnostics.gyrokinetics import distf, quantities as ff, quantity as qmod, utils
 from postgkyl.diagnostics.gyrokinetics.load_quantity import (
-    available_quantities, load_gk_quantity)
+    available_quantities, load_quantity)
 from postgkyl.diagnostics.gyrokinetics.registry import gk_quant_registry
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),
@@ -86,13 +86,13 @@ class TestResolveFrames:
 
 
 class TestLoadGkDistfKeywordOnly:
-  """``load_gk_distf``'s options must be keyword-only (PYTHON_PRINCIPLES #7 /
+  """``load_distf``'s options must be keyword-only (PYTHON_PRINCIPLES #7 /
   doctrine IV) so a caller can never silently swap two boolean flags by
   passing them positionally."""
 
   def test_tag_cannot_be_passed_positionally(self):
     with pytest.raises(TypeError):
-      distf.load_gk_distf("sim", "ion", 0, "f")
+      distf.load_distf("sim", "ion", 0, "f")
     # end
   # end
 # end
@@ -110,7 +110,7 @@ class TestLoadGkDistfReal:
   """
 
   def test_shape_and_grid(self):
-    out = distf.load_gk_distf(
+    out = distf.load_distf(
         name=os.path.join(DATA, GK_NAME), species="elc", frame=250,
         jacobtot_inv_file=os.path.join(
             DATA, f"{GK_NAME}-geo_int_jacobtot_inv.gkyl"))
@@ -122,7 +122,7 @@ class TestLoadGkDistfReal:
 
   def test_missing_jacobtot_inv_file_raises(self):
     with pytest.raises(Exception):
-      distf.load_gk_distf(name=os.path.join(DATA, GK_NAME), species="elc",
+      distf.load_distf(name=os.path.join(DATA, GK_NAME), species="elc",
           frame=250, jacobtot_inv_file=os.path.join(DATA, "does_not_exist.gkyl"))
   # end
 # end
@@ -132,9 +132,9 @@ class TestLoadGkDistfReal:
 class _FakeDistfData(GData):
   """A ``GData`` whose ``.interpolate()`` is a stubbed no-op (real
   interpolation needs the compiled Gkeyll shim), keeping the real computing
-  operators (``*``/``/``) so ``load_gk_distf``'s weak-multiply-then-divide
+  operators (``*``/``/``) so ``load_distf``'s weak-multiply-then-divide
   step still runs (as a plain NumPy op, since these fakes are never
-  gkyl-native) -- letting ``load_gk_distf``'s coordinate-map branches
+  gkyl-native) -- letting ``load_distf``'s coordinate-map branches
   (``use_c2p_vel``/``use_mc2nu``/``use_mapc2p``) be exercised without real
   mapc2p_vel/mc2nu/mapc2p DG fixtures (the staged rt_gk_tcv_iwl* files carry
   no such metadata -- see TestLoadGkDistfReal)."""
@@ -147,7 +147,7 @@ class _FakeDistfData(GData):
 
 
 class TestLoadGkDistfCoordinateMaps:
-  """Unit tests of ``load_gk_distf``'s ``use_c2p_vel``/``use_mc2nu``/
+  """Unit tests of ``load_distf``'s ``use_c2p_vel``/``use_mc2nu``/
   ``use_mapc2p`` branches, stubbed through ``distf.load``/``operations.map``
   since the compiled-Gkeyll fixtures have no mapping-file metadata to
   exercise them against."""
@@ -191,35 +191,35 @@ class TestLoadGkDistfCoordinateMaps:
 
   def test_use_c2p_vel(self, monkeypatch):
     calls = self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0, use_c2p_vel=True)
+    out = distf.load_distf("sim", "ion", 0, use_c2p_vel=True)
     assert calls == [("sim-ion_mapc2p_vel.gkyl", "vel")]
     assert out.ctx["grid_type"] == "c2p_vel"
   # end
 
   def test_use_mc2nu(self, monkeypatch):
     calls = self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0, use_mc2nu=True)
+    out = distf.load_distf("sim", "ion", 0, use_mc2nu=True)
     assert calls == [("sim-geo_corn_mc2nu_pos_deflated.gkyl", "conf")]
     assert out.ctx["grid_type"] == "mc2nu"
   # end
 
   def test_use_mapc2p(self, monkeypatch):
     calls = self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0, use_mapc2p=True)
+    out = distf.load_distf("sim", "ion", 0, use_mapc2p=True)
     assert calls == [("sim-geo_corn_mapc2p_deflated.gkyl", "conf")]
     assert out.ctx["grid_type"] == "mapc2p"
   # end
 
   def test_use_mc2nu_takes_precedence_over_mapc2p(self, monkeypatch):
     calls = self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0, use_mc2nu=True, use_mapc2p=True)
+    out = distf.load_distf("sim", "ion", 0, use_mc2nu=True, use_mapc2p=True)
     assert calls == [("sim-geo_corn_mc2nu_pos_deflated.gkyl", "conf")]
     assert out.ctx["grid_type"] == "mc2nu"
   # end
 
   def test_use_c2p_vel_and_mapc2p_both_applied(self, monkeypatch):
     calls = self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0, use_c2p_vel=True, use_mapc2p=True)
+    out = distf.load_distf("sim", "ion", 0, use_c2p_vel=True, use_mapc2p=True)
     assert calls == [("sim-ion_mapc2p_vel.gkyl", "vel"),
         ("sim-geo_corn_mapc2p_deflated.gkyl", "conf")]
     assert out.ctx["grid_type"] == "c2p_vel + mapc2p"
@@ -227,7 +227,7 @@ class TestLoadGkDistfCoordinateMaps:
 
   def test_no_grid_type_key_when_no_maps_requested(self, monkeypatch):
     self._stub(monkeypatch)
-    out = distf.load_gk_distf("sim", "ion", 0)
+    out = distf.load_distf("sim", "ion", 0)
     assert "grid_type" not in out.ctx
   # end
 # end
@@ -513,7 +513,7 @@ class TestSoundSpeed:
 
   ``fetch_c_s`` is an ``is_multi_species`` fetch function: it receives one
   ``[M0, temp]`` source list per species (as
-  ``GkQuantity.fetch_multi``/``load_gk_quantity`` would hand it), not a
+  ``GkQuantity.fetch_multi``/``load_quantity`` would hand it), not a
   flat list.
   """
 
@@ -685,7 +685,7 @@ class TestDriftVelocities:
 
 class TestLoadDistf:
   """``fetch_funcs.load_distf`` -- the registry 'distf' quantity's fetch
-  function -- stubbed against ``load_gk_distf`` so this checks the option
+  function -- stubbed against ``load_distf`` so this checks the option
   translation (``dict_get_bool``, path/name joining) without needing a real
   distribution-function file set (covered end to end by
   ``TestLoadGkDistfReal`` instead)."""
@@ -693,13 +693,13 @@ class TestLoadDistf:
   def test_forwards_options(self, monkeypatch):
     calls = {}
 
-    def fake_load_gk_distf(**kwargs):
+    def fake_load_distf(**kwargs):
       calls.update(kwargs)
       return "sentinel"
     # end
 
     from postgkyl.diagnostics.gyrokinetics import distf as distf_mod
-    monkeypatch.setattr(distf_mod, "load_gk_distf", fake_load_gk_distf)
+    monkeypatch.setattr(distf_mod, "load_distf", fake_load_distf)
 
     out = ff.load_distf([], path="/some/path/", name="sim", species="ion",
         frame="3", suffix="src", c2p_vel="0", mc2nu="1", block=2)
@@ -718,13 +718,13 @@ class TestLoadDistf:
   def test_defaults(self, monkeypatch):
     calls = {}
 
-    def fake_load_gk_distf(**kwargs):
+    def fake_load_distf(**kwargs):
       calls.update(kwargs)
       return "sentinel"
     # end
 
     from postgkyl.diagnostics.gyrokinetics import distf as distf_mod
-    monkeypatch.setattr(distf_mod, "load_gk_distf", fake_load_gk_distf)
+    monkeypatch.setattr(distf_mod, "load_distf", fake_load_distf)
 
     ff.load_distf([], path="p", name="n", species="ion", frame=0)
     # c2p_vel defaults True when not given as an extra.
@@ -777,13 +777,13 @@ class TestLoadQuantity:
 
   def test_unknown_quantity_raises(self):
     with pytest.raises(ValueError, match="Unknown quantity"):
-      load_gk_quantity("not_a_quantity", None, "sim", path=DATA)
+      load_quantity("not_a_quantity", None, "sim", path=DATA)
   # end
     # end
 
   @needs_gkeyll
   def test_M0_from_hamiltonian_moments_real(self):
-    out = load_gk_quantity("M0", "ion", HMOM_NAME, "250", path=DATA)
+    out = load_quantity("M0", "ion", HMOM_NAME, "250", path=DATA)
     assert len(out) == 1
     assert out[0].get_label() == r"$M_{0i}$ (m$^{-3}$)"
     assert out[0].values.shape[-1] == 1
@@ -791,14 +791,14 @@ class TestLoadQuantity:
 
   @needs_gkeyll
   def test_M1_from_hamiltonian_moments_real(self):
-    out = load_gk_quantity("M1", "ion", HMOM_NAME, "250", path=DATA, mass=2.0)
+    out = load_quantity("M1", "ion", HMOM_NAME, "250", path=DATA, mass=2.0)
     assert len(out) == 1
     assert np.all(np.isfinite(out[0].values))
   # end
 
   @needs_gkeyll
   def test_geo_quantity_real(self):
-    out = load_gk_quantity("geo_int_jacobtot_inv", None, GK_NAME, path=DATA)
+    out = load_quantity("geo_int_jacobtot_inv", None, GK_NAME, path=DATA)
     assert len(out) == 1
     assert out[0].get_label() == r"$(J B)^{-1}$"
   # end
@@ -806,7 +806,7 @@ class TestLoadQuantity:
   @needs_gkeyll
   def test_geo_quantity_missing_file_raises(self):
     with pytest.raises(FileNotFoundError):
-      load_gk_quantity("geo_int_bmag", None, GK_NAME, path=DATA)
+      load_quantity("geo_int_bmag", None, GK_NAME, path=DATA)
   # end
     # end
 
@@ -814,7 +814,7 @@ class TestLoadQuantity:
     # A species-independent geo quantity needs only its own marker file.
     (tmp_path / f"sim-geo_int_bmag.gkyl").touch()
     monkeypatch.setattr(qmod, "GData", lambda *a, **k: _field(np.full((2, 1), 3.0)))
-    out = load_gk_quantity("geo_int_bmag", None, "sim", path=str(tmp_path),
+    out = load_quantity("geo_int_bmag", None, "sim", path=str(tmp_path),
         tag="mytag", label="custom")
     assert out[0].get_tag() == "mytag"
     assert out[0].get_label() == "custom"
@@ -898,7 +898,7 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path, monkey
   checks "no exception, one dataset comes back", not specific numbers --
   those are covered analytically in ``TestFetchPhysics`` above."""
   if quantity == "distf":
-    pytest.skip("distf delegates to load_gk_distf, covered by "
+    pytest.skip("distf delegates to load_distf, covered by "
         "TestLoadGkDistfReal against the real staged fixtures")
   # end
 
@@ -918,7 +918,7 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path, monkey
 
   monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-  out = load_gk_quantity(quantity, species, name, str(frame), path=path,
+  out = load_quantity(quantity, species, name, str(frame), path=path,
       **_extra_for(quant))
   assert len(out) >= 1
   assert isinstance(out[0], GDataState)
@@ -986,7 +986,7 @@ class TestGkQuantityGetAvailSource:
 
 @needs_gkeyll
 class TestLoadQuantityMultiSpeciesMultiFrame:
-  """Exercises ``load_gk_quantity``'s multi-species/multi-frame label/tag
+  """Exercises ``load_quantity``'s multi-species/multi-frame label/tag
   suffix branches (only reached when more than one species or frame is
   requested)."""
 
@@ -1001,7 +1001,7 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
     # end
     monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-    out = load_gk_quantity("M0", "ion,elc", name, "0", path=path, tag="t",
+    out = load_quantity("M0", "ion,elc", name, "0", path=path, tag="t",
         label="custom")
     assert len(out) == 2
     assert {d.get_tag() for d in out} == {"t_ion", "t_elc"}
@@ -1019,7 +1019,7 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
     # end
     monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-    out = load_gk_quantity("M0", "ion", name, None, path=path)
+    out = load_quantity("M0", "ion", name, None, path=path)
     assert len(out) == 3
     assert all(" f" in d.get_label() for d in out)
   # end
@@ -1043,16 +1043,16 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
     monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
     species = f"{_ELC_SPECIES},{_ION_SPECIES}"
-    out = load_gk_quantity("c_s", species, name, "0", path=path)
+    out = load_quantity("c_s", species, name, "0", path=path)
     assert len(out) == 1
 
-    out = load_gk_quantity("M0", species, name, "0", path=path)
+    out = load_quantity("M0", species, name, "0", path=path)
     assert len(out) == 2
   # end
 
   def test_multi_species_quantity_needs_a_species_list(self, tmp_path):
     with pytest.raises(ValueError, match="needs a species list"):
-      load_gk_quantity("c_s", None, "gktest", "0", path=str(tmp_path))
+      load_quantity("c_s", None, "gktest", "0", path=str(tmp_path))
     # end
   # end
 # end

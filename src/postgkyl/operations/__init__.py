@@ -7,7 +7,8 @@ concrete (sub)class because ``_result`` rebuilds ``type(self)``.
 
 ``interpolate`` is the one-way modal -> NumPy bridge; ``arithmetic`` dispatches
 on the container backend (Gkeyll kernels for modal data, NumPy for field data);
-``integrate`` is a terminal verb that runs inside Gkeyll on modal data;
+``integrate`` performs full or partial integration inside Gkeyll on modal
+data (full is terminal; partial stays native and lower-dimensional);
 ``average`` reduces modal data over a dimension subset via
 ``gkyl_array_average``, producing a new lower-dimensional modal dataset;
 ``map`` delegates to the grid-mapping engine in ``dg.map``. Flat modules are
@@ -29,7 +30,7 @@ from .interpolate import interpolate
 from .local_poly import local_poly
 from .select import select
 from .info import info
-from .integrate import integrate, integrate_axis
+from .integrate import integrate
 from .average import average
 from .eval_at_coord_proj import eval_at_coord_proj
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
@@ -80,7 +81,7 @@ _TERM_ALL = CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
     result=ResultPolicy.VALUE)
 
 for _function in (
-    interpolate, local_poly, select, integrate, integrate_axis, average,
+    interpolate, local_poly, select, integrate, average,
     eval_at_coord_proj, fft, magsq, relchange, mask, collect, sort, grid,
     val2coord, extract_input, fit, differentiate, evaluate, map, represent,
     growth,
@@ -91,7 +92,7 @@ for _function in (
 select.__annotations__.update(comp=str | None, z0=str | None, z1=str | None,
     z2=str | None, z3=str | None, z4=str | None, z5=str | None)
 integrate.__annotations__["op"] = Literal["none", "abs", "sq"]
-integrate_axis.__annotations__["axis"] = Annotated[
+integrate.__annotations__["axis"] = Annotated[
     int | tuple | str | None, CliType(str | None), CliArgument()]
 evaluate.__annotations__["chain"] = Annotated[str, CliArgument()]
 average.__annotations__["dims"] = list[int]
@@ -107,7 +108,7 @@ map.__annotations__["data"] = GDataState
 map.__annotations__["mapping"] = str
 represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 
-for _function in (interpolate, local_poly, select, integrate_axis, average,
+for _function in (interpolate, local_poly, select, average,
     eval_at_coord_proj, fft, magsq, grid, differentiate, map):
   command(_MAP)(_function)
 # end
@@ -121,7 +122,8 @@ command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(growth)
 command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
     result=ResultPolicy.SILENT))(info)
-command(_TERM_EACH)(integrate)
+command(CommandSpec(Section.VERBS, Execution.MAP_OR_TERMINAL_EACH,
+    result=ResultPolicy.VALUE))(integrate)
 command(_TERM_EACH)(extract_input)
 command(_MAP)(represent)
 
@@ -129,7 +131,7 @@ hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
-__all__ = ["interpolate", "local_poly", "select", "info", "integrate", "integrate_axis", "average",
+__all__ = ["interpolate", "local_poly", "select", "info", "integrate", "average",
     "eval_at_coord_proj",
     "plot", "animate", "plotly", "plotly_animate", "pyvista",
     "arithmetic", "represent", "apply",

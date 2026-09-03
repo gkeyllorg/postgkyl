@@ -84,7 +84,7 @@ def _resolve(path: str, override: str | None, default: str,
 # end
 
 
-def gk_particle_balance(
+def particle_balance(
     name: str,
     species: str,
     *,

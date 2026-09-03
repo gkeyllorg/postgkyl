@@ -11,6 +11,7 @@ Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_particle_balance.py -
 
 from __future__ import annotations
 
+import importlib
 import os
 
 import matplotlib
@@ -19,8 +20,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import particle_balance as pb
 from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+
+pb = importlib.import_module(
+    "postgkyl.diagnostics.gyrokinetics.particle_balance")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")
@@ -139,7 +142,7 @@ class TestGkParticleBalanceSynthetic:
 
   def test_full_path_with_src_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path)
-    fig, traces = pb.gk_particle_balance("sim", "ion", path=path)
+    fig, traces = pb.particle_balance("sim", "ion", path=path)
     try:
       assert traces.src is not None
       assert traces.bflux_tot is not None
@@ -153,7 +156,7 @@ class TestGkParticleBalanceSynthetic:
 
   def test_missing_source_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, with_src=False, with_bflux=False)
-    fig, traces = pb.gk_particle_balance("sim", "ion", path=path)
+    fig, traces = pb.particle_balance("sim", "ion", path=path)
     try:
       assert traces.src is None
       assert traces.bflux_tot is None
@@ -174,7 +177,7 @@ class TestGkParticleBalanceSynthetic:
     dt_vals = np.full((n - 1, 1), 0.2)
     stub.add(f"{path}sim-dt.gkyl", dt_time, dt_vals)
 
-    fig, traces = pb.gk_particle_balance("sim", "ion", path=path, relative_error=True)
+    fig, traces = pb.particle_balance("sim", "ion", path=path, relative_error=True)
     try:
       assert traces.mom_err is None
       assert traces.mom_err_norm is not None
@@ -200,7 +203,7 @@ class TestGkParticleBalanceSynthetic:
     stub.add(f"{path}sim-dt.gkyl", dt_time, dt_vals)
 
     out_path = str(tmp_path / "out.png")
-    fig, traces = pb.gk_particle_balance(
+    fig, traces = pb.particle_balance(
         "sim", "ion", path=path, relative_error=True, absy=True, show=True,
         saveas=out_path)
     try:
@@ -215,7 +218,7 @@ class TestGkParticleBalanceSynthetic:
   def test_missing_required_fdot_file_raises(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     with pytest.raises(FileNotFoundError, match="fdot_integrated_moms"):
-      pb.gk_particle_balance("sim", "ion", path=path)
+      pb.particle_balance("sim", "ion", path=path)
   # end
     # end
 
@@ -228,7 +231,7 @@ class TestGkParticleBalanceSynthetic:
     override_name = f"{path}custom_bflux.gkyl"
     stub.add(override_name, time, override_vals)
 
-    fig, traces = pb.gk_particle_balance(
+    fig, traces = pb.particle_balance(
         "sim", "ion", path=path, bflux_files={"xlower": "custom_bflux.gkyl"},
         absy=True, logy=True)
     try:
@@ -249,7 +252,7 @@ class TestGkParticleBalanceSynthetic:
       fdot_vals[:, 0] = 1.0
       stub.add(f"{path}sim_b{block}-ion_fdot_integrated_moms.gkyl", time, fdot_vals)
     # end
-    fig, traces = pb.gk_particle_balance("sim", "ion", path=path, multib="0,1")
+    fig, traces = pb.particle_balance("sim", "ion", path=path, multib="0,1")
     try:
       # Two blocks, each contributing fdot=1.0, sum to 2.0 everywhere.
       np.testing.assert_allclose(traces.fdot, 2.0)

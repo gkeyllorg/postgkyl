@@ -196,7 +196,7 @@ src/postgkyl/
 ║                      rotations · enstrophy · ke_dke                          ║
 ║      vlasov/         kinetic frame transforms · trajectory                   ║
 ║      pkpm/           laguerre_compose(…) + load_pkpm(…)                      ║
-║      gyrokinetics/   load_gk_distf · load_gk_quantity + quantity registry    ║
+║      gyrokinetics/   load_distf · load_quantity + quantity registry          ║
 ║                      (Tpar, beta, ExB_vel, …) · energy_balance → Figure …    ║
 ║      discovery.py    shared naming-convention stem/frame discovery           ║
 ╚════════════════════════════╦═════════════════════════════════════════════════╝
@@ -271,7 +271,9 @@ Every dataset lives in one of two backends, discriminated by
   (`gpython.GkylArray`). Loading lands here. All math runs inside Gkeyll:
   `*`/`/` → weak kernels (`gkyl_dg_mul_op`/`div_op`), `+`/`-` → coefficient
   lin-combs (`gkyl_array_accumulate`), scalars → `scale`/mean-shift, integer
-  powers → repeated weak multiply, `.integrate()` → `gkyl_array_integrate`.
+  powers → repeated weak multiply, full `.integrate()` →
+  `gkyl_array_integrate`, partial `.integrate(axis=…)` → exact
+  `gkyl_array_average` followed by physical-volume scaling.
   `values` is a read-only view; `np.asarray`/ufuncs/`select` refuse with
   ".interpolate() first".
 - **`"numpy"` (field domain)** — post-`interpolate()` values as a plain ndarray;
@@ -379,8 +381,9 @@ transforming/re-expressing data; `operations/gyrokinetics/` owns the R-Z and
 flux-surface projections. Code that interprets components to derive a new
 physical conclusion belongs in `diagnostics/`.
 Implemented: `interpolate` (the bridge verb: gkyl-backed in, numpy-backed out),
-`select` (field-domain only), `info`, `integrate`
-(terminal; runs inside Gkeyll on modal data), `represent`/`apply` (the explicit
+`select` (field-domain only), `info`, `integrate` (full or partial; modal data
+stay inside Gkeyll, with full integration terminal and partial integration
+returning an exact lower-dimensional modal dataset), `represent`/`apply` (the explicit
 value_form verbs behind `.to_modal()/.to_nodal()/.to_quad()/.apply()`),
 `arithmetic` (`binary` + `apply_ufunc`), which **dispatches on `backend`**: modal
 operands → `dg.modal` kernel calls; numpy operands → the NumPy path; mixed
@@ -428,7 +431,7 @@ of this writing every program module builds its own bespoke figure directly
 with `matplotlib` instead.
 
 **Each equation model owns its loading internally** — there is no `loaders/`
-package. Entry points like `gyrokinetics.load_gk_quantity(...)` (naming-
+package. Entry points like `gyrokinetics.load_quantity(...)` (naming-
 convention load + registry dispatch, "physics-ready data by name") and
 `pkpm.load_pkpm(...)` live beside the physics they feed, because a quantity's
 ingredient files and its formula are one piece of equation knowledge. The
@@ -491,8 +494,8 @@ namespace, and generated CLI all point to this same callable.
 
 ### `__init__.py` — the facade (pure re-export)
 Gathers the public names from the layer that owns each: `load`/`GData` ← `gdata`,
-`plot` ← `render`, `info` ← `operations`, `save` ← `io`, `load_gk_quantity`/
-`load_gk_distf`/`available_gk_quantities` ← `diagnostics.gyrokinetics`. **It
+`plot` ← `render`, `info` ← `operations`, `save` ← `io`, and the
+`gyrokinetics` equation namespace ← `diagnostics.gyrokinetics`. **It
 contains no function or class definitions** (a test enforces this).
 
 `_version.py` sits beside `__init__.py` (same `""` layer) and supplies

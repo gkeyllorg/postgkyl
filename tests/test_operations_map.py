@@ -22,7 +22,7 @@ gyrokinetic velocity coordinates never couple. A real vel-space fixture
 way: its 4 components live on a 2-D (16, 8) grid, matching
 ``m * num_basis_1d == 2 * 2 == 4`` for 1-D serendipity p1, and it carries no
 ``basis_type``/``poly_order`` metadata of its own -- callers must supply it
-(see ``load_gk_distf``, which passes ``basis_type="serendipity",
+(see ``load_distf``, which passes ``basis_type="serendipity",
 poly_order=1``).
 """
 
@@ -286,7 +286,7 @@ class TestMapErrors:
   def test_vel_map_real_fixture_fits_the_separable_algorithm(self):
     """See the module docstring: this real fixture carries no basis
     metadata of its own (callers must supply it at load time, as
-    ``load_gk_distf`` does), and its 4 components match m * num_basis_1d
+    ``load_distf`` does), and its 4 components match m * num_basis_1d
     == 2 * 2 == 4 for 1-D serendipity p1 -- not m * num_basis_2d (== 2 * 4
     == 8), which is what the joint-curvilinear (conf-style) contract would
     require."""

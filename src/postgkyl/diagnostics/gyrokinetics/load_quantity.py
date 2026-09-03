@@ -24,7 +24,7 @@ def available_quantities() -> list[str]:
 # end
 
 
-def load_gk_quantity(
+def load_quantity(
     quantity: Annotated[str, ChoiceProvider(available_quantities)],
     species: str | None, name: str, frame: str | None = None, *,
     path: str = "./", tag: str = "default", label: str | None = None,

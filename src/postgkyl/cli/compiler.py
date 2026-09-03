@@ -361,7 +361,8 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
     # end
     is_receiver = parameter.name == "self" or (
         index == 0 and spec.execution in (
-            Execution.MAP_REPLACE, Execution.MAP_APPEND, Execution.TERMINAL_EACH))
+            Execution.MAP_REPLACE, Execution.MAP_APPEND,
+            Execution.MAP_OR_TERMINAL_EACH, Execution.TERMINAL_EACH))
     is_variadic_input = parameter.kind is inspect.Parameter.VAR_POSITIONAL and (
         spec.execution in (Execution.COMBINE, Execution.TERMINAL_ALL))
     injected = marker_injected or is_receiver or is_variadic_input
@@ -600,7 +601,8 @@ def _call(model: CommandModel, selected: list, values: dict, ctx):
         args.append(selected[0])
       # end
       elif model.spec.execution in (
-          Execution.MAP_REPLACE, Execution.MAP_APPEND, Execution.TERMINAL_EACH):
+          Execution.MAP_REPLACE, Execution.MAP_APPEND,
+          Execution.MAP_OR_TERMINAL_EACH, Execution.TERMINAL_EACH):
         args.append(selected[0])
       # end
       elif parameter.kind in (inspect.Parameter.POSITIONAL_ONLY,
@@ -645,7 +647,7 @@ def execute_model(ctx, model: CommandModel, values: dict):
 
   try:
     if execution in (Execution.MAP_REPLACE, Execution.MAP_APPEND,
-        Execution.TERMINAL_EACH):
+        Execution.MAP_OR_TERMINAL_EACH, Execution.TERMINAL_EACH):
       outputs: list[object] = []
       for dataset in selected:
         result, _ = _call(model, [dataset], values, ctx)
@@ -665,6 +667,20 @@ def execute_model(ctx, model: CommandModel, values: dict):
         # end
         for result in outputs:
           ctx.obj.datasets.extend(_datasets_from_result(result))
+        # end
+      elif execution is Execution.MAP_OR_TERMINAL_EACH:
+        by_input = {id(dataset): result
+            for dataset, result in zip(selected, outputs)}
+        ctx.obj.datasets = [
+            by_input[id(dataset)]
+            if id(dataset) in by_input and _is_dataset(by_input[id(dataset)])
+            else dataset
+            for dataset in ctx.obj.datasets
+        ]
+        if model.spec.result is ResultPolicy.VALUE:
+          for result in outputs:
+            _present(result)
+          # end
         # end
       else:
         if model.spec.result is ResultPolicy.VALUE:

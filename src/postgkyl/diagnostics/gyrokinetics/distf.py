@@ -45,7 +45,7 @@ def resolve_frames(
       bounds default to the first/last frame discovered on disk).
     name: Simulation name prefix.
     species: Species name.
-    suffix: Distribution-file suffix (see :func:`load_gk_distf`).
+    suffix: Distribution-file suffix (see :func:`load_distf`).
     block_idx: Use block-specific files with a ``_b<idx>`` prefix.
 
   Returns:
@@ -78,7 +78,7 @@ def resolve_frames(
 # end
 
 
-def load_gk_distf(
+def load_distf(
     name: str, species: str, frame: int, *,
     tag: str = "f", suffix: str = "", use_c2p_vel: bool = False,
     use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None,

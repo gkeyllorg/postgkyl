@@ -98,7 +98,6 @@ class GData(GDataState):
   gk_fluxsurf = operations.gyrokinetics.gk_fluxsurf
   select = operations.select
   integrate = operations.integrate
-  integrate_axis = operations.integrate_axis
   average = operations.average
   eval_at_coord_proj = operations.eval_at_coord_proj
   fft = operations.fft
