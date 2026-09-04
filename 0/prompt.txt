@@ -1,0 +1,5 @@
+Change the diagnostics folders to be gk, vm, mom, pkpm in src/postgkyl/diagnostics
+
+---
+
+Change the diagnostics folders to be gk, vm, mom, pkpm in src/postgkyl/diagnostics
