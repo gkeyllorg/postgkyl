@@ -1,0 +1,1 @@
+files look like rt_gk_multib_sheath_1x2v_p1_b2-geo_int_B3.gkyl. The _b2- at the end identifies the block number. Go ahead and implement these improvements you've suggested
