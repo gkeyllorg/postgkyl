@@ -1,0 +1,1 @@
+Add CI checks for macos as well
