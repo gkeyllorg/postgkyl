@@ -1,0 +1,45 @@
+The mac build is still failing. Run # --no-build-isolation: the compiled gpython bridge must be built
+Collecting numpy
+  Downloading numpy-2.4.6-cp311-cp311-macosx_14_0_arm64.whl.metadata (6.6 kB)
+Requirement already satisfied: setuptools in /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages (65.5.0)
+Downloading numpy-2.4.6-cp311-cp311-macosx_14_0_arm64.whl (5.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.5/5.5 MB 27.4 MB/s  0:00:00
+Installing collected packages: numpy
+Successfully installed numpy-2.4.6
+Obtaining file:///Users/runner/work/postgkyl/postgkyl
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × Preparing editable metadata (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [16 lines of output]
+      /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/setuptools/config/pyprojecttoml.py:108: _BetaConfiguration: Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+        warnings.warn(msg, _BetaConfiguration)
+      running dist_info
+      creating /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info
+      writing /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/PKG-INFO
+      writing dependency_links to /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/dependency_links.txt
+      writing entry points to /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/entry_points.txt
+      writing requirements to /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/requires.txt
+      writing top-level names to /private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/top_level.txt
+      writing manifest file '/private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/SOURCES.txt'
+      reading manifest file '/private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/SOURCES.txt'
+      adding license file 'LICENSE'
+      adding license file 'AUTHORS.md'
+      writing manifest file '/private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl.egg-info/SOURCES.txt'
+      creating '/private/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/pip-modern-metadata-enzbx5wl/postgkyl-2.0.0.dist-info'
+      error: invalid command 'bdist_wheel'
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: metadata-generation-failed
+
+× Encountered error while generating package metadata.
+╰─> from file:///Users/runner/work/postgkyl/postgkyl
+
+note: This is an issue with the package mentioned above, not pip.
+hint: See above for details.
+Error: Process completed with exit code 1.
