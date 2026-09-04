@@ -1,0 +1,79 @@
+Implement clang-format as the formatter for this repository. Use it in pre-commit and CI. Create the formatter to use only 2 spaces for indentation. First, build the configuration file for this formatter. The user MUST verify that the formatter is correct for this job. Implement ONLY WHEN the user has approved the configuration. This formatter does not have to preserve the # end statements in our files, and can remove them. You may want to write a script which removes all these statements
+
+---
+
+Implement clang-format as the formatter for this repository. Use it in pre-commit and CI. Create the formatter to use only 2 spaces for indentation. First, build the configuration file for this formatter. The user MUST verify that the formatter is correct for this job. Implement ONLY WHEN the user has approved the configuration. This formatter does not have to preserve the # end statements in our files, and can remove them. You may want to write a script which removes all these statements
+
+---
+
+Explain these parameters with examples AlwaysBreakAfterReturnType: AllDefinitions
+BreakBeforeBraces: WebKit
+AllowShortFunctionsOnASingleLine: None
+
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+IncludeBlocks: Preserve
+SortIncludes: Never
+
+---
+
+Explain these parameters with examples AlwaysBreakAfterReturnType: AllDefinitions
+BreakBeforeBraces: WebKit
+AllowShortFunctionsOnASingleLine: None
+
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+IncludeBlocks: Preserve
+SortIncludes: Never
+
+---
+
+I want the includes sorted alphabetically
+Apply this formatter to the python code, as well as the C files in this repository
+
+---
+
+I want the includes sorted alphabetically
+Apply this formatter to the python code, as well as the C files in this repository
+
+---
+
+Yes use YAPF
+
+---
+
+Yes use YAPF
+
+---
+
+explain .style.yapf with examples for the options
+
+---
+
+Implement all. Continue with the full implementation
+
+---
+
+yapf is now installed
+
+(refactor-diagnostics) postgkyl: pip install yapf                                                
+Collecting yapf
+  Downloading yapf-0.43.0-py3-none-any.whl.metadata (46 kB)
+Requirement already satisfied: platformdirs>=3.5.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from yapf) (4.9.4)
+Downloading yapf-0.43.0-py3-none-any.whl (256 kB)
+Installing collected packages: yapf
+Successfully installed yapf-0.43.0
+
+---
+
+yapf is now installed
+
+(refactor-diagnostics) postgkyl: pip install yapf                                                
+Collecting yapf
+  Downloading yapf-0.43.0-py3-none-any.whl.metadata (46 kB)
+Requirement already satisfied: platformdirs>=3.5.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from yapf) (4.9.4)
+Downloading yapf-0.43.0-py3-none-any.whl (256 kB)
+Installing collected packages: yapf
+Successfully installed yapf-0.43.0
