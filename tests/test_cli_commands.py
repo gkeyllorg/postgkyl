@@ -80,12 +80,12 @@ def test_fluent_chain_uses_api_command_and_option_names():
 # end
 
 
-def test_select_gets_only_conflict_free_short_options():
+def test_select_prioritizes_the_first_option_for_each_initial():
   select = next(command for command in COMMANDS if command.name == "select")
   options = {option.name: option.opts for option in select.params}
   assert options == {
       "comp": ["--comp", "-c"],
-      "z0": ["--z0"],
+      "z0": ["--z0", "-z"],
       "z1": ["--z1"],
       "z2": ["--z2"],
       "z3": ["--z3"],
@@ -95,8 +95,8 @@ def test_select_gets_only_conflict_free_short_options():
       "tag": ["--tag", "-t"],
       "label": ["--label", "-l"],
   }
-  result = _ok(FIELD, "interpolate", "select", "-c", "0", "-t", "chosen",
-      "info")
+  result = _ok(FIELD, "interpolate", "select", "-c", "0", "-z", "0",
+      "-t", "chosen", "info")
   assert result.output.startswith("(chosen#0)")
 # end
 

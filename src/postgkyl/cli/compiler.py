@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -142,18 +141,21 @@ _RESERVED_SHORT_OPTIONS = frozenset({"h"})
 
 
 def _short_option_names(parameters: tuple[ParameterModel, ...]) -> dict[str, str]:
-  """Return unambiguous one-letter option names for exposed parameters."""
-  candidates = {
-      parameter.name: parameter.name[0]
-      for parameter in parameters
-      if not parameter.injected and not parameter.argument
-  }
-  counts = Counter(candidates.values())
-  return {
-      name: f"-{candidate}"
-      for name, candidate in candidates.items()
-      if counts[candidate] == 1 and candidate not in _RESERVED_SHORT_OPTIONS
-  }
+  """Assign each available initial to its first exposed parameter."""
+  assigned: dict[str, str] = {}
+  claimed = set(_RESERVED_SHORT_OPTIONS)
+  for parameter in parameters:
+    if parameter.injected or parameter.argument:
+      continue
+    # end
+    initial = parameter.name[0]
+    if initial in claimed:
+      continue
+    # end
+    assigned[parameter.name] = f"-{initial}"
+    claimed.add(initial)
+  # end
+  return assigned
 # end
 
 

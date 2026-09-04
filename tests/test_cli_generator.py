@@ -97,7 +97,7 @@ def test_exact_option_projection_and_help_provenance():
       "enabled": ["--enabled", "-e"],
       "mode": ["--mode", "-m"],
       "format": ["--format", "-f"],
-      "paths": ["--paths"],
+      "paths": ["--paths", "-p"],
       "pair": ["--pair"],
       "values": ["--values", "-v"],
   }
@@ -107,7 +107,7 @@ def test_exact_option_projection_and_help_provenance():
 # end
 
 
-def test_short_options_require_a_unique_initial_and_reserve_help():
+def test_short_options_prioritize_parameter_order_and_reserve_help():
   @command(CommandSpec(Section.UTILITY, Execution.LOAD))
   def collisions(*, alpha: int = 0, another: int = 0,
       beta_value: int = 0, hidden: int = 0):
@@ -124,7 +124,7 @@ def test_short_options_require_a_unique_initial_and_reserve_help():
   command_obj = build_click_command(compile_callable(collisions))
   options = {option.name: option.opts for option in command_obj.params}
   assert options == {
-      "alpha": ["--alpha"],
+      "alpha": ["--alpha", "-a"],
       "another": ["--another"],
       "beta_value": ["--beta_value", "-b"],
       "hidden": ["--hidden"],
@@ -335,8 +335,7 @@ def test_every_generated_name_preserves_api_underscores():
     expected = {parameter.name for parameter in model.parameters
         if not parameter.injected}
     assert set(options) == expected
-    initials = [parameter.name[0] for parameter in model.parameters
-        if not parameter.injected and not parameter.argument]
+    claimed_initials = {"h"}
     for parameter in model.parameters:
       if not parameter.injected:
         if parameter.argument:
@@ -346,8 +345,9 @@ def test_every_generated_name_preserves_api_underscores():
         else:
           assert isinstance(options[parameter.name], click.Option)
           expected_opts = ["--" + parameter.name]
-          if initials.count(parameter.name[0]) == 1 and parameter.name[0] != "h":
+          if parameter.name[0] not in claimed_initials:
             expected_opts.append("-" + parameter.name[0])
+            claimed_initials.add(parameter.name[0])
           # end
         # end
         assert options[parameter.name].opts == expected_opts
