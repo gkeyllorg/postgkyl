@@ -1,0 +1,3 @@
+Let's think about how multiblock data can and should be handled elegantly inside postgkyl. For instance, say someone wanted to load data like
+pgkyl <sim_name>-b[0-9]*_elc_M0_1.gkyl interp gk-rz pl
+I would expect the gk-rz command to put all the data on the rz plane, but the pl command to plot all the blocks on the same figure. So I would expect 1 figure with all the blocks. How do we make this happen? How do we build in native mutiblock support in this manner?
