@@ -1,0 +1,2 @@
+Can I do the command
+fig = plt.plot(GData)
