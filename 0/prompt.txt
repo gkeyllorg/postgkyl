@@ -1,0 +1,1 @@
+Here is a crash on the latest version of the build. Propose a fix for macos builds that address this completely
