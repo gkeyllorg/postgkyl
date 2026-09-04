@@ -1,0 +1,1344 @@
+# AGENTS.md instructions for /home/maxwell-rosen/postgkyl
+
+<INSTRUCTIONS>
+# Coding Doctrine
+
+**0. Locality of reasoning.** Every principle below is a projection of
+one axiom: a reader must be able to understand a fragment without the
+whole program. Whatever keeps a local conclusion sound — a frozen
+record, an honest signature, a stated law — is doctrine. Whatever
+forces a global search — ambient state, a leaky layer, a second copy
+of a fact — is the enemy.
+
+*Data — what it does, and what it may say*
+
+**I. Data is inert. Functions transform.** No objects that know
+things and do things. Data is a frozen record. Behavior is a function
+that takes data in and returns data out. If you're reaching for
+inheritance, you've taken a wrong turn.
+
+**II. Make illegal states unrepresentable.** The shape of a datum is
+its strongest invariant. Constructors refuse invalid states; a checked
+fact becomes a type; downstream never re-proves what upstream
+established. Parse, don't validate.
+
+*Functions — one idea, honestly declared*
+
+**III. A function is one idea.** It takes exactly what it needs and
+returns exactly what it computes. If the signature has two concepts in
+it, you have two functions.
+
+**IV. The signature tells the whole truth.** Inward: if something
+needs a value, it receives it as a parameter — no spooky action at a
+distance, no stringly-typed interfaces, no implicit state. Outward:
+same inputs, same outputs; effects and failure appear in the type, not
+in the fine print. Pure core, effects at the edges.
+
+*Knowledge — one home per fact*
+
+**V. Every fact has one home.** One authoritative representation of
+each decision and each piece of knowledge; everything else inherits or
+is derived mechanically — never maintained by hand in parallel.
+Configuration is decided once, at the highest level, and threaded
+down; no module ever decides its own context. If the design and the
+implementation can disagree, you have two sources of truth and zero.
+
+*Layers — what above, how below*
+
+**VI. Separate what from how.** Logic and machinery are different
+concerns with a hard boundary. The layer that says *what* to compute
+should be readable by someone who has never seen the machinery
+underneath. The layer that says *how* lives below, stays below, and
+nothing leaks up from it.
+
+**VII. Notation is execution; lowering is transliteration.** Looking
+up: the spec layer reads like the math or logic it implements — when
+notation *is* the executable object, not a comment beside it, bugs
+have nowhere to hide. Looking down: the layer that executes the spec
+reproduces it exactly — nothing added, nothing dropped, nothing
+reinterpreted; no opinions, no defaults, no helpful conversions. If
+the lowering changes anything, the spec is a lie.
+
+*Abstraction — earned, and binding*
+
+**VIII. Earn your abstractions.** No abstraction before the second
+use. Three similar lines is better than a premature helper. The right
+amount of complexity is the minimum the current task demands — not the
+current task plus three hypothetical future ones.
+
+**IX. An abstraction is a contract.** It is defined by what it
+guarantees, not what it hides. If you can't state what is always true
+of it — properties a client may rely on without reading the
+implementation — it isn't an abstraction, it's indirection. Two
+implementations that honor the contract must be interchangeable; and
+its outputs stay in its vocabulary, so uses compose.
+
+*Verification — formal first*
+
+**X. Trust the most formal thing first.** Types over tests, tests
+over docs, docs over comments. Invest in whichever layer catches the
+bug earliest with the least ongoing maintenance cost.
+
+## Commands
+
+```bash
+# Install for development (editable) + test deps
+pip install -e .[test]
+
+# Run the tests
+pytest tests/
+# Without an install, point Python at the src layout:
+PYTHONPATH=src python -m pytest tests/
+
+# Run the CLI (chained pipeline; mirrors the fluent script API)
+pgkyl file.gkyl interpolate select --z0 0 plot
+pgkyl file.gkyl info
+
+# A diagnostics chain (equation-specific physics; see diagnostics/)
+# (diagnostics take NumPy-backed data, so interpolate always runs first)
+pgkyl euler_5m_0.gkyl interpolate five_moment_pressure --num_moms 5 plot
+
+# An RPN chain over the working set (see operations/evaluate.py)
+pgkyl a.gkyl b.gkyl evaluate "f0 f1 +" interpolate plot
+
+# `pgkyl --help` lists every registered command, grouped by section
+# (Verbs / Diagnostics / Render / Utility).
+pgkyl --help
+pgkyl --version
+```
+
+### Boolean API/CLI contract
+
+Every public boolean parameter defaults to `False`. If the default behavior
+is enabled, name the parameter for disabling or selecting its inverse (for
+example, `no_show=False`, `volume=False`, or `nodal=False`) and implement the
+default behavior under the false branch. The generated CLI mirrors the API
+parameter name and default exactly; a bare boolean option means `True`, while
+an explicit `True` or `False` remains accepted. The CLI compiler rejects a
+public boolean whose API default is not `False`.
+
+## Architecture — a strict, one-way layered DAG
+
+Every folder has **one job**, and imports point in **one direction only** (leaves at the
+bottom). There is **no import cycle** — this is enforced by a
+test (see "Import contract"). Arrow = "may import":
+
+> **Keeping the picture honest:** the two diagrams below and the prose after them are a
+> mirror of `tests/test_postgkyl.py::_ALLOWED` — that dict (and the AST walk that checks
+> every real import against it) is the enforced source of truth; this file is only a
+> readable projection of it. The two *can* drift (they already had:
+> `operations/average.py`, `operations/eval_at_coord_proj.py`, `operations/local_poly.py`,
+> `gdatastate/guards.py`, `gdata/gdatagroup.py`, and `gdata/verbs.py` existed in the tree before they
+> were added here). Whenever you add a new top-level module file or a new allowed import
+> edge, update `_ALLOWED` and this section in the same commit — don't let the picture
+> outlive the code it describes.
+
+```
+src/postgkyl/
+│
+├─ cli_spec.py          frozen command records/decorators · no imports [LEAF]
+│
+├─ __init__.py          facade · `import postgkyl as pg`              [SURFACE]
+│
+├─ cli/                 generated Click surface + generic runtime         [SURFACE]
+│   ├─ app.py
+│   ├─ discovery.py
+│   └─ compiler.py
+│
+├─ diagnostics/        equation-specific physics · grouped by Gkeyll [COMPOSITION]
+│   ├─ gk/             distf/quantity loaders + balance programs
+│   ├─ vm/             distribution transforms + trajectories
+│   ├─ pkpm/           Laguerre reconstruction + loader
+│   ├─ mom/            fluid moments, MHD, plasma, rotations + programs
+│   └─ discovery.py    shared equation-blind output discovery
+│
+├─ gdata/                ★ THE FLUENT SURFACE  (sits ABOVE operations)  [FLUENT API]
+│   ├─ gdata.py          class GData(GDataState) + .interpolate()/.plot()/
+│   │                    .plotly()/.pyvista()
+│   ├─ gdatagroup.py     fluent GDataGroup: broadcasts verbs over its members
+│   ├─ verbs.py          module-level fluent verbs with no single `self`
+│   │                    (collect/evaluate/relchange/animate) — one-line
+│   │                    delegations to `operations`, shared by GData and GDataGroup
+│   └─ load.py           pg.load(...) → returns a GData
+│
+├─ operations/         data transformations · the single seam          [VERBS]
+│   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (flat core
+│   ├─ select.py                                                       verbs are
+│   ├─ average.py        terminal-adjacent: weighted average over a dim subset,
+│   │                    stays modal/gkyl-native (composes with further verbs)
+│   ├─ eval_at_coord_proj.py  terminal-adjacent: eval at coords, project to the
+│   │                    lower-dim basis for survivors, stays modal/gkyl-native
+│   ├─ local_poly.py     modal coefficients → discontinuity-preserving plot mesh
+│   └─ gyrokinetics/     domain geometry transformations: R-Z + flux surfaces
+│
+├─ render/             canonical plot/animate · plotly/plotly_animate · pyvista [BACKEND]
+│
+├─ gdatastate/         ★ THE CONTAINER  (state only, NO verbs)        [CONTAINER]
+│   ├─ gdatastate.py          class GDataState: grid·values·ctx·_result·dunders
+│   ├─ gdatastategroup.py     GDataStateGroup
+│   ├─ guards.py         shared field-domain guard (backend=="gkyl" -> raise);
+│                        one home for the ".interpolate() first" check reused
+│                        across operations/diagnostics instead of retyped per verb
+│   └─ materialize.py    shared native point-values → NumPy-shadow bridge
+│
+├─ numerics/           pure NumPy math · 0 internal imports           [LEAF]
+├─ dg/                 interpolation bridge + modal ops → gpython     [ENGINE]
+├─ io/                 readers (C-native first) + writer → gpython    [ENGINE]
+└─ gpython/            ★ THE FOREIGN FLOOR · compiled shim            [FLOOR]
+    ├─ csrc/             _gpythonmodule.c — CPython extension over gkyl_gpython.h
+    │                    (the shim itself lives in gkeyll/core/zero/)
+    ├─ _gpython.so       built extension (scripts/build_gpython.sh)
+    ├─ libg0core.so      bundled beside it; loaded through a relative rpath
+    ├─ _lib.py           loads _gpython · GPYTHON_API_VERSION handshake
+    ├─ array.py          GkylArray — capsule owner of a gkyl_array
+    ├─ basis.py          basis cache + interpolation matrices via the shim
+    ├─ rio.py            file loading via gkyl_array_rio
+    └─ kernels.py        weak mul/div/inv · lincomb · reduce · integrate
+```
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ SURFACES        __init__.py  (pg facade)        cli/  (argv → verbs)         ║
+║                                                 gui/  (argv → graphics)      ║
+╚════════════════════════════╦══════════════════════════════╦══════════════════╝
+                             │ imports                      │ imports
+                             ▼                              ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ COMPOSITION                                                                  ║
+║   diagnostics/   ★ EQUATION-SPECIFIC PHYSICS · Gkeyll model families         ║
+║      mom/            five_moment · ten_moment · mhd · plasma · multispecies  ║
+║                      rotations · enstrophy · ke_dke                          ║
+║      vm/             kinetic frame transforms · trajectory                   ║
+║      pkpm/           laguerre_compose(…) + load_pkpm(…)                      ║
+║      gk/             load_distf · load_quantity + quantity registry          ║
+║                      (Tpar, beta, ExB_vel, …) · energy_balance → Figure …    ║
+║      discovery.py    shared naming-convention stem/frame discovery           ║
+╚════════════════════════════╦═════════════════════════════════════════════════╝
+                             │ imports
+                             ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ FLUENT API   ★ the fluent surface lives HERE, above operations               ║
+║                                                                              ║
+║   gdata/load.py    pg.load(path) ───────────────────► returns gdata.GData    ║
+║   gdata/gdata.py   class GData(GDataState):                                  ║
+║                   interpolate = operations.interpolate (static alias)        ║
+║                   plot/plotly/pyvista = operations = render (one each)       ║
+║   gdata/gdatagroup.py  GDataGroup(gdatastate.GDataStateGroup): broadcasts any verb ║
+║                  over its members via __getattr__ — no verb body duplicated  ║
+║   gdata/verbs.py module-level verbs with no single `self` (collect/evaluate/ ║
+║                  relchange/animate) — direct aliases to operations,          ║
+║                  shared by GData and GDataGroup so spellings can't drift     ║
+╚════════════════════════════╦═══════════════════════════════════╦═════════════╝
+                             │ imports                           │ extends
+                             ▼                                   │ (subclass)
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ VERBS · data transformations                                                 ║
+║   operations/interpolate.py   def interpolate(d: GDataState) -> GDataState   ║
+║   operations/select.py                                                       ║
+║   operations/gyrokinetics/     domain-specific geometry transformations       ║
+╚════════════════════════════╦═══════════════════════════════════╩═════════════╝
+                             │ imports                            │
+                             ▼                                    │
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ BACKEND                                                                      ║
+║   render/ (mpl plot/animate · plotly/plotly_animate · pyvista) — canonical;    ║
+║   facade, GData, operations, and CLI views share their exact identities      ║
+╚════════════════════════════╦════════════════════════════════════╦════════════╝
+                             │ imports                            │
+                             ▼                                    ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ CONTAINER                                                                    ║
+║   gdatastate/gdatastate.py   GDataState: grid · values · ctx ·_result·dunders║
+║   gdatastate/gdatagroup.py   GDataStateGroup                                 ║
+║   gdatastate/guards.py  shared field-domain guard: backend=="gkyl" -> raise  ║
+║                   the ".interpolate() first" message — one home for a check  ║
+║                   operations/diagnostics verbs used to retype independently  ║
+║   gdatastate/materialize.py  native nodal/quad → NumPy point-value state     ║
+╚════════════════════════════╦═════════════════════════════════════════════════╝
+                             │ imports
+                             ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ENGINE / LEAVES                                                              ║
+║   cli_spec.py (frozen command metadata · imports nothing)                   ║
+║   numerics/ (pure math · imports nothing)                                    ║
+║   dg/ (interpolation bridge + modal ops)   io/ (readers · writer)            ║
+╚═════════════╦══════════════════════════════════════╦═════════════════════════╝
+              │ imports                              │ imports
+              ▼                                      ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ FOREIGN FLOOR   gpython/  — the compiled gpython bridge (GKEYLL_C_SHIM.md)   ║
+║   GkylArray (capsule RAII) · basis cache · rio · kernels                     ║
+║                     ▼ import _gpython  (extension over gkyl_gpython.h only)  ║
+║   gkeyll/core/zero/{gkyl_gpython.h, gpython.c} — the shim, compiled by       ║
+║   Gkeyll's own make core INTO:      ▼ linked -lg0core                        ║
+║   libg0core.so  (pinned gkeyll clone · built, then bundled by the scripts)   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+```
+
+### The two-domain lifecycle (REFACTOR_GKEYLL_FFI.md)
+
+Every dataset lives in one of two backends, discriminated by
+`GDataState.backend`:
+
+- **`"gkyl"` (modal domain)** — DG coefficients as a native `gkyl_array`
+  (`gpython.GkylArray`). Loading lands here. All math runs inside Gkeyll:
+  `*`/`/` → weak kernels (`gkyl_dg_mul_op`/`div_op`), `+`/`-` → coefficient
+  lin-combs (`gkyl_array_accumulate`), scalars → `scale`/mean-shift, integer
+  powers → repeated weak multiply, full `.integrate()` →
+  `gkyl_array_integrate`, partial `.integrate(axis=…)` → exact
+  `gkyl_array_average` followed by physical-volume scaling.
+  `values` is a read-only view; `np.asarray`/ufuncs/`select` refuse with
+  ".interpolate() first".
+- **`"numpy"` (field domain)** — post-`interpolate()` values as a plain ndarray;
+  the unchanged NumPy stack (`select`, `plot`, ufuncs, arithmetic).
+
+`interpolate()` is the **one-way bridge**: matrix from Gkeyll's basis functions,
+applied per cell with NumPy `tensordot`, returning a *new, by-value* array.
+
+Every dataset has one **`value_form`** (`ctx["value_form"]`): `modal`
+coefficients, `nodal` values at the basis `node_list` points, or `quad`
+values at Gauss–Legendre points. This is a single, backend-agnostic fact —
+there is no separate `is_modal` flag duplicating it; a numpy-backed dataset
+that was never native (e.g. a plain nodal-basis file read without the
+Gkeyll library) carries the same three-valued `value_form` as a gkyl-native
+one, and every consumer (`_require_operable`, `interpolate`, `average`, …)
+reads that one key. **The capability boundary is modal vs point-values, not
+gkyl vs NumPy:**
+
+- **modal** — only Gkeyll's DG operations: weak `* /`, coefficient `+ -`/scalar
+  kernels, `.integrate()`, `.interpolate()`. Ufuncs/`np.asarray`/`plot` refuse.
+- **nodal / quad** — the values ARE the field at points, so *every* pointwise
+  NumPy operation is exact and allowed (ufuncs, `* / **`, `np.asarray`) —
+  computed on the views, wrapped back native, **staying in-value_form** —
+  and they `plot()` directly at their true point locations (non-tensor node
+  sets, e.g. serendipity p2 in 2-D, plot via `.to_quad()`).
+
+Conversions are **never implicit** — only `.to_modal()/.to_nodal()/.to_quad()`
+change `value_form` (nodal↔modal exact; quad round-trip exact for degree
+≤ 2·num_quad−1); `.apply(fn, num_quad=…)` is the one-shot modal → quad → fn →
+project-back spelling (≡ `fn(d.to_quad()).to_modal()`). Datasets combine only
+within one value_form. See REFACTOR_GKEYLL_FFI.md §3b.
+
+`basis_type`, `poly_order`, and `value_form` are properties **of the data
+itself** — read from a file's header metadata, or set once via `pg.load(...,
+basis_type=..., poly_order=..., value_form=...)` / the CLI's bare-filename
+`load` (`-b`/`-p`/`-v`) — never re-specified by a downstream verb. `.interpolate()`,
+`.local_poly()`, `.average()`, `.eval_at_coord_proj()`, `.integrate()`, … all
+read `ctx["basis_type"]`/`ctx["poly_order"]`/`ctx["value_form"]` off the
+dataset and raise a clear error if a required one is missing; none of them
+take a `basis`/`poly_order` override argument. Loading a dataset that has a
+spatial grid (`ctx["cells"]`) without `basis_type`/`poly_order`/`value_form`
+resolvable (neither in the file header nor given explicitly) warns and
+defaults to `basis_type="serendipity"`, `poly_order=0`, `value_form="nodal"`
+— the trivial one-point-per-cell basis, since there is no modal structure to
+assume otherwise. When `value_form` is defaulted this way, the grid is
+re-expressed as cell centers (p0 nodal's one point per cell) instead of the
+reader's raw cell-edge grid, so it lines up one-to-one with `values`. A
+dynvector/diagnostic file has no spatial grid and thus no DG basis to speak
+of, so it is exempt from this defaulting. This is distinct from the readers'
+own narrower default (`gkyl_c_reader.py`/`gkyl_reader.py`: `basis_type`
+resolved but no `value_form` tag in the file -> assume `"modal"`, silently,
+no warning) — there the data is *known* to be real DG output (the header
+has a basis), so the stored numbers are almost certainly modal coefficients
+already, not point values; that assumption is safe enough not to warn about.
+The `gdatastate.py`-level default above only fires when nothing about a
+basis was found at all.
+
+### `gdatastate/` — the container (`gdatastate/state.py`)
+`GDataState` holds one dataset: a nodal `grid` (list of 1-D edge arrays), values in
+one of the two backends (`gpython.GkylArray` or `np.ndarray`), and metadata in `ctx`.
+It is **verb-less** and imports only downward (`io` to construct itself, `gpython` for
+the backend type, and `dg` for shared point-value materialization). It owns:
+- shape properties (`num_dims`/`num_comps`/`num_cells`/`bounds`), `grid`/`values`,
+- `backend` (`"gkyl"`/`"numpy"`) and `native` (the raw `GkylArray` for the kernels),
+- `push`, `clone` (backend-aware deep copy via `type(self)`), and **`_result(...)`** —
+  the one "mutate-self vs. emit-new" decision point every verb funnels through,
+- pure state readers only: `__array__` (refuses on gkyl-backed data),
+  `__repr__`/`__str__`, `info`, `is_interpolated`.
+`gdatastate/collection.py` has `flatten_datasets` (shared by the multi-dataset entry points).
+`gdatastate/guards.py` centralizes the field-domain check (`backend == "gkyl"` → raise with
+the standard ".interpolate() first" message) that several `operations`/`diagnostics` verbs
+need but that isn't itself a verb, so it lives here rather than in `operations`.
+`gdatastate/materialize.py` owns the shared conversion from native nodal/quad values to
+a NumPy-backed state used by every terminal consumer.
+
+### `api/` — the fluent surface (`api/gdata.py`, `api/load.py`)
+`class GData(GDataState)` adds the **fluent verb methods** (`.interpolate()`, `.select()`,
+`.plot()`, `.save()`, `.info` inherited) and the **computing operators**
+(`+ - * / **`, reflected, `__neg__`/`__abs__`, `__array_ufunc__`). Because it lives
+*above* `operations`, exact verbs are static class-body aliases to their canonical
+operation — no wrapper, runtime `setattr`, or lazy import. `pg.load(...)`
+returns a `GData`.
+
+`gdata/gdatagroup.py` mirrors the same move one level up: `class GDataGroup(gdatastate.GDataStateGroup)`
+adds broadcasting — any attribute not defined on the class is resolved by `__getattr__`,
+looked up on every member, so a verb call broadcasts across the whole group without a
+single verb body being duplicated. `gdata/verbs.py` holds the handful of verbs that
+combine *several* datasets and so have no single `self` to hang off of a class —
+`collect`, `evaluate`, `relchange`, `animate` — each a direct alias to the matching
+`operations` function; `GData` and `GDataGroup` both call through these same
+module-level functions for their own methods, so the functional and fluent spellings
+of a multi-dataset verb can never drift apart.
+
+**The trick that removes the cycle:** `operations` verbs are typed on `GDataState` but *return*
+the caller's concrete class, because `_result` builds `type(self)()`. So `operations` never needs
+to import `gdata`, yet the whole fluent chain stays `GData`. See `HIERARCHY_2.md`.
+
+### `operations/` — the data-transformation library (the single seam)
+Flat core verbs have one module each and domain transformations live in named
+subpackages exposed from `operations/__init__.py`. Contract:
+`op(data: GDataState, *, ..., inplace=False, tag=None, label=None) -> GDataState`.
+Flat modules hold equation-blind core verbs. Domain subpackages may know the
+geometry or representation of one equation system while still only
+transforming/re-expressing data; `operations/gyrokinetics/` owns the R-Z and
+flux-surface projections. Code that interprets components to derive a new
+physical conclusion belongs in `diagnostics/`.
+Implemented: `interpolate` (the bridge verb: gkyl-backed in, numpy-backed out),
+`select` (field-domain only), `info`, `integrate` (full or partial; modal data
+stay inside Gkeyll, with full integration terminal and partial integration
+returning an exact lower-dimensional modal dataset), `represent`/`apply` (the explicit
+value_form verbs behind `.to_modal()/.to_nodal()/.to_quad()/.apply()`),
+`arithmetic` (`binary` + `apply_ufunc`), which **dispatches on `backend`**: modal
+operands → `dg.modal` kernel calls; numpy operands → the NumPy path; mixed
+domains or mixed value_forms → error, plus the field-domain analysis verbs
+(`fft`, `magsq`, `relchange`, `mask`, `collect`, `grid`, `val2coord`,
+`extract_input`, `fit` (its `window=True` mode covers growth-rate-style
+leading-window fits), `differentiate`, `evaluate`, `map`); and the modal-native
+verbs `average` (weighted average over a dimension subset via Gkeyll's
+`gkyl_array_average`) and `eval_at_coord_proj` (eval at physical coordinates,
+projected onto the lower-dimensional basis for the surviving directions) —
+both terminal-adjacent like `represent`: they emit a new, lower-dimensional
+dataset that stays modal/gkyl-native, so it composes with further
+`.to_nodal()`/`.interpolate()`/`.average()`/`.eval_at_coord_proj()` calls
+rather than dropping to NumPy. `local_poly` bridges modal coefficients to a
+discontinuity-preserving plotting mesh.
+`operations.plot`/`animate`/`plotly`/`plotly_animate`/`pyvista` are direct
+aliases of their canonical `render` callables.
+All terminal consumers share `gdatastate.materialize_point_values`, so the
+point-value capability rule has one home. Verbs wrap the layers below; they
+don't reimplement.
+
+### `diagnostics/` — equation-specific physics (COMPOSITION, above `gdata`)
+The layer that knows what the numbers *mean* — and the ONLY package in the
+COMPOSITION tier. Its four packages mirror Gkeyll's model-family folders:
+
+- `mom/` owns `five_moment`, `ten_moment`, `mhd`, `plasma` (plasma
+  parameters), `multispecies` (`energetics`, `accumulate_current`), `rotations`
+  (par/perp to B), and the five-moment `enstrophy`/`ke_dke` frame programs.
+- `vm/` owns distribution-function frame transforms (`kinetic`) and
+  particle trajectories (`trajectory`).
+- `pkpm/` owns Laguerre reconstruction and `load_pkpm`.
+- `gk/` owns distf/quantity loaders, the quantity registry (Tpar,
+  beta, drift velocities), and `energy_balance`/`particle_balance`/`nodes`.
+
+R-Z mapping and theta-phi flux-surface
+extraction are gyrokinetic operations; their old diagnostic module paths are
+compatibility aliases for the current major version. Contract: a diagnostic takes loaded
+data — one or several `GData` — plus physical scalars as keyword-only
+options, and returns `GDataState` (via `_result`, same inplace/tag/label
+contract as a verb) or a Figure; it is built entirely from the public
+vocabulary below it (`operations`, `gdatastate`, `numerics`, `gdata`) and nothing below the
+surfaces imports it. The `render` edge is pre-authorized for this layer (a
+program diagnostic may want `render.plot()`'s generic panel layout), but as
+of this writing every program module builds its own bespoke figure directly
+with `matplotlib` instead.
+
+**Each equation model owns its loading internally** — there is no `loaders/`
+package. Entry points like `gk.load_quantity(...)` (naming-
+convention load + registry dispatch, "physics-ready data by name") and
+`pkpm.load_pkpm(...)` live beside the physics they feed, because a quantity's
+ingredient files and its formula are one piece of equation knowledge. The
+only shared piece is `diagnostics/discovery.py` — equation-blind
+output-stem/frame discovery, the one home for Gkeyll's file-naming
+convention; equation loaders and programs resolve files through it, never
+with private globbing.
+
+Functions have real names (`mom.five_moment.pressure(d, gas_gamma=…)`), never
+string dispatch; each equation module's `VARIABLES` table maps the CLI's
+quantity-name vocabulary (`"density"`, `"pressure"`, …) to those functions —
+the one home for that vocabulary. These are **free functions, not `GData`
+methods**: the layer sits above the fluent surface. (This layer absorbed the
+former `models/` package — array physics now lives as private helpers inside
+the equation module that uses it.)
+
+### Engine layers — `dg/`, `io/` (may import `gpython` only)
+- **`dg/`** — Gkeyll-kernel orchestration. `dg/interpolate.py` is the one-way modal→NumPy
+  bridge (matrix from `gpython.basis`, applied per cell with `tensordot`; nodal-basis
+  files convert through the exact `nodal_to_modal` matrix first); `dg/modal.py`
+  holds the operations that stay modal (weak algebra, `lincomb`, `shift_mean`,
+  `power`, `integrate`); `dg/rep.py` holds the explicit value_form changes
+  (modal·nodal·quad) and `apply_pointwise` — all on native arrays.
+- **`io/`** — file I/O: `read()` dispatches over a reader registry. `GkylCReader`
+  (first) reads field files entirely inside Gkeyll (`gkyl_grid_array_new_from_file`)
+  and returns a native `GkylArray`; the pure-Python `GkylReader` is the fallback for
+  no-library installs, partial loads, and dynvectors. `save()` supports
+  `gkyl`/`txt`/`npy`/`vtk`. Readers fill a plain `ctx` dict and return
+  `(grid, values)` — they never import `gdatastate`.
+
+### Leaves — `numerics/` (imports nothing), `gpython/` (the foreign floor)
+- **`numerics/`** — pure NumPy: `idx_parser` (selection strings) and `elementwise`
+  (`grids_compatible`). No `GData`, ever.
+- **`gpython/`** — **the only doorway to the foreign world** (a test enforces this),
+  and it is a *compiled* one (GKEYLL_C_SHIM.md): the gpython shim
+  (`gkeyll/core/zero/{gkyl_gpython.h, gpython.c}`) lives **in the gkeyll tree** and is
+  compiled by Gkeyll's own `make core` *into* `libg0core.so` — it holds every
+  struct access, the by-value `struct gkyl_basis` convention, and the basis
+  function-pointer dispatch, all checked by the C compiler against the headers
+  in the same tree (shim and library can never drift apart).
+  `csrc/_gpythonmodule.c` wraps `gkyl_gpython.h` (opaque handles + scalars + buffers
+  only) into the `_gpython` extension, built by `scripts/build_gpython.sh` against
+  the pinned `gkeyll/` clone's `libg0core.so`, copies that library beside the
+  exte
+</INSTRUCTIONS>
+
+---
+
+<environment_context>
+  <cwd>/home/maxwell-rosen/postgkyl</cwd>
+  <shell>zsh</shell>
+  <current_date>2026-09-04</current_date>
+  <timezone>America/New_York</timezone>
+  <filesystem><workspace_roots><root>/home/maxwell-rosen/postgkyl</root></workspace_roots><permission_profile type="managed"><file_system type="restricted"><entry access="read"><special>:root</special></entry><entry access="write"><path>/home/maxwell-rosen/postgkyl</path></entry><entry access="write"><special>:slash_tmp</special></entry><entry access="write"><special>:tmpdir</special></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.git</path></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.agents</path></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.codex</path></entry></file_system></permission_profile></filesystem>
+</environment_context>
+
+---
+
+<codex_internal_context source="goal">
+Continue working toward the active thread goal.
+
+The objective below is user-provided data. Treat it as the task to pursue, not as higher-priority instructions.
+
+<objective>
+Improve the unit testing coverage of the codebase. You may want to run pytest --cov -n4 to look at which files need coverage improvement. Update the threshold for CI when you've improved it as much as possible.
+</objective>
+
+Continuation behavior:
+- This goal persists across turns. Ending this turn does not require shrinking the objective to what fits now.
+- Keep the full objective intact. If it cannot be finished now, make concrete progress toward the real requested end state, leave the goal active, and do not redefine success around a smaller or easier task.
+- Temporary rough edges are acceptable while the work is moving in the right direction. Completion still requires the requested end state to be true and verified.
+
+Budget:
+- Tokens used: 0
+- Token budget: none
+- Tokens remaining: unbounded
+
+Work from evidence:
+Use the current worktree and external state as authoritative. Previous conversation context can help locate relevant work, but inspect the current state before relying on it. Improve, replace, or remove existing work as needed to satisfy the actual objective.
+
+No-progress check:
+- Classify the previous goal turn as progress, a verified wait, or no progress. Progress changes authoritative state, completes work, or yields evidence that changes the next action; status restatements and unexecuted plans are no progress.
+- A verified wait polls a specific process, session, job, or tool handle confirmed live now. Conversation, intent, prior output, or a lock or state file alone is insufficient. Treat work as stopped only when authoritative state says it is terminal or its handle is missing. An observation timeout or transient polling failure is not terminal: re-poll the same handle or inspect other authoritative state; never restart solely because observation expired.
+- Revalidate a no-progress turn and take the next available safe action. If none exists because the same genuine blocker remains, report it and leave the goal active until the blocked audit threshold is met. Treat equivalent blockers as the same condition across turns even when their wording or stated next step changes.
+
+Fidelity:
+- Optimize each turn for movement toward the requested end state, not for the smallest stable-looking subset or easiest passing change.
+- Do not substitute a narrower, safer, smaller, merely compatible, or easier-to-test solution because it is more likely to pass current tests.
+- Treat alignment as movement toward the requested end state. An edit is aligned only if it makes the requested final state more true; useful-looking behavior that preserves a different end state is misaligned.
+
+Completion audit:
+Before deciding that the goal is achieved, treat completion as unproven and verify it against the actual current state:
+- Derive concrete requirements from the objective and any referenced files, plans, specifications, issues, or user instructions.
+- Preserve the original scope; do not redefine success around the work that already exists.
+- For every explicit requirement, numbered item, named artifact, command, test, gate, invariant, and deliverable, identify the authoritative evidence that would prove it, then inspect the relevant current-state sources: files, command output, test results, PR state, rendered artifacts, runtime behavior, or other authoritative evidence.
+- For each item, determine whether the evidence proves completion, contradicts completion, shows incomplete work, is too weak or indirect to verify completion, or is missing.
+- Match the verification scope to the requirement's scope; do not use a narrow check to support a broad claim.
+- Treat tests, manifests, verifiers, green checks, and search results as evidence only after confirming they cover the relevant requirement.
+- Treat uncertain or indirect evidence as not achieved; gather stronger evidence or continue the work.
+- The audit must prove completion, not merely fail to find obvious remaining work.
+
+Do not rely on intent, partial progress, memory of earlier work, or a plausible final answer as proof of completion. Marking the goal complete is a claim that the full objective has been finished and can withstand requirement-by-requirement scrutiny. Only mark the goal achieved when current evidence proves every requirement has been satisfied and no required work remains. If the evidence is incomplete, weak, indirect, merely consistent with completion, or leaves any requirement missing, incomplete, or unverified, keep working instead of marking the goal complete. If the objective is achieved, call update_goal with status "complete" so usage accounting is preserved. If the achieved goal has a token budget, report the final consumed token budget to the user after update_goal succeeds.
+
+Blocked audit:
+- Do not call update_goal with status "blocked" the first time a blocker appears.
+- Only use status "blocked" when the same blocking condition has repeated for at least three consecutive goal turns, counting the original/user-triggered turn and any automatic goal continuations.
+- If the user resumes a goal that was previously marked "blocked", treat the resumed run as a fresh blocked audit. If the same blocking condition then repeats for at least three consecutive resumed goal turns, call update_goal with status "blocked" again.
+- Use status "blocked" only when you are truly at an impasse and cannot make meaningful progress without user input or an external-state change.
+- Once the blocked threshold is satisfied, do not keep reporting that you are still blocked while leaving the goal active; call update_goal with status "blocked".
+- Never use status "blocked" merely because the work is hard, slow, uncertain, incomplete, or would benefit from clarification.
+
+Do not call update_goal unless the goal is complete or the strict blocked audit above is satisfied. Do not mark a goal complete merely because the budget is nearly exhausted or because you are stopping work.
+
+</codex_internal_context>
+
+---
+
+Ruff is now installed. Run the relevant tests. Is there anything else which must be installed?
+
+---
+
+I installed these packages. Run the relevant tests
+
+---
+
+I installed these packages. Run the relevant tests
+
+---
+
+I got a big error running pip install -e '.[test]'
+
+Requirement already satisfied: mdurl~=0.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from markdown-it-py>=2.2.0->rich>=13.6.0->cyclopts>=4.0.0->pyvista>=0.48.4->postgkyl==2.0.0) (0.1.2)
+Requirement already satisfied: numexpr>=2.6.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (2.14.1)
+Requirement already satisfied: py-cpuinfo in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (9.0.0)
+Requirement already satisfied: blosc2>=2.3.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (4.2.0)
+Requirement already satisfied: ndindex in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (1.10.1)
+Requirement already satisfied: pydantic in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.13.4)
+Requirement already satisfied: requests in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.32.5)
+Requirement already satisfied: threadpoolctl in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.6.0)
+Requirement already satisfied: readme-renderer>=35.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (46.0)
+Requirement already satisfied: requests-toolbelt!=0.9.0,>=0.8.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.0.0)
+Requirement already satisfied: urllib3>=1.26.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.6.3)
+Requirement already satisfied: keyring>=21.2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (25.7.0)
+Requirement already satisfied: rfc3986>=1.4.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: id in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.6.1)
+Requirement already satisfied: SecretStorage>=3.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.5.0)
+Requirement already satisfied: jeepney>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (0.9.0)
+Requirement already satisfied: jaraco.classes in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.4.0)
+Requirement already satisfied: jaraco.functools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (4.6.0)
+Requirement already satisfied: jaraco.context in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (6.1.2)
+Requirement already satisfied: nh3>=0.2.14 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from readme-renderer>=35.0->twine>=6.2.0->postgkyl==2.0.0) (0.3.7)
+Requirement already satisfied: charset_normalizer<4,>=2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.4.6)
+Requirement already satisfied: idna<4,>=2.5 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.11)
+Requirement already satisfied: certifi>=2017.4.17 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2026.2.25)
+Requirement already satisfied: cryptography>=2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0)(50.0.1)
+Requirement already satisfied: cffi>=2.0.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: pycparser in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cffi>=2.0.0->cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.22)
+Requirement already satisfied: distlib<1,>=0.3.7 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (0.4.3)
+Requirement already satisfied: filelock<4,>=3.24.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (3.32.5)
+Requirement already satisfied: python-discovery>=1.6 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (1.6.0)
+Requirement already satisfied: more-itertools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from jaraco.classes->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (11.1.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.4 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.46.4)
+Requirement already satisfied: typing-inspection>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.4.2)
+Downloading pre_commit-4.3.0-py2.py3-none-any.whl (220 kB)
+Building wheels for collected packages: postgkyl
+  Building editable for postgkyl (pyproject.toml) ... error
+  error: subprocess-exited-with-error
+  
+  × Building editable for postgkyl (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [326 lines of output]
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+      !!
+      
+              ********************************************************************************
+              Please use a simple string containing a SPDX expression for `project.license`.You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+      
+              By 2027-Feb-18, you need to update your project and remove deprecated calls
+              or your builds will no longer be supported.
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        corresp(dist, value, root_dir)
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        dist._finalize_license_expression()
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        self._finalize_license_expression()
+      running editable_wheel
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info
+      writing /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/PKG-INFO
+      writing dependency_links to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/dependency_links.txt
+      writing entry points to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/entry_points.txt
+      writing requirements to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/requires.txt
+      writing top-level names to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/top_level.txt
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest template 'MANIFEST.in'
+      warning: no previously-included files found matching 'src/postgkyl/gpython/libg0core.so'
+      adding license file 'LICENSE'
+      adding license file 'AUTHORS.md'
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      creating '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info'
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info/WHEEL
+      running build_py
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      copying /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/libg0core.so -> /tmp/tmp68mij4f6.build-lib/postgkyl/gpython
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 39, in _copy_file_contents
+          fdst = open(dst, 'wb')  # noqa: SIM115 # closed in the finally below
+      FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so'
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 306, in _safely_run
+          return self.run_command(cmd_name)
+                 ~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 342, in run_command
+          self.distribution.run_command(command)
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 71, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/build_py.py", line 66, in copy_file
+          return super().copy_file(  # pyright: ignore[reportReturnType] # pypa/distutils#309
+                 ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              infile, outfile, preserve_mode, preserve_times, link, level
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 406, in copy_file
+          return file_util.copy_file(
+                 ~~~~~~~~~~~~~~~~~~~^
+              infile,
+              ^^^^^^^
+          ...<4 lines>...
+              link,
+              ^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 151, in copy_file
+          _copy_file_contents(src, dst)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 41, in _copy_file_contents
+          raise DistutilsFileError(f"could not create '{dst}': {e.strerror}")
+      distutils.errors.DistutilsFileError: could not create '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so': No such file or directory
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+          ~~~~^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+                                   ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 303, in build_editable
+          return hook(wheel_directory, config_settings, metadata_directory)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 474, in build_editable
+          return self._build_with_temp_dir(
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~^
+              cmd, ".whl", wheel_directory, config_settings
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
+          self.run_setup()
+          ~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 317, in run_setup
+          exec(code, locals())  # noqa: S102 # exec is intentional here
+          ~~~~^^^^^^^^^^^^^^^^
+        File "<string>", line 100, in <module>
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/__init__.py", line 117, in setup
+          return distutils.core.setup(**attrs)  # type: ignore[return-value]
+                 ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 168, in setup
+          return run_commands(dist)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 184, in run_commands
+          dist.run_commands()
+          ~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1028, in run_commands
+          self.run_command(cmd)
+          ~~~~~~~~~~~~~~~~^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 85, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 142, in run
+          self._create_wheel_file(bdist_wheel)
+          ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 352, in _create_wheel_file
+          files, mapping = self._run_build_commands(dist_name, unpacked, lib, tmp)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 275, in _run_build_commands
+          self._run_build_subcommands()
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 300, in _run_build_subcommands
+          self._safely_run(name)
+          ~~~~~~~~~~~~~~~~^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 308, in _safely_run
+          SetuptoolsDeprecationWarning.emit(
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+              "Customization incompatible with editable install",
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          ...<19 lines>...
+              # needs work.
+              ^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 49, in emit
+          text = cls._format(summary_, details_, due, see_url or docs_url, kwargs)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 67, in _format
+          cleandoc(details).format_map(format_args or {}),
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+      KeyError: 'dst'
+      An error occurred when building editable wheel for postgkyl.
+      See debugging tips in: https://setuptools.pypa.io/en/latest/userguide/development_mode.html#debugging-tips
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building editable for postgkyl
+Failed to build postgkyl
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> postgkyl
+
+---
+
+I got a big error running pip install -e '.[test]'
+
+Requirement already satisfied: mdurl~=0.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from markdown-it-py>=2.2.0->rich>=13.6.0->cyclopts>=4.0.0->pyvista>=0.48.4->postgkyl==2.0.0) (0.1.2)
+Requirement already satisfied: numexpr>=2.6.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (2.14.1)
+Requirement already satisfied: py-cpuinfo in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (9.0.0)
+Requirement already satisfied: blosc2>=2.3.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (4.2.0)
+Requirement already satisfied: ndindex in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (1.10.1)
+Requirement already satisfied: pydantic in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.13.4)
+Requirement already satisfied: requests in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.32.5)
+Requirement already satisfied: threadpoolctl in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.6.0)
+Requirement already satisfied: readme-renderer>=35.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (46.0)
+Requirement already satisfied: requests-toolbelt!=0.9.0,>=0.8.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.0.0)
+Requirement already satisfied: urllib3>=1.26.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.6.3)
+Requirement already satisfied: keyring>=21.2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (25.7.0)
+Requirement already satisfied: rfc3986>=1.4.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: id in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.6.1)
+Requirement already satisfied: SecretStorage>=3.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.5.0)
+Requirement already satisfied: jeepney>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (0.9.0)
+Requirement already satisfied: jaraco.classes in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.4.0)
+Requirement already satisfied: jaraco.functools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (4.6.0)
+Requirement already satisfied: jaraco.context in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (6.1.2)
+Requirement already satisfied: nh3>=0.2.14 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from readme-renderer>=35.0->twine>=6.2.0->postgkyl==2.0.0) (0.3.7)
+Requirement already satisfied: charset_normalizer<4,>=2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.4.6)
+Requirement already satisfied: idna<4,>=2.5 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.11)
+Requirement already satisfied: certifi>=2017.4.17 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2026.2.25)
+Requirement already satisfied: cryptography>=2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0)(50.0.1)
+Requirement already satisfied: cffi>=2.0.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: pycparser in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cffi>=2.0.0->cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.22)
+Requirement already satisfied: distlib<1,>=0.3.7 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (0.4.3)
+Requirement already satisfied: filelock<4,>=3.24.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (3.32.5)
+Requirement already satisfied: python-discovery>=1.6 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (1.6.0)
+Requirement already satisfied: more-itertools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from jaraco.classes->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (11.1.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.4 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.46.4)
+Requirement already satisfied: typing-inspection>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.4.2)
+Downloading pre_commit-4.3.0-py2.py3-none-any.whl (220 kB)
+Building wheels for collected packages: postgkyl
+  Building editable for postgkyl (pyproject.toml) ... error
+  error: subprocess-exited-with-error
+  
+  × Building editable for postgkyl (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [326 lines of output]
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+      !!
+      
+              ********************************************************************************
+              Please use a simple string containing a SPDX expression for `project.license`.You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+      
+              By 2027-Feb-18, you need to update your project and remove deprecated calls
+              or your builds will no longer be supported.
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        corresp(dist, value, root_dir)
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        dist._finalize_license_expression()
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        self._finalize_license_expression()
+      running editable_wheel
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info
+      writing /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/PKG-INFO
+      writing dependency_links to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/dependency_links.txt
+      writing entry points to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/entry_points.txt
+      writing requirements to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/requires.txt
+      writing top-level names to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/top_level.txt
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest template 'MANIFEST.in'
+      warning: no previously-included files found matching 'src/postgkyl/gpython/libg0core.so'
+      adding license file 'LICENSE'
+      adding license file 'AUTHORS.md'
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      creating '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info'
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info/WHEEL
+      running build_py
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      copying /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/libg0core.so -> /tmp/tmp68mij4f6.build-lib/postgkyl/gpython
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 39, in _copy_file_contents
+          fdst = open(dst, 'wb')  # noqa: SIM115 # closed in the finally below
+      FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so'
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 306, in _safely_run
+          return self.run_command(cmd_name)
+                 ~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 342, in run_command
+          self.distribution.run_command(command)
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 71, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/build_py.py", line 66, in copy_file
+          return super().copy_file(  # pyright: ignore[reportReturnType] # pypa/distutils#309
+                 ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              infile, outfile, preserve_mode, preserve_times, link, level
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 406, in copy_file
+          return file_util.copy_file(
+                 ~~~~~~~~~~~~~~~~~~~^
+              infile,
+              ^^^^^^^
+          ...<4 lines>...
+              link,
+              ^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 151, in copy_file
+          _copy_file_contents(src, dst)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 41, in _copy_file_contents
+          raise DistutilsFileError(f"could not create '{dst}': {e.strerror}")
+      distutils.errors.DistutilsFileError: could not create '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so': No such file or directory
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+          ~~~~^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+                                   ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 303, in build_editable
+          return hook(wheel_directory, config_settings, metadata_directory)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 474, in build_editable
+          return self._build_with_temp_dir(
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~^
+              cmd, ".whl", wheel_directory, config_settings
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
+          self.run_setup()
+          ~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 317, in run_setup
+          exec(code, locals())  # noqa: S102 # exec is intentional here
+          ~~~~^^^^^^^^^^^^^^^^
+        File "<string>", line 100, in <module>
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/__init__.py", line 117, in setup
+          return distutils.core.setup(**attrs)  # type: ignore[return-value]
+                 ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 168, in setup
+          return run_commands(dist)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 184, in run_commands
+          dist.run_commands()
+          ~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1028, in run_commands
+          self.run_command(cmd)
+          ~~~~~~~~~~~~~~~~^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 85, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 142, in run
+          self._create_wheel_file(bdist_wheel)
+          ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 352, in _create_wheel_file
+          files, mapping = self._run_build_commands(dist_name, unpacked, lib, tmp)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 275, in _run_build_commands
+          self._run_build_subcommands()
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 300, in _run_build_subcommands
+          self._safely_run(name)
+          ~~~~~~~~~~~~~~~~^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 308, in _safely_run
+          SetuptoolsDeprecationWarning.emit(
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+              "Customization incompatible with editable install",
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          ...<19 lines>...
+              # needs work.
+              ^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 49, in emit
+          text = cls._format(summary_, details_, due, see_url or docs_url, kwargs)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 67, in _format
+          cleandoc(details).format_map(format_args or {}),
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+      KeyError: 'dst'
+      An error occurred when building editable wheel for postgkyl.
+      See debugging tips in: https://setuptools.pypa.io/en/latest/userguide/development_mode.html#debugging-tips
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building editable for postgkyl
+Failed to build postgkyl
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> postgkyl
+
+---
+
+How can we fix this bug?
+
+---
+
+How can we fix this bug?
