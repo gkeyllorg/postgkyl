@@ -457,7 +457,8 @@ def test_non_mapping_metadata_is_ignored(tmp_path):
 
   path = str(tmp_path / "list-meta.gkyl")
   data = np.arange(3, dtype=np.float64).reshape(3, 1)
-  _write_v1_field(path, [3], [0.0], [3.0], data,
+  _write_v1_field(path, [3], [0.0], [3.0],
+                  data,
                   meta=msgpack.packb(["not", "a", "mapping"]))
   reader = GkylReader(path, ctx={})
   reader.preload()

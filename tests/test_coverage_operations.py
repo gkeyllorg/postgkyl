@@ -231,8 +231,7 @@ def test_apply_ufunc_reductions_return_numpy_results():
 
 def test_remaining_reflected_and_unary_operators_preserve_data():
   a = pg.GData()
-  a.push([np.linspace(0.0, 1.0, 4)],
-         np.array([[-2.0], [0.0], [3.0]]))
+  a.push([np.linspace(0.0, 1.0, 4)], np.array([[-2.0], [0.0], [3.0]]))
 
   np.testing.assert_allclose((1.0 + a).values, 1.0 + a.values)
   np.testing.assert_allclose(abs(a).values, np.abs(a.values))
@@ -395,12 +394,13 @@ def test_average_accepts_a_compatible_weight():
   def constant_state(value):
     coefficients = np.zeros((cells[0], num_basis))
     coefficients[:, 0] = value * basis_constant
-    data = pg.GData(ctx={
-        "basis_type": basis_type,
-        "poly_order": poly_order,
-        "value_form": "modal",
-        "cells": np.array(cells),
-    })
+    data = pg.GData(
+        ctx={
+            "basis_type": basis_type,
+            "poly_order": poly_order,
+            "value_form": "modal",
+            "cells": np.array(cells),
+        })
     data.push([np.linspace(0.0, 1.0, cells[0] + 1)],
               gpython.GkylArray.from_numpy(coefficients))
     return data

@@ -180,8 +180,12 @@ class TestLiveAnimation:
     assert fig._suptitle.get_text() == "My Animation"
 
   @pytest.mark.parametrize(("ctx", "expected"), [
-      ({"time": 1.25}, "time: 1.2500e+00"),
-      ({"frame": 7}, "frame: 7"),
+      ({
+          "time": 1.25
+      }, "time: 1.2500e+00"),
+      ({
+          "frame": 7
+      }, "frame: 7"),
   ])
   def test_generated_title_accepts_either_frame_metadata_field(
       self, ctx, expected):
@@ -197,13 +201,11 @@ class TestLiveAnimation:
     monkeypatch.setattr(
         anim_mod, "_frame_value_range",
         lambda *_args, **_kwargs: pytest.fail("global range was calculated"))
-    anim = anim_mod.animate(_three_frames(),
-                            variable_range=True,
-                            no_show=True)
+    anim = anim_mod.animate(_three_frames(), variable_range=True, no_show=True)
     assert anim is not None
 
-  def test_live_save_configuration_without_running_a_writer(self, monkeypatch,
-                                                             tmp_path):
+  def test_live_save_configuration_without_running_a_writer(
+      self, monkeypatch, tmp_path):
     saved = []
 
     def save(self, filename, **kwargs):
@@ -331,8 +333,8 @@ class TestCompileMovie:
     with pytest.raises(RuntimeError, match="ffmpeg"):
       anim_mod._compile_movie(paths, str(tmp_path / "out.mp4"), duration=100.0)
 
-  def test_video_writer_protocol_without_external_process(self, monkeypatch,
-                                                           tmp_path):
+  def test_video_writer_protocol_without_external_process(
+      self, monkeypatch, tmp_path):
     from contextlib import contextmanager
     from PIL import Image
     import matplotlib.animation
@@ -383,9 +385,7 @@ class TestCompileMovie:
         ("close", figure)))
 
     output = str(tmp_path / "movie.mp4")
-    anim_mod._compile_movie(["one.png", "two.png"],
-                            output,
-                            duration=250.0)
+    anim_mod._compile_movie(["one.png", "two.png"], output, duration=250.0)
     assert ("fps", 4.0) in events
     assert ("saving", output, 100) in events
     assert events.count(("grab", )) == 2

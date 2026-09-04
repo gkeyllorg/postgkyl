@@ -152,13 +152,11 @@ def test_3d_projection_uses_corner_geometry_when_available():
   dz = geometry.coords[2][-1] - geometry.coords[2][0]
   corner_coords[2] = np.array(
       [geometry.coords[2][0] - dz, geometry.coords[2][-1] + dz])
-  corner_r = np.stack(
-      [geometry.major_r[..., 0], geometry.major_r[..., -1]], axis=-1)
-  corner_z = np.stack(
-      [geometry.vert_z[..., 0], geometry.vert_z[..., -1]], axis=-1)
-  with_corner = replace(
-      geometry,
-      corner=(corner_coords, corner_r, corner_z))
+  corner_r = np.stack([geometry.major_r[..., 0], geometry.major_r[..., -1]],
+                      axis=-1)
+  corner_z = np.stack([geometry.vert_z[..., 0], geometry.vert_z[..., -1]],
+                      axis=-1)
+  with_corner = replace(geometry, corner=(corner_coords, corner_r, corner_z))
   projection = gk_ops.resolve_rz_projection(data, with_corner, nz_interp=2)
   assert projection.r.shape == projection.z.shape == (97, 65)
 
@@ -172,10 +170,9 @@ def test_reusable_rz_projection_validates_every_shape_contract():
   invalid_2d = [
       (replace(projection_2d, num_dims=4), "invalid dimensionality"),
       (replace(projection_2d, num_dims=3), "dimensionality does not match"),
-      (replace(projection_2d, z=projection_2d.z[:, :-1]),
-       "matching 2-D arrays"),
       (replace(projection_2d,
-               r=projection_2d.r[:-1],
+               z=projection_2d.z[:, :-1]), "matching 2-D arrays"),
+      (replace(projection_2d, r=projection_2d.r[:-1],
                z=projection_2d.z[:-1]), "expected grid shape"),
   ]
   for projection, message in invalid_2d:
@@ -185,8 +182,8 @@ def test_reusable_rz_projection_validates_every_shape_contract():
   data_3d = pg.load(F3D)
   geometry_3d = gk_ops.resolve_geometry(data_3d.file_name)
   projection_3d = gk_ops.resolve_rz_projection(data_3d,
-                                                geometry_3d,
-                                                nz_interp=2)
+                                               geometry_3d,
+                                               nz_interp=2)
   invalid_3d = [
       (replace(projection_3d, zc=None), "metadata is incomplete"),
       (replace(projection_3d, box=0.0), "span must be finite and nonzero"),
@@ -206,11 +203,10 @@ def test_rz_projection_collection_caches_by_geometry_prefix(monkeypatch):
   calls = []
   monkeypatch.setattr(rz, "geometry_prefix", lambda path: path)
   monkeypatch.setattr(
-      rz, "resolve_geometry",
-      lambda path, **kwargs: calls.append((path, kwargs)) or path)
-  monkeypatch.setattr(
-      rz, "resolve_rz_projection",
-      lambda data, geo, **_kwargs: f"projection:{geo}")
+      rz, "resolve_geometry", lambda path, **kwargs: calls.append(
+          (path, kwargs)) or path)
+  monkeypatch.setattr(rz, "resolve_rz_projection",
+                      lambda data, geo, **_kwargs: f"projection:{geo}")
 
   projections = rz.rz_projections([first, repeated, second],
                                   mapc2p="map-*.gkyl",

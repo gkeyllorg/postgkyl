@@ -193,27 +193,27 @@ def test_output_identity_handles_an_unrecognized_name(monkeypatch):
 
 
 def test_info_reports_all_optional_metadata(capsys):
-  d = GDataState(ctx={
-      "time": 1.5,
-      "frame": 3,
-      "block": 2,
-      "sim": "demo",
-      "basis_type": "serendipity",
-      "poly_order": None,
-      "value_form": "quad",
-      "num_quad": 3,
-      "changeset": "abc123",
-      "builddate": "today",
-      "geometry_type": "tokamak",
-      "geqdsk_sign_convention": -1,
-      "mass": 2.0,
-      "charge": -1.0,
-      "gas_gamma": 5.0 / 3.0,
-      "vdim": 2,
-      "custom_metadata": "kept",
-  })
-  d.push([np.linspace(0.0, 1.0, 3)],
-         np.arange(4, dtype=float).reshape(2, 2))
+  d = GDataState(
+      ctx={
+          "time": 1.5,
+          "frame": 3,
+          "block": 2,
+          "sim": "demo",
+          "basis_type": "serendipity",
+          "poly_order": None,
+          "value_form": "quad",
+          "num_quad": 3,
+          "changeset": "abc123",
+          "builddate": "today",
+          "geometry_type": "tokamak",
+          "geqdsk_sign_convention": -1,
+          "mass": 2.0,
+          "charge": -1.0,
+          "gas_gamma": 5.0 / 3.0,
+          "vdim": 2,
+          "custom_metadata": "kept",
+      })
+  d.push([np.linspace(0.0, 1.0, 3)], np.arange(4, dtype=float).reshape(2, 2))
 
   out = d.info(no_header=True)
 
@@ -224,11 +224,17 @@ def test_info_reports_all_optional_metadata(capsys):
   assert capsys.readouterr().out == out + "\n"
 
 
-@pytest.mark.parametrize("ctx", [{"builddate": "today"},
-                                  {"changeset": "abc123"},
-                                  {"geqdsk_sign_convention": 1},
-                                  {"mass": 1.0},
-                                  {"charge": -1.0}])
+@pytest.mark.parametrize("ctx", [{
+    "builddate": "today"
+}, {
+    "changeset": "abc123"
+}, {
+    "geqdsk_sign_convention": 1
+}, {
+    "mass": 1.0
+}, {
+    "charge": -1.0
+}])
 def test_info_reports_independent_optional_metadata(ctx):
   d = GDataState(ctx=ctx)
   d.push([np.linspace(0.0, 1.0, 3)], np.ones((2, 1)))

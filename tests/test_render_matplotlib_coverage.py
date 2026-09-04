@@ -69,8 +69,8 @@ class TestOutputNormalization:
   def test_default_output_stem_uses_labels_and_fallbacks(self):
     labelled = _line()
     labelled.label = "ion density"
-    assert backend._default_output_stem(
-        [labelled, _UnlabelledState()]) == "ion_density_dataset_1"
+    assert backend._default_output_stem([labelled, _UnlabelledState()
+                                         ]) == "ion_density_dataset_1"
     assert backend._default_output_stem([]) == "matplotlib_output"
 
   def test_output_paths_rejects_a_non_iterable(self):
@@ -123,12 +123,12 @@ class TestSmallPlotHelpers:
     one_comp = _field_2d(n=2)
     two_comps = _field_2d(n=2, ncomp=2)
     two_comps._values[..., 1] = np.nan
-    assert backend._shared_component_range(
-        [one_comp, two_comps], 0.0, 1.0) == [(0.0, 3.0), (None, None)]
+    assert backend._shared_component_range([one_comp, two_comps], 0.0,
+                                           1.0) == [(0.0, 3.0), (None, None)]
 
-  @pytest.mark.parametrize(
-      ("limits", "comp", "expected"),
-      [({}, 0, None), ([(0.0, 1.0)], 2, None), ([None], 0, None)])
+  @pytest.mark.parametrize(("limits", "comp", "expected"),
+                           [({}, 0, None), ([(0.0, 1.0)], 2, None),
+                            ([None], 0, None)])
   def test_split_ylim_missing_component_is_automatic(self, limits, comp,
                                                      expected):
     assert backend._split_ylim_for_component(limits, comp) is expected
@@ -191,12 +191,14 @@ class TestRcParamNovelties:
       backend.plot(_field_2d(), no_show=True, jet=True)
       assert mpl.rcParams["image.cmap"] == "jet"
 
+  @pytest.mark.filterwarnings("ignore:No xkcd-style font found:UserWarning")
   def test_xkcd_flag_invokes_xkcd_mode(self):
     with mpl.rc_context():
       fig = backend.plot(_line(), no_show=True, xkcd=True)
       line = fig.axes[0].lines[0]
       assert line.get_sketch_params() is not None
 
+  @pytest.mark.filterwarnings("ignore:No xkcd-style font found:UserWarning")
   def test_xkcd_flag_does_not_leak_into_global_rcparams(self):
     # A past bug: `plt.xkcd()` called without a `with` block never reverted,
     # contaminating every plot drawn afterwards.
@@ -584,19 +586,23 @@ class TestRemainingValidationBranches:
     with pytest.raises(ValueError, match="only supported for 1D"):
       backend.plot(_field_2d(), no_show=True, color=["red", "blue"])
 
-  @pytest.mark.parametrize(
-      ("kwargs", "error", "message"),
-      [({"split_point": object()}, TypeError, "split_point"),
-       ({"split_point": np.inf}, ValueError, "split_point"),
-       ({"split_log_base": object()}, TypeError, "split_log_base"),
-       ({"split_gap": object()}, TypeError, "split_gap")])
+  @pytest.mark.parametrize(("kwargs", "error", "message"),
+                           [({
+                               "split_point": object()
+                           }, TypeError, "split_point"),
+                            ({
+                                "split_point": np.inf
+                            }, ValueError, "split_point"),
+                            ({
+                                "split_log_base": object()
+                            }, TypeError, "split_log_base"),
+                            ({
+                                "split_gap": object()
+                            }, TypeError, "split_gap")])
   def test_split_numeric_options_reject_invalid_values(self, kwargs, error,
                                                        message):
     with pytest.raises(error, match=message):
-      backend.plot(_line(),
-                   no_show=True,
-                   split_linear_log=True,
-                   **kwargs)
+      backend.plot(_line(), no_show=True, split_linear_log=True, **kwargs)
 
   def test_legend_subplot_rejects_a_non_integer(self):
     with pytest.raises(TypeError, match="must be an integer"):
@@ -619,9 +625,8 @@ class TestRemainingValidationBranches:
 
 class TestRemainingSplitBranches:
 
-  @pytest.mark.parametrize(
-      ("side", "legend_axis"),
-      [("left", 0), ("right", 1), ("linear", 0)])
+  @pytest.mark.parametrize(("side", "legend_axis"), [("left", 0), ("right", 1),
+                                                     ("linear", 0)])
   def test_explicit_split_legend_side(self, side, legend_axis):
     data = _line()
     data.label = "curve"
@@ -688,17 +693,11 @@ class TestRemainingSurfaceBranches:
     assert fig.axes[0].get_zlim() == (1.0, 9.0)
 
   def test_unlabelled_surface_comparison_needs_no_legend_handle(self):
-    fig = backend.plot(_field_2d(),
-                       no_show=True,
-                       surface=True,
-                       comparison=True)
+    fig = backend.plot(_field_2d(), no_show=True, surface=True, comparison=True)
     assert fig.axes[0].get_legend() is None
 
   def test_unlabelled_contour_comparison_needs_no_legend_handle(self):
-    fig = backend.plot(_field_2d(),
-                       no_show=True,
-                       contour=True,
-                       comparison=True)
+    fig = backend.plot(_field_2d(), no_show=True, contour=True, comparison=True)
     assert fig.axes[0].get_legend() is None
 
   def test_cval_without_bounds_uses_colormap_midpoint(self):

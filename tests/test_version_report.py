@@ -8,7 +8,6 @@ import subprocess
 
 import pytest
 
-
 version = import_module("postgkyl._version")
 
 pytestmark = pytest.mark.compatibility
@@ -18,10 +17,10 @@ def test_git_returns_none_outside_a_checkout(tmp_path):
   assert version._git(tmp_path, "status") is None
 
 
-@pytest.mark.parametrize("error", [OSError("missing git"),
-                                   subprocess.CalledProcessError(1, "git")])
-def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
-                                                  error):
+@pytest.mark.parametrize(
+    "error", [OSError("missing git"),
+              subprocess.CalledProcessError(1, "git")])
+def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path, error):
   (tmp_path / ".git").mkdir()
 
   def fail(*_args, **_kwargs):
@@ -35,10 +34,12 @@ def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
     ("build", "expected"),
     [
         (None, "unknown (not a git checkout)"),
-        ({"postgkyl_build_commit": "unknown"},
-         "unknown (not a git checkout)"),
-        ({"postgkyl_build_commit": "1234567890abcdef"},
-         "1234567890ab (baked at build time, not a git checkout)"),
+        ({
+            "postgkyl_build_commit": "unknown"
+        }, "unknown (not a git checkout)"),
+        ({
+            "postgkyl_build_commit": "1234567890abcdef"
+        }, "1234567890ab (baked at build time, not a git checkout)"),
     ],
 )
 def test_postgkyl_commit_uses_baked_fallback(monkeypatch, build, expected):

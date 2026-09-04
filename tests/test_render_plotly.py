@@ -570,8 +570,8 @@ class TestSaveRotatingPlotlyFigure:
     monkeypatch.setattr(plotly_module, "require_ffmpeg",
                         lambda _caller: "/ffmpeg")
     monkeypatch.setattr(
-        subprocess, "run",
-        lambda command, **kwargs: commands.append((command, kwargs)))
+        subprocess, "run", lambda command, **kwargs: commands.append(
+            (command, kwargs)))
 
     output = tmp_path / f"rotation.{extension}"
     save_rotating_plotly_figure(FakeFigure(),
@@ -650,8 +650,8 @@ class TestPlotlyAnimate:
     with pytest.raises(ValueError, match="same number of traces"):
       plotly_animate([one_comp, two_comp])
 
-  def test_save_adds_html_extension_and_show_writes_preview(self, monkeypatch,
-                                                            tmp_path):
+  def test_save_adds_html_extension_and_show_writes_preview(
+      self, monkeypatch, tmp_path):
     plotly_module = import_module("postgkyl.render.plotly")
     written = []
     opened = []
@@ -669,9 +669,7 @@ class TestPlotlyAnimate:
     assert opened == [written[-1]]
 
     explicit_html = tmp_path / "animation.html"
-    plotly_animate([_surface_2d()],
-                   saveas=str(explicit_html),
-                   show=True)
+    plotly_animate([_surface_2d()], saveas=str(explicit_html), show=True)
     assert written[-1] == str(explicit_html)
     assert opened[-1] == str(explicit_html)
 
@@ -689,8 +687,8 @@ class TestOutputHelpers:
     data._custom_label = ""
     assert plotly_module._default_output_stem(data) == "plotly_output"
 
-  def test_write_output_dispatches_rotating_and_plain_formats(self, monkeypatch,
-                                                              tmp_path):
+  def test_write_output_dispatches_rotating_and_plain_formats(
+      self, monkeypatch, tmp_path):
     plotly_module = import_module("postgkyl.render.plotly")
     calls = []
 
@@ -703,27 +701,24 @@ class TestOutputHelpers:
         plotly_module, "save_rotating_plotly_figure",
         lambda fig, path, **kwargs: calls.append(("rotate", path, kwargs)))
     figure = FakeFigure()
-    rotating = plotly_module._write_plotly_output(
-        figure,
-        str(tmp_path / "figure.html"),
-        starting_azimuthal_angle=0.0,
-        polar_angle=60.0,
-        rotation_period=2.0,
-        fps=10)
-    plain = plotly_module._write_plotly_output(
-        figure,
-        str(tmp_path / "figure.png"),
-        starting_azimuthal_angle=0.0,
-        polar_angle=60.0,
-        rotation_period=2.0,
-        fps=10)
-    empty = plotly_module._write_plotly_output(
-        figure,
-        "",
-        starting_azimuthal_angle=0.0,
-        polar_angle=60.0,
-        rotation_period=2.0,
-        fps=10)
+    rotating = plotly_module._write_plotly_output(figure,
+                                                  str(tmp_path / "figure.html"),
+                                                  starting_azimuthal_angle=0.0,
+                                                  polar_angle=60.0,
+                                                  rotation_period=2.0,
+                                                  fps=10)
+    plain = plotly_module._write_plotly_output(figure,
+                                               str(tmp_path / "figure.png"),
+                                               starting_azimuthal_angle=0.0,
+                                               polar_angle=60.0,
+                                               rotation_period=2.0,
+                                               fps=10)
+    empty = plotly_module._write_plotly_output(figure,
+                                               "",
+                                               starting_azimuthal_angle=0.0,
+                                               polar_angle=60.0,
+                                               rotation_period=2.0,
+                                               fps=10)
     assert rotating.endswith("figure.html")
     assert plain.endswith("figure.html")
     assert empty == ".html"
@@ -736,18 +731,16 @@ class TestOutputHelpers:
     opened = []
     monkeypatch.setattr(plotly_module.tempfile, "gettempdir",
                         lambda: str(tmp_path))
-    monkeypatch.setattr(
-        plotly_module, "save_rotating_plotly_figure",
-        lambda _fig, path, **_kwargs: saved.append(path))
+    monkeypatch.setattr(plotly_module, "save_rotating_plotly_figure",
+                        lambda _fig, path, **_kwargs: saved.append(path))
     monkeypatch.setattr(plotly_module.webbrowser, "open",
                         lambda uri: opened.append(uri))
-    path = plotly_module._preview_plotly_figure(
-        object(),
-        " !!! ",
-        starting_azimuthal_angle=0.0,
-        polar_angle=60.0,
-        rotation_period=2.0,
-        fps=10)
+    path = plotly_module._preview_plotly_figure(object(),
+                                                " !!! ",
+                                                starting_azimuthal_angle=0.0,
+                                                polar_angle=60.0,
+                                                rotation_period=2.0,
+                                                fps=10)
     assert path.endswith("plotly_preview_preview.html")
     assert saved == [path]
     named_path = plotly_module._preview_plotly_figure(
@@ -766,18 +759,17 @@ class TestOutputHelpers:
     calls = []
     monkeypatch.setattr(
         plotly_module, "_write_plotly_output",
-        lambda _fig, path, **_kwargs: calls.append(("write", path)) or
-        "saved.html")
+        lambda _fig, path, **_kwargs: calls.append(
+            ("write", path)) or "saved.html")
     monkeypatch.setattr(
         plotly_module, "_preview_plotly_figure",
-        lambda _fig, stem, **_kwargs: calls.append(("preview", stem)) or
-        "preview.html")
+        lambda _fig, stem, **_kwargs: calls.append(
+            ("preview", stem)) or "preview.html")
     monkeypatch.setattr(plotly_module, "open_preview",
                         lambda path: calls.append(("open", path)))
 
     plotly(_surface_2d(), save=True)
     plotly(_surface_2d(), show=True)
     plotly(_surface_2d(), saveas="figure.html", show=True)
-    assert [call[0] for call in calls] == [
-        "write", "preview", "open", "write", "open"
-    ]
+    assert [call[0]
+            for call in calls] == ["write", "preview", "open", "write", "open"]

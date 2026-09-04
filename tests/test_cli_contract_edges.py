@@ -47,7 +47,6 @@ from postgkyl.cli.discovery import (
     discover_public_surface,
 )
 
-
 pytestmark = pytest.mark.compatibility
 
 
@@ -93,8 +92,14 @@ def _compiled_option(annotation):
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"section": "Utility", "execution": Execution.LOAD}, "enums"),
-        ({"section": Section.UTILITY, "execution": "LOAD"}, "enums"),
+        ({
+            "section": "Utility",
+            "execution": Execution.LOAD
+        }, "enums"),
+        ({
+            "section": Section.UTILITY,
+            "execution": "LOAD"
+        }, "enums"),
         ({
             "section": Section.UTILITY,
             "execution": Execution.LOAD,
@@ -176,11 +181,13 @@ def test_discovery_rejects_unclassified_and_doubly_classified_callables():
   doubly_classified.__postgkyl_command_spec__ = CommandSpec(
       Section.UTILITY, Execution.LOAD)
   doubly_classified.__postgkyl_cli_hidden__ = CliHidden("synthetic conflict")
-  with pytest.raises(SurfaceClassificationError, match="both exposed and hidden"):
+  with pytest.raises(SurfaceClassificationError,
+                     match="both exposed and hidden"):
     _classify(doubly_classified, "example.conflict")
 
 
-def test_discovery_handles_cycles_facade_diagnostics_and_nonfunction_variables():
+def test_discovery_handles_cycles_facade_diagnostics_and_nonfunction_variables(
+):
   root = ModuleType("postgkyl.diagnostics")
   child = ModuleType("postgkyl.diagnostics.synthetic")
   root.__all__ = ["child", "alias"]
@@ -242,8 +249,7 @@ def test_group_resolve_command_with_no_arguments_delegates_to_click():
         ("Summary.\n\nArgs:\n  value: one\n\nArgs:\n  value: two",
          "duplicate Args"),
         ("Summary.\n\nArgs:\n  value:", "has no description"),
-        ("Summary.\n\nArgs:\n  value: one\n  value: two",
-         "documented twice"),
+        ("Summary.\n\nArgs:\n  value: one\n  value: two", "documented twice"),
         ("Summary.\n\nArgs:\nnot an entry", "malformed Args entry"),
         ("Summary.\n\nArgs:\n  absent: no such parameter",
          "absent from signature"),
@@ -291,18 +297,18 @@ def test_docstring_parser_collects_multiline_text_and_stops_at_section():
         (Annotated[int,
                    ChoiceProvider(lambda: (1, )),
                    ChoiceProvider(lambda: (2, ))], "duplicate Annotated"),
-        (Annotated[dict[str, int], KeyValue(), KeyValue()],
-         "duplicate Annotated"),
+        (Annotated[dict[str, int], KeyValue(),
+                   KeyValue()], "duplicate Annotated"),
         (Annotated[int, CliType(int), CliType(str)], "duplicate Annotated"),
-        (Annotated[dict[str, int], ChoiceProvider(lambda: (1, )), KeyValue()],
-         "cannot be combined"),
-        (Annotated[int, ChoiceProvider(lambda: "abc")],
-         "choice provider failed"),
+        (Annotated[dict[str, int],
+                   ChoiceProvider(lambda: (1, )),
+                   KeyValue()], "cannot be combined"),
+        (Annotated[int,
+                   ChoiceProvider(lambda: "abc")], "choice provider failed"),
         (Annotated[int, ChoiceProvider(lambda: ())], "returned no choices"),
-        (Annotated[list[int], ChoiceProvider(lambda: (1, ))],
-         "requires a scalar"),
-        (Annotated[int, ChoiceProvider(lambda: ("one", ))],
-         "do not match"),
+        (Annotated[list[int],
+                   ChoiceProvider(lambda: (1, ))], "requires a scalar"),
+        (Annotated[int, ChoiceProvider(lambda: ("one", ))], "do not match"),
         (Annotated[int, ChoiceProvider(lambda: (True, ))], "do not match"),
         (Annotated[int, ChoiceProvider(lambda: (1, 1))], "duplicate choices"),
         (Annotated[int, KeyValue()], "requires a mapping"),
@@ -329,8 +335,7 @@ def test_choice_and_variadic_tuple_codecs_round_trip():
   @command(
       CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
   def options(*,
-              level: Annotated[int,
-                               ChoiceProvider(lambda: (1, 2))] = 1,
+              level: Annotated[int, ChoiceProvider(lambda: (1, 2))] = 1,
               values: tuple[int, ...] = ()):
     """Use provider and repeated-value codecs.
 
@@ -340,10 +345,10 @@ def test_choice_and_variadic_tuple_codecs_round_trip():
     """
     calls.append((level, values))
 
-  result = CliRunner().invoke(build_click_command(compile_callable(options)),
-                              ["--level", "2", "--values", "3", "--values",
-                               "4"],
-                              obj=DataSpace())
+  result = CliRunner().invoke(
+      build_click_command(compile_callable(options)),
+      ["--level", "2", "--values", "3", "--values", "4"],
+      obj=DataSpace())
   assert result.exit_code == 0, result.output
   assert calls == [(2, [3, 4])]
 
@@ -402,8 +407,9 @@ def test_compile_callable_reports_signature_and_name_errors():
 @pytest.mark.parametrize(
     ("annotation", "execution", "parameter", "message"),
     [
-        (Annotated[object, PipelineInput(), PipelineInput()], Execution.COMBINE,
-         "value", "duplicate PipelineInput"),
+        (Annotated[object, PipelineInput(),
+                   PipelineInput()], Execution.COMBINE, "value",
+         "duplicate PipelineInput"),
         (object, Execution.LOAD, "*value", "not a declared pipeline"),
         (Annotated[object, DatasetRef(), DatasetRef()], Execution.COMBINE,
          "value", "duplicate DatasetRef"),
@@ -484,8 +490,8 @@ def _invoke_pipeline(fn, datasets, arguments=()):
   return result, space
 
 
-@pytest.mark.parametrize("execution", [Execution.MAP_REPLACE,
-                                        Execution.MAP_APPEND])
+@pytest.mark.parametrize("execution",
+                         [Execution.MAP_REPLACE, Execution.MAP_APPEND])
 def test_map_execution_policies_transform_each_dataset(execution):
 
   @command(
@@ -516,9 +522,7 @@ def test_map_append_can_preserve_inputs_and_flatten_groups():
     return _Group(_Dataset(data.tag + "-one"), _Dataset(data.tag + "-two"))
 
   _, space = _invoke_pipeline(append, [_Dataset("a")])
-  assert [dataset.tag for dataset in space.datasets] == [
-      "a", "a-one", "a-two"
-  ]
+  assert [dataset.tag for dataset in space.datasets] == ["a", "a-one", "a-two"]
 
 
 def test_map_or_terminal_replaces_data_and_prints_scalar_values():
@@ -535,8 +539,7 @@ def test_map_or_terminal_replaces_data_and_prints_scalar_values():
     """
     return _Dataset("replaced") if data.tag == "data" else 7
 
-  result, space = _invoke_pipeline(maybe,
-                                   [_Dataset("data"), _Dataset("value")])
+  result, space = _invoke_pipeline(maybe, [_Dataset("data"), _Dataset("value")])
   assert result.output == "7\n"
   assert [dataset.tag for dataset in space.datasets] == ["replaced", "value"]
 
@@ -613,10 +616,7 @@ def test_combine_preserves_returned_dataset_order():
 
 def test_dataset_reference_resolves_uniquely_and_limits_consumption():
 
-  @command(
-      CommandSpec(Section.VERBS,
-                  Execution.COMBINE,
-                  consumes_inputs=True))
+  @command(CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True))
   def take(reference: Annotated[object, DatasetRef()] = None):
     """Consume one referenced dataset.
 
@@ -630,8 +630,8 @@ def test_dataset_reference_resolves_uniquely_and_limits_consumption():
   assert [dataset.tag for dataset in space.datasets] == ["kept", "result"]
 
   for datasets, message in (([kept], "no dataset tagged"),
-                            ([_Dataset("chosen"), _Dataset("chosen")],
-                             "matches 2 datasets")):
+                            ([_Dataset("chosen"),
+                              _Dataset("chosen")], "matches 2 datasets")):
     result = CliRunner().invoke(build_click_command(compile_callable(take)),
                                 ["--reference", "chosen"],
                                 obj=DataSpace(datasets))
@@ -755,12 +755,11 @@ def test_optional_dataset_reference_can_be_omitted():
   _invoke_pipeline(inspect, [_Dataset("one")])
 
 
-@pytest.mark.parametrize("execution", [Execution.MAP_OR_TERMINAL_EACH,
-                                        Execution.TERMINAL_EACH])
+@pytest.mark.parametrize(
+    "execution", [Execution.MAP_OR_TERMINAL_EACH, Execution.TERMINAL_EACH])
 def test_each_policies_can_silence_scalar_results(execution):
 
-  @command(
-      CommandSpec(Section.UTILITY, execution, result=ResultPolicy.SILENT))
+  @command(CommandSpec(Section.UTILITY, execution, result=ResultPolicy.SILENT))
   def inspect(data: object):
     """Inspect one dataset silently.
 
@@ -775,10 +774,7 @@ def test_each_policies_can_silence_scalar_results(execution):
 
 def test_combine_can_consume_unreferenced_inputs():
 
-  @command(
-      CommandSpec(Section.VERBS,
-                  Execution.COMBINE,
-                  consumes_inputs=True))
+  @command(CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True))
   def combine(*datasets: object):
     """Replace all inputs.
 
@@ -794,9 +790,7 @@ def test_combine_can_consume_unreferenced_inputs():
 def test_combine_and_terminal_all_apply_their_result_policies():
 
   @command(
-      CommandSpec(Section.VERBS,
-                  Execution.COMBINE,
-                  result=ResultPolicy.VALUE))
+      CommandSpec(Section.VERBS, Execution.COMBINE, result=ResultPolicy.VALUE))
   def combine(*datasets: object):
     """Present a combined value.
 

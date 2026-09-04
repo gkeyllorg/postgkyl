@@ -81,10 +81,7 @@ def test_flux_surface_grid_requires_two_binormal_and_parallel_points():
 def test_extract_flux_surface_validates_reusable_grid_metadata():
   data = pg.load(FIELD)
   geometry = gk_ops.resolve_geometry(data.file_name)
-  grid = gk_ops.resolve_flux_surface_grid(data,
-                                          geometry,
-                                          nphi=4,
-                                          nz_interp=2)
+  grid = gk_ops.resolve_flux_surface_grid(data, geometry, nphi=4, nz_interp=2)
 
   shifted = data.clone()
   shifted.grid[0] = shifted.grid[0] + 0.1
@@ -95,18 +92,14 @@ def test_extract_flux_surface_validates_reusable_grid_metadata():
     gk_ops.extract_flux_surface(data, replace(grid, x_idx=10_000))
 
   with pytest.raises(ValueError, match="projection and data grid shapes"):
-    gk_ops.extract_flux_surface(data,
-                                replace(grid, phi_2d=np.ones((1, 1))))
+    gk_ops.extract_flux_surface(data, replace(grid, phi_2d=np.ones((1, 1))))
 
 
 @needs_gkeyll
 def test_extract_flux_surface_rejects_zero_toroidal_span():
   data = pg.load(FIELD)
   geometry = gk_ops.resolve_geometry(data.file_name)
-  grid = gk_ops.resolve_flux_surface_grid(data,
-                                          geometry,
-                                          nphi=4,
-                                          nz_interp=2)
+  grid = gk_ops.resolve_flux_surface_grid(data, geometry, nphi=4, nz_interp=2)
   zero_span = replace(grid, phi_2d=np.zeros_like(grid.phi_2d))
   with pytest.raises(ValueError, match="zero or non-finite"):
     gk_ops.extract_flux_surface(data, zero_span)
@@ -120,11 +113,10 @@ def test_flux_surface_grid_collection_caches_by_geometry_prefix(monkeypatch):
   calls = []
   monkeypatch.setattr(fluxsurf, "geometry_prefix", lambda path: path)
   monkeypatch.setattr(
-      fluxsurf, "resolve_geometry",
-      lambda path, **kwargs: calls.append((path, kwargs)) or path)
-  monkeypatch.setattr(
-      fluxsurf, "resolve_flux_surface_grid",
-      lambda data, geo, **_kwargs: f"grid:{geo}")
+      fluxsurf, "resolve_geometry", lambda path, **kwargs: calls.append(
+          (path, kwargs)) or path)
+  monkeypatch.setattr(fluxsurf, "resolve_flux_surface_grid",
+                      lambda data, geo, **_kwargs: f"grid:{geo}")
 
   grids = fluxsurf.flux_surface_grids([first, repeated, second],
                                       mapc2p="map-*.gkyl",
@@ -151,8 +143,8 @@ def test_gk_fluxsurf_composes_geometry_grid_and_extraction(monkeypatch):
   data = SimpleNamespace(file_name="field.gkyl")
   calls = []
   monkeypatch.setattr(
-      fluxsurf, "resolve_geometry",
-      lambda path, **kwargs: calls.append(("geometry", path, kwargs)) or "geo")
+      fluxsurf, "resolve_geometry", lambda path, **kwargs: calls.append(
+          ("geometry", path, kwargs)) or "geo")
   monkeypatch.setattr(
       fluxsurf, "resolve_flux_surface_grid",
       lambda source, geo, **kwargs: calls.append(
