@@ -1,0 +1,1 @@
+A user says their installation worked, is able to plot things, but pytest has a bunch of failures. What could be the problem?
