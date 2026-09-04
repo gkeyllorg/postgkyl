@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1Q3Z7BZADX4HFXVK8RKAW6P",
+  "session_id": "01a06e2b-d332-7c81-8c0a-40b006387b86",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-04T21:07:38.703919053Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "examples/cli_tutorial.md",
+    "src/postgkyl/cli/compiler.py",
+    "src/postgkyl/dg/interpolate.py",
+    "src/postgkyl/dg/map.py",
+    "src/postgkyl/diagnostics/mom/plasma.py",
+    "src/postgkyl/diagnostics/vm/trajectory.py",
+    "src/postgkyl/gdata/gdatagroup.py",
+    "src/postgkyl/gdatastate/gdatastate.py",
+    "src/postgkyl/operations/info.py",
+    "src/postgkyl/operations/interpolate.py",
+    "src/postgkyl/operations/local_poly.py",
+    "src/postgkyl/render/animate.py",
+    "src/postgkyl/render/matplotlib.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/conftest.py",
+    "tests/test_cli_commands.py",
+    "tests/test_cli_generator.py",
+    "tests/test_coverage_container.py",
+    "tests/test_dg_map.py",
+    "tests/test_diagnostics_plasma.py",
+    "tests/test_diagnostics_programs_trajectory.py",
+    "tests/test_multiblock.py",
+    "tests/test_postgkyl.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "fdc042d53fe6",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 191183,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11566588,
+    "output_tokens": 38842,
+    "api_call_count": 104
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-04T21:07:38.598593566Z",
+    "agent_lines": 136,
+    "agent_removed": 186,
+    "human_added": 158,
+    "human_modified": 24,
+    "human_removed": 0,
+    "total_committed": 318,
+    "total_lines_changed": 686,
+    "agent_percentage": 46.93877551020408,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 345,
+      "user_lines_removed": 24,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/.gitignore": 2,
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88,
+        "examples/cli_tutorial.md": 7,
+        "src/postgkyl/cli/compiler.py": 72,
+        "tests/test_cli_commands.py": 4,
+        "tests/test_cli_generator.py": 75,
+        "tests/test_coverage_container.py": 1,
+        "tests/test_multiblock.py": 5,
+        "tests/test_postgkyl.py": 1
+      },
+      "user_removed_per_file": {
+        "examples/cli_tutorial.md": 4,
+        "src/postgkyl/cli/compiler.py": 4,
+        "tests/test_cli_commands.py": 3,
+        "tests/test_cli_generator.py": 4,
+        "tests/test_coverage_container.py": 1,
+        "tests/test_multiblock.py": 7,
+        "tests/test_postgkyl.py": 1
+      }
+    }
+  ]
+}

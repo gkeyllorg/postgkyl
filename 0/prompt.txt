@@ -1,0 +1,21 @@
+In the CLI, I'd like the options which are booleans to simply trigger the boolean flag when specified without a flag. So something like plot --no_show defaults to false and is interpreted as true when the flag is provided, but when given is true. Therefore, all boolean values should default to false. So plot defaults to show, but when --no_show is provided, then it does not show, but someone could also provide --no_show False which does show or --no_show True which does not show. Each boolean should have a name which makes sense
+
+---
+
+In the CLI, I'd like the options which are booleans to simply trigger the boolean flag when specified without a flag. So something like plot --no_show defaults to false and is interpreted as true when the flag is provided, but when given is true. Therefore, all boolean values should default to false. So plot defaults to show, but when --no_show is provided, then it does not show, but someone could also provide --no_show False which does show or --no_show True which does not show. Each boolean should have a name which makes sense
+
+---
+
+In the CLI, I'd like the options which are booleans to simply trigger the boolean flag when specified without a flag. So something like plot --no_show defaults to false and is interpreted as true when the flag is provided, but when given is true. Therefore, all boolean values should default to false. So plot defaults to show, but when --no_show is provided, then it does not show, but someone could also provide --no_show False which does show or --no_show True which does not show. Each boolean should have a name which makes sense. Do not change the defaults of options. Instead, if there is an option which defaults to True, change the name sensibly such that the default is False
+
+---
+
+In the CLI, I'd like the options which are booleans to simply trigger the boolean flag when specified without a flag. So something like plot --no_show defaults to false and is interpreted as true when the flag is provided, but when given is true. Therefore, all boolean values should default to false. So plot defaults to show, but when --no_show is provided, then it does not show, but someone could also provide --no_show False which does show or --no_show True which does not show. Each boolean should have a name which makes sense. Do not change the defaults of options. Instead, if there is an option which defaults to True, change the name sensibly such that the default is False
+
+---
+
+Rather than changing the prefix to the boolean flags, change the scripts themselves so that the CLI perfectly mirrors the API. therefore, all API booleans should default to False. Update the documentation too and agent tools to reflect this
+
+---
+
+Rather than changing the prefix to the boolean flags, change the scripts themselves so that the CLI perfectly mirrors the API. therefore, all API booleans should default to False. Update the documentation too and agent tools to reflect this

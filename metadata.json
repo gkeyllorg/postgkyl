@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1Q3Z7BZADX4HFXVK8RKAW6P",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AGENTS.md",
+    "examples/cli_tutorial.md",
+    "src/postgkyl/cli/compiler.py",
+    "src/postgkyl/dg/interpolate.py",
+    "src/postgkyl/dg/map.py",
+    "src/postgkyl/diagnostics/mom/plasma.py",
+    "src/postgkyl/diagnostics/vm/trajectory.py",
+    "src/postgkyl/gdata/gdatagroup.py",
+    "src/postgkyl/gdatastate/gdatastate.py",
+    "src/postgkyl/operations/info.py",
+    "src/postgkyl/operations/interpolate.py",
+    "src/postgkyl/operations/local_poly.py",
+    "src/postgkyl/render/animate.py",
+    "src/postgkyl/render/matplotlib.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/conftest.py",
+    "tests/test_cli_commands.py",
+    "tests/test_cli_generator.py",
+    "tests/test_coverage_container.py",
+    "tests/test_dg_map.py",
+    "tests/test_diagnostics_plasma.py",
+    "tests/test_diagnostics_programs_trajectory.py",
+    "tests/test_multiblock.py",
+    "tests/test_postgkyl.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 191183,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 11566588,
+    "output_tokens": 38842,
+    "api_call_count": 104
+  }
+}
