@@ -32,6 +32,7 @@ from ._prep import subplot_grid
 from .style import apply_style
 
 _AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
+_INDEX_AXES_LABELS = [rf"$i_{i}$" for i in range(6)]
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
     | dict[int, tuple[float, float]])
@@ -347,7 +348,8 @@ def plot(*datasets: GDataState | Iterable[GDataState],
     figure: Annotated[int | str | Figure | None,
         CliType(int | None)] = None,
     squeeze: bool = False,
-    transpose: bool = False, num_axes: int | None = None, start_axes: int = 0,
+    transpose: bool = False, grid_indices: bool = False,
+    num_axes: int | None = None, start_axes: int = 0,
     spread_axes: bool = True,
     num_subplot_row: int | None = None, num_subplot_col: int | None = None,
     streamline: bool = False, sdensity: int = 1, quiver: bool = False,
@@ -429,7 +431,9 @@ def plot(*datasets: GDataState | Iterable[GDataState],
   legend, colorbar, aspect, log axes, xkcd/hashtag/jet, style). ``transpose``
   swaps the horizontal and vertical axes: in 1-D the coordinate moves to the
   vertical axis; in 2-D the data, grid, and default labels are swapped before
-  drawing (shifts/scales keep their screen-axis meaning). ``save``/``saveas``/
+  drawing (shifts/scales keep their screen-axis meaning). ``grid_indices``
+  replaces each plotted coordinate with its zero-based sample index without
+  changing the dataset itself. ``save``/``saveas``/
   ``show`` make the render call self-sufficient: ``saveas`` writes a PNG or
   PDF according to its extension (an extension-less name defaults to PNG),
   while ``save=True`` derives a PNG name from the input dataset. ``clear`` lets
@@ -480,6 +484,7 @@ def plot(*datasets: GDataState | Iterable[GDataState],
     figure: Existing or numbered figure to target.
     squeeze: Remove singleton spatial axes before laying out panels.
     transpose: Swap the horizontal and vertical display axes.
+    grid_indices: Plot zero-based sample indices instead of grid values.
     num_axes: Number of logical component axes.
     start_axes: First logical component axis to use.
     spread_axes: Advance the component-axis block for each dataset.
@@ -722,7 +727,8 @@ def plot(*datasets: GDataState | Iterable[GDataState],
       use_3d = bool(surface) and ref_num_dims == 2
       subplot_kw = {"projection": "3d"} if use_3d else {}
 
-      default_xlabel, default_ylabel = _AXES_LABELS[0], _AXES_LABELS[1]
+      coordinate_labels = _INDEX_AXES_LABELS if grid_indices else _AXES_LABELS
+      default_xlabel, default_ylabel = coordinate_labels[0], coordinate_labels[1]
       if transpose and ref_num_dims == 2:
         # The data axes are swapped before drawing, so the default label base
         # names swap too; the shift/scale annotations below keep their
@@ -733,7 +739,7 @@ def plot(*datasets: GDataState | Iterable[GDataState],
       layout_ylabel = ylabel
       layout_clabel = clabel
       if layout_xlabel is None:
-        layout_xlabel = default_xlabel if lineouts != 1 else _AXES_LABELS[1]
+        layout_xlabel = default_xlabel if lineouts != 1 else coordinate_labels[1]
         if xshift != 0.0 and xscale != 1.0:
           layout_xlabel = rf"({layout_xlabel:s} + {xshift:.2e}) $\times$ {xscale:.2e}"
         # end
@@ -968,7 +974,7 @@ def plot(*datasets: GDataState | Iterable[GDataState],
           raise ValueError("every dataset must be 1D when 'split_linear_log' is set")
         # end
 
-        axes_labels = list(_AXES_LABELS)
+        axes_labels = list(coordinate_labels)
         if len(grid) > num_dims:
           idx = [d for d in range(len(grid)) if cells[d] <= 1]
           grid = [g.squeeze() for g in grid]
@@ -998,6 +1004,10 @@ def plot(*datasets: GDataState | Iterable[GDataState],
           grid[0], grid[1] = g0, g1
           cells = cells[[1, 0]]  # fancy indexing: num_cells may alias ctx["cells"]
           axes_labels[0], axes_labels[1] = axes_labels[1], axes_labels[0]
+        # end
+
+        if grid_indices:
+          grid = [np.arange(int(num_cells)) for num_cells in cells]
         # end
 
         num_comps = values.shape[-1]

@@ -135,7 +135,7 @@ def test_generated_save_options_match_python_parameter_names(tmp_path):
 def test_plot_uses_generated_render_options(tmp_path):
   output = tmp_path / "field.png"
   _ok(FIELD, "interpolate", "select", "--comp", "0", "plot", "--show",
-      "False", "--saveas", output)
+      "False", "--grid-indices", "True", "--saveas", output)
   assert output.is_file()
 # end
 

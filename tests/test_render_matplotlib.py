@@ -156,6 +156,40 @@ class TestLogAxes:
 
 
 # --------------------------------------------------------------------------
+# Grid indices
+# --------------------------------------------------------------------------
+
+class TestGridIndices:
+  def test_1d_uses_zero_based_indices_instead_of_grid_values(self):
+    data = GDataState()
+    time = np.array([0.0, 0.1, 0.4, 1.2])
+    data.push([time], np.arange(time.size, dtype=float)[:, None])
+
+    fig = backend.plot(data, show=False, grid_indices=True)
+
+    np.testing.assert_array_equal(fig.axes[0].lines[0].get_xdata(),
+        np.arange(time.size))
+    assert fig.get_supxlabel() == r"$i_0$"
+    np.testing.assert_array_equal(data.grid[0], time)
+  # end
+
+  def test_2d_puts_cell_centers_at_integer_indices(self):
+    data = _field_2d(n=4)
+
+    fig = backend.plot(data, show=False, grid_indices=True, colorbar=False)
+
+    coordinates = fig.axes[0].collections[0].get_coordinates()
+    assert coordinates[..., 0].min() == pytest.approx(-0.5)
+    assert coordinates[..., 0].max() == pytest.approx(3.5)
+    assert coordinates[..., 1].min() == pytest.approx(-0.5)
+    assert coordinates[..., 1].max() == pytest.approx(3.5)
+    assert fig.get_supxlabel() == r"$i_0$"
+    assert fig.get_supylabel() == r"$i_1$"
+  # end
+# end
+
+
+# --------------------------------------------------------------------------
 # Joined linear/log split panels
 # --------------------------------------------------------------------------
 
