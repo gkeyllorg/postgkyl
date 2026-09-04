@@ -1,0 +1,1 @@
+Put all the optional dependencies as real dependencies so everything installs all the time for pytest to work. Also, depricate sympy dependency
