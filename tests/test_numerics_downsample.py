@@ -55,6 +55,11 @@ class TestDownsample:
     assert out[0] == x[0]
     assert out[-1] == x[-1]
 
+  def test_downsampling_does_not_duplicate_an_aligned_endpoint(self):
+    x = np.arange(5)
+    out, = downsample(x, maximum_points_per_axis=3)
+    np.testing.assert_array_equal(out, [0, 2, 4])
+
   def test_multiple_arrays_downsampled_consistently(self):
     x = np.linspace(0, 10, 100)
     y = np.sin(x)

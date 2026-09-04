@@ -179,6 +179,47 @@ class TestLiveAnimation:
                            {"title": "My Animation"})
     assert fig._suptitle.get_text() == "My Animation"
 
+  @pytest.mark.parametrize(("ctx", "expected"), [
+      ({"time": 1.25}, "time: 1.2500e+00"),
+      ({"frame": 7}, "frame: 7"),
+  ])
+  def test_generated_title_accepts_either_frame_metadata_field(
+      self, ctx, expected):
+    frame = _line_frame(0.0)
+    frame.ctx.pop("frame")
+    frame.ctx.pop("time")
+    frame.ctx.update(ctx)
+    fig = plt.figure()
+    anim_mod._draw_frame([frame], fig, {})
+    assert fig._suptitle.get_text() == expected
+
+  def test_variable_range_skips_global_limit_calculation(self, monkeypatch):
+    monkeypatch.setattr(
+        anim_mod, "_frame_value_range",
+        lambda *_args, **_kwargs: pytest.fail("global range was calculated"))
+    anim = anim_mod.animate(_three_frames(),
+                            variable_range=True,
+                            no_show=True)
+    assert anim is not None
+
+  def test_live_save_configuration_without_running_a_writer(self, monkeypatch,
+                                                             tmp_path):
+    saved = []
+
+    def save(self, filename, **kwargs):
+      saved.append((filename, kwargs))
+
+    monkeypatch.setattr(anim_mod, "require_ffmpeg", lambda _caller: "/ffmpeg")
+    monkeypatch.setattr("matplotlib.animation.FuncAnimation.save", save)
+    out = tmp_path / "movie.mp4"
+    anim_mod.animate(_three_frames(),
+                     save=True,
+                     saveas=str(out),
+                     fps=5,
+                     dpi=80,
+                     no_show=True)
+    assert saved == [(str(out), {"writer": "ffmpeg", "fps": 5, "dpi": 80})]
+
 
 # --------------------------------------------------------------------------
 # saved frames
@@ -223,6 +264,35 @@ class TestSaveFrames:
     # the scratch directory must not leak its frame PNGs behind.
     assert list(tmp_path.glob("*.png")) == []
 
+  def test_worker_can_render_one_frame_directly(self, tmp_path):
+    prefix = str(tmp_path / "worker")
+    path = anim_mod._save_frame_worker(
+        (3, [_line_frame(0.0)], {}, prefix, 72, (3.0, 2.0)))
+    assert path == f"{prefix}_3.png"
+    assert os.path.isfile(path)
+
+  def test_grouped_tags_suffix_saved_frame_prefixes(self, tmp_path):
+    frames = _three_frames()
+    frames[0].tag = "left"
+    frames[1].tag = "left"
+    frames[2].tag = "right"
+    prefix = str(tmp_path / "frame")
+    paths = anim_mod.animate(frames,
+                             grouptags=True,
+                             saveframes=prefix,
+                             no_show=True)
+    assert paths == [[f"{prefix}_left_0.png", f"{prefix}_left_1.png"],
+                     [f"{prefix}_right_0.png"]]
+
+  def test_saveas_without_extension_defaults_to_gif(self, tmp_path):
+    prefix = str(tmp_path / "frame")
+    output = tmp_path / "movie"
+    anim_mod.animate(_three_frames(),
+                     saveframes=prefix,
+                     saveas=str(output),
+                     no_show=True)
+    assert output.with_suffix(".gif").is_file()
+
 
 # --------------------------------------------------------------------------
 # movie compile
@@ -260,6 +330,65 @@ class TestCompileMovie:
     paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     with pytest.raises(RuntimeError, match="ffmpeg"):
       anim_mod._compile_movie(paths, str(tmp_path / "out.mp4"), duration=100.0)
+
+  def test_video_writer_protocol_without_external_process(self, monkeypatch,
+                                                           tmp_path):
+    from contextlib import contextmanager
+    from PIL import Image
+    import matplotlib.animation
+
+    events = []
+
+    class FakeImage:
+      width = 320
+      height = 200
+
+    class FakeAxes:
+
+      def axis(self, value):
+        events.append(("axis", value))
+
+      def clear(self):
+        events.append(("clear", ))
+
+      def imshow(self, image):
+        assert isinstance(image, FakeImage)
+        events.append(("imshow", ))
+
+    class FakeFigure:
+
+      def add_axes(self, bounds):
+        assert bounds == [0, 0, 1, 1]
+        return FakeAxes()
+
+    class FakeWriter:
+
+      def __init__(self, fps):
+        events.append(("fps", fps))
+
+      @contextmanager
+      def saving(self, figure, output_file, dpi):
+        assert isinstance(figure, FakeFigure)
+        events.append(("saving", output_file, dpi))
+        yield
+
+      def grab_frame(self):
+        events.append(("grab", ))
+
+    monkeypatch.setattr(anim_mod, "require_ffmpeg", lambda _caller: "/ffmpeg")
+    monkeypatch.setattr(Image, "open", lambda _path: FakeImage())
+    monkeypatch.setattr(matplotlib.animation, "FFMpegWriter", FakeWriter)
+    monkeypatch.setattr(plt, "figure", lambda **_kwargs: FakeFigure())
+    monkeypatch.setattr(plt, "close", lambda figure: events.append(
+        ("close", figure)))
+
+    output = str(tmp_path / "movie.mp4")
+    anim_mod._compile_movie(["one.png", "two.png"],
+                            output,
+                            duration=250.0)
+    assert ("fps", 4.0) in events
+    assert ("saving", output, 100) in events
+    assert events.count(("grab", )) == 2
 
   @needs_ffmpeg
   @external_tool

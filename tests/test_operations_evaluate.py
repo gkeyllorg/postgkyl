@@ -185,3 +185,112 @@ def test_modal_data_unsupported_op_warns_and_falls_back():
   with pytest.warns(UserWarning, match="weak-kernel"):
     result = operations.evaluate("f sqrt", d)
   assert result.backend == "numpy"
+
+
+def test_available_operator_vocabulary_is_sorted_and_public():
+  operators = pg.available_evaluate_operators()
+  assert operators == sorted(operators)
+  assert {"+", "pow", "sqrt", "int"} <= set(operators)
+
+
+@needs_gkeyll
+def test_modal_dataset_binary_operators_cover_each_weak_kernel_dispatch():
+  d = _native_field(2.0, "modal")
+  for token in ("-", "*", "/"):
+    result = operations.evaluate(f"f0 f0 {token}", d, d)
+    assert result.backend == "gkyl"
+
+  with pytest.warns(UserWarning, match="between two modal datasets"):
+    result = operations.evaluate("f0 f0 pow", d, d)
+  assert result.backend == "numpy"
+
+  with pytest.warns(UserWarning, match="no weak-kernel form"):
+    result = operations.evaluate("f0 f0 max2", d, d)
+  assert result.backend == "numpy"
+
+
+@needs_gkeyll
+def test_modal_dataset_scalar_operators_cover_operand_order_and_power():
+  d = _native_field(2.0, "modal")
+  for chain in ("f 2 +", "f 2 -", "2 f -", "f 2 pow"):
+    result = operations.evaluate(chain, d)
+    assert result.backend == "gkyl"
+
+  for chain in ("f 0 pow", "2 f pow"):
+    with pytest.warns(UserWarning, match="positive integer"):
+      result = operations.evaluate(chain, d)
+    assert result.backend == "numpy"
+
+
+@needs_gkeyll
+def test_modal_dispatch_warns_for_missing_or_mismatched_metadata():
+  d = _native_field(2.0, "modal")
+  missing = d.clone()
+  missing.ctx.pop("basis_type")
+  with pytest.warns(UserWarning, match="no basis_type/poly_order"):
+    operations.evaluate("f sq", missing)
+
+  mismatched = d.clone()
+  mismatched.ctx["basis_type"] = "tensor"
+  with pytest.warns(UserWarning, match="different DG bases"):
+    operations.evaluate("f0 f1 +", d, mismatched)
+
+  with pytest.warns(UserWarning, match="plain array"):
+    operations.evaluate("f [1] +", d)
+
+
+@needs_gkeyll
+def test_modal_dispatch_rejects_operators_without_a_matching_arity():
+  d = _native_field(2.0, "modal")
+  with pytest.warns(UserWarning, match="3 operands"):
+    result = operations.evaluate("f 0 2 scale_comp", d)
+  assert result.backend == "numpy"
+
+
+def _native_field(value, value_form):
+  grid = [np.linspace(0.0, 1.0, 5)]
+  native = gpython.GkylArray.from_numpy(np.full((4, 1), value))
+  return _make(grid,
+               native,
+               basis_type="serendipity",
+               poly_order=0,
+               value_form=value_form)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("value_form", ["nodal", "quad"])
+def test_native_pointwise_evaluation_stays_native(value_form):
+  d = _native_field(4.0, value_form)
+  result = operations.evaluate("f sqrt", d)
+  assert result.backend == "gkyl"
+  assert result.ctx["value_form"] == value_form
+  np.testing.assert_allclose(result.values, 2.0)
+
+
+@needs_gkeyll
+def test_native_point_reduction_leaves_the_value_form_domain():
+  d = _native_field(4.0, "nodal")
+  result = operations.evaluate("f mean", d)
+  assert result.backend == "numpy"
+  assert "value_form" not in result.ctx
+  assert result.ctx["interpolated"] is True
+
+
+@needs_gkeyll
+def test_mixed_native_point_value_forms_warn_and_fall_back():
+  nodal = _native_field(2.0, "nodal")
+  quad = _native_field(3.0, "quad")
+  with pytest.warns(UserWarning, match="different value_forms"):
+    result = operations.evaluate("f0 f1 +", nodal, quad)
+  assert result.backend == "numpy"
+  np.testing.assert_allclose(result.values, 5.0)
+
+
+@needs_gkeyll
+def test_modal_dispatch_scalar_helpers_cover_scalar_shapes():
+  from importlib import import_module
+  evaluate_module = import_module("postgkyl.operations.evaluate")
+  assert evaluate_module._as_scalar(np.int64(3)) == 3.0
+  assert evaluate_module._as_scalar(np.array([3.0])) is None
+  assert evaluate_module._modal_kernel("+", [None], [np.array([1.0])],
+                                       [{}]) is None

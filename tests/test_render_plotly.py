@@ -10,7 +10,9 @@ case below builds one via ``GDataState().push(...)``.
 
 from __future__ import annotations
 
+from importlib import import_module
 import sys
+from types import SimpleNamespace
 
 import matplotlib
 
@@ -533,6 +535,57 @@ class TestSaveRotatingPlotlyFigure:
     assert out.exists()
     assert "recomputeRotationParams" not in out.read_text(encoding="utf-8")
 
+  @pytest.mark.parametrize(("extension", "command_marker"), [
+      ("mp4", "yuv420p"),
+      ("gif", "palettegen"),
+  ])
+  def test_binary_export_protocol_without_external_process(
+      self, monkeypatch, tmp_path, extension, command_marker):
+    import subprocess
+    plotly_module = import_module("postgkyl.render.plotly")
+    events = []
+
+    class FakeLayout:
+
+      @staticmethod
+      def to_plotly_json():
+        return {"scene": {}}
+
+    class FakeFigure:
+      layout = FakeLayout()
+
+      def update_layout(self, **kwargs):
+        events.append(("layout", kwargs))
+
+      def to_image(self, *, format):
+        assert format == "png"
+        return b"png"
+
+    fake_kaleido = SimpleNamespace(
+        start_sync_server=lambda **kwargs: events.append(("start", kwargs)),
+        stop_sync_server=lambda **kwargs: events.append(("stop", kwargs)),
+    )
+    commands = []
+    monkeypatch.setitem(sys.modules, "kaleido", fake_kaleido)
+    monkeypatch.setattr(plotly_module, "require_ffmpeg",
+                        lambda _caller: "/ffmpeg")
+    monkeypatch.setattr(
+        subprocess, "run",
+        lambda command, **kwargs: commands.append((command, kwargs)))
+
+    output = tmp_path / f"rotation.{extension}"
+    save_rotating_plotly_figure(FakeFigure(),
+                                str(output),
+                                starting_azimuthal_angle=15.0,
+                                fps=2,
+                                polar_angle=60.0,
+                                rotation_period=1.0)
+    assert [event[0] for event in events].count("layout") == 2
+    assert events[0][0] == "start" and events[-1][0] == "stop"
+    assert len(commands) == 1
+    assert command_marker in " ".join(commands[0][0])
+    assert commands[0][1]["check"] is True
+
   @needs_ffmpeg
   @needs_chrome
   @skip_macos_chrome
@@ -596,3 +649,135 @@ class TestPlotlyAnimate:
     two_comp = _state(grid, np.stack([x + y + z, x - y - z], axis=-1))
     with pytest.raises(ValueError, match="same number of traces"):
       plotly_animate([one_comp, two_comp])
+
+  def test_save_adds_html_extension_and_show_writes_preview(self, monkeypatch,
+                                                            tmp_path):
+    plotly_module = import_module("postgkyl.render.plotly")
+    written = []
+    opened = []
+    monkeypatch.setattr(go.Figure, "write_html",
+                        lambda _fig, path: written.append(str(path)))
+    monkeypatch.setattr(plotly_module, "open_preview",
+                        lambda path: opened.append(str(path)))
+
+    output = tmp_path / "animation"
+    plotly_animate([_surface_2d()], saveas=str(output))
+    assert written[-1] == f"{output}.html"
+
+    plotly_animate([_surface_2d()], show=True)
+    assert written[-1].endswith("plotly-animate_preview.html")
+    assert opened == [written[-1]]
+
+    explicit_html = tmp_path / "animation.html"
+    plotly_animate([_surface_2d()],
+                   saveas=str(explicit_html),
+                   show=True)
+    assert written[-1] == str(explicit_html)
+    assert opened[-1] == str(explicit_html)
+
+
+class TestOutputHelpers:
+
+  def test_default_stem_prefers_file_then_label_then_fallback(self):
+    plotly_module = import_module("postgkyl.render.plotly")
+    data = _surface_2d()
+    data._file_name = "/tmp/simulation.gkyl"
+    assert plotly_module._default_output_stem(data) == "simulation"
+    data._file_name = ""
+    data._custom_label = "density"
+    assert plotly_module._default_output_stem(data) == "density"
+    data._custom_label = ""
+    assert plotly_module._default_output_stem(data) == "plotly_output"
+
+  def test_write_output_dispatches_rotating_and_plain_formats(self, monkeypatch,
+                                                              tmp_path):
+    plotly_module = import_module("postgkyl.render.plotly")
+    calls = []
+
+    class FakeFigure:
+
+      def write_html(self, path):
+        calls.append(("html", path))
+
+    monkeypatch.setattr(
+        plotly_module, "save_rotating_plotly_figure",
+        lambda fig, path, **kwargs: calls.append(("rotate", path, kwargs)))
+    figure = FakeFigure()
+    rotating = plotly_module._write_plotly_output(
+        figure,
+        str(tmp_path / "figure.html"),
+        starting_azimuthal_angle=0.0,
+        polar_angle=60.0,
+        rotation_period=2.0,
+        fps=10)
+    plain = plotly_module._write_plotly_output(
+        figure,
+        str(tmp_path / "figure.png"),
+        starting_azimuthal_angle=0.0,
+        polar_angle=60.0,
+        rotation_period=2.0,
+        fps=10)
+    empty = plotly_module._write_plotly_output(
+        figure,
+        "",
+        starting_azimuthal_angle=0.0,
+        polar_angle=60.0,
+        rotation_period=2.0,
+        fps=10)
+    assert rotating.endswith("figure.html")
+    assert plain.endswith("figure.html")
+    assert empty == ".html"
+    assert [call[0] for call in calls] == ["rotate", "html", "html"]
+
+  def test_preview_sanitizes_names_and_open_preview_uses_file_uri(
+      self, monkeypatch, tmp_path):
+    plotly_module = import_module("postgkyl.render.plotly")
+    saved = []
+    opened = []
+    monkeypatch.setattr(plotly_module.tempfile, "gettempdir",
+                        lambda: str(tmp_path))
+    monkeypatch.setattr(
+        plotly_module, "save_rotating_plotly_figure",
+        lambda _fig, path, **_kwargs: saved.append(path))
+    monkeypatch.setattr(plotly_module.webbrowser, "open",
+                        lambda uri: opened.append(uri))
+    path = plotly_module._preview_plotly_figure(
+        object(),
+        " !!! ",
+        starting_azimuthal_angle=0.0,
+        polar_angle=60.0,
+        rotation_period=2.0,
+        fps=10)
+    assert path.endswith("plotly_preview_preview.html")
+    assert saved == [path]
+    named_path = plotly_module._preview_plotly_figure(
+        object(),
+        "named",
+        starting_azimuthal_angle=0.0,
+        polar_angle=60.0,
+        rotation_period=2.0,
+        fps=10)
+    assert named_path.endswith("named_preview.html")
+    plotly_module.open_preview(path)
+    assert opened[0].startswith("file://")
+
+  def test_plotly_save_and_show_dispatch_to_output_helpers(self, monkeypatch):
+    plotly_module = import_module("postgkyl.render.plotly")
+    calls = []
+    monkeypatch.setattr(
+        plotly_module, "_write_plotly_output",
+        lambda _fig, path, **_kwargs: calls.append(("write", path)) or
+        "saved.html")
+    monkeypatch.setattr(
+        plotly_module, "_preview_plotly_figure",
+        lambda _fig, stem, **_kwargs: calls.append(("preview", stem)) or
+        "preview.html")
+    monkeypatch.setattr(plotly_module, "open_preview",
+                        lambda path: calls.append(("open", path)))
+
+    plotly(_surface_2d(), save=True)
+    plotly(_surface_2d(), show=True)
+    plotly(_surface_2d(), saveas="figure.html", show=True)
+    assert [call[0] for call in calls] == [
+        "write", "preview", "open", "write", "open"
+    ]

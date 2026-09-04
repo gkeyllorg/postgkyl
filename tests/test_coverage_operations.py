@@ -85,6 +85,16 @@ def test_select_by_coordinate_on_a_non_matching_edge_grid():
   assert by_slice.grid[0].shape[0] == 4
 
 
+@needs_gkeyll
+def test_select_keeps_native_point_values_in_the_native_backend():
+  nodal = pg.load(F1).to_nodal()
+  selected = nodal.select(comp=0)
+  assert selected.backend == "gkyl"
+  assert selected.ctx["value_form"] == "nodal"
+  np.testing.assert_array_equal(selected.ctx["cells"], [24])
+  assert selected.native.ncomp == 1
+
+
 # ========================================================== operations.arithmetic
 @needs_gkeyll
 def test_numpy_domain_rejects_incompatible_grids_and_shapes():
@@ -217,6 +227,23 @@ def test_apply_ufunc_reductions_return_numpy_results():
   b.push([np.linspace(0.0, 1.0, 4)], bool_values)
   assert np.all(b) == np.all(bool_values)
   assert np.any(b) == np.any(bool_values)
+
+
+def test_remaining_reflected_and_unary_operators_preserve_data():
+  a = pg.GData()
+  a.push([np.linspace(0.0, 1.0, 4)],
+         np.array([[-2.0], [0.0], [3.0]]))
+
+  np.testing.assert_allclose((1.0 + a).values, 1.0 + a.values)
+  np.testing.assert_allclose(abs(a).values, np.abs(a.values))
+  positive = +a
+  np.testing.assert_allclose(positive.values, a.values)
+  assert positive is not a
+
+
+def test_apply_ufunc_reduction_rejects_non_dataset_inputs():
+  assert operations.arithmetic.apply_ufunc(np.add, "reduce", 1.0,
+                                           2.0) is NotImplemented
 
 
 @needs_gkeyll
@@ -360,6 +387,31 @@ def test_average_partial_reduction_of_a_constant_field():
 
 
 @needs_gkeyll
+def test_average_accepts_a_compatible_weight():
+  basis_type, poly_order, cells = "serendipity", 1, [4]
+  num_basis = gpython.basis.num_basis(basis_type, 1, poly_order)
+  basis_constant = 2.0**0.5
+
+  def constant_state(value):
+    coefficients = np.zeros((cells[0], num_basis))
+    coefficients[:, 0] = value * basis_constant
+    data = pg.GData(ctx={
+        "basis_type": basis_type,
+        "poly_order": poly_order,
+        "value_form": "modal",
+        "cells": np.array(cells),
+    })
+    data.push([np.linspace(0.0, 1.0, cells[0] + 1)],
+              gpython.GkylArray.from_numpy(coefficients))
+    return data
+
+  out = constant_state(3.0).average([0], weight=constant_state(2.0))
+  np.testing.assert_allclose(out.native.view()[0, 0] / basis_constant,
+                             3.0,
+                             atol=1e-10)
+
+
+@needs_gkeyll
 def test_average_rejects_numpy_backed_and_non_modal():
   interpolated = pg.load(F1).interpolate()
   with pytest.raises(ValueError, match="native modal data"):
@@ -482,3 +534,79 @@ def test_integrate_full_rejects_partial_result_options():
   a = pg.load(F1).interpolate()
   with pytest.raises(ValueError, match="partial integration"):
     a.integrate(tag="not-a-dataset")
+
+
+@pytest.mark.parametrize(("axis", "message"), [
+    ((), "at least one axis"),
+    ((0, 0), "must be distinct"),
+    ((1, ), "out of range"),
+])
+def test_integrate_rejects_invalid_axis_sets(axis, message):
+  a = pg.GData()
+  a.push([np.linspace(0.0, 1.0, 5)], np.ones((4, 1)))
+  with pytest.raises(ValueError, match=message):
+    a.integrate(axis)
+
+
+def test_native_integration_guard_reports_backend_before_basis():
+  from importlib import import_module
+  integrate_module = import_module("postgkyl.operations.integrate")
+  a = pg.GData()
+  a.push([np.linspace(0.0, 1.0, 5)], np.ones((4, 1)))
+  with pytest.raises(ValueError, match="needs native modal data"):
+    integrate_module._native_basis(a)
+
+
+@needs_gkeyll
+def test_native_integration_guard_rejects_point_value_forms():
+  from importlib import import_module
+  integrate_module = import_module("postgkyl.operations.integrate")
+  nodal = pg.load(F1).to_nodal()
+  with pytest.raises(ValueError, match="expects the modal value_form"):
+    integrate_module._native_basis(nodal)
+
+
+def test_integrate_rejects_native_only_op_for_point_data():
+  one_dim = pg.GData()
+  one_dim.push([np.linspace(0.0, 1.0, 5)], np.ones((4, 1)))
+  with pytest.raises(ValueError, match="full native-DG"):
+    one_dim.integrate(op="abs")
+
+  two_dim = pg.GData()
+  two_dim.push([np.linspace(0.0, 1.0, 5),
+                np.linspace(0.0, 1.0, 4)], np.ones((4, 3, 1)))
+  with pytest.raises(ValueError, match="full native-DG"):
+    two_dim.integrate(1, op="abs")
+
+
+def test_remaining_mapped_axes_reindexes_surviving_groups():
+  from importlib import import_module
+  integrate_module = import_module("postgkyl.operations.integrate")
+  data = pg.GData(ctx={"mapped_axes": {0: 0, 1: 0, 2: 2}})
+  assert integrate_module._remaining_mapped_axes(data, [0, 1]) == {0: 0, 1: 0}
+
+
+def test_curvilinear_lookup_ignores_flat_axes_and_can_miss_an_axis():
+  from postgkyl.operations._curvilinear import block_for_axis, curvilinear_blocks
+
+  blocks = curvilinear_blocks([np.arange(3), np.ones((3, 4))], {
+      0: 0,
+      1: 1,
+  })
+  assert blocks == {1: [1]}
+  assert block_for_axis(blocks, 0) is None
+
+
+def test_fft_preserves_an_already_point_aligned_grid():
+  data = pg.GData()
+  data.push([np.linspace(0.0, 1.0, 8, endpoint=False)],
+            np.arange(8, dtype=float)[:, None])
+  out = data.fft()
+  assert out.values.shape == data.values.shape
+
+
+def test_val2coord_range_accepts_negative_slice_endpoints():
+  from postgkyl.operations.val2coord import _get_range
+
+  np.testing.assert_array_equal(_get_range("-4:-1", 6), [2, 3, 4])
+  np.testing.assert_array_equal(_get_range("1:4", 6), [1, 2, 3])

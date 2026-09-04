@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from importlib import import_module
 import os
+from types import SimpleNamespace
 
 import click
 import numpy as np
@@ -123,6 +126,110 @@ def test_missing_toroidal_geometry_and_incompatible_projection_fail_clearly():
   shifted.grid[0] = shifted.grid[0] + 0.01
   with pytest.raises(ValueError, match="computational grid does not match"):
     gk_ops.map_to_rz(shifted, projection)
+
+
+@needs_gkeyll
+def test_3d_projection_rejects_thin_and_zero_span_geometry():
+  data = pg.load(F3D)
+  geometry = gk_ops.resolve_geometry(data.file_name)
+
+  thin = data.clone()
+  thin.ctx["poly_order"] = 0
+  thin._grid[1] = np.array([0.0, 1.0])
+  with pytest.raises(ValueError, match="at least two interpolated y and z"):
+    gk_ops.resolve_rz_projection(thin, geometry)
+
+  zero_span = replace(geometry, phi=np.zeros_like(geometry.phi))
+  with pytest.raises(ValueError, match="zero or non-finite"):
+    gk_ops.resolve_rz_projection(data, zero_span)
+
+
+@needs_gkeyll
+def test_3d_projection_uses_corner_geometry_when_available():
+  data = pg.load(F3D)
+  geometry = gk_ops.resolve_geometry(data.file_name)
+  corner_coords = [np.array(axis, copy=True) for axis in geometry.coords]
+  dz = geometry.coords[2][-1] - geometry.coords[2][0]
+  corner_coords[2] = np.array(
+      [geometry.coords[2][0] - dz, geometry.coords[2][-1] + dz])
+  corner_r = np.stack(
+      [geometry.major_r[..., 0], geometry.major_r[..., -1]], axis=-1)
+  corner_z = np.stack(
+      [geometry.vert_z[..., 0], geometry.vert_z[..., -1]], axis=-1)
+  with_corner = replace(
+      geometry,
+      corner=(corner_coords, corner_r, corner_z))
+  projection = gk_ops.resolve_rz_projection(data, with_corner, nz_interp=2)
+  assert projection.r.shape == projection.z.shape == (97, 65)
+
+
+@needs_gkeyll
+def test_reusable_rz_projection_validates_every_shape_contract():
+  data_2d = pg.load(F2D)
+  geometry_2d = gk_ops.resolve_geometry(data_2d.file_name)
+  projection_2d = gk_ops.resolve_rz_projection(data_2d, geometry_2d)
+
+  invalid_2d = [
+      (replace(projection_2d, num_dims=4), "invalid dimensionality"),
+      (replace(projection_2d, num_dims=3), "dimensionality does not match"),
+      (replace(projection_2d, z=projection_2d.z[:, :-1]),
+       "matching 2-D arrays"),
+      (replace(projection_2d,
+               r=projection_2d.r[:-1],
+               z=projection_2d.z[:-1]), "expected grid shape"),
+  ]
+  for projection, message in invalid_2d:
+    with pytest.raises(ValueError, match=message):
+      gk_ops.map_to_rz(data_2d, projection)
+
+  data_3d = pg.load(F3D)
+  geometry_3d = gk_ops.resolve_geometry(data_3d.file_name)
+  projection_3d = gk_ops.resolve_rz_projection(data_3d,
+                                                geometry_3d,
+                                                nz_interp=2)
+  invalid_3d = [
+      (replace(projection_3d, zc=None), "metadata is incomplete"),
+      (replace(projection_3d, box=0.0), "span must be finite and nonzero"),
+      (replace(projection_3d, wind=projection_3d.wind[:-1]),
+       "projection and data grid shapes differ"),
+  ]
+  for projection, message in invalid_3d:
+    with pytest.raises(ValueError, match=message):
+      gk_ops.map_to_rz(data_3d, projection)
+
+
+def test_rz_projection_collection_caches_by_geometry_prefix(monkeypatch):
+  rz = import_module("postgkyl.operations.gyrokinetics.rz")
+  first = SimpleNamespace(file_name="block-one", ctx={"block": 1})
+  repeated = SimpleNamespace(file_name="block-one", ctx={"block": 1})
+  second = SimpleNamespace(file_name="block-two", ctx={"block": 2})
+  calls = []
+  monkeypatch.setattr(rz, "geometry_prefix", lambda path: path)
+  monkeypatch.setattr(
+      rz, "resolve_geometry",
+      lambda path, **kwargs: calls.append((path, kwargs)) or path)
+  monkeypatch.setattr(
+      rz, "resolve_rz_projection",
+      lambda data, geo, **_kwargs: f"projection:{geo}")
+
+  projections = rz.rz_projections([first, repeated, second],
+                                  mapc2p="map-*.gkyl",
+                                  nodes_file="nodes-*.gkyl")
+  assert projections == {
+      "block-one": "projection:block-one",
+      "block-two": "projection:block-two",
+  }
+  assert calls == [
+      ("block-one", {
+          "mapc2p": "map-1.gkyl",
+          "nodes_file": "nodes-1.gkyl"
+      }),
+      ("block-two", {
+          "mapc2p": "map-2.gkyl",
+          "nodes_file": "nodes-2.gkyl"
+      }),
+  ]
+  assert rz.projection_for(projections, first) == "projection:block-one"
 
 
 @needs_gkeyll

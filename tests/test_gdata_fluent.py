@@ -403,6 +403,18 @@ class TestGDataGroup:
     assert isinstance(out, MyData)
     np.testing.assert_allclose(out.get_values(), 3.0)  # 1.0 + 2.0
 
+  def test_plotly_animate_delegates_the_whole_group(self, monkeypatch):
+    frames = self._frames()
+    sentinel = object()
+
+    def fake_plotly_animate(datasets, **kwargs):
+      assert list(datasets) == frames
+      assert kwargs == {"fps": 7}
+      return sentinel
+
+    monkeypatch.setattr(api_verbs, "plotly_animate", fake_plotly_animate)
+    assert ApiGDataGroup(frames).plotly_animate(fps=7) is sentinel
+
   @needs_gkeyll
   def test_animate_is_explicit_not_broadcast(self):
     from matplotlib.animation import FuncAnimation

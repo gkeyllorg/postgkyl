@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 import os
 
 import numpy as np
@@ -195,3 +196,30 @@ def test_window_rejects_modal_data():
   d = pg.load(F1)
   with pytest.raises(ValueError, match=r"\.interpolate\(\)"):
     operations.fit(d, "exp2", window=True)
+
+
+def test_growth_is_the_declared_leading_window_composition(monkeypatch):
+  growth_module = import_module("postgkyl.operations.growth")
+  calls = []
+
+  def fake_fit(*args, **kwargs):
+    calls.append((args, kwargs))
+    return "result"
+
+  monkeypatch.setattr(growth_module, "fit", fake_fit)
+  data = object()
+  result = growth_module.growth(data,
+                                guess="1,2",
+                                min_n=7,
+                                inplace=True,
+                                tag="fit",
+                                label="growth")
+  assert result == "result"
+  assert calls == [((data, "exp2"), {
+      "guess": "1,2",
+      "window": True,
+      "min_n": 7,
+      "inplace": True,
+      "tag": "fit",
+      "label": "growth",
+  })]

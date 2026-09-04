@@ -88,6 +88,10 @@ class TestParseOutputName:
     parsed = parse_output_name("sim-elc_5_restart.gkyl")
     assert (parsed.quantity, parsed.frame, parsed.restart) == ("elc", 5, True)
 
+  def test_field_key_excludes_block_and_directory(self):
+    parsed = parse_output_name("dir/sim_b2-elc_M0_3.gkyl")
+    assert parsed.field_key == ("sim", "elc_M0", 3)
+
   def test_empty_path_has_no_identity(self):
     assert parse_output_name("") is None
     assert parse_output_name(None) is None

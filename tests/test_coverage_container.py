@@ -137,6 +137,13 @@ def test_setitem_raises_when_empty():
     d[0] = 1.0
 
 
+@needs_gkeyll
+def test_setitem_rejects_native_storage():
+  d = pg.load(F1)
+  with pytest.raises(ValueError, match="native Gkeyll storage"):
+    d[0] = 1.0
+
+
 def test_copy_with_data_deep_copies_numpy_backend():
   d = GDataState()
   d.push([np.linspace(0.0, 1.0, 4)], np.ones((3, 2)))
@@ -175,6 +182,71 @@ def test_info_reports_nodal_and_quad_representation():
   assert "quad" in a.to_quad().info()
 
 
+def test_output_identity_handles_an_unrecognized_name(monkeypatch):
+  monkeypatch.setattr("postgkyl.gdatastate.gdatastate.io.parse_output_name",
+                      lambda _path: None)
+  d = GDataState()
+  d._file_name = "unrecognized"
+  d._stamp_output_name()
+  assert d.output_name is None
+  assert "sim" not in d.ctx
+
+
+def test_info_reports_all_optional_metadata(capsys):
+  d = GDataState(ctx={
+      "time": 1.5,
+      "frame": 3,
+      "block": 2,
+      "sim": "demo",
+      "basis_type": "serendipity",
+      "poly_order": None,
+      "value_form": "quad",
+      "num_quad": 3,
+      "changeset": "abc123",
+      "builddate": "today",
+      "geometry_type": "tokamak",
+      "geqdsk_sign_convention": -1,
+      "mass": 2.0,
+      "charge": -1.0,
+      "gas_gamma": 5.0 / 3.0,
+      "vdim": 2,
+      "custom_metadata": "kept",
+  })
+  d.push([np.linspace(0.0, 1.0, 3)],
+         np.arange(4, dtype=float).reshape(2, 2))
+
+  out = d.info(no_header=True)
+
+  assert "GEQDSK sign convention: -1" in out
+  assert "Adiabatic index" in out
+  assert "custom_metadata: kept" in out
+  assert "default#0" not in out
+  assert capsys.readouterr().out == out + "\n"
+
+
+@pytest.mark.parametrize("ctx", [{"builddate": "today"},
+                                  {"changeset": "abc123"},
+                                  {"geqdsk_sign_convention": 1},
+                                  {"mass": 1.0},
+                                  {"charge": -1.0}])
+def test_info_reports_independent_optional_metadata(ctx):
+  d = GDataState(ctx=ctx)
+  d.push([np.linspace(0.0, 1.0, 3)], np.ones((2, 1)))
+  assert d.info()
+
+
+def test_info_handles_values_without_a_grid_and_a_grid_without_values():
+  values_only = GDataState()
+  values_only.values = np.ones((2, 1))
+  assert "Maximum" in values_only.info(no_header=True)
+  assert "Grid:" not in values_only.info(no_header=True)
+
+  grid_only = GDataState()
+  grid_only.grid = [np.linspace(0.0, 1.0, 3)]
+  assert "Grid:" in grid_only.info(no_header=True)
+  assert "Maximum" not in grid_only.info(no_header=True)
+
+
 # ---------------------------------------------------------- repr/str/summary
 def test_repr_and_str_on_empty_dataset():
   d = GDataState()
@@ -195,6 +267,19 @@ def test_repr_on_interpolated_dataset():
   d = pg.load(F1).interpolate()
   r = repr(d)
   assert "interpolate" in r
+
+
+def test_repr_handles_values_without_grid_or_basis_metadata():
+  d = GDataState()
+  d.values = np.ones((2, 1))
+  assert "[" not in repr(d)
+
+
+def test_repr_handles_basis_without_poly_order():
+  d = GDataState(ctx={"basis_type": "serendipity"})
+  d.values = np.ones((2, 1))
+  assert "serendipity" in repr(d)
+  assert " p" not in repr(d)
 
 
 @needs_gkeyll

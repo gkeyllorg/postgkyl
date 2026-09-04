@@ -42,11 +42,105 @@ def _field_2d(n=8, ncomp=1) -> GDataState:
   return d
 
 
+class _UnlabelledState:
+
+  _file_name = ""
+
+
 @pytest.fixture(autouse=True)
 def _close_figs():
   plt.close("all")
   yield
   plt.close("all")
+
+
+# --------------------------------------------------------------------------
+# Pure output/style normalization helpers
+# --------------------------------------------------------------------------
+
+
+class TestOutputNormalization:
+
+  def test_indexed_saveas_handles_one_path_and_a_sequence(self):
+    assert backend._indexed_saveas("plot.pdf", 3, True) == "plot_3.pdf"
+    assert backend._indexed_saveas(("a", "b.png"), 2,
+                                   True) == ("a_2", "b_2.png")
+
+  def test_default_output_stem_uses_labels_and_fallbacks(self):
+    labelled = _line()
+    labelled.label = "ion density"
+    assert backend._default_output_stem(
+        [labelled, _UnlabelledState()]) == "ion_density_dataset_1"
+    assert backend._default_output_stem([]) == "matplotlib_output"
+
+  def test_output_paths_rejects_a_non_iterable(self):
+    with pytest.raises(TypeError, match="path or an iterable"):
+      backend._output_paths(False, 3, [])
+
+  def test_output_paths_rejects_a_non_path_entry(self):
+    with pytest.raises(TypeError, match="entry must be path-like"):
+      backend._output_paths(False, ["ok.png", object()], [])
+
+
+class TestLineStyleNormalization:
+
+  def test_invalid_color_string_is_left_to_matplotlib(self):
+    assert backend._normalize_line_colors("not-a-color") is None
+
+  def test_non_iterable_color_is_treated_as_a_scalar(self):
+    assert backend._normalize_line_colors(object()) is None
+
+  def test_empty_color_sequence_raises(self):
+    with pytest.raises(ValueError, match="must not be an empty sequence"):
+      backend._normalize_line_colors([])
+
+  def test_invalid_color_sequence_entry_raises(self):
+    with pytest.raises(ValueError, match="every entry"):
+      backend._normalize_line_colors(["red", "not-a-color"])
+
+  def test_custom_dash_pattern_is_one_linestyle(self):
+    assert backend._normalize_linestyles((0, (5, 2)), 2) is None
+
+  def test_non_iterable_linestyle_is_treated_as_a_scalar(self):
+    assert backend._normalize_linestyles(object(), 2) is None
+
+  def test_empty_linestyle_sequence_raises(self):
+    with pytest.raises(ValueError, match="must not be an empty sequence"):
+      backend._normalize_linestyles([], 2)
+
+
+class TestSmallPlotHelpers:
+
+  def test_xkcd_without_a_suitable_font_warns_and_uses_sans_serif(
+      self, monkeypatch):
+    monkeypatch.setattr(backend.fm.fontManager, "ttflist", [])
+    with pytest.warns(UserWarning, match="No xkcd-style font"):
+      context, rc = backend.get_xkcd_safely()
+    assert callable(context)
+    assert rc == {"font.family": "sans-serif"}
+
+  def test_shared_range_skips_missing_components_and_nonfinite_values(self):
+    one_comp = _field_2d(n=2)
+    two_comps = _field_2d(n=2, ncomp=2)
+    two_comps._values[..., 1] = np.nan
+    assert backend._shared_component_range(
+        [one_comp, two_comps], 0.0, 1.0) == [(0.0, 3.0), (None, None)]
+
+  @pytest.mark.parametrize(
+      ("limits", "comp", "expected"),
+      [({}, 0, None), ([(0.0, 1.0)], 2, None), ([None], 0, None)])
+  def test_split_ylim_missing_component_is_automatic(self, limits, comp,
+                                                     expected):
+    assert backend._split_ylim_for_component(limits, comp) is expected
+
+  def test_split_ylim_rejects_a_non_container(self):
+    with pytest.raises(TypeError, match="split y-limits"):
+      backend._split_ylim_for_component(1.0, 0)
+
+  @pytest.mark.parametrize("limits", [[(0.0, 1.0, 2.0)], {0: 1.0}])
+  def test_split_ylim_rejects_a_malformed_pair(self, limits):
+    with pytest.raises(ValueError, match="must be a .* pair"):
+      backend._split_ylim_for_component(limits, 0)
 
 
 # --------------------------------------------------------------------------
@@ -477,3 +571,136 @@ class TestNumAxesAcrossDatasets:
     fig = backend.plot(a, b, multiblock=True, no_show=True, num_axes=2)
     assert len(fig.axes[0].collections) == 1
     assert len(fig.axes[1].collections) == 1
+
+
+# --------------------------------------------------------------------------
+# Remaining validation and specialized drawing branches
+# --------------------------------------------------------------------------
+
+
+class TestRemainingValidationBranches:
+
+  def test_color_sequence_rejects_a_2d_plot(self):
+    with pytest.raises(ValueError, match="only supported for 1D"):
+      backend.plot(_field_2d(), no_show=True, color=["red", "blue"])
+
+  @pytest.mark.parametrize(
+      ("kwargs", "error", "message"),
+      [({"split_point": object()}, TypeError, "split_point"),
+       ({"split_point": np.inf}, ValueError, "split_point"),
+       ({"split_log_base": object()}, TypeError, "split_log_base"),
+       ({"split_gap": object()}, TypeError, "split_gap")])
+  def test_split_numeric_options_reject_invalid_values(self, kwargs, error,
+                                                       message):
+    with pytest.raises(error, match=message):
+      backend.plot(_line(),
+                   no_show=True,
+                   split_linear_log=True,
+                   **kwargs)
+
+  def test_legend_subplot_rejects_a_non_integer(self):
+    with pytest.raises(TypeError, match="must be an integer"):
+      backend.plot(_line(), no_show=True, legend_subplot="0")
+
+  def test_second_dataset_over_2d_raises_inside_one_family(self):
+    bad = GDataState()
+    bad.push([np.linspace(0, 1, 3)] * 3, np.zeros((2, 2, 2, 1)))
+    with pytest.raises(ValueError, match="Only 1D and 2D"):
+      backend.plot(_line(), bad, multiblock=True, no_show=True)
+
+  def test_second_dataset_must_match_split_dimensionality(self):
+    with pytest.raises(ValueError, match="every dataset must be 1D"):
+      backend.plot(_line(),
+                   _field_2d(),
+                   multiblock=True,
+                   no_show=True,
+                   split_linear_log=True)
+
+
+class TestRemainingSplitBranches:
+
+  @pytest.mark.parametrize(
+      ("side", "legend_axis"),
+      [("left", 0), ("right", 1), ("linear", 0)])
+  def test_explicit_split_legend_side(self, side, legend_axis):
+    data = _line()
+    data.label = "curve"
+    fig = backend.plot(data,
+                       no_show=True,
+                       forcelegend=True,
+                       split_linear_log=True,
+                       split_legend_side=side)
+    assert fig.axes[legend_axis].get_legend() is not None
+
+  def test_split_layout_accepts_y_label_only_and_hides_right_ticks(self):
+    fig = backend.plot(_line(),
+                       no_show=True,
+                       split_linear_log=True,
+                       xlabel="",
+                       ylabel="amplitude",
+                       no_split_right_ticks=True)
+    assert fig.get_supxlabel() == ""
+    assert fig.get_supylabel() == "amplitude"
+    assert fig.axes[1].yaxis.get_ticks_position() != "right"
+
+  def test_split_plot_allows_logarithmic_x_axis(self):
+    fig = backend.plot(_line(),
+                       no_show=True,
+                       split_linear_log=True,
+                       split_point=0.5,
+                       logx=True)
+    assert all(axis.get_xscale() == "log" for axis in fig.axes)
+
+
+class TestRemainingSurfaceBranches:
+
+  @staticmethod
+  def _mapped_field() -> GDataState:
+    coordinates = np.linspace(0.0, 1.0, 4)
+    gx, gy = np.meshgrid(coordinates, coordinates, indexing="ij")
+    data = GDataState()
+    data.push([gx, gy], np.arange(16, dtype=float).reshape(4, 4, 1))
+    return data
+
+  def test_transpose_transposes_joint_coordinate_arrays(self):
+    fig = backend.plot(self._mapped_field(),
+                       no_show=True,
+                       transpose=True,
+                       no_colorbar=True)
+    assert len(fig.axes[0].collections) == 1
+
+  def test_surface_transposes_joint_coordinates_without_a_colorbar(self):
+    fig = backend.plot(self._mapped_field(),
+                       no_show=True,
+                       surface=True,
+                       no_colorbar=True)
+    assert fig.axes[0].name == "3d"
+    assert len(fig.axes) == 1
+
+  def test_surface_applies_color_label_and_z_limits(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       surface=True,
+                       clabel="density",
+                       zmin=1.0,
+                       zmax=9.0)
+    assert fig.axes[0].get_zlabel() == "density"
+    assert fig.axes[0].get_zlim() == (1.0, 9.0)
+
+  def test_unlabelled_surface_comparison_needs_no_legend_handle(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       surface=True,
+                       comparison=True)
+    assert fig.axes[0].get_legend() is None
+
+  def test_unlabelled_contour_comparison_needs_no_legend_handle(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=True,
+                       comparison=True)
+    assert fig.axes[0].get_legend() is None
+
+  def test_cval_without_bounds_uses_colormap_midpoint(self):
+    fig = backend.plot(_line(), no_show=True, cmap="viridis", cval=3.0)
+    assert fig.axes[0].lines[0].get_color() == plt.get_cmap("viridis")(0.5)

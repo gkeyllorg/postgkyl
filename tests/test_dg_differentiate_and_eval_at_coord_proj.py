@@ -231,3 +231,16 @@ def test_ops_eval_at_coord_proj_tag_label_inplace():
   mutated = b.eval_at_coord_proj([1], [y0], inplace=True)
   assert mutated is b
   assert b.num_dims == 2
+
+
+@needs_gkeyll
+def test_ops_eval_at_coord_proj_can_eliminate_every_dimension():
+  data = pg.load(GKHYB)
+  lower, upper = data.bounds
+  coordinates = 0.5 * (lower + upper)
+
+  out = data.eval_at_coord_proj([0, 1, 2], coordinates)
+
+  assert out.num_dims == 1
+  assert out.ctx["cells"].tolist() == [1]
+  np.testing.assert_array_equal(out.grid[0], [0.0, 1.0])

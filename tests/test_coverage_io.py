@@ -39,6 +39,7 @@ F1 = os.path.join(
 F1D_SINGLE_RANGE = os.path.join(DATA, "generated",
                                 "1d_ms_p1.gkyl")  # file_type 1
 F2D = os.path.join(DATA, "generated", "2d_ms_p1.gkyl")
+DYNVEC = os.path.join(DATA, "generated", "energy_dynvec.gkyl")
 
 # ndim=1, 24 cells, 6 comps, split across 4 multi-ranges of 6 cells each
 # (1-indexed [1,6] [7,12] [13,18] [19,24]) -- verified by direct header
@@ -442,6 +443,72 @@ def test_single_precision_real_type_is_read_as_float32(tmp_path):
   grid, out = r.load()
   assert r.dtf == np.dtype("f4")
   np.testing.assert_allclose(out, data)
+
+
+def test_reader_preserves_an_explicit_grid_type_and_accepts_axes_none():
+  ctx = {"grid_type": "nodal"}
+  reader = GkylReader(F1D_SINGLE_RANGE, ctx=ctx, axes=None)
+  assert reader.ctx["grid_type"] == "nodal"
+  assert reader.partial_load is False
+
+
+def test_non_mapping_metadata_is_ignored(tmp_path):
+  import msgpack
+
+  path = str(tmp_path / "list-meta.gkyl")
+  data = np.arange(3, dtype=np.float64).reshape(3, 1)
+  _write_v1_field(path, [3], [0.0], [3.0], data,
+                  meta=msgpack.packb(["not", "a", "mapping"]))
+  reader = GkylReader(path, ctx={})
+  reader.preload()
+  assert "basis_type" not in reader.ctx
+
+
+def test_reader_metadata_overrides_are_independent(tmp_path):
+  path = str(tmp_path / "overrides.gkyl")
+  data = np.arange(3, dtype=np.float64).reshape(3, 1)
+  _write_v1_field(path, [3], [0.0], [3.0], data)
+  reader = GkylReader(path,
+                      ctx={},
+                      basis_type="tensor",
+                      poly_order=2,
+                      value_form="nodal")
+  reader.preload()
+  assert reader.ctx["basis_type"] == "tensor"
+  assert reader.ctx["poly_order"] == 2
+  assert reader.ctx["value_form"] == "nodal"
+
+
+def test_full_slice_partial_load_uses_zero_offsets():
+  reader = GkylReader(F1D_SINGLE_RANGE,
+                      ctx={},
+                      axes=(":", None, None, None, None, None),
+                      comp=":")
+  reader.preload()
+  _, values = reader.load()
+  assert values.shape == (8, 2)
+
+
+def test_preload_and_field_load_allow_an_empty_context(tmp_path):
+  path = str(tmp_path / "empty-context.gkyl")
+  data = np.arange(3, dtype=np.float64).reshape(3, 1)
+  _write_v1_field(path, [3], [0.0], [3.0], data)
+  reader = GkylReader(path, ctx={})
+  reader.ctx = {}
+  reader.preload()
+  assert reader.ctx == {}
+  _, values = reader.load()
+  np.testing.assert_allclose(values, data)
+  assert reader.ctx == {}
+
+
+def test_dynvector_load_allows_an_empty_context():
+  reader = GkylReader(DYNVEC, ctx={})
+  reader.preload()
+  reader.ctx = {}
+  grid, values = reader.load()
+  assert len(grid[0]) == values.shape[0]
+  assert reader.ctx == {}
 
 
 def test_load_raises_for_an_unsupported_file_type(tmp_path):

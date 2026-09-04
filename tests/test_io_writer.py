@@ -156,6 +156,20 @@ def test_vtk_series_recovers_from_a_corrupt_sidecar(tmp_path):
   assert len(series["files"]) == 1
 
 
+def test_vtk_series_recovers_from_valid_json_with_the_wrong_shape(tmp_path):
+  series_path = tmp_path / "bad-shape.vtk.series"
+  series_path.write_text("[]")
+  data = _make_state([np.linspace(0.0, 1.0, 4)],
+                     np.arange(3, dtype=float)[:, None],
+                     time=0.5)
+
+  writer._update_vtk_series_file(data, str(tmp_path / "bad-shape_0001.vtk"))
+
+  with open(series_path) as fh:
+    series = json.load(fh)
+  assert series["files"] == [{"name": "bad-shape_0001.vtk", "time": 0.5}]
+
+
 # ------------------------------------------------------------------- gkyl rt
 def test_gkyl_roundtrip_preserves_grid_and_values_exactly(tmp_path):
   """``io.read`` is exercised both directly (grid) and through ``pg.load``
