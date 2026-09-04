@@ -1,0 +1,1 @@
+I'm building this on a new device. Here are my steps so far. I want pip install -e . to install everything, including all dependencies
