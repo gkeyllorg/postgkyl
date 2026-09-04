@@ -171,7 +171,7 @@ Install the repository's Git hook and run both formatters over all tracked
 Python and C sources with:
 
 ```bash
-python -m pip install -e ".[test]"
+python -m pip install --no-build-isolation -e ".[test]"
 pre-commit install
 pre-commit run --all-files
 ```

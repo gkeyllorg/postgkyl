@@ -79,8 +79,10 @@ bug earliest with the least ongoing maintenance cost.
 ## Commands
 
 ```bash
-# Install for development (editable) + test deps
-pip install -e .[test]
+# Install for development (editable) + test deps. NumPy must already be in
+# the runtime environment so the native bridge builds against that exact ABI.
+pip install --upgrade numpy setuptools wheel
+pip install --no-build-isolation -e '.[test]'
 
 # Run the tests
 pytest tests/

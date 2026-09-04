@@ -381,7 +381,7 @@ def test_compile_callable_reports_signature_and_name_errors():
     compile_callable(keywords)
 
   @command(CommandSpec(Section.UTILITY, Execution.LOAD))
-  def unresolved(value: "MissingType"):
+  def unresolved(value: "MissingType"):  # noqa: F821
     """Reject an unresolved annotation.
 
     Args:

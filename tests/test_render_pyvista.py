@@ -125,7 +125,7 @@ class TestPyvista:
 
   def test_saves_a_vtksz_export(self, tmp_path):
     # Like .html, PyVista's .vtksz export needs the optional "trame" extra.
-    pytest.importorskip("trame")
+    pytest.importorskip("trame_vtk")
     out = tmp_path / "out.vtksz"
     pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()

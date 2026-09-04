@@ -7,7 +7,6 @@ from setuptools import setup
 from setuptools.dist import Distribution
 from setuptools.command.build_py import build_py
 from setuptools.command.develop import develop
-from setuptools.command.editable_wheel import editable_wheel
 
 ROOT_DIR = Path(__file__).parent
 BUILD_SCRIPT = ROOT_DIR / "scripts" / "build_gkeyll.sh"
@@ -55,6 +54,13 @@ class BuildPyWithGkeyll(build_py):
   def run(self):
     built_native = _build_gkeyll()
     super().run()
+    # PEP 660 sets editable_mode and deliberately makes build_py.run() a
+    # no-op: the editable wheel points at the source tree, where the build
+    # script has already placed both native artifacts.  Trying to copy into
+    # build_lib here assumes a directory Setuptools intentionally did not
+    # create and makes ``pip install -e`` fail after a successful compile.
+    if getattr(self, "editable_mode", False):
+      return
     destination = Path(self.build_lib) / "postgkyl" / "gpython"
     if not built_native:
       # A reused build directory may contain output from an earlier native
@@ -68,17 +74,11 @@ class BuildPyWithGkeyll(build_py):
     if not BUNDLED_LIB.is_file():
       raise FileNotFoundError(
           f"native build did not produce bundled library: {BUNDLED_LIB}")
+    destination.mkdir(parents=True, exist_ok=True)
     self.copy_file(str(BUNDLED_LIB), str(destination / BUNDLED_LIB.name))
 
 
 class DevelopWithGkeyll(develop):
-
-  def run(self):
-    _build_gkeyll()
-    super().run()
-
-
-class EditableWheelWithGkeyll(editable_wheel):
 
   def run(self):
     _build_gkeyll()
@@ -100,6 +100,5 @@ class BinaryDistribution(Distribution):
 setup(cmdclass={
     "build_py": BuildPyWithGkeyll,
     "develop": DevelopWithGkeyll,
-    "editable_wheel": EditableWheelWithGkeyll,
 },
       distclass=BinaryDistribution)
