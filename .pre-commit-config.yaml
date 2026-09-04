@@ -1,3 +1,5 @@
+minimum_pre_commit_version: "4.3.0"
+
 repos:
   - repo: https://github.com/google/yapf
     rev: v0.43.0

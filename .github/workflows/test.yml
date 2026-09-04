@@ -9,21 +9,56 @@ on:
       - synchronize
       - ready_for_review
 
+permissions:
+  contents: read
+
 jobs:
   format:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.format.outputs.changed }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.event.pull_request.head.sha }}
     - uses: actions/setup-python@v5
       with:
         python-version: "3.12"
     - name: Install pre-commit
       run: python -m pip install pre-commit==4.3.0
-    - name: Check formatting
-      run: pre-commit run --all-files --show-diff-on-failure
+    - name: Install formatter hook environments
+      run: |
+        pre-commit validate-config
+        if ! pre-commit install-hooks; then
+          echo "::error title=Formatter installation failed::Pre-commit could not install the YAPF or clang-format hook environment."
+          exit 1
+        fi
+    - name: Apply formatting
+      id: format
+      shell: bash
+      run: |
+        # Hooks return 1 when they rewrite a file. The second pass distinguishes
+        # that expected result from a formatter/configuration failure.
+        pre-commit run --all-files || true
+        pre-commit run --all-files --show-diff-on-failure
+
+        if git diff --quiet; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+        git diff --binary --output="$RUNNER_TEMP/formatted.patch"
+    - name: Store formatted source patch
+      uses: actions/upload-artifact@v4
+      with:
+        name: formatted-source
+        path: ${{ runner.temp }}/formatted.patch
+        if-no-files-found: error
+        retention-days: 1
 
   install_and_test:
-
+    needs: format
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,9 +67,24 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Download formatted source patch
+      uses: actions/download-artifact@v4
+      with:
+        name: formatted-source
+        path: ${{ runner.temp }}/formatted-source
+    - name: Apply formatted source patch
+      shell: bash
+      run: |
+        patch="$RUNNER_TEMP/formatted-source/formatted.patch"
+        if [ -s "$patch" ]; then
+          git apply "$patch"
+        fi
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install postgkyl
@@ -66,3 +116,37 @@ jobs:
         else
           pytest
         fi
+
+  commit_formatting:
+    name: Commit formatting
+    needs:
+      - format
+      - install_and_test
+    if: >-
+      needs.format.outputs.changed == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Download formatted source patch
+      uses: actions/download-artifact@v4
+      with:
+        name: formatted-source
+        path: ${{ runner.temp }}/formatted-source
+    - name: Commit and push formatting
+      shell: bash
+      env:
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      run: |
+        git apply "$RUNNER_TEMP/formatted-source/formatted.patch"
+        git diff --check
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add --update
+        git commit -m "Apply automated formatting"
+        git push origin "HEAD:$HEAD_REF"

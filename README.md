@@ -156,13 +156,19 @@ Install the repository's Git hook and run both formatters over all tracked
 Python and C sources with:
 
 ```bash
-python -m pip install pre-commit
+python -m pip install -e ".[test]"
 pre-commit install
 pre-commit run --all-files
 ```
 
-YAPF reads `.style.yapf`; clang-format reads `.clang-format`. CI runs the same
-pre-commit hooks and fails when either formatter would change a file.
+The test extra pins the supported pre-commit runner; pre-commit installs the
+pinned YAPF and clang-format hooks in isolated environments. YAPF reads
+`.style.yapf`; clang-format reads `.clang-format`. On pull requests, CI first
+installs and verifies those hook environments, applies the hooks, tests the
+formatted source, and commits the formatting patch back to same-repository
+branches after every test passes. Fork pull requests receive the formatted
+patch as a workflow artifact because the CI token cannot write to their
+branches.
 
 ## Testing
 

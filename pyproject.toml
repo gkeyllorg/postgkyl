@@ -48,6 +48,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
+    "pre-commit==4.3.0",
     "pytest>=9.0.3",
     # macOS CI only: isolates each test in its own forked process (see
     # .github/workflows/test.yml's --forked flag) so a native-library abort
