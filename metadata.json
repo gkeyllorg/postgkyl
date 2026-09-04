@@ -3,10 +3,16 @@
   "checkpoint_id": "01M1Q3Z7BZADX4HFXVK8RKAW6P",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
+    ".pre-commit-config.yaml",
     "AGENTS.md",
     "examples/cli_tutorial.md",
+    "examples/scripts/01_quickstart.py",
+    "examples/scripts/03_diagnostics_five_moment.py",
+    "examples/scripts/04_gyrokinetics.py",
+    "examples/scripts/05_gk_rz.py",
+    "examples/scripts/mirror_comparison.py",
     "src/postgkyl/cli/compiler.py",
     "src/postgkyl/dg/interpolate.py",
     "src/postgkyl/dg/map.py",
@@ -25,11 +31,18 @@
     "tests/test_cli_commands.py",
     "tests/test_cli_generator.py",
     "tests/test_coverage_container.py",
+    "tests/test_coverage_leaf.py",
     "tests/test_dg_map.py",
     "tests/test_diagnostics_plasma.py",
     "tests/test_diagnostics_programs_trajectory.py",
+    "tests/test_gdata_fluent.py",
     "tests/test_multiblock.py",
-    "tests/test_postgkyl.py"
+    "tests/test_operations_animate.py",
+    "tests/test_postgkyl.py",
+    "tests/test_render_animate.py",
+    "tests/test_render_matplotlib.py",
+    "tests/test_render_matplotlib_coverage.py",
+    "tests/test_render_pyvista.py"
   ],
   "sessions": [
     {
@@ -38,13 +51,20 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 191183,
+    "input_tokens": 216707,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 11566588,
-    "output_tokens": 38842,
-    "api_call_count": 104
+    "cache_read_tokens": 11761513,
+    "output_tokens": 42830,
+    "api_call_count": 114
   }
 }
