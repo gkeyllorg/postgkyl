@@ -1,0 +1,27 @@
+How do I get this to build with a newer version of python in the venv? [mr1884@stellar-vis2 ~]$ cd Documents/
+[mr1884@stellar-vis2 Documents]$ rm -rf postgkyl/
+[mr1884@stellar-vis2 Documents]$ git clone https://github.com/gkeyllorg/postgkyl.git
+Cloning into 'postgkyl'...
+remote: Enumerating objects: 13166, done.
+remote: Counting objects: 100% (1027/1027), done.
+remote: Compressing objects: 100% (437/437), done.
+remote: Total 13166 (delta 654), reused 615 (delta 575), pack-reused 12139 (from 3)
+Receiving objects: 100% (13166/13166), 15.51 MiB | 25.33 MiB/s, done.
+Resolving deltas: 100% (8928/8928), done.
+[mr1884@stellar-vis2 Documents]$ cd postgkyl
+[mr1884@stellar-vis2 postgkyl]$ git checkout refactor-diagnostics
+branch 'refactor-diagnostics' set up to track 'origin/refactor-diagnostics'.
+Switched to a new branch 'refactor-diagnostics'
+[mr1884@stellar-vis2 postgkyl]$ git pull
+Already up to date.
+[mr1884@stellar-vis2 postgkyl]$ python3 -m venv .venv
+[mr1884@stellar-vis2 postgkyl]$ source .venv/bin/activate
+(.venv) [mr1884@stellar-vis2 postgkyl]$ which python3
+~/Documents/postgkyl/.venv/bin/python3
+(.venv) [mr1884@stellar-vis2 postgkyl]$ which pip
+~/Documents/postgkyl/.venv/bin/pip
+(.venv) [mr1884@stellar-vis2 postgkyl]$ python3 --version
+Python 3.6.8
+(.venv) [mr1884@stellar-vis2 postgkyl]$ pip --version
+pip 9.0.3 from /home/mr1884/Documents/postgkyl/.venv/lib64/python3.6/site-packages (python 3.6)
+(.venv) [mr1884@stellar-vis2 postgkyl]$
