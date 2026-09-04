@@ -1,0 +1,1 @@
+Please output some CLI commands to demonstrate these features. I'll send them to a colegue to test out
