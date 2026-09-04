@@ -1,0 +1,227 @@
+Linting CI is failing. Fix it +    plain = plotly_module._write_plotly_output(figure,
++                                               str(tmp_path / "figure.png"),
++                                               starting_azimuthal_angle=0.0,
++                                               polar_angle=60.0,
++                                               rotation_period=2.0,
++                                               fps=10)
++    empty = plotly_module._write_plotly_output(figure,
++                                               "",
++                                               starting_azimuthal_angle=0.0,
++                                               polar_angle=60.0,
++                                               rotation_period=2.0,
++                                               fps=10)
+     assert rotating.endswith("figure.html")
+     assert plain.endswith("figure.html")
+     assert empty == ".html"
+@@ -736,18 +731,16 @@ class TestOutputHelpers:
+     opened = []
+     monkeypatch.setattr(plotly_module.tempfile, "gettempdir",
+                         lambda: str(tmp_path))
+-    monkeypatch.setattr(
+-        plotly_module, "save_rotating_plotly_figure",
+-        lambda _fig, path, **_kwargs: saved.append(path))
++    monkeypatch.setattr(plotly_module, "save_rotating_plotly_figure",
++                        lambda _fig, path, **_kwargs: saved.append(path))
+     monkeypatch.setattr(plotly_module.webbrowser, "open",
+                         lambda uri: opened.append(uri))
+-    path = plotly_module._preview_plotly_figure(
+-        object(),
+-        " !!! ",
+-        starting_azimuthal_angle=0.0,
+-        polar_angle=60.0,
+-        rotation_period=2.0,
+-        fps=10)
++    path = plotly_module._preview_plotly_figure(object(),
++                                                " !!! ",
++                                                starting_azimuthal_angle=0.0,
++                                                polar_angle=60.0,
++                                                rotation_period=2.0,
++                                                fps=10)
+     assert path.endswith("plotly_preview_preview.html")
+     assert saved == [path]
+     named_path = plotly_module._preview_plotly_figure(
+@@ -766,18 +759,17 @@ class TestOutputHelpers:
+     calls = []
+     monkeypatch.setattr(
+         plotly_module, "_write_plotly_output",
+-        lambda _fig, path, **_kwargs: calls.append(("write", path)) or
+-        "saved.html")
++        lambda _fig, path, **_kwargs: calls.append(
++            ("write", path)) or "saved.html")
+     monkeypatch.setattr(
+         plotly_module, "_preview_plotly_figure",
+-        lambda _fig, stem, **_kwargs: calls.append(("preview", stem)) or
+-        "preview.html")
++        lambda _fig, stem, **_kwargs: calls.append(
++            ("preview", stem)) or "preview.html")
+     monkeypatch.setattr(plotly_module, "open_preview",
+                         lambda path: calls.append(("open", path)))
+ 
+     plotly(_surface_2d(), save=True)
+     plotly(_surface_2d(), show=True)
+     plotly(_surface_2d(), saveas="figure.html", show=True)
+-    assert [call[0] for call in calls] == [
+-        "write", "preview", "open", "write", "open"
+-    ]
++    assert [call[0]
++            for call in calls] == ["write", "preview", "open", "write", "open"]
+diff --git a/tests/test_version_report.py b/tests/test_version_report.py
+index a3bb3d8..538145e 100644
+--- a/tests/test_version_report.py
++++ b/tests/test_version_report.py
+@@ -8,7 +8,6 @@ import subprocess
+ 
+ import pytest
+ 
+-
+ version = import_module("postgkyl._version")
+ 
+ pytestmark = pytest.mark.compatibility
+@@ -18,10 +17,10 @@ def test_git_returns_none_outside_a_checkout(tmp_path):
+   assert version._git(tmp_path, "status") is None
+ 
+ 
+-@pytest.mark.parametrize("error", [OSError("missing git"),
+-                                   subprocess.CalledProcessError(1, "git")])
+-def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
+-                                                  error):
++@pytest.mark.parametrize(
++    "error", [OSError("missing git"),
++              subprocess.CalledProcessError(1, "git")])
++def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path, error):
+   (tmp_path / ".git").mkdir()
+ 
+   def fail(*_args, **_kwargs):
+@@ -35,10 +34,12 @@ def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
+     ("build", "expected"),
+     [
+         (None, "unknown (not a git checkout)"),
+-        ({"postgkyl_build_commit": "unknown"},
+-         "unknown (not a git checkout)"),
+-        ({"postgkyl_build_commit": "1234567890abcdef"},
+-         "1234567890ab (baked at build time, not a git checkout)"),
++        ({
++            "postgkyl_build_commit": "unknown"
++        }, "unknown (not a git checkout)"),
++        ({
++            "postgkyl_build_commit": "1234567890abcdef"
++        }, "1234567890ab (baked at build time, not a git checkout)"),
+     ],
+ )
+ def test_postgkyl_commit_uses_baked_fallback(monkeypatch, build, expected):
+Error: Process completed with exit code 1.
+
+---
+
+Linting CI is failing. Fix it +    plain = plotly_module._write_plotly_output(figure,
++                                               str(tmp_path / "figure.png"),
++                                               starting_azimuthal_angle=0.0,
++                                               polar_angle=60.0,
++                                               rotation_period=2.0,
++                                               fps=10)
++    empty = plotly_module._write_plotly_output(figure,
++                                               "",
++                                               starting_azimuthal_angle=0.0,
++                                               polar_angle=60.0,
++                                               rotation_period=2.0,
++                                               fps=10)
+     assert rotating.endswith("figure.html")
+     assert plain.endswith("figure.html")
+     assert empty == ".html"
+@@ -736,18 +731,16 @@ class TestOutputHelpers:
+     opened = []
+     monkeypatch.setattr(plotly_module.tempfile, "gettempdir",
+                         lambda: str(tmp_path))
+-    monkeypatch.setattr(
+-        plotly_module, "save_rotating_plotly_figure",
+-        lambda _fig, path, **_kwargs: saved.append(path))
++    monkeypatch.setattr(plotly_module, "save_rotating_plotly_figure",
++                        lambda _fig, path, **_kwargs: saved.append(path))
+     monkeypatch.setattr(plotly_module.webbrowser, "open",
+                         lambda uri: opened.append(uri))
+-    path = plotly_module._preview_plotly_figure(
+-        object(),
+-        " !!! ",
+-        starting_azimuthal_angle=0.0,
+-        polar_angle=60.0,
+-        rotation_period=2.0,
+-        fps=10)
++    path = plotly_module._preview_plotly_figure(object(),
++                                                " !!! ",
++                                                starting_azimuthal_angle=0.0,
++                                                polar_angle=60.0,
++                                                rotation_period=2.0,
++                                                fps=10)
+     assert path.endswith("plotly_preview_preview.html")
+     assert saved == [path]
+     named_path = plotly_module._preview_plotly_figure(
+@@ -766,18 +759,17 @@ class TestOutputHelpers:
+     calls = []
+     monkeypatch.setattr(
+         plotly_module, "_write_plotly_output",
+-        lambda _fig, path, **_kwargs: calls.append(("write", path)) or
+-        "saved.html")
++        lambda _fig, path, **_kwargs: calls.append(
++            ("write", path)) or "saved.html")
+     monkeypatch.setattr(
+         plotly_module, "_preview_plotly_figure",
+-        lambda _fig, stem, **_kwargs: calls.append(("preview", stem)) or
+-        "preview.html")
++        lambda _fig, stem, **_kwargs: calls.append(
++            ("preview", stem)) or "preview.html")
+     monkeypatch.setattr(plotly_module, "open_preview",
+                         lambda path: calls.append(("open", path)))
+ 
+     plotly(_surface_2d(), save=True)
+     plotly(_surface_2d(), show=True)
+     plotly(_surface_2d(), saveas="figure.html", show=True)
+-    assert [call[0] for call in calls] == [
+-        "write", "preview", "open", "write", "open"
+-    ]
++    assert [call[0]
++            for call in calls] == ["write", "preview", "open", "write", "open"]
+diff --git a/tests/test_version_report.py b/tests/test_version_report.py
+index a3bb3d8..538145e 100644
+--- a/tests/test_version_report.py
++++ b/tests/test_version_report.py
+@@ -8,7 +8,6 @@ import subprocess
+ 
+ import pytest
+ 
+-
+ version = import_module("postgkyl._version")
+ 
+ pytestmark = pytest.mark.compatibility
+@@ -18,10 +17,10 @@ def test_git_returns_none_outside_a_checkout(tmp_path):
+   assert version._git(tmp_path, "status") is None
+ 
+ 
+-@pytest.mark.parametrize("error", [OSError("missing git"),
+-                                   subprocess.CalledProcessError(1, "git")])
+-def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
+-                                                  error):
++@pytest.mark.parametrize(
++    "error", [OSError("missing git"),
++              subprocess.CalledProcessError(1, "git")])
++def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path, error):
+   (tmp_path / ".git").mkdir()
+ 
+   def fail(*_args, **_kwargs):
+@@ -35,10 +34,12 @@ def test_git_converts_process_failures_to_missing(monkeypatch, tmp_path,
+     ("build", "expected"),
+     [
+         (None, "unknown (not a git checkout)"),
+-        ({"postgkyl_build_commit": "unknown"},
+-         "unknown (not a git checkout)"),
+-        ({"postgkyl_build_commit": "1234567890abcdef"},
+-         "1234567890ab (baked at build time, not a git checkout)"),
++        ({
++            "postgkyl_build_commit": "unknown"
++        }, "unknown (not a git checkout)"),
++        ({
++            "postgkyl_build_commit": "1234567890abcdef"
++        }, "1234567890ab (baked at build time, not a git checkout)"),
+     ],
+ )
+ def test_postgkyl_commit_uses_baked_fallback(monkeypatch, build, expected):
+Error: Process completed with exit code 1.

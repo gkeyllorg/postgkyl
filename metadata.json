@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1Q8X6E83RNVN19RYNPHXB9F",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/test_cli_contract_edges.py",
+    "tests/test_coverage_container.py",
+    "tests/test_coverage_io.py",
+    "tests/test_coverage_operations.py",
+    "tests/test_operations_gk_fluxsurf.py",
+    "tests/test_operations_gk_geometry.py",
+    "tests/test_operations_gk_rz.py",
+    "tests/test_render_animate.py",
+    "tests/test_render_matplotlib_coverage.py",
+    "tests/test_render_plotly.py",
+    "tests/test_version_report.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 38581,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 352392,
+    "output_tokens": 4313,
+    "api_call_count": 13
+  }
+}
