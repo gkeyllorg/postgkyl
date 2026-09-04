@@ -1,0 +1,181 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl
+configfile: pyproject.toml
+collected 132 items
+tests/test_cli_commands.py .......F..FF.FFFFFFF.FFFFFFFFFFF.F.FFFFFF.F.F [ 34%]
+FFF.F..FF.FF.FF......F........F.FFFFFFFF..FFFFF.FFFFFFFFFFFFF.FFFF.FF... [ 88%]
+...........FFF.                                                          [100%]
+=================================== FAILURES ===================================
+__________________ TestAbbreviation.test_pr_resolves_to_print __________________
+self = <test_cli_commands.TestAbbreviation object at 0x31a0ccef0>
+    def test_pr_resolves_to_print(self):
+>     result = _ok([ENERGY, "pr"])
+               ^^^^^^^^^^^^^^^^^^^
+tests/test_cli_commands.py:182: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp', 'pr']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+_______________ TestChainedPipelines.test_info_on_multiple_files _______________
+self = <test_cli_commands.TestChainedPipelines object at 0x31ab96ba0>
+    def test_info_on_multiple_files(self):
+>     result = _ok([DISTF_P2_0, DISTF_P2_1, "info"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_cli_commands.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', '/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_1.bp', 'info']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+________________ TestChainedPipelines.test_evaluate_expression _________________
+self = <test_cli_commands.TestChainedPipelines object at 0x31ab97e60>
+    def test_evaluate_expression(self):
+>     result = _ok([DISTF_P2_0, "evaluate", "f 2 *", "print"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_cli_commands.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'evaluate', 'f 2 *', 'print']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+________ TestChainedPipelines.test_evaluate_preserves_untouched_dataset ________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae8500>
+    def test_evaluate_preserves_untouched_dataset(self):
+      # Regression test for review C1: ``evaluate`` used to replace the *entire*
+      # working set with its own result, silently dropping datasets that were
+      # deactivated (and thus not part of its input pool) rather than leaving
+      # them in place, reactivatable via ``status --activate``.
+>     result = _ok([ENERGY, ENERGY, "status", "--deactivate", "0", "evaluate",
+          "f 2 *", "status"])
+tests/test_cli_commands.py:226: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp', '/Users/mfran...l/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp', 'status', '--deactivate', '0', 'evaluate', ...]
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+_____________________ TestChainedPipelines.test_fft_chain ______________________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae8830>
+    def test_fft_chain(self):
+>     _ok([DISTF_P2_0, "interp", "fft"])
+tests/test_cli_commands.py:234: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'interp', 'fft']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+______________________ TestChainedPipelines.test_fft_psd _______________________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae8b60>
+    def test_fft_psd(self):
+>     _ok([DISTF_P2_0, "interp", "fft", "--psd"])
+tests/test_cli_commands.py:238: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'interp', 'fft', '--psd']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+____________________ TestChainedPipelines.test_magsq_chain _____________________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae8e90>
+    def test_magsq_chain(self):
+>     _ok([DISTF_P2_0, "interp", "magsq"])
+tests/test_cli_commands.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'interp', 'magsq']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+___________________ TestChainedPipelines.test_magsq_with_tag ___________________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae91c0>
+    def test_magsq_with_tag(self):
+>     result = _ok([DISTF_P2_0, "interp", "magsq", "--tag", "mags", "info"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_cli_commands.py:246: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'interp', 'magsq', '--tag', 'mags', 'info']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+_____________________ TestChainedPipelines.test_grid_chain _____________________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae94f0>
+    def test_grid_chain(self):
+>     _ok([DISTF_P2_0, "interp", "grid"])
+tests/test_cli_commands.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'interp', 'grid']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+________ TestChainedPipelines.test_dg_local_poly_chain_and_help_example ________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae9850>
+tmp_path = PosixPath('/private/var/folders/nr/8gt5vt0121dcvwp89bqxw_2r0000gq/T/pytest-of-mfrancis/pytest-3/test_dg_local_poly_chain_and_h0')
+    def test_dg_local_poly_chain_and_help_example(self, tmp_path):
+      """The exact chain from ``dg_local_poly --help``'s docstring example
+      (1D M0 moment, selecting down the extra directions), against a real
+      1x2v distribution-function fixture."""
+      out = tmp_path / "cli.png"
+>     result = _ok(["--batch-mode", DISTF_P2_0, "dg_local_poly", "select",
+          "--z1", "0.0", "--z2", "0.0", "plot", "--saveas", str(out)])
+tests/test_cli_commands.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['--batch-mode', '/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp', 'dg_local_poly', 'select', '--z1', '0.0', ...]
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-f-p2_0.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+_____________ TestChainedPipelines.test_relchange_against_baseline _____________
+self = <test_cli_commands.TestChainedPipelines object at 0x16dae9eb0>
+    def test_relchange_against_baseline(self):
+>     result = _ok([ENERGY, ENERGY, "relchange"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_cli_commands.py:270: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+args = ['/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp', '/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp', 'relchange']
+    def _ok(args):
+      result = _run(args)
+>     assert result.exit_code == 0, result.output
+E     AssertionError: 
+E     assert 1 == 0
+E      +  where 1 = <Result NameError("'/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_data/twostream-field-energy.bp' cannot be read with any known reader: ['gkyl_c', 'gkyl', 'adios', 'h5', 'flash']")>.exit_code
+tests/test_cli_commands.py:84: AssertionError
+_____________ TestChainedPipelines.test_relchange_with_use_filter ______________
+self = <test...
