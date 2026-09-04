@@ -1,0 +1,78 @@
+Now I see this error on python 3.10 on macos. Run pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.10.11, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+collected 1702 items
+
+tests/test_cli_commands.py ............................................. [  2%]
+Fatal Python error: Aborted
+
+Current thread 0x00000001f9c45d80 (most recent call first):
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/_mathtext.py", line 159 in to_raster
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/mathtext.py", line 105 in _parse_cached
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/mathtext.py", line 86 in parse
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/backends/backend_agg.py", line 215 in get_text_width_height_descent
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/text.py", line 77 in _get_text_metrics_with_cache_impl
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/text.py", line 69 in _get_text_metrics_with_cache
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/text.py", line 382 in _get_layout
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/text.py", line 969 in get_window_extent
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axis.py", line 1332 in <listcomp>
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axis.py", line 1332 in _get_ticklabel_bboxes
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axis.py", line 2241 in _get_tick_boxes_siblings
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axis.py", line 2675 in _update_label_position
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axis.py", line 1353 in get_tightbbox
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/artist.py", line 1404 in _get_tightbbox_for_layout_only
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/axes/_base.py", line 4564 in get_tightbbox
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/artist.py", line 1404 in _get_tightbbox_for_layout_only
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/_tight_layout.py", line 82 in _auto_adjust_subplotpars
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/_tight_layout.py", line 266 in get_tight_layout_figure
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/layout_engine.py", line 188 in execute
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/matplotlib/figure.py", line 3647 in tight_layout
+  File "/Users/runner/work/postgkyl/postgkyl/src/postgkyl/render/matplotlib.py", line 748 in plot
+  File "/Users/runner/work/postgkyl/postgkyl/src/postgkyl/cli/commands/plot.py", line 312 in command
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/decorators.py", line 34 in new_func
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/core.py", line 907 in invoke
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/core.py", line 1353 in invoke
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/core.py", line 2001 in invoke
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/core.py", line 1490 in main
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/click/testing.py", line 687 in invoke
+  File "/Users/runner/work/postgkyl/postgkyl/tests/test_cli_commands.py", line 88 in _run
+  File "/Users/runner/work/postgkyl/postgkyl/tests/test_cli_commands.py", line 93 in _ok
+  File "/Users/runner/work/postgkyl/postgkyl/tests/test_cli_commands.py", line 782 in test_plot_grows_log_and_colorbar_options
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/python.py", line 167 in pytest_pyfunc_call
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/python.py", line 1707 in runtest
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 361 in from_call
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/main.py", line 384 in _main
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "/Users/runner/hostedtoolcache/Python/3.10.11/arm64/bin/pytest", line 6 in <module>
+
+Extension modules: numpy._core._multiarray_umath, numpy.linalg._umath_linalg, scipy._lib._ccallback_c, scipy.linalg._fblas, scipy.linalg._flapack, scipy.linalg.cython_lapack, scipy.linalg._cythonized_array_utils, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._mt19937, numpy.random.mtrand, numpy.random._philox, numpy.random._pcg64, numpy.random._sfc64, numpy.random._generator, charset_normalizer.md, charset_normalizer.cd, scipy.linalg._solve_toeplitz, scipy.linalg._decomp_lu_cython, scipy.linalg._matfuncs_sqrtm_triu, scipy.linalg._matfuncs_expm, scipy.linalg._linalg_pythran, scipy.linalg.cython_blas, scipy.linalg._decomp_update, scipy.sparse._sparsetools, _csparsetools, scipy.sparse._csparsetools, scipy.sparse.linalg._dsolve._superlu, scipy.sparse.linalg._eigen.arpack._arpack, scipy.sparse.linalg._propack._spropack, scipy.sparse.linalg._propack._dpropack, scipy.sparse.linalg._propack._cpropack, scipy.sparse.linalg._propack._zpropack, scipy.sparse.csgraph._tools, scipy.sparse.csgraph._shortest_path, scipy.sparse.csgraph._traversal, scipy.sparse.csgraph._min_spanning_tree, scipy.sparse.csgraph._flow, scipy.sparse.csgraph._matching, scipy.sparse.csgraph._reordering, scipy.optimize._group_columns, scipy._lib.messagestream, scipy.optimize._trlib._trlib, scipy.optimize._lbfgsb, _moduleTNC, scipy.optimize._moduleTNC, scipy.optimize._cobyla, scipy.optimize._slsqp, scipy.optimize._minpack, scipy.optimize._lsq.givens_elimination, scipy.optimize._zeros, scipy.optimize._cython_nnls, scipy._lib._uarray._uarray, scipy.special._ufuncs_cxx, scipy.special._ufuncs, scipy.special._specfun, scipy.special._comb, scipy.special._ellip_harm_2, scipy.linalg._decomp_interpolative, scipy.optimize._bglu_dense, scipy.optimize._lsap, scipy.spatial._ckdtree, scipy.spatial._qhull, scipy.spatial._voronoi, scipy.spatial._distance_wrap, scipy.spatial._hausdorff, scipy.spatial.transform._rotation, scipy.optimize._direct, PIL._imaging, kiwisolver._cext, msgpack._cmsgpack, postgkyl.gpython._gpython, tables._comp_lzo, tables._comp_bzip2, tables.utilsextension, numexpr.interpreter, tables.hdf5extension, tables.linkextension, tables.lrucacheextension, tables.tableextension, tables.indexesextension, vtkmodules.vtkCommonCore, vtkmodules.vtkCommonMath, vtkmodules.vtkCommonTransforms, vtkmodules.vtkCommonSystem, vtkmodules.vtkParallelCore, vtkmodules.vtkCommonDataModel, vtkmodules.vtkCommonExecutionModel, vtkmodules.vtkFiltersSources, vtkmodules.vtkImagingSources, scipy.signal._sigtools, scipy.signal._max_len_seq_inner, scipy.signal._upfirdn_apply, scipy.signal._spline, scipy.interpolate._fitpack, scipy.interpolate._dfitpack, scipy.interpolate._dierckx, scipy.interpolate._ppoly, scipy.interpolate._interpnd, scipy.interpolate._rbfinterp_pythran, scipy.interpolate._rgi_cython, scipy.interpolate._bspl, scipy.ndimage._nd_image, scipy.ndimage._rank_filter_1d, _ni_label, scipy.ndimage._ni_label, scipy.signal._sosfilt, scipy.integrate._odepack, scipy.integrate._quadpack, scipy.integrate._vode, scipy.integrate._dop, scipy.integrate._lsoda, scipy.special.cython_special, scipy.stats._stats, scipy.stats._sobol, scipy.stats._qmc_cy, scipy.stats._biasedurn, scipy.stats._stats_pythran, scipy.stats._levy_stable.levyst, scipy.stats._ansari_swilk_statistics, scipy.stats._mvn, scipy.stats._rcont.rcont, scipy.signal._peak_finding_utils, simplejson._speedups, vtkmodules.vtkCommonMisc, vtkmodules.vtkFiltersCore, vtkmodules.vtkRenderingCore, vtkmodules.vtkRenderingFreeType, vtkmodules.vtkRenderingMatplotlib, vtkmodules.vtkCommonColor, vtkmodules.vtkRenderingContext2D, vtkmodules.vtkFiltersGeneral, vtkmodules.vtkChartsCore, vtkmodules.vtkPythonContext2D, vtkmodules.vtkFiltersPython, vtkmodules.vtkRenderingVolume, vtkmodules.vtkImagingCore, vtkmodules.vtkImagingMath, vtkmodules.vtkIOCore, vtkmodules.vtkIOImage, vtkmodules.vtkRenderingHyperTreeGrid, vtkmodules.vtkRenderingUI, vtkmodules.vtkRenderingOpenGL2, vtkmodules.vtkRenderingVolumeOpenGL2, vtkmodules.vtkRenderingAnnotation, vtkmodules.vtkInteractionStyle, PIL._imagingmath (total: 148)
+/Users/runner/work/_temp/f4bc7e32-7cac-4a4d-af65-2824dd7d49ff.sh: line 1:  9996 Abort trap: 6           pytest
+..............................s.sssss...
+Error: Process completed with exit code 134.. 3.11 seems to fail with similar issues
