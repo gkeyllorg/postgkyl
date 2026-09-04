@@ -1,0 +1,1 @@
+Provide a clean set of installation instructions with anaconda
