@@ -11,6 +11,7 @@ Run:  PYTHONPATH=src pytest tests/test_coverage_io.py -v
 
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -344,7 +345,7 @@ def test_dynvec_multi_chunk_continuation(tmp_path):
   rio.write_dynvec(p2, np.array([0.2, 0.3, 0.4]),
                    np.array([[5.0, 6.0], [7.0, 8.0], [9.0, 10.0]]))
   combo = tmp_path / "combo.gkyl"
-  combo.write_bytes(open(p1, "rb").read() + open(p2, "rb").read())
+  combo.write_bytes(Path(p1).read_bytes() + Path(p2).read_bytes())
 
   r = GkylReader(str(combo), ctx={})
   r.preload()
@@ -366,7 +367,7 @@ def test_dynvec_continuation_rejects_a_non_dynvec_second_chunk(tmp_path):
       "cells": np.array([3])
   }, GkylArray.from_numpy(np.ones((3, 2))))
   bad = tmp_path / "bad_combo.gkyl"
-  bad.write_bytes(open(p1, "rb").read() + open(pf, "rb").read())
+  bad.write_bytes(Path(p1).read_bytes() + Path(pf).read_bytes())
 
   r = GkylReader(str(bad), ctx={})
   r.preload()

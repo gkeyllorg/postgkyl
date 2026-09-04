@@ -47,6 +47,40 @@ import pytest
 from generate_test_data import generate_all
 
 GEN_DIR = Path(__file__).parent / "test_data" / "generated"
+_COMPATIBILITY_TEST_FILES = frozenset({
+    "test_cli_generator.py",
+    "test_diagnostics_discovery.py",
+    "test_io_mapping.py",
+})
+
+
+def _env_enabled(name: str) -> bool:
+  """Read a CI feature switch without treating ``"0"`` as truthy."""
+  value = os.environ.get(name, "").strip().lower()
+  if not value:
+    return False
+  if value in {"1", "true", "yes", "on"}:
+    return True
+  if value in {"0", "false", "no", "off"}:
+    return False
+  raise pytest.UsageError(
+      f"{name} must be one of 1/0, true/false, yes/no, or on/off; got "
+      f"{os.environ[name]!r}")
+
+
+def _require_gkeyll_when_requested() -> None:
+  """Turn a missing native capability into a CI failure, not mass skips."""
+  if not _env_enabled("POSTGKYL_REQUIRE_GKEYLL"):
+    return
+
+  from postgkyl import gpython
+  if not gpython.available():
+    pytest.exit(
+        "POSTGKYL_REQUIRE_GKEYLL is enabled, but the compiled Gkeyll/gpython "
+        "capability is unavailable. Native tests would otherwise be silently "
+        "skipped.",
+        returncode=2)
+
 
 # macOS-only escape hatch: ``postgkyl``'s facade (__init__.py -> render ->
 # render.pyvista) unconditionally imports PyVista's VTK bindings, so every
@@ -115,6 +149,8 @@ def _close_matplotlib_figures():
 
 
 def pytest_configure(config: pytest.Config) -> None:
+  _require_gkeyll_when_requested()
+
   # A session-scoped autouse *fixture* only actually runs on first request,
   # which lands inside whichever test forks first under macOS CI's --forked
   # (see test.yml) -- pytest's "already cached" bookkeeping then lives in
@@ -124,3 +160,31 @@ def pytest_configure(config: pytest.Config) -> None:
   # exactly once, in the true parent process, before collection or any
   # forking begins, so this is immune to that regardless of --forked.
   generate_all(GEN_DIR)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+  """Attach capability categories from their authoritative test metadata.
+
+  Native tests already declare a skip condition whose reason names the
+  compiled Gkeyll capability.  Deriving ``native`` from that marker avoids a
+  second hand-maintained inventory.  The compatibility inventory names only
+  modules proven to pass with the extension absent; all numerics modules are
+  included mechanically because that layer has no internal imports. Render
+  modules have one job, so their filename is likewise the single category
+  rule; external-tool and slow markers stay explicit on the individual tests
+  that actually cross a process boundary or take appreciable time.
+  """
+  for item in items:
+    file_name = Path(str(item.path)).name
+    if (file_name.startswith("test_numerics_")
+        or file_name in _COMPATIBILITY_TEST_FILES):
+      item.add_marker("compatibility")
+
+    if file_name.startswith("test_render_"):
+      item.add_marker("render")
+
+    for marker in item.iter_markers(name="skipif"):
+      reason = str(marker.kwargs.get("reason", "")).lower()
+      if "compiled gkeyll" in reason:
+        item.add_marker("native")
+        break

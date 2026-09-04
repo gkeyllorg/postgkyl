@@ -66,8 +66,9 @@ and deactivate with:
 mamba deactivate
 ```
 
-Note that with `mamba`, one can also use the provided `environment.yml` file,
-which also includes dependency specifications:
+With `mamba`, the provided `environment.yml` creates the Python build
+environment. Runtime and test dependencies remain authoritative in
+`pyproject.toml` and are installed by the `pip install` step below:
 
 ```bash
 mamba env create -f environment.yml
@@ -75,7 +76,7 @@ mamba env create -f environment.yml
 
 ### Installing Postgkyl
 
-The Postgkyl itself is installed with `pip`.[^1] Developers and uses who want to
+Postgkyl itself is installed with `pip`.[^1] Developers and users who want to
 have the most up-to-date version should install Postgkyl from the source code:
 
 ```bash
@@ -89,7 +90,7 @@ Alternatively, Postgkyl can be installed directly from [PyPI](https://pypi.org/p
 
 ```bash
 pip install --upgrade numpy setuptools wheel
-pip install -e postgkyl[test] --no-build-isolation
+pip install 'postgkyl[test]' --no-build-isolation
 ```
 
 #### The Gkeyll bridge (native `.gkyl` reading, `interpolate`, weak algebra)
@@ -98,14 +99,15 @@ Postgkyl talks to Gkeyll through a small compiled bridge (`gpython`), not a path
 built automatically** as part of `pip install`/`pip install -e .`. `setup.py` runs
 `scripts/build_gkeyll.sh`, which:
 
-1. clones [Gkeyll](https://github.com/ammarhakim/gkeyll) into `./gkeyll/`
-   (a sparse, blobless, depth-1 clone of just the `core/` app — a few tens
-   of MB, not a submodule),
+1. fetches the exact [Gkeyll](https://github.com/ammarhakim/gkeyll) commit in
+   `scripts/gkeyll-revision` into `./gkeyll/` (a sparse, blobless clone of just
+   the `core/` app — a few tens of MB, not a submodule),
 2. `./configure`s and `make core`s it into `gkeyll/build/core/libg0core.so`
    with no external dependencies (`--use-lapack-lite=yes`, so no
    MPI/CUDA/SuperLU/Lua/system LAPACK are required), then
-3. compiles postgkyl's `_gpython` CPython extension
-   (`src/postgkyl/gpython/csrc/_gpythonmodule.c`) against it.
+3. bundles `libg0core.so` beside and compiles postgkyl's `_gpython` CPython
+   extension (`src/postgkyl/gpython/csrc/_gpythonmodule.c`) against a relative
+   loader path, so a built wheel does not depend on the source checkout.
 
 This step needs **network access** (to clone Gkeyll) and **a C compiler**.
 It defaults to `cc`; if your system doesn't have `cc`, set `CC=gcc` (or any compiler you have) before
@@ -145,6 +147,19 @@ scripts/build_gkeyll.sh   # full: re-clone/build libg0core.so, then the extensio
 scripts/build_gpython.sh  # just the extension, if libg0core.so is already built
 ```
 
+Pure-Python compatibility testing can explicitly omit the native build with
+`POSTGKYL_SKIP_GKEYLL_BUILD=1`. This switch is intended for test lanes that
+select the `compatibility` marker; normal installs continue to build the
+bridge.
+
+To verify a release artifact independently of the checkout, build it and run
+the clean-environment smoke test:
+
+```bash
+python -m build --no-isolation
+scripts/smoke_wheel.sh dist/*.whl
+```
+
 If `gpython.available()` is `False`, the printed error explains which of the
 two prerequisites (compiler, or the clone) is missing, or whether the built
 extension is stale relative to the shim header — the fix in that last case
@@ -162,13 +177,10 @@ pre-commit run --all-files
 ```
 
 The test extra pins the supported pre-commit runner; pre-commit installs the
-pinned YAPF and clang-format hooks in isolated environments. YAPF reads
-`.style.yapf`; clang-format reads `.clang-format`. On pull requests, CI first
-installs and verifies those hook environments, applies the hooks, tests the
-formatted source, and commits the formatting patch back to same-repository
-branches after every test passes. Fork pull requests receive the formatted
-patch as a workflow artifact because the CI token cannot write to their
-branches.
+pinned YAPF, clang-format, Ruff, and repository-sanity hooks in isolated
+environments. YAPF reads `.style.yapf`; clang-format reads `.clang-format`;
+Ruff reads `pyproject.toml`. CI checks the exact pull-request commit and fails
+with a formatter diff when that commit is not clean.
 
 ## Testing
 
@@ -178,6 +190,21 @@ be called manually from the root Postgkyl directory simply by using:
 ```bash
 pytest [-v]
 ```
+
+The default suite treats unexpected warnings as errors and uses strict marker
+and configuration validation. Useful CI-equivalent subsets are:
+
+```bash
+POSTGKYL_SKIP_GKEYLL_BUILD=1 pytest -m compatibility
+POSTGKYL_REQUIRE_GKEYLL=1 pytest -m native
+pytest -m "render and not external_tool"
+pytest -m external_tool  # invokes Chrome and/or ffmpeg
+pytest -m "not external_tool" --cov=postgkyl --cov-branch --cov-fail-under=93
+```
+
+The external-tool lane has explicit timeouts in CI. Native lanes set
+`POSTGKYL_REQUIRE_GKEYLL=1`, turning a missing bridge into a session failure
+instead of allowing the native test inventory to skip silently.
 
 ## API and CLI documentation
 

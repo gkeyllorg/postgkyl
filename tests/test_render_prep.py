@@ -4,7 +4,6 @@ shared by every render backend (formerly axis_and_grid_prep + load_plot_data).""
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.render._prep import (

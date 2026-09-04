@@ -16,7 +16,6 @@ from postgkyl.cli_spec import (
     CliArgument,
     CliType,
     CommandSpec,
-    DatasetRef,
     Execution,
     KeyValue,
     PipelineInput,

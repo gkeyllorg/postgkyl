@@ -19,6 +19,8 @@ tests/test_data/generated/
 /*.json
 # built gpython/_gpython extension (scripts/build_gpython.sh)
 src/postgkyl/gpython/_gpython.so
+# bundled native library copied beside the extension
+src/postgkyl/gpython/libg0core.so
 # generated Gkeyll commit/build-date metadata (scripts/build_gpython.sh)
 src/postgkyl/gpython/_build_info.py
 
@@ -26,3 +28,6 @@ src/postgkyl/gpython/_build_info.py
 examples/scripts/output/
 .vscode/settings.json
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/

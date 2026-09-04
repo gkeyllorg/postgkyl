@@ -1,152 +1,322 @@
-
-name: Test Postgkyl
+name: CI
 
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Exercise external Chrome/ffmpeg integrations even during quiet weeks.
+    - cron: "0 7 * * 1"
 
+# Every job is read-only. In particular, formatting is a check on the source
+# commit, never a mutation which is passed on to later jobs.
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # pull_request checks run the contributor's exact commit, rather than a
+  # synthetic merge commit. The fallbacks cover push and workflow_dispatch.
+  SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  FORCE_COLOR: "1"
+  PYTHONFAULTHANDLER: "1"
+  PYTHONUNBUFFERED: "1"
+
 jobs:
-  format:
+  quality:
+    name: Quality (format and lint)
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.format.outputs.changed }}
+    timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.sha }}
-    - uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-    - name: Install pre-commit
-      run: python -m pip install pre-commit==4.3.0
-    - name: Install formatter hook environments
-      run: |
-        pre-commit validate-config
-        if ! pre-commit install-hooks; then
-          echo "::error title=Formatter installation failed::Pre-commit could not install the YAPF or clang-format hook environment."
-          exit 1
-        fi
-    - name: Apply formatting
-      id: format
-      shell: bash
-      run: |
-        # Hooks return 1 when they rewrite a file. The second pass distinguishes
-        # that expected result from a formatter/configuration failure.
-        pre-commit run --all-files || true
-        pre-commit run --all-files --show-diff-on-failure
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install quality tools
+        run: python -m pip install pre-commit==4.3.0 ruff==0.12.11
+      - name: Validate hooks and check formatting
+        run: |
+          pre-commit validate-config
+          pre-commit run --all-files --show-diff-on-failure
+      - name: Lint
+        run: ruff check .
 
-        if git diff --quiet; then
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        fi
-        git diff --binary --output="$RUNNER_TEMP/formatted.patch"
-    - name: Store formatted source patch
-      uses: actions/upload-artifact@v4
-      with:
-        name: formatted-source
-        path: ${{ runner.temp }}/formatted.patch
-        if-no-files-found: error
-        retention-days: 1
-
-  install_and_test:
-    needs: format
-    runs-on: ${{ matrix.os }}
+  compatibility:
+    name: Core / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      POSTGKYL_SKIP_GKEYLL_BUILD: "1"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-
+        # The authoritative full suite runs on 3.12 below. This matrix covers
+        # the other supported interpreters without repeating costly renderer
+        # and native integration tests.
+        include:
+          - python-version: "3.10"
+            numpy: "numpy==2.2.6"
+          - python-version: "3.11"
+            numpy: "numpy==2.2.6"
+          - python-version: "3.13"
+            numpy: "numpy==2.2.6"
+          # NumPy 2.2 predates Python 3.14 support. Resolve the current NumPy
+          # release on this one lane instead of asking pip for no wheel.
+          - python-version: "3.14"
+            numpy: "numpy"
     steps:
-    - uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.sha }}
-    - name: Download formatted source patch
-      uses: actions/download-artifact@v4
-      with:
-        name: formatted-source
-        path: ${{ runner.temp }}/formatted-source
-    - name: Apply formatted source patch
-      shell: bash
-      run: |
-        patch="$RUNNER_TEMP/formatted-source/formatted.patch"
-        if [ -s "$patch" ]; then
-          git apply "$patch"
-        fi
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install postgkyl
-      run: |
-        # Pinned, not "--upgrade numpy": floating to whatever's newest on
-        # PyPI resolves a *different* NumPy per Python version once upstream
-        # drops support for an older interpreter mid-matrix (confirmed: NumPy
-        # 2.4/2.5 already require Python >=3.11/>=3.12, so "latest" silently
-        # stops matching across 3.10/3.11/3.12 here) -- non-reproducible and
-        # untested against the rest of the scientific stack (matplotlib's
-        # contourpy dependency, pyvista/VTK, pytables) on whatever day CI
-        # happens to run. Pin to the exact floor pyproject.toml already
-        # declares (numpy>=2.2.6) so every Python version in this matrix
-        # tests the same, already-vetted NumPy release; bump both together.
-        pip install "numpy==2.2.6" setuptools wheel
-        pip install -e .[test] --no-build-isolation
-    - uses: pyvista/setup-headless-display-action@v4
-    - name: Test with pytest
-      run: |
-        # macOS only: --forked (pytest-forked, installed via pyproject.toml's
-        # sys_platform=='darwin' marker) runs each test in its own forked
-        # process, so a native-library abort in a compiled dependency
-        # (matplotlib/FreeType, VTK, ...) -- observed repeatedly on macOS CI
-        # and never on Linux -- fails just that one test instead of taking
-        # down the whole 1700-test session. Skipped on Linux: unneeded there,
-        # and forking every test adds real overhead.
-        if [ "${{ matrix.os }}" = "macos-latest" ]; then
-          pytest --forked
-        else
-          pytest
-        fi
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Postgkyl and test dependencies
+        run: |
+          python -m pip install "${{ matrix.numpy }}" setuptools wheel
+          python -m pip install --no-build-isolation -e ".[test]"
+      - name: Run core tests
+        run: >-
+          python -m pytest
+          -m compatibility
+          --strict-config --strict-markers
+          --timeout=120
 
-  commit_formatting:
-    name: Commit formatting
-    needs:
-      - format
-      - install_and_test
-    if: >-
-      needs.format.outputs.changed == 'true' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+  coverage:
+    name: Full suite and branch coverage / Linux
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 60
+    env:
+      MPLBACKEND: Agg
+      POSTGKYL_REQUIRE_GKEYLL: "1"
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-    - name: Download formatted source patch
-      uses: actions/download-artifact@v4
-      with:
-        name: formatted-source
-        path: ${{ runner.temp }}/formatted-source
-    - name: Commit and push formatting
-      shell: bash
-      env:
-        HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      run: |
-        git apply "$RUNNER_TEMP/formatted-source/formatted.patch"
-        git diff --check
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add --update
-        git commit -m "Apply automated formatting"
-        git push origin "HEAD:$HEAD_REF"
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Postgkyl and test dependencies
+        run: |
+          python -m pip install "numpy==2.2.6" setuptools wheel
+          python -m pip install --no-build-isolation -e ".[test]"
+      - name: Start headless display
+        uses: pyvista/setup-headless-display-action@v4
+      - name: Require the compiled Gkeyll bridge
+        run: |
+          python - <<'PY'
+          from postgkyl import gpython
+          gpython.require()
+          print(gpython.lib_path())
+          PY
+      - name: Run full suite with coverage
+        run: >-
+          python -m pytest
+          -m "not external_tool"
+          --strict-config --strict-markers
+          --timeout=120
+          --cov=postgkyl --cov-branch
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-fail-under=93
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  native_macos:
+    name: Native bridge / macOS
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      POSTGKYL_REQUIRE_GKEYLL: "1"
+    steps:
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Postgkyl and test dependencies
+        run: |
+          python -m pip install "numpy==2.2.6" setuptools wheel
+          python -m pip install --no-build-isolation -e ".[test]"
+      - name: Require the compiled Gkeyll bridge
+        run: |
+          python - <<'PY'
+          from postgkyl import gpython
+          gpython.require()
+          print(gpython.lib_path())
+          PY
+      - name: Run native tests in isolated processes
+        # Native-library aborts on macOS should fail one test, not terminate
+        # the entire session and hide which test caused the failure.
+        run: >-
+          python -m pytest
+          -m native
+          --strict-config --strict-markers
+          --timeout=120
+          --forked
+
+  renderers:
+    name: Renderer integrations / Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MPLBACKEND: Agg
+      POSTGKYL_SKIP_GKEYLL_BUILD: "1"
+    steps:
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Set up Chrome for Kaleido
+        if: github.event_name != 'pull_request'
+        uses: browser-actions/setup-chrome@v2
+      - name: Install Postgkyl and test dependencies
+        run: |
+          python -m pip install "numpy==2.2.6" setuptools wheel
+          python -m pip install --no-build-isolation -e ".[test]"
+      - name: Start headless display
+        uses: pyvista/setup-headless-display-action@v4
+      - name: Verify external renderer tools
+        if: github.event_name != 'pull_request'
+        run: |
+          python - <<'PY'
+          from choreographer.browsers.chromium import Chromium
+          from postgkyl.render import _ffmpeg
+
+          chrome = Chromium.find_browser(skip_local=False)
+          ffmpeg = _ffmpeg.resolve_ffmpeg()
+          if chrome is None:
+            raise SystemExit("Chrome/Chromium is required for Kaleido tests")
+          if ffmpeg is None:
+            raise SystemExit("ffmpeg is required for animation tests")
+          print(f"chrome: {chrome}")
+          print(f"ffmpeg: {ffmpeg}")
+          PY
+      - name: Run headless renderer tests
+        run: >-
+          python -m pytest
+          -m "render and not external_tool"
+          --strict-config --strict-markers
+          --timeout=120
+      - name: Run external renderer tests
+        if: github.event_name != 'pull_request'
+        # These tests launch Chrome and ffmpeg. A separate invocation gives
+        # them a firm timeout and an unambiguous failure in the job log.
+        run: >-
+          python -m pytest
+          -m external_tool
+          --strict-config --strict-markers
+          --timeout=180 --timeout-method=signal
+
+  package:
+    name: Build and install distribution artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install artifact tools and build prerequisites
+        run: >-
+          python -m pip install
+          "numpy==2.2.6" setuptools wheel
+          build==1.3.0 twine==6.2.0
+      - name: Build sdist and wheel from the sdist
+        # `python -m build` creates the sdist first and then uses that sdist as
+        # the wheel source, testing that no untracked checkout files are needed.
+        run: python -m build --no-isolation
+      - name: Validate artifact metadata
+        run: python -m twine check --strict dist/*
+      - name: Remove access to build-time native libraries
+        shell: bash
+        run: |
+          # An absolute RPATH back into the checkout can make a broken wheel
+          # appear healthy. Hide the build tree before testing the installed
+          # artifact so the wheel must carry/find its own runtime libraries.
+          if [ -d "$GITHUB_WORKSPACE/gkeyll" ]; then
+            mv "$GITHUB_WORKSPACE/gkeyll" "$RUNNER_TEMP/build-only-gkeyll"
+          fi
+      - name: Smoke-test the installed wheel outside the checkout
+        run: scripts/smoke_wheel.sh dist/*.whl
+      - name: Upload distribution artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 14

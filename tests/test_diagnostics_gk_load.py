@@ -807,7 +807,7 @@ class TestLoadQuantity:
 
   def test_label_and_tag_override(self, tmp_path, monkeypatch):
     # A species-independent geo quantity needs only its own marker file.
-    (tmp_path / f"sim-geo_int_bmag.gkyl").touch()
+    (tmp_path / "sim-geo_int_bmag.gkyl").touch()
     monkeypatch.setattr(qmod, "GData",
                         lambda *a, **k: _field(np.full((2, 1), 3.0)))
     out = load_quantity("geo_int_bmag",

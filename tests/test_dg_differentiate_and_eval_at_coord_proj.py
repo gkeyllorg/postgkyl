@@ -19,7 +19,7 @@ SRC = os.path.join(os.path.dirname(ROOT), "src")
 sys.path.insert(0, SRC)  # dedup harmless across the shared test session
 
 import postgkyl as pg  # noqa: E402
-from postgkyl import dg, gpython, operations  # noqa: E402
+from postgkyl import dg, gpython  # noqa: E402
 
 needs_gkeyll = pytest.mark.skipif(
     not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
@@ -135,7 +135,6 @@ def test_eval_at_coord_proj_matches_direct_polynomial_evaluation():
 def test_eval_at_coord_proj_full_reduction_uses_the_degenerate_1d_target():
   ndim, poly_order = 1, 1
   basis_type = "serendipity"
-  nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
   a = gpython.GkylArray.from_numpy(np.array([[1.0, 0.5]]))
   grid = {"ndim": ndim, "lower": [0.0], "upper": [1.0], "cells": [1]}
 
@@ -185,8 +184,6 @@ def test_eval_at_coord_proj_on_real_gkhybrid_data_matches_donor_reconstruction(
   cells = np.asarray(d.ctx["cells"])
   dx = (up - lo) / cells
   # Pick a point in cell (0, 0, 0): conf x and mu at their cell centers.
-  x0 = lo[0] + 0.5 * dx[0]
-  mu0 = lo[2] + 0.5 * dx[2]
   zx = 0.0  # cell center -> reference coordinate 0
   zy = 2.0 * (y0 - (lo[1] + 0.5 * dx[1])) / dx[1]
   zmu = 0.0

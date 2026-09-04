@@ -14,7 +14,8 @@ from typing import Annotated
 
 import matplotlib as mpl
 import matplotlib.font_manager as fm
-import mpl_toolkits.mplot3d  # noqa: F401  (registers the '3d' projection)
+# Importing the toolkit registers Matplotlib's ``3d`` projection.
+import mpl_toolkits.mplot3d  # noqa: F401
 import numpy as np
 from matplotlib import cm, colors, patches
 from matplotlib.figure import Figure

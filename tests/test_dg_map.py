@@ -36,7 +36,6 @@ def _project_1d(fn, lower, upper, cells, basis_type, poly_order):
   and back through the exact nodal<->modal change of basis reproduces it
   exactly, independent of the mapping code under test.
   """
-  nb = gpython.basis.num_basis(basis_type, 1, poly_order)
   node_eta = gpython.basis.node_coords(basis_type, 1, poly_order)[:, 0]
   n2m = gpython.basis.nodal_to_modal_matrix(basis_type, 1, poly_order)
   dz = (upper - lower) / cells
@@ -48,7 +47,6 @@ def _project_1d(fn, lower, upper, cells, basis_type, poly_order):
 
 def _project_2d(fn, lower, upper, cells, basis_type, poly_order):
   """Exact per-cell modal coefficients of ``fn(z0, z1)`` for a 2-D basis."""
-  nb = gpython.basis.num_basis(basis_type, 2, poly_order)
   node_eta = gpython.basis.node_coords(basis_type, 2, poly_order)  # (nb, 2)
   n2m = gpython.basis.nodal_to_modal_matrix(basis_type, 2, poly_order)
   dz = [(upper[d] - lower[d]) / cells[d] for d in range(2)]

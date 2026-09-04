@@ -37,6 +37,8 @@ from postgkyl.render.plotly import (
 needs_ffmpeg = pytest.mark.skipif(
     _ffmpeg.resolve_ffmpeg() is None,
     reason="ffmpeg not found on PATH or via imageio-ffmpeg")
+external_tool = pytest.mark.external_tool
+slow = pytest.mark.slow
 
 
 def _chrome_available() -> bool:
@@ -534,6 +536,8 @@ class TestSaveRotatingPlotlyFigure:
   @needs_ffmpeg
   @needs_chrome
   @skip_macos_chrome
+  @external_tool
+  @slow
   def test_gif_export_end_to_end(self, tmp_path):
     # fps * rotation_period = 2 -- the minimum frame count that still
     # exercises the multi-frame rotation loop (fewer, and the `max(2, ...)`
@@ -548,6 +552,8 @@ class TestSaveRotatingPlotlyFigure:
   @needs_ffmpeg
   @needs_chrome
   @skip_macos_chrome
+  @external_tool
+  @slow
   def test_mp4_export_end_to_end(self, tmp_path):
     out = tmp_path / "out.mp4"
     save_rotating_plotly_figure(self._scene_fig(), str(out), 0.0, 2, 1.0, 1.0)

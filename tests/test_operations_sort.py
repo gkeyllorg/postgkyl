@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from postgkyl import numerics, operations
 from postgkyl.gdatastate.gdatastate import GDataState
 

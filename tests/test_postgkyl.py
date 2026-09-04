@@ -7,6 +7,7 @@ import ast
 import collections
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -548,7 +549,7 @@ def _build_edges(pkg_root=None):
         continue
       p = os.path.join(dp, f)
       src = _layer(p, pkg_root)
-      for node in ast.walk(ast.parse(open(p, encoding="utf-8").read(), p)):
+      for node in ast.walk(ast.parse(Path(p).read_text(encoding="utf-8"), p)):
         for tgt in _import_targets(node):
           if tgt == src:
             continue
@@ -563,7 +564,7 @@ def _build_edges(pkg_root=None):
 def test_facade_is_pure_reexport():
   """__init__.py must define no functions/classes -- only re-export names."""
   facade = os.path.join(SRC, "postgkyl", "__init__.py")
-  tree = ast.parse(open(facade).read(), facade)
+  tree = ast.parse(Path(facade).read_text(encoding="utf-8"), facade)
   defs = [
       n.name for n in tree.body
       if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -584,7 +585,7 @@ def _foreign_floor_offenders(pkg_root):
         continue
       p = os.path.join(dp, f)
       in_gpython = _layer(p, pkg_root) == "gpython"
-      for node in ast.walk(ast.parse(open(p, encoding="utf-8").read(), p)):
+      for node in ast.walk(ast.parse(Path(p).read_text(encoding="utf-8"), p)):
         names = []
         if isinstance(node, ast.Import):
           names = [n.name for n in node.names]

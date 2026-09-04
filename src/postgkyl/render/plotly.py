@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os.path
 import tempfile
-import time
 import webbrowser
 from pathlib import Path
 from typing import Annotated

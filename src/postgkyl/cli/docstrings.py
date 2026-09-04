@@ -65,7 +65,6 @@ def parse_docstring(obj,
     chunks: list[str] = []
 
     def finish() -> None:
-      nonlocal current, chunks
       if current is None:
         return
       text = " ".join(part for part in chunks if part).strip()

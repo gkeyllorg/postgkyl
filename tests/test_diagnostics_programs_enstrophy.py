@@ -75,8 +75,6 @@ class TestEnstrophySweep:
 
   def test_sweeps_expected_frame_range(self, monkeypatch):
     n = 3
-    dx = dy = dz = 1.0
-    coords = np.arange(n, dtype=np.float64)
     edges = np.arange(n + 1, dtype=np.float64)
     rho = np.full((n, n, n), 1.0)
 

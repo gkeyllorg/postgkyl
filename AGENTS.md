@@ -185,6 +185,7 @@ src/postgkyl/
     ├─ csrc/             _gpythonmodule.c — CPython extension over gkyl_gpython.h
     │                    (the shim itself lives in gkeyll/core/zero/)
     ├─ _gpython.so       built extension (scripts/build_gpython.sh)
+    ├─ libg0core.so      bundled beside it; loaded through a relative rpath
     ├─ _lib.py           loads _gpython · GPYTHON_API_VERSION handshake
     ├─ array.py          GkylArray — capsule owner of a gkyl_array
     ├─ basis.py          basis cache + interpolation matrices via the shim
@@ -267,7 +268,7 @@ src/postgkyl/
 ║                     ▼ import _gpython  (extension over gkyl_gpython.h only)  ║
 ║   gkeyll/core/zero/{gkyl_gpython.h, gpython.c} — the shim, compiled by       ║
 ║   Gkeyll's own make core INTO:      ▼ linked -lg0core                        ║
-║   libg0core.so  (gkeyll/ clone · built by scripts/build_gkeyll.sh)           ║
+║   libg0core.so  (pinned gkeyll clone · built, then bundled by the scripts)   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 ```
@@ -484,7 +485,8 @@ the equation module that uses it.)
   in the same tree (shim and library can never drift apart).
   `csrc/_gpythonmodule.c` wraps `gkyl_gpython.h` (opaque handles + scalars + buffers
   only) into the `_gpython` extension, built by `scripts/build_gpython.sh` against
-  the cloned `gkeyll/`'s `libg0core.so` (linked + rpath-bound, not dlopened).
+  the pinned `gkeyll/` clone's `libg0core.so`, copies that library beside the
+  extension, and links it through `$ORIGIN`/`@loader_path` (not dlopened).
   `_lib.py` imports the extension and performs the `GPYTHON_API_VERSION`
   handshake. `array.py`'s
   `GkylArray` holds the owning capsule (its destructor releases the C array;

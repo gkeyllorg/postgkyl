@@ -1,6 +1,5 @@
 """Module including Gkeyll binary reader class."""
 
-from collections.abc import Iterable
 from typing import Tuple
 import msgpack as mp
 import numpy as np
@@ -565,7 +564,6 @@ class GkylReader(object):
       raise TypeError("This g0 format is not presently supported")
 
     # Load or construct grid
-    num_dims = len(self.cells)
     if time is not None:
       grid = [time]
       if self.ctx:

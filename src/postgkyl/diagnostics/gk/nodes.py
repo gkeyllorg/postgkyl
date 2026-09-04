@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from postgkyl.operations.gyrokinetics.geometry import (
-    GKYL_GEOMETRY_ID,
-    is_geo_mapc2p,
+# GKYL_GEOMETRY_ID remains an intentional diagnostics.gk compatibility export.
+from postgkyl.operations.gyrokinetics.geometry import (  # noqa: F401
+    GKYL_GEOMETRY_ID, is_geo_mapc2p,
 )
 
 from . import utils

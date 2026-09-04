@@ -22,7 +22,6 @@ import os
 import numpy as np
 from postgkyl import numerics
 from postgkyl.gdata import GData
-from postgkyl.operations.gyrokinetics.geometry import _resample_grid as resample_grid
 
 # Maximum number of blocks a multiblock simulation is assumed to have, used
 # only to bound an open-ended slice request in get_block_indices.

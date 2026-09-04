@@ -18,6 +18,7 @@ GKEYLL_DIR="${ROOT_DIR}/gkeyll"
 LIB_DIR="${GKEYLL_DIR}/build/core"
 CSRC_DIR="${ROOT_DIR}/src/postgkyl/gpython/csrc"
 OUT="${ROOT_DIR}/src/postgkyl/gpython/_gpython.so"
+BUNDLED_LIB="${ROOT_DIR}/src/postgkyl/gpython/libg0core.so"
 
 if [ ! -f "${LIB_DIR}/libg0core.so" ]; then
     echo "error: ${LIB_DIR}/libg0core.so not found; run scripts/build_gkeyll.sh first" >&2
@@ -60,6 +61,11 @@ fi
 
 CC="${CC:-cc}"
 
+# Keep the extension and its sole non-system shared library together.  A
+# relative loader path then works from a wheel, virtualenv, or relocated source
+# checkout without referring back to this build tree.
+cp "${LIB_DIR}/libg0core.so" "${BUNDLED_LIB}"
+
 # CPython extension modules must leave the Py* symbols unresolved at link
 # time; the interpreter provides them at import. Linux's -shared does this
 # by default, macOS needs -undefined dynamic_lookup (same flag setuptools
@@ -67,6 +73,12 @@ CC="${CC:-cc}"
 EXT_LDFLAGS=""
 if [ "$(uname -s)" = "Darwin" ]; then
     EXT_LDFLAGS="-Wl,-undefined,dynamic_lookup"
+    EXT_RPATH="@loader_path"
+    # Gkeyll names the Mach-O library .so for consistency across platforms.
+    # Give the bundled copy a relocatable install name before linking to it.
+    install_name_tool -id "@rpath/libg0core.so" "${BUNDLED_LIB}"
+else
+    EXT_RPATH='$ORIGIN'
 fi
 
 echo "# Building _gpython extension (CC=${CC}) -> ${OUT}"
@@ -75,7 +87,7 @@ echo "# Building _gpython extension (CC=${CC}) -> ${OUT}"
     -I "${GKEYLL_DIR}/core/zero" \
     -I "${PY_INCLUDES}" \
     -I "${NUMPY_INCLUDE}" \
-    -L "${LIB_DIR}" -lg0core -Wl,-rpath,"${LIB_DIR}" \
+    -L "$(dirname -- "${BUNDLED_LIB}")" -lg0core -Wl,-rpath,"${EXT_RPATH}" \
     ${EXT_LDFLAGS} \
     -o "${OUT}"
 echo "# Built ${OUT}"
@@ -89,7 +101,7 @@ _git_log_field() {  # _git_log_field <repo-dir> <log-format>
 }
 GKEYLL_COMMIT=$(_git_log_field "${GKEYLL_DIR}" "%H")
 GKEYLL_COMMIT_DATE=$(_git_log_field "${GKEYLL_DIR}" "%cI")
-GKEYLL_BRANCH=$(git -C "${GKEYLL_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+GKEYLL_BRANCH=pinned
 POSTGKYL_BUILD_COMMIT=$(_git_log_field "${ROOT_DIR}" "%H")
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_ARCH_FLAGS="${ARCH_FLAGS:-}"

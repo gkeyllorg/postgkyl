@@ -6,7 +6,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import pytest
 
 from postgkyl.render.style import DEFAULT_STYLE, apply_style

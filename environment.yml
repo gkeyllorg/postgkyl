@@ -4,15 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python>=3.10
-  - click>=8.1.7
-  - imageio-ffmpeg>=0.6.0
-  - matplotlib>=3.10.9
-  - msgpack-python>=1.1.2
-  - numpy>=2.2.6
-  - pytables>=3.10.1
-  - pytest>=9.0.3
-  - scipy>=1.15.3
-  - plotly>=6.7.0
-  - python-kaleido>=1.3.0
-  - pyvista>=0.48.4
+  # Runtime and test dependency versions have one authoritative home in
+  # pyproject.toml. Install the project after activating this environment.
+  - pip
   - setuptools>=61.0

@@ -291,15 +291,13 @@ class TestRPN:
   def test_rpn_malformed_stack_raises(self):
     # Leading operator with empty stack causes IndexError inside curve_fit.
     x = np.linspace(0, 1, 10)
-    y = x
     with pytest.raises((IndexError, Exception)):
-      fitmod.fit(x, y, "* x a +", p0=[1.0])
+      fitmod.fit(x, x, "* x a +", p0=[1.0])
 
   def test_rpn_bad_token_raises_value_error(self):
     """A token that is neither an operator, function, known parameter, nor
     a valid float literal (bad token edge case)."""
     x = np.linspace(0, 1, 10)
-    y = x
     func = fitmod._rpn_make_func("a x * not_a_number +")
     with pytest.raises(ValueError):
       func(x, 1.0)

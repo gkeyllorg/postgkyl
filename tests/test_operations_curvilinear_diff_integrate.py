@@ -7,12 +7,9 @@ analytic answer up to floating-point precision, independent of resolution.
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pytest
 
-import postgkyl as pg
 from postgkyl import gpython, operations
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.numerics import curvilinear

@@ -25,7 +25,6 @@ matplotlib.use("Agg")
 
 import postgkyl as pg  # noqa: E402
 from postgkyl import gpython, operations  # noqa: E402
-from postgkyl.gdatastate.gdatastate import GDataState  # noqa: E402
 
 needs_gkeyll = pytest.mark.skipif(
     not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")

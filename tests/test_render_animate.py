@@ -26,6 +26,8 @@ anim_mod = import_module("postgkyl.render.animate")
 needs_ffmpeg = pytest.mark.skipif(
     _ffmpeg.resolve_ffmpeg() is None,
     reason="ffmpeg not found on PATH or via imageio-ffmpeg")
+external_tool = pytest.mark.external_tool
+slow = pytest.mark.slow
 
 
 def _line_frame(offset: float) -> GDataState:
@@ -145,6 +147,8 @@ class TestLiveAnimation:
     assert anim is not None
 
   @needs_ffmpeg
+  @external_tool
+  @slow
   def test_live_animation_saves_mp4(self, tmp_path):
     out = tmp_path / "live.mp4"
     anim = anim_mod.animate(_three_frames(),
@@ -258,6 +262,8 @@ class TestCompileMovie:
       anim_mod._compile_movie(paths, str(tmp_path / "out.mp4"), duration=100.0)
 
   @needs_ffmpeg
+  @external_tool
+  @slow
   def test_mp4_compile_with_ffmpeg(self, tmp_path):
     prefix = str(tmp_path / "frame")
     paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
