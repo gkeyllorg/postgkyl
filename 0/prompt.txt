@@ -1,0 +1,5 @@
+Currently, the CLI changes all the underscores to dashes. I do not like this. Change this to have a unified style everywhere, so if it is a underrscore in the API, then it is an underscore in the CLI. Do not preserve legacy details. Update all tests
+
+---
+
+Currently, the CLI changes all the underscores to dashes. I do not like this. Change this to have a unified style everywhere, so if it is a underrscore in the API, then it is an underscore in the CLI. Do not preserve legacy details. Update all tests
