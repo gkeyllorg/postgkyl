@@ -1,0 +1,211 @@
+This aspect of CI is failing. Please fix the CI or the failing tests. Run python -m pytest -m "render and not external_tool" --strict-config --strict-markers --timeout=120
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.15.0, timeout-2.4.0
+timeout: 120.0s
+timeout method: signal
+timeout func_only: False
+collected 1937 items / 1599 deselected / 338 selected
+
+tests/test_render_animate.py ..............................              [  8%]
+tests/test_render_ffmpeg.py .....                                        [ 10%]
+tests/test_render_labels.py ..............                               [ 14%]
+tests/test_render_matplotlib.py ........................................ [ 26%]
+..........ss.....................                                        [ 36%]
+tests/test_render_matplotlib_coverage.py ..........................FF... [ 45%]
+........................................................                 [ 61%]
+tests/test_render_plotly.py ............................................ [ 74%]
+........................                                                 [ 81%]
+tests/test_render_prep.py ...........................                    [ 89%]
+tests/test_render_pyvista.py ...s..............s.........                [ 98%]
+tests/test_render_style.py ......                                        [100%]
+
+=================================== FAILURES ===================================
+____________ TestRcParamNovelties.test_xkcd_flag_invokes_xkcd_mode _____________
+
+self = <test_render_matplotlib_coverage.TestRcParamNovelties object at 0x7f87617903e0>
+
+    def test_xkcd_flag_invokes_xkcd_mode(self):
+      with mpl.rc_context():
+>       fig = backend.plot(_line(), no_show=True, xkcd=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_render_matplotlib_coverage.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/postgkyl/render/matplotlib.py:598: in plot
+    xkcd_cm, xkcd_rc = get_xkcd_safely()
+                       ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def get_xkcd_safely():
+      """An xkcd context manager + rc override that degrades gracefully when no
+      xkcd-style font is installed, instead of silently drawing with whatever
+      default font Matplotlib falls back to."""
+      import warnings
+    
+      import matplotlib.pyplot as plt
+    
+      required_fonts = {"xkcd", "xkcd Script", "Comic Neue", "Comic Sans MS"}
+      available_fonts = {f.name for f in fm.fontManager.ttflist}
+      if required_fonts.isdisjoint(available_fonts):
+>       warnings.warn(
+            "No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans "
+            "MS); falling back to the default sans-serif font.",
+            stacklevel=2)
+E       UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+
+src/postgkyl/render/matplotlib.py:187: UserWarning
+____ TestRcParamNovelties.test_xkcd_flag_does_not_leak_into_global_rcparams ____
+
+self = <test_render_matplotlib_coverage.TestRcParamNovelties object at 0x7f8761733e00>
+
+    def test_xkcd_flag_does_not_leak_into_global_rcparams(self):
+      # A past bug: `plt.xkcd()` called without a `with` block never reverted,
+      # contaminating every plot drawn afterwards.
+      with mpl.rc_context():
+>       backend.plot(_line(), no_show=True, xkcd=True)
+
+tests/test_render_matplotlib_coverage.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/postgkyl/render/matplotlib.py:598: in plot
+    xkcd_cm, xkcd_rc = get_xkcd_safely()
+                       ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def get_xkcd_safely():
+      """An xkcd context manager + rc override that degrades gracefully when no
+      xkcd-style font is installed, instead of silently drawing with whatever
+      default font Matplotlib falls back to."""
+      import warnings
+    
+      import matplotlib.pyplot as plt
+    
+      required_fonts = {"xkcd", "xkcd Script", "Comic Neue", "Comic Sans MS"}
+      available_fonts = {f.name for f in fm.fontManager.ttflist}
+      if required_fonts.isdisjoint(available_fonts):
+>       warnings.warn(
+            "No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans "
+            "MS); falling back to the default sans-serif font.",
+            stacklevel=2)
+E       UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+
+src/postgkyl/render/matplotlib.py:187: UserWarning
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_render_matplotlib.py:543: no compiled Gkeyll (libg0core.so) found
+SKIPPED [1] tests/test_render_matplotlib.py:554: no compiled Gkeyll (libg0core.so) found
+SKIPPED [1] tests/test_render_pyvista.py:73: could not import 'trame_vtk': No module named 'trame_vtk'
+SKIPPED [1] tests/test_render_pyvista.py:128: could not import 'trame_vtk': No module named 'trame_vtk'
+FAILED tests/test_render_matplotlib_coverage.py::TestRcParamNovelties::test_xkcd_flag_invokes_xkcd_mode - UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+FAILED tests/test_render_matplotlib_coverage.py::TestRcParamNovelties::test_xkcd_flag_does_not_leak_into_global_rcparams - UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+========== 2 failed, 332 passed, 4 skipped, 1599 deselected in 24.88s ==========
+Error: Process completed with exit code 1.
+
+---
+
+This aspect of CI is failing. Please fix the CI or the failing tests. Run python -m pytest -m "render and not external_tool" --strict-config --strict-markers --timeout=120
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.15.0, timeout-2.4.0
+timeout: 120.0s
+timeout method: signal
+timeout func_only: False
+collected 1937 items / 1599 deselected / 338 selected
+
+tests/test_render_animate.py ..............................              [  8%]
+tests/test_render_ffmpeg.py .....                                        [ 10%]
+tests/test_render_labels.py ..............                               [ 14%]
+tests/test_render_matplotlib.py ........................................ [ 26%]
+..........ss.....................                                        [ 36%]
+tests/test_render_matplotlib_coverage.py ..........................FF... [ 45%]
+........................................................                 [ 61%]
+tests/test_render_plotly.py ............................................ [ 74%]
+........................                                                 [ 81%]
+tests/test_render_prep.py ...........................                    [ 89%]
+tests/test_render_pyvista.py ...s..............s.........                [ 98%]
+tests/test_render_style.py ......                                        [100%]
+
+=================================== FAILURES ===================================
+____________ TestRcParamNovelties.test_xkcd_flag_invokes_xkcd_mode _____________
+
+self = <test_render_matplotlib_coverage.TestRcParamNovelties object at 0x7f87617903e0>
+
+    def test_xkcd_flag_invokes_xkcd_mode(self):
+      with mpl.rc_context():
+>       fig = backend.plot(_line(), no_show=True, xkcd=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_render_matplotlib_coverage.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/postgkyl/render/matplotlib.py:598: in plot
+    xkcd_cm, xkcd_rc = get_xkcd_safely()
+                       ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def get_xkcd_safely():
+      """An xkcd context manager + rc override that degrades gracefully when no
+      xkcd-style font is installed, instead of silently drawing with whatever
+      default font Matplotlib falls back to."""
+      import warnings
+    
+      import matplotlib.pyplot as plt
+    
+      required_fonts = {"xkcd", "xkcd Script", "Comic Neue", "Comic Sans MS"}
+      available_fonts = {f.name for f in fm.fontManager.ttflist}
+      if required_fonts.isdisjoint(available_fonts):
+>       warnings.warn(
+            "No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans "
+            "MS); falling back to the default sans-serif font.",
+            stacklevel=2)
+E       UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+
+src/postgkyl/render/matplotlib.py:187: UserWarning
+____ TestRcParamNovelties.test_xkcd_flag_does_not_leak_into_global_rcparams ____
+
+self = <test_render_matplotlib_coverage.TestRcParamNovelties object at 0x7f8761733e00>
+
+    def test_xkcd_flag_does_not_leak_into_global_rcparams(self):
+      # A past bug: `plt.xkcd()` called without a `with` block never reverted,
+      # contaminating every plot drawn afterwards.
+      with mpl.rc_context():
+>       backend.plot(_line(), no_show=True, xkcd=True)
+
+tests/test_render_matplotlib_coverage.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/postgkyl/render/matplotlib.py:598: in plot
+    xkcd_cm, xkcd_rc = get_xkcd_safely()
+                       ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def get_xkcd_safely():
+      """An xkcd context manager + rc override that degrades gracefully when no
+      xkcd-style font is installed, instead of silently drawing with whatever
+      default font Matplotlib falls back to."""
+      import warnings
+    
+      import matplotlib.pyplot as plt
+    
+      required_fonts = {"xkcd", "xkcd Script", "Comic Neue", "Comic Sans MS"}
+      available_fonts = {f.name for f in fm.fontManager.ttflist}
+      if required_fonts.isdisjoint(available_fonts):
+>       warnings.warn(
+            "No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans "
+            "MS); falling back to the default sans-serif font.",
+            stacklevel=2)
+E       UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+
+src/postgkyl/render/matplotlib.py:187: UserWarning
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_render_matplotlib.py:543: no compiled Gkeyll (libg0core.so) found
+SKIPPED [1] tests/test_render_matplotlib.py:554: no compiled Gkeyll (libg0core.so) found
+SKIPPED [1] tests/test_render_pyvista.py:73: could not import 'trame_vtk': No module named 'trame_vtk'
+SKIPPED [1] tests/test_render_pyvista.py:128: could not import 'trame_vtk': No module named 'trame_vtk'
+FAILED tests/test_render_matplotlib_coverage.py::TestRcParamNovelties::test_xkcd_flag_invokes_xkcd_mode - UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+FAILED tests/test_render_matplotlib_coverage.py::TestRcParamNovelties::test_xkcd_flag_does_not_leak_into_global_rcparams - UserWarning: No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans MS); falling back to the default sans-serif font.
+========== 2 failed, 332 passed, 4 skipped, 1599 deselected in 24.88s ==========
+Error: Process completed with exit code 1.
