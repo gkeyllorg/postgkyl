@@ -1,0 +1,1 @@
+Can I do fig = GData.plot(), and it will return the appropriate matplotlib figure to customize?
