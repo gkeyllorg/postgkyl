@@ -2,7 +2,7 @@
 ``GData`` you get from ``pg.load``.
 
 ``diagnostics`` sits *above* the fluent API (``operations``/``api``) and is
-equation-blind-free by design: ``postgkyl.diagnostics.moments.five_moment`` knows the
+equation-blind-free by design: ``postgkyl.diagnostics.mom.five_moment`` knows the
 Euler fluid moment layout (``[rho, rho*vx, rho*vy, rho*vz, E]``) and turns raw
 conserved moments into primitive variables (density, velocity, pressure,
 Mach number, ...). Diagnostics are **free functions**, not ``GData`` methods
@@ -26,7 +26,7 @@ matplotlib.use("Agg")
 import numpy as np
 
 import postgkyl as pg
-from postgkyl.diagnostics.moments import five_moment as fm
+from postgkyl.diagnostics.mom import five_moment as fm
 
 from _example_paths import TEST_DATA, prepare_output_dir
 

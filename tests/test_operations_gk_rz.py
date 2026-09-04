@@ -176,8 +176,8 @@ def test_comp_selects_an_explicit_physical_field():
 @needs_gkeyll
 def test_group_compatibility_cli_and_help_section():
   from postgkyl.cli.app import cli
-  from postgkyl.diagnostics.gyrokinetics import fluxsurf as old_fluxsurf
-  from postgkyl.diagnostics.gyrokinetics import rz as old_rz
+  from postgkyl.diagnostics.gk import fluxsurf as old_fluxsurf
+  from postgkyl.diagnostics.gk import rz as old_rz
 
   group = pg.GDataGroup([pg.load(F2D), pg.load(F2D)])
   mapped = group.gk_rz(mapc2p=F2D_GEO, nz_interp=2)

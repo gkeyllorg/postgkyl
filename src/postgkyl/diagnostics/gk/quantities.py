@@ -49,7 +49,7 @@ def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
   ``kwargs[key]`` may be a single value (applies to every species) or a
   list/tuple with one entry per species, indexed by ``kwargs
   ['species_idx']`` -- the position :meth:`~postgkyl.diagnostics.
-  gyrokinetics.quantity.GkQuantity.fetch_multi`/``load_quantity`` stamp
+  gk.quantity.GkQuantity.fetch_multi`/``load_quantity`` stamp
   onto ``extra`` for the species currently being resolved.
   """
   if key in kwargs:
@@ -336,7 +336,7 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
   electron entry and the ion entries, by the sign of each species' charge.
 
   ``gdatas[i]`` is species ``i``'s resolved source list (as
-  :meth:`~postgkyl.diagnostics.gyrokinetics.quantity.GkQuantity.fetch_multi`
+  :meth:`~postgkyl.diagnostics.gk.quantity.GkQuantity.fetch_multi`
   hands it to an ``is_multi_species`` fetch function); each entry's
   ``mass``/``charge`` is resolved with ``species_idx=i`` so a per-species
   ``--extra`` array picks the right one.
@@ -435,7 +435,7 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
 def fetch_c_s(gdatas, **kwargs):
   """Sound speed (m/s), combining the electrons and every ion species.
   ``gdatas`` has one ``[M0, temp]`` source list per species, in the order
-  requested, e.g. ``pgkyl gyrokinetics-load-quantity --quantity c_s
+  requested, e.g. ``pgkyl gk-load-quantity --quantity c_s
   --species elc,ion1,ion2 ...``.
   Electrons and ions are told apart by the sign of each species' charge
   attribute, so the species may be named anything.
@@ -594,10 +594,10 @@ def fetch_diamag_vel(gdatas, **kwargs):
 # --------------------------------------------------------- phase space (f)
 def load_distf(gdatas, **kwargs):
   """Loader for the registry ``distf`` quantity: wraps
-  :func:`~postgkyl.diagnostics.gyrokinetics.distf.load_distf` with
+  :func:`~postgkyl.diagnostics.gk.distf.load_distf` with
   defaults tailored to registry use (never interpolate further, convert
   velocity coordinates by default). Extra keyword overrides (via
-  ``**extra`` on :func:`~postgkyl.diagnostics.gyrokinetics.load_quantity.
+  ``**extra`` on :func:`~postgkyl.diagnostics.gk.load_quantity.
   load_quantity`): ``suffix``, ``c2p_vel``, ``mc2nu``, ``mapc2p``,
   ``block``.
   """

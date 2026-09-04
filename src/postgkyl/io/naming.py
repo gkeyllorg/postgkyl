@@ -16,7 +16,7 @@ A Gkeyll output file name encodes four facts::
 - **frame**    the trailing ``_<digits>`` of the quantity, when present.
 
 Before this module the convention was re-derived in three places with three
-slightly different rules (``diagnostics.gyrokinetics.rz._file_prefix``'s
+slightly different rules (``diagnostics.gk.rz._file_prefix``'s
 ``rsplit('-', 1)``, ``diagnostics.discovery.find_output_stems``'s
 ``_\\d+$`` strip, and the animation operation's port of main's
 ``utils.set_frame``, which recovered a frame index by diffing the loaded file
@@ -36,7 +36,7 @@ import re
 from dataclasses import dataclass
 
 # The multiblock block index: Gkeyll writes "<sim>_b<N>-<quantity>.gkyl"
-# (see the ``name + '_b*-'`` prefix built by ``diagnostics.gyrokinetics.nodes``
+# (see the ``name + '_b*-'`` prefix built by ``diagnostics.gk.nodes``
 # and main's ``nodes``). Digits are required, so a simulation legitimately
 # named e.g. "gk_beta_scan" is never mistaken for block "eta_scan".
 _BLOCK_RE = re.compile(r"^(?P<sim>.*)_b(?P<block>\d+)$")

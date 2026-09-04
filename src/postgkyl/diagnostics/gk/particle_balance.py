@@ -1,7 +1,7 @@
 """Gyrokinetic particle-balance diagnostic.
 
 Ported from ``src_bak/postgkyl/apps/gk_particle_balance.py``. Same shape as
-:mod:`postgkyl.diagnostics.gyrokinetics.energy_balance`, but for a single
+:mod:`postgkyl.diagnostics.gk.energy_balance`, but for a single
 species and the M0 (density) moment, with no field/apar-energy terms::
 
     N_err = S - bflux - df/dt

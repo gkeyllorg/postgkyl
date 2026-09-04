@@ -21,7 +21,7 @@ owns it and simply gathered here:
     represent, apply                 <- operations/ (value_form verbs)
     available_evaluate_operators     <- operations/ (``evaluate``'s RPN token vocabulary)
     save                             <- io/        (file output)
-    gyrokinetics                    <- diagnostics/ (equation namespace)
+    gk                              <- diagnostics/ (equation namespace)
     version_report                    <- _version.py  (``pgkyl --version``'s
                                                       commit/build-info report)
 
@@ -63,7 +63,7 @@ from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
 from postgkyl.cli_spec import hidden
 from postgkyl.io import save
-from postgkyl.diagnostics import gyrokinetics
+from postgkyl.diagnostics import gk
 from postgkyl._version import version_report
 
 __version__ = "2.0.0"
@@ -76,5 +76,5 @@ __all__ = ["GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integ
     "extract_input", "fit", "growth", "differentiate", "map",
     "represent", "apply", "gk_rz", "gk_fluxsurf", "save",
     "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
-    "available_evaluate_operators", "plotly", "pyvista", "gyrokinetics",
+    "available_evaluate_operators", "plotly", "pyvista", "gk",
     "__version__", "version_report"]

@@ -84,23 +84,23 @@ pgkyl tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_
 
 ## 6. Gyrokinetics: pre-named quantities and distribution functions
 
-`gyrokinetics-load-quantity` loads one of a registry of named gyrokinetic
+`gk-load-quantity` loads one of a registry of named gyrokinetic
 quantities (listed in its generated `--quantity` choices) straight from a simulation's naming convention --
 no manual file paths. `--name` is the simulation's *name prefix* (not a path);
 `--path` is the directory to look in.
 
 ```bash
-pgkyl gyrokinetics-load-quantity --help
-pgkyl gyrokinetics-load-quantity --quantity geo_int_jacobtot_inv --species "" \
+pgkyl gk-load-quantity --help
+pgkyl gk-load-quantity --quantity geo_int_jacobtot_inv --species "" \
     --name rt_gk_tcv_iwl_1x2v_p1 --path tests/test_data info
 ```
 
-`gyrokinetics-load-distf` reconstructs a full distribution function from the saved
+`gk-load-distf` reconstructs a full distribution function from the saved
 `Jf`-times-Jacobian(s) files (here `--name` *does* include the directory, since
 the simulation name itself includes the directory):
 
 ```bash
-pgkyl gyrokinetics-load-distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
+pgkyl gk-load-distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
     --species elc --frame 250 \
     --jacobtot-inv-file tests/test_data/rt_gk_tcv_iwl_1x2v_p1-geo_int_jacobtot_inv.gkyl \
     info

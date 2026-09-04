@@ -9,13 +9,13 @@ stay in flat ``operations`` modules. Domain-specific transformations live in
 operation subpackages (for example ``operations.gyrokinetics``); this layer
 is reserved for code that knows what field components physically mean.
 
-The four public packages mirror Gkeyll's model families: ``gyrokinetics``,
-``vlasov``, ``pkpm``, and ``moments``. The equation-blind ``discovery`` module
+The four public packages mirror Gkeyll's model families: ``gk``, ``vm``,
+``pkpm``, and ``mom``. The equation-blind ``discovery`` module
 stays shared at this package root. There is no separate ``loaders`` package;
 each model family owns its loading and program-scale diagnostics.
 """
 
-from . import discovery, gyrokinetics, moments, pkpm, vlasov
+from . import discovery, gk, mom, pkpm, vm
 
 from typing import Annotated, Literal
 
@@ -58,62 +58,62 @@ def _combine(function, dataset_names: tuple[str, ...]) -> None:
 
 
 for _module, _names in (
-    (moments.five_moment, ("density", "xvel", "yvel", "zvel", "vel", "pressure",
+    (mom.five_moment, ("density", "xvel", "yvel", "zvel", "vel", "pressure",
         "ke", "temp", "sound", "mach")),
-    (moments.ten_moment, ("pressure", "ke", "temp", "sound", "mach", "pxx", "pxy",
+    (mom.ten_moment, ("pressure", "ke", "temp", "sound", "mach", "pxx", "pxy",
         "pxz", "pyy", "pyz", "pzz", "pressure_tensor")),
-    (moments.mhd, ("bx", "by", "bz", "bi", "mag_pressure", "pressure", "temp",
+    (mom.mhd, ("bx", "by", "bz", "bi", "mag_pressure", "pressure", "temp",
         "sound", "mach")),
-    (moments.plasma, ("magB", "vt", "omegaC", "omegaP", "d", "lambdaD")),
+    (mom.plasma, ("magB", "vt", "omegaC", "omegaP", "d", "lambdaD")),
 ):
   for _name in _names:
     _map(getattr(_module, _name))
   # end
 # end
 
-_resolve(moments.multispecies.accumulate_current)
+_resolve(mom.multispecies.accumulate_current)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.MAP_APPEND,
-    consumes_inputs=True))(moments.multispecies.accumulate_current)
+    consumes_inputs=True))(mom.multispecies.accumulate_current)
 
 for _function, _datasets in (
-    (moments.five_moment.velocity, ("density", "momentum")),
-    (moments.ten_moment.p_par, ("ptensor", "bfield")),
-    (moments.ten_moment.p_perp, ("ptensor", "bfield")),
-    (moments.ten_moment.agyro, ("ptensor", "bfield")),
-    (moments.ten_moment.mom_agyro, ("species", "field")),
-    (moments.plasma.vA, ("species", "field")),
-    (moments.plasma.rho, ("species", "field")),
-    (moments.plasma.beta, ("species", "field")),
-    (moments.multispecies.energetics, ("elc", "ion", "field")),
-    (moments.rotations.parrotate, ("array", "rotator")),
-    (moments.rotations.perprotate, ("array", "rotator")),
-    (moments.rotations.bparrotate, ("array", "field")),
-    (moments.rotations.bperprotate, ("array", "field")),
-    (vlasov.kinetic.transform_frame, ("distribution", "bulk")),
+    (mom.five_moment.velocity, ("density", "momentum")),
+    (mom.ten_moment.p_par, ("ptensor", "bfield")),
+    (mom.ten_moment.p_perp, ("ptensor", "bfield")),
+    (mom.ten_moment.agyro, ("ptensor", "bfield")),
+    (mom.ten_moment.mom_agyro, ("species", "field")),
+    (mom.plasma.vA, ("species", "field")),
+    (mom.plasma.rho, ("species", "field")),
+    (mom.plasma.beta, ("species", "field")),
+    (mom.multispecies.energetics, ("elc", "ion", "field")),
+    (mom.rotations.parrotate, ("array", "rotator")),
+    (mom.rotations.perprotate, ("array", "rotator")),
+    (mom.rotations.bparrotate, ("array", "field")),
+    (mom.rotations.bperprotate, ("array", "field")),
+    (vm.kinetic.transform_frame, ("distribution", "bulk")),
     (pkpm.laguerre_compose, ("distribution", "variables")),
 ):
   _combine(_function, _datasets)
 # end
 
-moments.ten_moment.agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
-moments.ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
+mom.ten_moment.agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
+mom.ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak", "frobenius"]
 
 for _function in (pkpm.load_pkpm, discovery.find_output_stems,
-    discovery.available_frames, moments.enstrophy.enstrophy,
-    moments.ke_dke.ke_dke):
+    discovery.available_frames, mom.enstrophy.enstrophy,
+    mom.ke_dke.ke_dke):
   _resolve(_function)
   command(_DIAG_LOAD if _function is pkpm.load_pkpm else _DIAG_REPORT)(_function)
 # end
 pkpm.load_pkpm.__annotations__["idx"] = str
 
-_resolve(vlasov.trajectory.trajectory)
+_resolve(vm.trajectory.trajectory)
 command(CommandSpec(Section.DIAGNOSTICS, Execution.TERMINAL_ALL,
-    result=ResultPolicy.VALUE))(vlasov.trajectory.trajectory)
+    result=ResultPolicy.VALUE))(vm.trajectory.trajectory)
 
 for _function in (
-    gyrokinetics.load_distf, gyrokinetics.load_quantity,
-    gyrokinetics.energy_balance, gyrokinetics.particle_balance,
-    gyrokinetics.nodes,
+    gk.load_distf, gk.load_quantity,
+    gk.energy_balance, gk.particle_balance,
+    gk.nodes,
 ):
   _resolve(_function)
 # end
@@ -134,7 +134,7 @@ for _name in (
     "resolve_rz_projection", "extract_flux_surface",
     "resolve_flux_surface_grid",
 ):
-  _function = getattr(gyrokinetics, _name)
+  _function = getattr(gk, _name)
   if command_spec(_function) is None and hidden_spec(_function) is None:
     hidden("requires Python objects or is a registry/provider helper")(_function)
   # end
@@ -142,5 +142,5 @@ for _name in (
 # end
 
 __all__ = [
-    "gyrokinetics", "vlasov", "pkpm", "moments", "discovery",
+    "gk", "vm", "mom", "pkpm", "discovery",
 ]

@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.moments.five_moment -- the 5-/10-moment primitive
+"""Tests for postgkyl.diagnostics.mom.five_moment -- the 5-/10-moment primitive
 variable family (density, velocity, pressure, temperature, sound, Mach),
 folding the array-math analytic tests (formerly tests_models_five_moment.py)
 with the verb-level guard/inplace/tag/label/VARIABLES tests (formerly part of
@@ -13,7 +13,7 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics.moments import five_moment as fm
+from postgkyl.diagnostics.mom import five_moment as fm
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),

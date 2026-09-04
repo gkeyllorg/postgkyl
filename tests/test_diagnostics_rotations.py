@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.moments.rotations -- parrotate/perprotate, folding
+"""Tests for postgkyl.diagnostics.mom.rotations -- parrotate/perprotate, folding
 the array-math analytic tests (formerly tests_models_rotations.py) with the
 verb-level guard/inplace tests (formerly part of tests_ops_physics.py)."""
 
@@ -11,7 +11,7 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics.moments import rotations
+from postgkyl.diagnostics.mom import rotations
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),

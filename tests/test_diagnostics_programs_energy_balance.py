@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.gyrokinetics.energy_balance``.
+"""Tests for ``postgkyl.diagnostics.gk.energy_balance``.
 
 Ported/extended from ``src_bak/postgkyl/apps/gk_energy_balance.py`` (no
 ``tests_bak`` corpus exists for this app -- it was never covered upstream).
@@ -26,10 +26,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+from postgkyl.diagnostics.gk import utils as gk_utils
 
 eb = importlib.import_module(
-    "postgkyl.diagnostics.gyrokinetics.energy_balance")
+    "postgkyl.diagnostics.gk.energy_balance")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")

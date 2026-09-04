@@ -4,7 +4,7 @@ speed, and Mach number.
 
 MHD moment data is laid out ``[rho, mx, my, mz, E, Bx, By, Bz]``: components
 0:4 are shared with the 5-moment layout (density and momentum), so density
-and velocity are reused from :mod:`postgkyl.diagnostics.moments.five_moment`.
+and velocity are reused from :mod:`postgkyl.diagnostics.mom.five_moment`.
 """
 
 from __future__ import annotations

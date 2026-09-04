@@ -488,13 +488,13 @@ _ALLOWED = {
     "diagnostics": {"gdatastate", "operations", "numerics", "gdata", "render", "io", "cli_spec"}, # added by
                                                       # 10-diagnostics.md: equation-
                                                       # specific compositions grouped under
-                                                      # gyrokinetics/vlasov/pkpm/moments;
+                                                      # gk/vm/pkpm/mom;
                                                       # their modules wrap core
                                                       # verbs and state -- none of gdatastate/operations/
                                                       # numerics imports upward, so this
                                                       # cannot create a cycle; "gdata" added by
                                                       # 12-diagnostics-loaders.md: the
-                                                      # gyrokinetics/pkpm loaders build on
+                                                      # gk/pkpm loaders build on
                                                       # pg.load/GData (modal arithmetic,
                                                       # .interpolate()) to read simulation output
                                                       # -- gdata imports only gdatastate/operations/io, none
@@ -526,8 +526,8 @@ _ALLOWED = {
                                                       # "diagnostics" added by
                                                       # 12-diagnostics-loaders.md, which
                                                       # explicitly authorizes the facade
-                                                      # re-exporting the gyrokinetics namespace
-                                                      # for pg.gyrokinetics.load_quantity(...);
+                                                      # re-exporting the gk namespace for
+                                                      # pg.gk.load_quantity(...);
                                                       # "_version" is __init__.py's own import
                                                       # of _version.py's version_report (`pgkyl
                                                       # --version`'s commit/build-info report),

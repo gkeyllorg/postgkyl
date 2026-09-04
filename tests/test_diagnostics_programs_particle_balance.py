@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.gyrokinetics.particle_balance``.
+"""Tests for ``postgkyl.diagnostics.gk.particle_balance``.
 
 See ``test_diagnostics_programs_energy_balance.py`` for the shared testing
 strategy (no ``tests_bak`` corpus exists for this app; the repo ships no
@@ -20,10 +20,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+from postgkyl.diagnostics.gk import utils as gk_utils
 
 pb = importlib.import_module(
-    "postgkyl.diagnostics.gyrokinetics.particle_balance")
+    "postgkyl.diagnostics.gk.particle_balance")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")

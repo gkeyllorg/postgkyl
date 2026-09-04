@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.moments.ten_moment -- 10-moment pressure tensor,
+"""Tests for postgkyl.diagnostics.mom.ten_moment -- 10-moment pressure tensor,
 field-aligned pressure diagnostics (p_par, p_perp, agyrotropy), folding the
 array-math analytic tests (formerly tests_models_ten_moment.py) with the
 verb-level guard/inplace/VARIABLES tests (formerly part of
@@ -13,7 +13,7 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics.moments import ten_moment as tm
+from postgkyl.diagnostics.mom import ten_moment as tm
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),
@@ -325,7 +325,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   # end
 
   def test_density_reused_from_five_moment(self):
-    from postgkyl.diagnostics.moments import five_moment as fm
+    from postgkyl.diagnostics.mom import five_moment as fm
     assert tm.density is fm.density
     assert tm.xvel is fm.xvel
     assert tm.vel is fm.vel
@@ -334,7 +334,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   def test_pressure_uses_num_moms_10(self):
     d = self._tenmoment_state()
     out = tm.pressure(d)
-    from postgkyl.diagnostics.moments.five_moment import _get_p
+    from postgkyl.diagnostics.mom.five_moment import _get_p
     _, expected = _get_p(d.grid, d.values, gas_gamma=5.0 / 3, num_moms=10)
     np.testing.assert_allclose(out.values, expected)
   # end
@@ -342,7 +342,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   def test_ke_uses_num_moms_10(self):
     d = self._tenmoment_state()
     out = tm.ke(d)
-    from postgkyl.diagnostics.moments.five_moment import _get_ke
+    from postgkyl.diagnostics.mom.five_moment import _get_ke
     _, expected = _get_ke(d.grid, d.values, gas_gamma=5.0 / 3, num_moms=10)
     np.testing.assert_allclose(out.values, expected)
   # end
@@ -350,7 +350,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   def test_temp_uses_num_moms_10(self):
     d = self._tenmoment_state()
     out = tm.temp(d)
-    from postgkyl.diagnostics.moments.five_moment import _get_temp
+    from postgkyl.diagnostics.mom.five_moment import _get_temp
     _, expected = _get_temp(d.grid, d.values, gas_gamma=5.0 / 3, num_moms=10)
     np.testing.assert_allclose(out.values, expected)
   # end
@@ -358,7 +358,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   def test_sound_uses_num_moms_10(self):
     d = self._tenmoment_state()
     out = tm.sound(d)
-    from postgkyl.diagnostics.moments.five_moment import _get_sound
+    from postgkyl.diagnostics.mom.five_moment import _get_sound
     _, expected = _get_sound(d.grid, d.values, gas_gamma=5.0 / 3, num_moms=10)
     np.testing.assert_allclose(out.values, expected)
   # end
@@ -366,7 +366,7 @@ class TestFiveMomentSetFixedAtTenMoments:
   def test_mach_uses_num_moms_10(self):
     d = self._tenmoment_state()
     out = tm.mach(d)
-    from postgkyl.diagnostics.moments.five_moment import _get_mach
+    from postgkyl.diagnostics.mom.five_moment import _get_mach
     _, expected = _get_mach(d.grid, d.values, gas_gamma=5.0 / 3, num_moms=10)
     np.testing.assert_allclose(out.values, expected)
   # end

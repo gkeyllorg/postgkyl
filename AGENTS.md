@@ -133,10 +133,10 @@ src/postgkyl/
 │   └─ compiler.py
 │
 ├─ diagnostics/        equation-specific physics · grouped by Gkeyll [COMPOSITION]
-│   ├─ gyrokinetics/   distf/quantity loaders + balance programs
-│   ├─ vlasov/         distribution transforms + trajectories
+│   ├─ gk/             distf/quantity loaders + balance programs
+│   ├─ vm/             distribution transforms + trajectories
 │   ├─ pkpm/           Laguerre reconstruction + loader
-│   ├─ moments/        fluid moments, MHD, plasma, rotations + programs
+│   ├─ mom/            fluid moments, MHD, plasma, rotations + programs
 │   └─ discovery.py    shared equation-blind output discovery
 │
 ├─ gdata/                ★ THE FLUENT SURFACE  (sits ABOVE operations)  [FLUENT API]
@@ -192,11 +192,11 @@ src/postgkyl/
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ COMPOSITION                                                                  ║
 ║   diagnostics/   ★ EQUATION-SPECIFIC PHYSICS · Gkeyll model families         ║
-║      moments/        five_moment · ten_moment · mhd · plasma · multispecies  ║
+║      mom/            five_moment · ten_moment · mhd · plasma · multispecies  ║
 ║                      rotations · enstrophy · ke_dke                          ║
-║      vlasov/         kinetic frame transforms · trajectory                   ║
+║      vm/             kinetic frame transforms · trajectory                   ║
 ║      pkpm/           laguerre_compose(…) + load_pkpm(…)                      ║
-║      gyrokinetics/   load_distf · load_quantity + quantity registry          ║
+║      gk/             load_distf · load_quantity + quantity registry          ║
 ║                      (Tpar, beta, ExB_vel, …) · energy_balance → Figure …    ║
 ║      discovery.py    shared naming-convention stem/frame discovery           ║
 ╚════════════════════════════╦═════════════════════════════════════════════════╝
@@ -409,13 +409,13 @@ don't reimplement.
 The layer that knows what the numbers *mean* — and the ONLY package in the
 COMPOSITION tier. Its four packages mirror Gkeyll's model-family folders:
 
-- `moments/` owns `five_moment`, `ten_moment`, `mhd`, `plasma` (plasma
+- `mom/` owns `five_moment`, `ten_moment`, `mhd`, `plasma` (plasma
   parameters), `multispecies` (`energetics`, `accumulate_current`), `rotations`
   (par/perp to B), and the five-moment `enstrophy`/`ke_dke` frame programs.
-- `vlasov/` owns distribution-function frame transforms (`kinetic`) and
+- `vm/` owns distribution-function frame transforms (`kinetic`) and
   particle trajectories (`trajectory`).
 - `pkpm/` owns Laguerre reconstruction and `load_pkpm`.
-- `gyrokinetics/` owns distf/quantity loaders, the quantity registry (Tpar,
+- `gk/` owns distf/quantity loaders, the quantity registry (Tpar,
   beta, drift velocities), and `energy_balance`/`particle_balance`/`nodes`.
 
 R-Z mapping and theta-phi flux-surface
@@ -431,7 +431,7 @@ of this writing every program module builds its own bespoke figure directly
 with `matplotlib` instead.
 
 **Each equation model owns its loading internally** — there is no `loaders/`
-package. Entry points like `gyrokinetics.load_quantity(...)` (naming-
+package. Entry points like `gk.load_quantity(...)` (naming-
 convention load + registry dispatch, "physics-ready data by name") and
 `pkpm.load_pkpm(...)` live beside the physics they feed, because a quantity's
 ingredient files and its formula are one piece of equation knowledge. The
@@ -440,7 +440,7 @@ output-stem/frame discovery, the one home for Gkeyll's file-naming
 convention; equation loaders and programs resolve files through it, never
 with private globbing.
 
-Functions have real names (`moments.five_moment.pressure(d, gas_gamma=…)`), never
+Functions have real names (`mom.five_moment.pressure(d, gas_gamma=…)`), never
 string dispatch; each equation module's `VARIABLES` table maps the CLI's
 quantity-name vocabulary (`"density"`, `"pressure"`, …) to those functions —
 the one home for that vocabulary. These are **free functions, not `GData`
@@ -495,7 +495,7 @@ namespace, and generated CLI all point to this same callable.
 ### `__init__.py` — the facade (pure re-export)
 Gathers the public names from the layer that owns each: `load`/`GData` ← `gdata`,
 `plot` ← `render`, `info` ← `operations`, `save` ← `io`, and the
-`gyrokinetics` equation namespace ← `diagnostics.gyrokinetics`. **It
+`gk` equation namespace ← `diagnostics.gk`. **It
 contains no function or class definitions** (a test enforces this).
 
 `_version.py` sits beside `__init__.py` (same `""` layer) and supplies

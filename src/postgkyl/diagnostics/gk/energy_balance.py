@@ -156,7 +156,7 @@ def energy_balance(
     relative_error: Plot the relative error instead of every balance term.
     multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-      of block indices (see :func:`~postgkyl.diagnostics.gyrokinetics.utils.
+      of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
       get_block_indices`).
     field_dot_file: Explicit field-energy derivative path override.
     apar_dot_file: Explicit parallel-vector-potential energy derivative path.

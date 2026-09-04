@@ -235,7 +235,7 @@ class TestOneFigurePerField:
 # ================================== per-block geometry (gk_rz/gk_fluxsurf)
 class TestPerBlockGeometry:
   def test_geometry_prefix_is_per_block(self):
-    from postgkyl.diagnostics.gyrokinetics import rz
+    from postgkyl.diagnostics.gk import rz
 
     assert rz.geometry_prefix("d/sim_b2-elc_M0_3.gkyl") == "d/sim_b2"
     assert rz.geometry_prefix("d/sim-elc_M0_3.gkyl") == "d/sim"
@@ -243,7 +243,7 @@ class TestPerBlockGeometry:
   # end
 
   def test_explicit_geometry_path_substitutes_the_block_index(self):
-    from postgkyl.diagnostics.gyrokinetics.rz import per_block_path
+    from postgkyl.diagnostics.gk.rz import per_block_path
 
     assert per_block_path("geo_b*.gkyl", 3) == "geo_b3.gkyl"
     assert per_block_path("geo.gkyl", 3) == "geo.gkyl"       # no '*' -> as given
@@ -255,7 +255,7 @@ class TestPerBlockGeometry:
     # The bug this replaces: geometry was resolved once, from the first
     # dataset, and that one projection was applied to every block -- drawing
     # every block at block 0's position.
-    from postgkyl.diagnostics.gyrokinetics import rz
+    from postgkyl.diagnostics.gk import rz
 
     seen = []
     monkeypatch.setattr(rz, "resolve_geometry",
@@ -280,7 +280,7 @@ class TestPerBlockGeometry:
     # 'pgkyl ... interp gk_rz' must not interpolate twice: the second pass
     # would run the DG evaluation matrix over values that are already point
     # values, silently producing garbage instead of raising.
-    from postgkyl.diagnostics.gyrokinetics import utils
+    from postgkyl.diagnostics.gk import utils
 
     raw = pg.load(os.path.join(GEN, "mb_sim_b0-elc_M0_0.gkyl"))
     once = utils.interpolated_grid_values(raw)

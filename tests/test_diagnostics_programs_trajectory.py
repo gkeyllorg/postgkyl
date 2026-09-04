@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.vlasov.trajectory``.
+"""Tests for ``postgkyl.diagnostics.vm.trajectory``.
 
 Ported from ``src_bak/postgkyl/apps/trajectory.py`` (no ``tests_bak`` corpus
 exists for this app). A Gkeyll dynvector's grid holds exactly one time stamp
@@ -27,7 +27,7 @@ import pytest
 
 from postgkyl import io
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.diagnostics.vlasov import trajectory as traj
+from postgkyl.diagnostics.vm import trajectory as traj
 
 
 def _make_trajectory(num_pos=10, *, velocity=False, seed=0):

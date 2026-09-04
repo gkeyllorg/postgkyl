@@ -1,7 +1,7 @@
 """Equation-blind output discovery -- Gkeyll's file-naming convention.
 
 The ONE home for "what outputs does this directory hold" (CLAUDE.md,
-diagnostics layer). Every equation loader in ``gyrokinetics/`` and every
+diagnostics layer). Every equation loader in ``gk/`` and every
 program-scale diagnostic (layer 13) resolves files through here, never with
 private ``glob`` logic of its own -- doctrine V, one home per fact.
 
@@ -9,7 +9,7 @@ Ported from ``src_bak/postgkyl/loader.py``'s ``find_output_stems`` plus a new
 ``available_frames`` helper factored out of
 ``src_bak/postgkyl/gk/gk_quantities/gkquantity.py``'s ``_avail_frames_src``
 (the gyrokinetic quantity registry no longer globs on its own -- see
-``diagnostics/gyrokinetics/quantity.py``).
+``diagnostics/gk/quantity.py``).
 """
 
 from __future__ import annotations

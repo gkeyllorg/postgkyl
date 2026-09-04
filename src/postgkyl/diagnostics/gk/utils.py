@@ -78,8 +78,8 @@ def read_time_trace_if_present(
   per-dimension arrays (``GDataState.grid`` never hands back a bare
   ``ndarray``, only a list of one for 1-D data) -- this unwraps that single
   entry into the plain time array every trace in
-  :mod:`~postgkyl.diagnostics.gyrokinetics.energy_balance`/
-  :mod:`~postgkyl.diagnostics.gyrokinetics.particle_balance` is indexed
+  :mod:`~postgkyl.diagnostics.gk.energy_balance`/
+  :mod:`~postgkyl.diagnostics.gk.particle_balance` is indexed
   against.
   """
   found, grid, values, gdata = read_gfile_if_present(file_name)
@@ -121,8 +121,8 @@ def interpolated_grid_values(data: GData, *,
     comp: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
   """Interpolate ``data``'s DG coefficients onto its computational mesh.
 
-  Shared by :mod:`~postgkyl.diagnostics.gyrokinetics.rz` and
-  :mod:`~postgkyl.diagnostics.gyrokinetics.fluxsurf`, which both need a
+  Shared by :mod:`~postgkyl.diagnostics.gk.rz` and
+  :mod:`~postgkyl.diagnostics.gk.fluxsurf`, which both need a
   field-aligned dataset's fine computational grid (for sampling the
   simulation's geometry) alongside its interpolated values.
 

@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.gyrokinetics.nodes``.
+"""Tests for ``postgkyl.diagnostics.gk.nodes``.
 
 Ported from ``src_bak/postgkyl/apps/gk_nodes.py`` (no ``tests_bak`` corpus
 exists for this app). The pure geometry helpers (``is_geo_mapc2p``,
@@ -25,9 +25,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.gyrokinetics import utils as gk_utils
+from postgkyl.diagnostics.gk import utils as gk_utils
 
-nodes = importlib.import_module("postgkyl.diagnostics.gyrokinetics.nodes")
+nodes = importlib.import_module("postgkyl.diagnostics.gk.nodes")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")

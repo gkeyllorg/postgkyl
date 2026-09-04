@@ -1,4 +1,4 @@
-"""Tests for ``postgkyl.diagnostics.moments.ke_dke``.
+"""Tests for ``postgkyl.diagnostics.mom.ke_dke``.
 
 Ported from ``src_bak/postgkyl/tools/calc_ke_dke.py`` (no ``tests_bak``
 corpus exists for this tool). See the module docstring for the three
@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from postgkyl.diagnostics.moments import ke_dke as kd
+from postgkyl.diagnostics.mom import ke_dke as kd
 
 
 class _FakeGData:

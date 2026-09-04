@@ -11,7 +11,7 @@ import postgkyl as pg
 from postgkyl.cli.app import cli, COMMANDS
 from postgkyl.cli.state import DataSpace
 from postgkyl import diagnostics
-from postgkyl.diagnostics.gyrokinetics import distf
+from postgkyl.diagnostics.gk import distf
 from postgkyl.gdata.gdata import GData
 
 
@@ -38,31 +38,34 @@ def _invoke(name, datasets, **kwargs):
 
 def test_diagnostics_follow_gkeyll_model_families():
   assert diagnostics.__all__ == [
-      "gyrokinetics", "vlasov", "pkpm", "moments", "discovery"]
-  assert diagnostics.moments.five_moment.__name__.endswith(
-      ".moments.five_moment")
-  assert diagnostics.moments.enstrophy.__name__.endswith(
-      ".moments.enstrophy")
-  assert diagnostics.vlasov.kinetic.__name__.endswith(".vlasov.kinetic")
-  assert diagnostics.vlasov.trajectory.__name__.endswith(".vlasov.trajectory")
+      "gk", "vm", "mom", "pkpm", "discovery"]
+  assert diagnostics.mom.five_moment.__name__.endswith(
+      ".mom.five_moment")
+  assert diagnostics.mom.enstrophy.__name__.endswith(
+      ".mom.enstrophy")
+  assert diagnostics.vm.kinetic.__name__.endswith(".vm.kinetic")
+  assert diagnostics.vm.trajectory.__name__.endswith(".vm.trajectory")
+  for old_name in ("gyrokinetics", "vlasov", "moments"):
+    assert not hasattr(diagnostics, old_name)
+  # end
 # end
 
 
 def test_gyrokinetic_diagnostics_use_concise_python_names():
   functions = (
-      diagnostics.gyrokinetics.energy_balance,
-      diagnostics.gyrokinetics.nodes,
-      diagnostics.gyrokinetics.particle_balance,
-      diagnostics.gyrokinetics.load_distf,
-      diagnostics.gyrokinetics.load_quantity,
+      diagnostics.gk.energy_balance,
+      diagnostics.gk.nodes,
+      diagnostics.gk.particle_balance,
+      diagnostics.gk.load_distf,
+      diagnostics.gk.load_quantity,
   )
   assert tuple(function.__name__ for function in functions) == (
       "energy_balance", "nodes", "particle_balance", "load_distf",
       "load_quantity",
   )
-  assert pg.gyrokinetics is diagnostics.gyrokinetics
-  assert pg.gyrokinetics.available_quantities() == (
-      diagnostics.gyrokinetics.available_quantities())
+  assert pg.gk is diagnostics.gk
+  assert pg.gk.available_quantities() == (
+      diagnostics.gk.available_quantities())
   for bare_name in ("load_distf", "load_quantity", "available_gk_quantities"):
     assert not hasattr(pg, bare_name)
   # end
@@ -70,7 +73,7 @@ def test_gyrokinetic_diagnostics_use_concise_python_names():
       "gk_energy_balance", "gk_nodes", "gk_particle_balance",
       "load_gk_distf", "load_gk_quantity",
   ):
-    assert not hasattr(diagnostics.gyrokinetics, old_name)
+    assert not hasattr(diagnostics.gk, old_name)
     assert not hasattr(pg, old_name)
   # end
 # end
@@ -84,18 +87,21 @@ def test_only_canonical_diagnostic_names_are_registered():
   assert "kinetic-transform-frame" in COMMAND_BY_NAME
   assert "pkpm-laguerre-compose" in COMMAND_BY_NAME
   for name in (
-      "gyrokinetics-energy-balance", "gyrokinetics-nodes",
-      "gyrokinetics-particle-balance", "gyrokinetics-load-distf",
-      "gyrokinetics-load-quantity",
+      "gk-energy-balance", "gk-nodes",
+      "gk-particle-balance", "gk-load-distf",
+      "gk-load-quantity",
   ):
     assert name in COMMAND_BY_NAME
   # end
   for old_name in (
       "bparrotate", "agyro", "energetics", "euler", "tenmoment", "mhd",
       "transform_frame", "laguerre_compose",
-      "gyrokinetics-gk-energy-balance", "gyrokinetics-gk-nodes",
-      "gyrokinetics-gk-particle-balance", "gyrokinetics-load-gk-distf",
-      "gyrokinetics-load-gk-quantity",
+      "gyrokinetics-energy-balance", "gyrokinetics-nodes",
+      "gyrokinetics-particle-balance", "gyrokinetics-load-distf",
+      "gyrokinetics-load-quantity",
+      "gk-gk-energy-balance", "gk-gk-nodes",
+      "gk-gk-particle-balance", "gk-load-gk-distf",
+      "gk-load-gk-quantity",
   ):
     assert old_name not in COMMAND_BY_NAME
   # end
@@ -104,7 +110,7 @@ def test_only_canonical_diagnostic_names_are_registered():
 
 def test_load_distf_frame_is_text_and_cli_accepts_all_frames(tmp_path,
     monkeypatch):
-  command = COMMAND_BY_NAME["gyrokinetics-load-distf"]
+  command = COMMAND_BY_NAME["gk-load-distf"]
   frame_option = next(option for option in command.params
       if option.name == "frame")
   assert isinstance(frame_option.type, click.types.StringParamType)
@@ -125,7 +131,7 @@ def test_load_distf_frame_is_text_and_cli_accepts_all_frames(tmp_path,
   monkeypatch.chdir(tmp_path)
 
   result = CliRunner().invoke(cli, [
-      "gyrokinetics-load-distf", "--name", "sim", "--species", "ion",
+      "gk-load-distf", "--name", "sim", "--species", "ion",
       "--frame", ":", "--suffix", "fdot",
   ])
   assert result.exit_code == 0, result.output

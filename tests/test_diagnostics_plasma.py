@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.moments.plasma -- plasma-parameter GData verbs
+"""Tests for postgkyl.diagnostics.mom.plasma -- plasma-parameter GData verbs
 (magB, vt, vA, omegaC, omegaP, d, lambdaD, rho, beta), porting the analytic
 array-math assertions of tests_models_plasma_params.py onto the new
 GData-facing wrappers -- these functions never had a verb layer before this
@@ -14,7 +14,7 @@ import scipy.constants as const
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics.moments import plasma as pp
+from postgkyl.diagnostics.mom import plasma as pp
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),

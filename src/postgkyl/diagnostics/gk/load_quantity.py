@@ -1,6 +1,6 @@
 """Loader for pre-named gyrokinetic quantities.
 
-Resolves a quantity name through the :mod:`postgkyl.diagnostics.gyrokinetics.
+Resolves a quantity name through the :mod:`postgkyl.diagnostics.gk.
 registry`, loads the required source files, computes the quantity, and
 returns ready datasets. Ported from
 ``src_bak/postgkyl/loaders/gk_quantity.py``.

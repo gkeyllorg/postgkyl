@@ -1,5 +1,5 @@
 """Tests for the gyrokinetic loader stack:
-``postgkyl.diagnostics.gyrokinetics.{distf,quantity,quantities,registry,
+``postgkyl.diagnostics.gk.{distf,quantity,quantities,registry,
 load_quantity}``.
 
 Ported/extended from ``tests_bak/test_gk_load_quantity.py`` (the registry
@@ -22,10 +22,10 @@ import pytest
 from postgkyl import gpython
 from postgkyl.gdata import GData, GDataGroup
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.diagnostics.gyrokinetics import distf, quantities as ff, quantity as qmod, utils
-from postgkyl.diagnostics.gyrokinetics.load_quantity import (
+from postgkyl.diagnostics.gk import distf, quantities as ff, quantity as qmod, utils
+from postgkyl.diagnostics.gk.load_quantity import (
     available_quantities, load_quantity)
-from postgkyl.diagnostics.gyrokinetics.registry import gk_quant_registry
+from postgkyl.diagnostics.gk.registry import gk_quant_registry
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),
     reason="no compiled Gkeyll (libg0core.so) found")
@@ -766,7 +766,7 @@ class TestLoadDistf:
       return "sentinel"
     # end
 
-    from postgkyl.diagnostics.gyrokinetics import distf as distf_mod
+    from postgkyl.diagnostics.gk import distf as distf_mod
     monkeypatch.setattr(distf_mod, "load_distf", fake_load_distf)
 
     out = ff.load_distf([], path="/some/path/", name="sim", species="ion",
@@ -791,7 +791,7 @@ class TestLoadDistf:
       return "sentinel"
     # end
 
-    from postgkyl.diagnostics.gyrokinetics import distf as distf_mod
+    from postgkyl.diagnostics.gk import distf as distf_mod
     monkeypatch.setattr(distf_mod, "load_distf", fake_load_distf)
 
     ff.load_distf([], path="p", name="n", species="ion", frame=0)
@@ -1127,7 +1127,7 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
 
 
 class TestUtils:
-  """postgkyl.diagnostics.gyrokinetics.utils -- file/geometry helpers ported
+  """postgkyl.diagnostics.gk.utils -- file/geometry helpers ported
   from src_bak's gk_utils.py (matplotlib bits dropped, read_g*file adapted
   to postgkyl.gdata.load + .interpolate())."""
 

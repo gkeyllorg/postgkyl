@@ -1,4 +1,4 @@
-"""Tests for postgkyl.diagnostics.vlasov.kinetic -- distribution-function frame
+"""Tests for postgkyl.diagnostics.vm.kinetic -- distribution-function frame
 transform, folding the array-math analytic tests (formerly
 tests_models_frame.py) with the verb-level guard/inplace tests (formerly
 part of tests_ops_physics.py)."""
@@ -12,7 +12,7 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.diagnostics.vlasov import kinetic
+from postgkyl.diagnostics.vm import kinetic
 from postgkyl.gdatastate.gdatastate import GDataState
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),

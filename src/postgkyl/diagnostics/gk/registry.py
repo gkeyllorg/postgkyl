@@ -2,7 +2,7 @@
 
 Ported from ``src_bak/postgkyl/gk/gk_quantities/registry.py``. Each entry
 names its preferred source combinations (in order) and the fetch function
-for each; :func:`~postgkyl.diagnostics.gyrokinetics.quantity.GkQuantity.
+for each; :func:`~postgkyl.diagnostics.gk.quantity.GkQuantity.
 get_avail_source` picks the first combination whose files are actually
 present on disk.
 """
