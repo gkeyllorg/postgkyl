@@ -44,7 +44,7 @@ def test_golden_script_1d():
   assert g.num_dims == 1
   assert g.values.shape[0] == 48  # 24 cells * (p+1=2) interpolation points
   assert type(g).__name__ == "GData"  # subclass propagated through verbs
-  fig = g.plot(show=False)
+  fig = g.plot(no_show=True)
   assert fig is not None
 
 
@@ -52,7 +52,7 @@ def test_golden_script_2d():
   g = pg.load(F2D).interpolate().select(comp=0)
   assert g.num_dims == 2
   assert g.values.shape == (16, 16, 1)
-  assert g.plot(show=False) is not None
+  assert g.plot(no_show=True) is not None
 
 
 def test_plot_has_one_canonical_callable():
@@ -311,7 +311,7 @@ def test_conversions_are_always_explicit():
   with pytest.raises(ValueError):
     np.asarray(a)  # coefficients are not values
   with pytest.raises(ValueError):
-    a.plot(show=False)  # coefficients are not plottable
+    a.plot(no_show=True)  # coefficients are not plottable
 
 
 @needs_gkeyll
@@ -337,14 +337,14 @@ def test_pointwise_numpy_on_point_values():
 def test_plot_point_values_directly():
   """Nodal/quad datasets plot at their true point locations."""
   a = pg.load(F1)
-  assert a.to_nodal().plot(show=False) is not None
-  assert a.to_quad().plot(show=False) is not None
+  assert a.to_nodal().plot(no_show=True) is not None
+  assert a.to_quad().plot(no_show=True) is not None
   b = pg.load(F2D)
-  assert b.to_quad().plot(show=False) is not None
-  assert b.to_nodal().plot(show=False) is not None  # p1 corners: tensor set
+  assert b.to_quad().plot(no_show=True) is not None
+  assert b.to_nodal().plot(no_show=True) is not None  # p1 corners: tensor set
   p2 = pg.load(os.path.join(DATA, "generated", "2d_ms_p2.gkyl"))
   with pytest.raises(ValueError):
-    p2.to_nodal().plot(show=False)  # non-tensor node set -> to_quad
+    p2.to_nodal().plot(no_show=True)  # non-tensor node set -> to_quad
 
 
 @needs_gkeyll
@@ -405,7 +405,7 @@ def test_cli_chained(tmp_path):
 
   out = tmp_path / "cli.png"
   result = CliRunner().invoke(cli, [
-      F1, "interp", "sel", "--comp", "0", "plot", "--show", "False", "--saveas",
+      F1, "interp", "sel", "--comp", "0", "plot", "--no_show", "--saveas",
       str(out)
   ])
   assert result.exit_code == 0, result.output

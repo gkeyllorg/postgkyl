@@ -19,7 +19,7 @@ pg.plot(
     color=["#D55E00", "#0072B2"],
     legend_labels=["2e-4", "2e-5"],
     linestyle=["-", "--"],
-    legend=True,
+    no_legend=False,
     legend_subplot=0,
     legend_loc="best",
     title=r"Comparing $\alpha$ = 2e-4 to $\alpha$ = 2e-5",
@@ -49,5 +49,5 @@ pg.plot(
                      r"$T_\parallel$ [keV],"
                      r"$T_\perp$ [keV]"),
     saveas=figure_path,
-    show=False,
+    no_show=True,
 )

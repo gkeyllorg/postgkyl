@@ -62,7 +62,7 @@ def interpolate(values: np.ndarray,
                 *,
                 poly_order: int,
                 basis_type: str,
-                modal: bool = True,
+                nodal: bool = False,
                 num_interp: int | None = None):
   """Interpolate DG coefficients onto a refined uniform mesh.
 
@@ -72,7 +72,7 @@ def interpolate(values: np.ndarray,
     poly_order: polynomial order of the basis.
     basis_type: long basis name (``"serendipity"``, ``"tensor"``,
       ``"hybrid"``, or ``"gkhybrid"``).
-    modal: False for nodal-basis data (field-blocked node values per cell);
+    nodal: Whether the data are field-blocked node values per cell;
       converted through the exact ``nodal_to_modal`` matrix first.
     num_interp: interpolation points per cell; defaults to ``poly_order + 1``.
 
@@ -91,8 +91,8 @@ def interpolate(values: np.ndarray,
   c_mat = gpython_basis.interpolation_matrix(basis_type, num_dims, poly_order,
                                              num_interp)
 
-  n2m = (None if modal else gpython_basis.nodal_to_modal_matrix(
-      basis_type, num_dims, poly_order))
+  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order)
+         if nodal else None)
   out = None
   for c in range(num_fields):
     q = values[..., c * nodes:(c + 1) * nodes]
@@ -122,7 +122,7 @@ def local_poly(values: np.ndarray,
                *,
                poly_order: int,
                basis_type: str,
-               modal: bool = True,
+               nodal: bool = False,
                npoints: int = 2):
   """Evaluate the DG polynomial cell-by-cell onto a discontinuity-preserving
   plotting mesh.
@@ -139,7 +139,7 @@ def local_poly(values: np.ndarray,
     poly_order: polynomial order of the basis.
     basis_type: long basis name (``"serendipity"``, ``"tensor"``,
       ``"hybrid"``, or ``"gkhybrid"``).
-    modal: False for nodal-basis data; converted through the exact
+    nodal: Whether the data use a nodal basis; converted through the exact
       ``nodal_to_modal`` matrix first.
     npoints: evaluation points per cell, from one face to the other.
 
@@ -161,8 +161,8 @@ def local_poly(values: np.ndarray,
       basis_type, num_dims, poly_order,
       gpython_basis.tensor_points(nodes_1d, num_dims))
 
-  n2m = (None if modal else gpython_basis.nodal_to_modal_matrix(
-      basis_type, num_dims, poly_order))
+  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order)
+         if nodal else None)
   out = None
   for c in range(num_fields):
     q = values[..., c * nb:(c + 1) * nb]

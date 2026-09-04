@@ -29,15 +29,15 @@ def eval_at_points(coeffs: np.ndarray,
                    *,
                    basis_type: str,
                    poly_order: int,
-                   modal: bool = True) -> np.ndarray:
+                   nodal: bool = False) -> np.ndarray:
   """Evaluate one coordinate's DG coefficients at arbitrary computational points.
 
   Args:
     coeffs: ``(*cells, num_basis)`` array -- the mapping's per-cell
       coefficients for a single physical coordinate ``x_d(z)`` over its own
-      uniform grid. Modal by default; pass ``modal=False`` for a nodal-basis
-      mapping file (converted through the exact ``nodal_to_modal`` matrix
-      first, same pattern as :func:`postgkyl.dg.interpolate.interpolate`).
+      uniform grid. Pass ``nodal=True`` for a nodal-basis mapping file
+      (converted through the exact ``nodal_to_modal`` matrix first, same
+      pattern as :func:`postgkyl.dg.interpolate.interpolate`).
     lower: length-``m`` array, the mapping's own domain lower bounds.
     upper: length-``m`` array, the mapping's own domain upper bounds.
     cells: length-``m`` array, the mapping's own cell counts (must match
@@ -47,7 +47,7 @@ def eval_at_points(coeffs: np.ndarray,
     basis_type: long basis name (``"serendipity"``, ``"tensor"``,
       ``"hybrid"``, or ``"gkhybrid"``).
     poly_order: polynomial order of the mapping's basis.
-    modal: False for nodal-basis mapping coefficients.
+    nodal: Whether these are nodal-basis mapping coefficients.
 
   Returns:
     ``(*shape,)`` array -- ``x_d`` evaluated at every point.
@@ -71,7 +71,7 @@ def eval_at_points(coeffs: np.ndarray,
         f"eval_at_points: points last axis has length {points.shape[-1]}, "
         f"expected {m} (len(lower))")
 
-  if not modal:
+  if nodal:
     n2m = gpython.basis.nodal_to_modal_matrix(basis_type, m, poly_order)
     coeffs = np.einsum("jk,...k->...j", n2m, coeffs)
 
@@ -125,7 +125,7 @@ def map_grid(map_coeffs: np.ndarray, map_ctx: dict,
   cells = map_ctx["cells"]
   basis_type = map_ctx["basis_type"]
   poly_order = map_ctx["poly_order"]
-  modal = map_ctx.get("value_form", "modal") == "modal"
+  nodal = map_ctx.get("value_form", "modal") == "nodal"
   m = len(target_axes)
 
   if m == 1:
@@ -142,7 +142,7 @@ def map_grid(map_coeffs: np.ndarray, map_ctx: dict,
                      points,
                      basis_type=basis_type,
                      poly_order=poly_order,
-                     modal=modal) for d in range(m)
+                     nodal=nodal) for d in range(m)
   ]
 
 
@@ -177,7 +177,7 @@ def map_grid_separable(map_coeffs: np.ndarray, map_ctx: dict,
   cells = map_ctx["cells"]
   basis_type = map_ctx["basis_type"]
   poly_order = map_ctx["poly_order"]
-  modal = map_ctx.get("value_form", "modal") == "modal"
+  nodal = map_ctx.get("value_form", "modal") == "nodal"
   m = len(target_axes)
 
   nb = gpython.basis.num_basis(basis_type, 1, poly_order)
@@ -195,5 +195,5 @@ def map_grid_separable(map_coeffs: np.ndarray, map_ctx: dict,
                        points,
                        basis_type=basis_type,
                        poly_order=poly_order,
-                       modal=modal))
+                       nodal=nodal))
   return new_axes

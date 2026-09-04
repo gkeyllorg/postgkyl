@@ -75,18 +75,18 @@ class TestMagB:
 
 class TestVt:
 
-  def test_sqrt2_default_true(self):
+  def test_no_sqrt2_defaults_false(self):
     out = pp.vt(_species())
     T = _P / _RHO
     np.testing.assert_allclose(out.values.flat[0], np.sqrt(2.0 * T), rtol=1e-10)
 
-  def test_sqrt2_false(self):
-    out = pp.vt(_species(), sqrt2=False)
+  def test_no_sqrt2(self):
+    out = pp.vt(_species(), no_sqrt2=True)
     T = _P / _RHO
     np.testing.assert_allclose(out.values.flat[0], np.sqrt(T), rtol=1e-10)
 
   def test_mass_scales_result(self):
-    out = pp.vt(_species(), mass=2.0, sqrt2=False)
+    out = pp.vt(_species(), mass=2.0, no_sqrt2=True)
     T = _P / _RHO
     np.testing.assert_allclose(out.values.flat[0], np.sqrt(T / 2.0), rtol=1e-10)
 
@@ -96,7 +96,7 @@ class TestVt:
     e_mhd = 0.5 * _RHO * _VX**2 + _P / (_GAMMA - 1) + mag_p
     mhd_vals = np.array([[_RHO, _RHO * _VX, 0.0, 0.0, e_mhd, bx, by, bz]])
     d = _make(_G1, mhd_vals)
-    out = pp.vt(d, gas_gamma=_GAMMA, mhd=True, sqrt2=False)
+    out = pp.vt(d, gas_gamma=_GAMMA, mhd=True, no_sqrt2=True)
     np.testing.assert_allclose(out.values.flat[0],
                                np.sqrt(_P / _RHO),
                                rtol=1e-10)
@@ -211,8 +211,8 @@ class TestLambdaD:
                      charge=1.0,
                      epsilon_0=1.0,
                      mu_0=1.0,
-                     sqrt2=True)
-    vt_out = pp.vt(_species(), sqrt2=True)
+                     no_sqrt2=False)
+    vt_out = pp.vt(_species(), no_sqrt2=False)
     omegaP_out = pp.omegaP(_species(), mass=1.0, charge=1.0, epsilon_0=1.0)
     expected = vt_out.values.flat[0] / omegaP_out.values.flat[0] / np.sqrt(2.0)
     np.testing.assert_allclose(out.values.flat[0], expected, rtol=1e-10)
@@ -227,17 +227,21 @@ class TestLambdaD:
 class TestRho:
 
   def test_larmor_radius(self):
-    out = pp.rho(_species(), _field(), mass=1.0, charge=1.0, sqrt2=True)
-    vt_out = pp.vt(_species(), sqrt2=True)
+    out = pp.rho(_species(), _field(), mass=1.0, charge=1.0, no_sqrt2=False)
+    vt_out = pp.vt(_species(), no_sqrt2=False)
     omegaC_out = pp.omegaC(_field(), mass=1.0, charge=1.0)
     expected = vt_out.values.flat[0] / omegaC_out.values.flat[0]
     np.testing.assert_allclose(out.values.flat[0], expected, rtol=1e-10)
 
-  def test_sqrt2_false_matches_sqrt2_true_times_sqrt2(self):
-    rho_true = pp.rho(_species(), _field(), mass=1.0, charge=1.0, sqrt2=True)
-    rho_false = pp.rho(_species(), _field(), mass=1.0, charge=1.0, sqrt2=False)
-    np.testing.assert_allclose(rho_false.values.flat[0] /
-                               rho_true.values.flat[0],
+  def test_no_sqrt2_matches_default_after_normalization(self):
+    rho_default = pp.rho(_species(), _field(), mass=1.0, charge=1.0)
+    rho_no_sqrt2 = pp.rho(_species(),
+                          _field(),
+                          mass=1.0,
+                          charge=1.0,
+                          no_sqrt2=True)
+    np.testing.assert_allclose(rho_no_sqrt2.values.flat[0] /
+                               rho_default.values.flat[0],
                                1.0,
                                rtol=1e-8)
 
@@ -254,20 +258,23 @@ class TestRho:
 class TestBeta:
 
   def test_plasma_beta(self):
-    out = pp.beta(_species(), _field(), mu_0=1.0, sqrt2=True)
-    vt_out = pp.vt(_species(), sqrt2=True)
+    out = pp.beta(_species(), _field(), mu_0=1.0, no_sqrt2=False)
+    vt_out = pp.vt(_species(), no_sqrt2=False)
     vA_out = pp.vA(_species(), _field(), mu_0=1.0)
     expected = vt_out.values.flat[0]**2 / vA_out.values.flat[0]**2
     np.testing.assert_allclose(out.values.flat[0], expected, rtol=1e-10)
 
-  def test_sqrt2_false_matches_sqrt2_true(self):
-    # The "* 2.0" correction for sqrt2=False exactly compensates for the
+  def test_no_sqrt2_matches_default(self):
+    # The "* 2.0" correction for no_sqrt2=True exactly compensates for the
     # missing sqrt(2) factor squared in v_th**2, so both conventions give
     # the same beta.
-    beta_true = pp.beta(_species(), _field(), mu_0=1.0, sqrt2=True)
-    beta_false = pp.beta(_species(), _field(), mu_0=1.0, sqrt2=False)
-    np.testing.assert_allclose(beta_false.values.flat[0],
-                               beta_true.values.flat[0],
+    beta_default = pp.beta(_species(), _field(), mu_0=1.0)
+    beta_no_sqrt2 = pp.beta(_species(),
+                            _field(),
+                            mu_0=1.0,
+                            no_sqrt2=True)
+    np.testing.assert_allclose(beta_no_sqrt2.values.flat[0],
+                               beta_default.values.flat[0],
                                rtol=1e-10)
 
   @needs_gkeyll

@@ -103,6 +103,25 @@ class _DocumentedArgument(click.Argument):
 class _GeneratedCommand(click.Command):
   """Render positional parameter docs separately from option docs."""
 
+  def parse_args(self, ctx, args):
+    """Let generated boolean options omit their otherwise optional value."""
+    boolean_options = {
+        option_name
+        for parameter in self.get_params(ctx)
+        if isinstance(parameter, _OptionalBooleanOption)
+        for option_name in parameter.opts
+    }
+    normalized = []
+    for index, value in enumerate(args):
+      normalized.append(value)
+      option_name = value.partition("=")[0]
+      if value != option_name or option_name not in boolean_options:
+        continue
+      next_value = args[index + 1] if index + 1 < len(args) else None
+      if next_value is None or not _is_boolean_literal(next_value):
+        normalized.append("True")
+    return super().parse_args(ctx, normalized)
+
   def format_options(self, ctx, formatter) -> None:
     arguments = []
     options = []
@@ -120,6 +139,10 @@ class _GeneratedCommand(click.Command):
         formatter.write_dl(options)
 
 
+class _OptionalBooleanOption(click.Option):
+  """Marker for a BOOL option whose explicit value may be omitted."""
+
+
 _NONE_TYPE = type(None)
 _SCALARS = {
     str: CodecKind.STRING,
@@ -129,6 +152,12 @@ _SCALARS = {
     Path: CodecKind.PATH,
 }
 _RESERVED_SHORT_OPTIONS = frozenset({"h"})
+_BOOLEAN_LITERALS = frozenset(
+    {"1", "0", "yes", "no", "true", "false", "on", "off", "t", "f", "y", "n"})
+
+
+def _is_boolean_literal(value: str) -> bool:
+  return value.strip().lower() in _BOOLEAN_LITERALS
 
 
 def _short_option_names(
@@ -385,6 +414,9 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
       codec = (TypeCodec(CodecKind.STRING, str,
                          optional=not required) if is_dataset_ref else _codec(
                              canonical, parameter.name, base, markers))
+      if codec.kind is CodecKind.BOOLEAN and parameter.default is not False:
+        raise _error(canonical, parameter.name,
+                     "boolean CLI options must default to False")
       if is_argument and (codec.multiple or codec.nargs != 1):
         raise _error(canonical, parameter.name,
                      "CliArgument currently supports scalar values only")
@@ -686,7 +718,11 @@ def build_click_command(model: CommandModel,
     if parameter.name in short_options:
       declarations.append(short_options[parameter.name])
     declarations.append(parameter.name)
-    params.append(click.Option(declarations, **attrs))
+    option_class = (_OptionalBooleanOption
+                    if codec.kind is CodecKind.BOOLEAN else click.Option)
+    if codec.kind is CodecKind.BOOLEAN:
+      attrs["metavar"] = "[BOOLEAN]"
+    params.append(option_class(declarations, **attrs))
 
   @click.pass_context
   def callback(click_context, **kwargs):

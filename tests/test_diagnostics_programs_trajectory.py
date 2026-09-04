@@ -97,11 +97,11 @@ class TestTrajectorySynthetic:
 
   def test_first_frame_renders_without_error(self):
     d = _make_trajectory(num_pos=6, velocity=True)
-    anim = traj.trajectory(d, velocity=True)
+    anim = traj.trajectory(d, no_velocity=False)
     try:
       fig = anim._fig
       ax = fig.axes[0]
-      traj._update(0, ax, (d, ), 1, True, None, None, None, None, None, None)
+      traj._update(0, ax, (d, ), 1, False, None, None, None, None, None, None)
       assert ax.get_title().startswith("T:")
     finally:
       plt.close(anim._fig)
@@ -114,7 +114,7 @@ class TestTrajectorySynthetic:
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     try:
-      traj._update(3, ax, (d, ), 1, True, None, None, None, None, None, None)
+      traj._update(3, ax, (d, ), 1, False, None, None, None, None, None, None)
     finally:
       plt.close(fig)
 

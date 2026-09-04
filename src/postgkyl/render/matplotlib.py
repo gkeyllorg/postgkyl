@@ -304,7 +304,7 @@ def plot(
     grid_indices: bool = False,
     num_axes: int | None = None,
     start_axes: int = 0,
-    spread_axes: bool = True,
+    overlay_axes: bool = False,
     num_subplot_row: int | None = None,
     num_subplot_col: int | None = None,
     streamline: bool = False,
@@ -336,13 +336,13 @@ def plot(
     rcParams: Annotated[dict[str, object] | None,
                         CliType(dict[str, str] | None),
                         KeyValue()] = None,
-    legend: bool = True,
+    no_legend: bool = False,
     legend_labels: list[str] | None = None,
     legend_subplot: int | None = None,
     legend_loc: Annotated[str | int | tuple[float, float],
                           CliType(str)] = "best",
     forcelegend: bool = False,
-    colorbar: bool = True,
+    no_colorbar: bool = False,
     xlabel: str | None = None,
     ylabel: str | None = None,
     clabel: str | None = None,
@@ -362,7 +362,7 @@ def plot(
                                  CliType(tuple[float, float] | None)] = None,
     split_log_ylim: Annotated[_AxisLimits | None,
                               CliType(tuple[float, float] | None)] = None,
-    split_right_ticks: bool = True,
+    no_split_right_ticks: bool = False,
     split_legend_side: str = "log",
     split_log_base: float = 10.0,
     split_log_nonpositive: str = "clip",
@@ -370,7 +370,7 @@ def plot(
     fixaspect: bool = False,
     aspect: float | None = None,
     edgecolors: str | None = None,
-    showgrid: bool = True,
+    no_showgrid: bool = False,
     hashtag: bool = False,
     xkcd: bool = False,
     color: Annotated[ColorType | Iterable[ColorType] | None,
@@ -390,7 +390,7 @@ def plot(
     saveas: Annotated[str | os.PathLike | Iterable[str | os.PathLike] | None,
                       CliType(str | None)] = None,
     dpi: int = 200,
-    show: bool = True,
+    no_show: bool = False,
     clear: bool = False):
   """Plot one or more datasets onto a shared figure and return it.
 
@@ -400,7 +400,7 @@ def plot(
   then drawn -- overlaid onto the same panels for 1-D, or onto the next
   ``start_axes``-offset block of panels when ``num_axes`` spreads multiple
   datasets' components across one grid (the old ``--subplots`` behaviour).
-  Set ``spread_axes=False`` to keep every dataset in the *same*
+  Set ``overlay_axes=True`` to keep every dataset in the *same*
   ``start_axes`` block instead of advancing per dataset -- what the blocks of
   one multiblock field want, since they are one field and belong in one panel.
 
@@ -418,7 +418,7 @@ def plot(
   drawing (shifts/scales keep their screen-axis meaning). ``grid_indices``
   replaces each plotted coordinate with its zero-based sample index without
   changing the dataset itself. ``save``/``saveas``/
-  ``show`` make the render call self-sufficient: ``saveas`` writes a PNG or
+  ``no_show`` make the render call self-sufficient: ``saveas`` writes a PNG or
   PDF according to its extension (an extension-less name defaults to PNG),
   while ``save=True`` derives a PNG name from the input dataset. ``clear`` lets
   ``render.animate`` redraw onto a persistent figure across frames.
@@ -471,7 +471,7 @@ def plot(
     grid_indices: Plot zero-based sample indices instead of grid values.
     num_axes: Number of logical component axes.
     start_axes: First logical component axis to use.
-    spread_axes: Advance the component-axis block for each dataset.
+    overlay_axes: Draw every dataset in the same component-axis block.
     num_subplot_row: Forced subplot row count.
     num_subplot_col: Forced subplot column count.
     streamline: Draw two-component fields as streamlines.
@@ -501,12 +501,12 @@ def plot(
     relax: Allow relaxed layout behavior for reused figures.
     style: Matplotlib style name or style-file path.
     rcParams: Matplotlib configuration overrides.
-    legend: Draw legends for line plots.
+    no_legend: Suppress legends for line plots.
     legend_labels: Explicit dataset legend labels.
     legend_subplot: Zero-based subplot receiving the legend.
     legend_loc: Matplotlib legend location.
     forcelegend: Draw a legend even for one unlabeled curve.
-    colorbar: Draw color bars for field plots.
+    no_colorbar: Suppress color bars for field plots.
     xlabel: Horizontal-axis label override.
     ylabel: Vertical-axis label override.
     clabel: Color-bar label override.
@@ -524,7 +524,7 @@ def plot(
     split_gap: Gap between split halves.
     split_linear_ylim: Limits for the linear half.
     split_log_ylim: Limits for the logarithmic half.
-    split_right_ticks: Draw ticks on the right edge of split panels.
+    no_split_right_ticks: Suppress ticks on the right edge of split panels.
     split_legend_side: Split half receiving the legend.
     split_log_base: Logarithm base for the logarithmic half.
     split_log_nonpositive: Handling of nonpositive logarithmic values.
@@ -532,7 +532,7 @@ def plot(
     fixaspect: Use equal physical scaling on coordinate axes.
     aspect: Explicit axes aspect ratio.
     edgecolors: Mesh edge color.
-    showgrid: Draw plot grid lines.
+    no_showgrid: Suppress plot grid lines.
     hashtag: Prefix labels with a hash marker.
     xkcd: Draw using Matplotlib's XKCD context.
     color: Line color or per-line colors.
@@ -548,7 +548,7 @@ def plot(
     save: Save to an automatically derived output name.
     saveas: Explicit image output path or paths.
     dpi: Saved-image resolution.
-    show: Display the figures interactively.
+    no_show: Do not display the figures interactively.
     clear: Clear a reused figure before drawing.
 
   Returns:
@@ -797,7 +797,7 @@ def plot(
               left_ax.xaxis.set_label_coords(pair_center, -0.1)
             if sub_title:
               left_ax.set_title(sub_title, x=pair_center, y=1.08)
-            if split_right_ticks:
+            if not no_split_right_ticks:
               right_ax.yaxis.tick_right()
               right_ax.yaxis.set_label_position("right")
         elif squeeze:  # Plotting into 1 panel
@@ -930,11 +930,11 @@ def plot(
           comp_label = (label_prefix if explicit_legend_label else
                         (f"{label_prefix:s}_c{comp:d}".strip("_")
                          if len(idx_comps) > 1 else label_prefix))
-          comp_legend = (legend and
+          comp_legend = (not no_legend and
                          (legend_subplot is None or
                           (logical_ax_idx == legend_subplot
                            if split_linear_log else cax is ax[legend_subplot])))
-          comp_colorbar = colorbar
+          comp_colorbar = not no_colorbar
 
           if num_dims == 1:
             nodal_grid = _nodal_grid(grid, cells)
@@ -1237,7 +1237,7 @@ def plot(
                              horizontalalignment="left",
                              transform=legend_ax.transAxes)
           for side_idx, side_ax in enumerate(component_axes):
-            side_ax.grid(showgrid)
+            side_ax.grid(not no_showgrid)
             if hashtag and (not split_linear_log or side_ax is legend_ax):
               side_ax.text(0.97,
                            0.03,
@@ -1293,14 +1293,14 @@ def plot(
             if fixaspect and not (surface and num_dims == 2):
               plt.setp(side_ax, aspect=aspect)
 
-        if num_axes and spread_axes:
+        if num_axes and not overlay_axes:
           cur_start_axes += num_comps
 
       mpl_fig.tight_layout()
       for output_path in _output_paths(save, family_saveas, states):
         mpl_fig.savefig(output_path, dpi=dpi)
     figures.append(mpl_fig)
-  if show:
+  if not no_show:
     plt.show()
   return figures[0] if len(figures) == 1 else figures
 

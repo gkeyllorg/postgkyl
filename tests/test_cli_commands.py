@@ -108,9 +108,10 @@ def test_api_underscores_are_the_only_cli_spellings():
   _ok(DISTF, "local_poly", "--npoints", "3", "info")
 
 
-def test_boolean_options_preserve_the_script_signature():
-  assert _run(DISTF, "interpolate", "fft", "--psd").exit_code != 0
+def test_boolean_options_accept_an_optional_explicit_value():
+  _ok(DISTF, "interpolate", "fft", "--psd", "info")
   _ok(DISTF, "interpolate", "fft", "--psd", "True", "info")
+  _ok(DISTF, "interpolate", "fft", "--psd", "False", "info")
 
 
 def test_declared_cli_arguments_are_positional():
@@ -132,7 +133,7 @@ def test_generated_save_options_match_python_parameter_names(tmp_path):
 
 def test_plot_uses_generated_render_options(tmp_path):
   output = tmp_path / "field.png"
-  _ok(FIELD, "interpolate", "select", "--comp", "0", "plot", "--show", "False",
+  _ok(FIELD, "interpolate", "select", "--comp", "0", "plot", "--no_show",
       "--grid_indices", "True", "--saveas", output)
   assert output.is_file()
 

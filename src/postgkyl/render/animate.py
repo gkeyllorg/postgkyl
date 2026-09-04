@@ -110,7 +110,7 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
     if dat0.ctx.get("time") is not None:
       parts.append(f"time: {dat0.ctx['time']:.4e}")
     kwargs["title"] = " ".join(parts)
-  return backend.plot(*frame, figure=fig, clear=True, show=False, **kwargs)
+  return backend.plot(*frame, figure=fig, clear=True, no_show=True, **kwargs)
 
 
 def _render_frame(index: int, frames: list[list["GDataState"]], fig: "Figure",
@@ -231,10 +231,10 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             multiblock: bool = False,
             grouptags: bool = False,
             interval: int = 100,
-            fixed_range: bool = True,
+            variable_range: bool = False,
             cutoffglobalrange: float | None = None,
             notitle: bool = False,
-            show: bool = True,
+            no_show: bool = False,
             save: bool = False,
             saveas: str | None = None,
             fps: int | None = None,
@@ -253,12 +253,12 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     multiblock: Force datasets with the same frame index into one frame.
     grouptags: Build a separate animation for each dataset tag.
     interval: live-animation delay between frames, in milliseconds.
-    fixed_range: hold a constant value/color scale across every frame
-      (``ymin``/``ymax``/``zmin``/``zmax``).
+    variable_range: Recompute the value/color scale for every frame instead
+      of holding ``ymin``/``ymax``/``zmin``/``zmax`` constant.
     cutoffglobalrange: clip the fixed range to this central percentile band
       (see ``_frame_value_range``); ``None`` uses the true min/max.
     notitle: suppress the per-frame frame/time title.
-    show: open a live window (the ``FuncAnimation`` path only).
+    no_show: Do not open a live window (the ``FuncAnimation`` path only).
     save: write to ``saveas`` (or ``anim.gif``) after building the frames.
     saveas: output path; its extension selects the writer (``.gif``/
       ``.webp``/``.apng`` via PIL, ``.mp4``/``.mov``/``.avi``/``.mkv`` via
@@ -303,10 +303,10 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
         animate(tagged,
                 multiblock=multiblock,
                 interval=interval,
-                fixed_range=fixed_range,
+                variable_range=variable_range,
                 cutoffglobalrange=cutoffglobalrange,
                 notitle=notitle,
-                show=show,
+                no_show=no_show,
                 save=save,
                 saveas=suffixed(saveas, tag),
                 fps=fps,
@@ -321,7 +321,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
   plot_kwargs = {}
   plot_kwargs["notitle"] = notitle
 
-  if fixed_range:
+  if not variable_range:
     vmin, vmax = _frame_value_range(frames,
                                     cutoffglobalrange,
                                     yscale=plot_kwargs.get("yscale", 1.0),
@@ -383,6 +383,6 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
 
     mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
     anim.save(out_file, writer="ffmpeg", fps=fps, dpi=dpi)
-  if show:
+  if not no_show:
     plt.show()
   return anim

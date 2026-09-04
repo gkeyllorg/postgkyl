@@ -112,6 +112,55 @@ def test_codec_models_and_round_trip(tmp_path):
   })
 
 
+def test_boolean_options_are_optional_value_flags_with_false_defaults():
+  calls = []
+
+  @command(
+      CommandSpec(Section.UTILITY,
+                  Execution.LOAD,
+                  result=ResultPolicy.SILENT))
+  def booleans(*, enabled: bool = False):
+    """Exercise an optional-value boolean option.
+
+    Args:
+      enabled: Enable the optional behavior.
+    """
+    calls.append(enabled)
+
+  model = compile_callable(booleans)
+  command_obj = build_click_command(model)
+  options = {option.name: option for option in command_obj.params}
+  assert options["enabled"].opts == ["--enabled", "-e"]
+  assert options["enabled"].default is False
+
+  runner = CliRunner()
+  for arguments, expected in (
+      ([], False),
+      (["--enabled"], True),
+      (["--enabled", "True"], True),
+      (["--enabled", "False"], False),
+      (["-e"], True),
+  ):
+    result = runner.invoke(command_obj, arguments, obj=DataSpace())
+    assert result.exit_code == 0, result.output
+    assert calls[-1] == expected
+
+
+def test_boolean_options_must_default_to_false():
+
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
+  def default_true(enabled: bool = True):
+    """Declare an invalid true-default boolean.
+
+    Args:
+      enabled: Invalid true-default boolean.
+    """
+
+  with pytest.raises(CommandCompilationError,
+                     match="boolean CLI options must default to False"):
+    compile_callable(default_true)
+
+
 def test_exact_option_projection_and_help_provenance():
   model = compile_callable(codec_demo)
   command_obj = build_click_command(model)
@@ -373,10 +422,24 @@ def test_every_generated_name_preserves_api_underscores():
         else:
           assert isinstance(options[parameter.name], click.Option)
           expected_opts = ["--" + parameter.name]
-          if parameter.name[0] not in claimed_initials:
-            expected_opts.append("-" + parameter.name[0])
-            claimed_initials.add(parameter.name[0])
+          initial = parameter.name[0]
+          if initial not in claimed_initials:
+            expected_opts.append("-" + initial)
+            claimed_initials.add(initial)
         assert options[parameter.name].opts == expected_opts
+
+
+def test_every_generated_boolean_has_a_false_cli_default():
+  for model, command_obj in zip(MODELS, COMMANDS):
+    options = {parameter.name: parameter for parameter in command_obj.params}
+    for parameter in model.parameters:
+      if parameter.codec is None or parameter.codec.kind is not CodecKind.BOOLEAN:
+        continue
+      option = options[parameter.name]
+      assert option.default is False
+      assert option.metavar == "[BOOLEAN]"
+      assert parameter.default is False
+      assert option.opts[0] == "--" + parameter.name
 
 
 def test_cli_has_no_manual_command_package_or_compatibility_layer():

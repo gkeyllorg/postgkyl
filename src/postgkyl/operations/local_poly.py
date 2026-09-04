@@ -57,7 +57,7 @@ def local_poly(data: "GDataState",
                                data.grid,
                                poly_order=poly_order,
                                basis_type=basis_type,
-                               modal=(value_form == "modal"),
+                               nodal=(value_form == "nodal"),
                                npoints=npoints)
   return data._result(grid,
                       values,

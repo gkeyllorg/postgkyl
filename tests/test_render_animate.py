@@ -110,7 +110,7 @@ class TestLiveAnimation:
 
   def test_returns_funcanimation_with_correct_frame_count(self):
     from matplotlib.animation import FuncAnimation
-    anim = anim_mod.animate(_three_frames(), show=False)
+    anim = anim_mod.animate(_three_frames(), no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 3
 
@@ -118,14 +118,14 @@ class TestLiveAnimation:
     from matplotlib.animation import FuncAnimation
     grouped = [[_line_frame(0.0), _line_frame(0.5)],
                [_line_frame(1.0), _line_frame(1.5)]]
-    anim = anim_mod.animate(grouped, show=False)
+    anim = anim_mod.animate(grouped, no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2
 
   def test_multiblock_groups_equal_frame_indices(self):
     from matplotlib.animation import FuncAnimation
     grouped = [_line_frame(0.0), _line_frame(0.5)]
-    anim = anim_mod.animate(grouped, multiblock=True, show=False)
+    anim = anim_mod.animate(grouped, multiblock=True, no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 1
 
@@ -135,13 +135,13 @@ class TestLiveAnimation:
     frames[0].tag = "left"
     frames[1].tag = "left"
     frames[2].tag = "right"
-    animations = anim_mod.animate(frames, grouptags=True, show=False)
+    animations = anim_mod.animate(frames, grouptags=True, no_show=True)
     assert len(animations) == 2
     assert all(isinstance(anim, FuncAnimation) for anim in animations)
     assert [anim._save_count for anim in animations] == [2, 1]
 
   def test_show_true_does_not_raise_on_agg(self):
-    anim = anim_mod.animate(_three_frames(), show=True)
+    anim = anim_mod.animate(_three_frames(), no_show=False)
     assert anim is not None
 
   @needs_ffmpeg
@@ -151,7 +151,7 @@ class TestLiveAnimation:
                             save=True,
                             saveas=str(out),
                             fps=5,
-                            show=False)
+                            no_show=True)
     assert anim is not None
     assert out.exists()
     assert out.stat().st_size > 0
@@ -185,14 +185,14 @@ class TestSaveFrames:
 
   def test_writes_one_png_per_frame(self, tmp_path):
     prefix = str(tmp_path / "frame")
-    paths = anim_mod.animate(_three_frames(), saveframes=prefix, show=False)
+    paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     assert len(paths) == 3
     for p in paths:
       assert os.path.isfile(p)
 
   def test_saveframes_path_naming(self, tmp_path):
     prefix = str(tmp_path / "myframe")
-    paths = anim_mod.animate(_three_frames(), saveframes=prefix, show=False)
+    paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     assert paths[0] == f"{prefix}_0.png"
     assert paths[2] == f"{prefix}_2.png"
 
@@ -201,7 +201,7 @@ class TestSaveFrames:
     paths = anim_mod.animate(_three_frames(),
                              saveframes=prefix,
                              nproc=2,
-                             show=False)
+                             no_show=True)
     assert len(paths) == 3
     for p in paths:
       assert os.path.isfile(p)
@@ -213,7 +213,7 @@ class TestSaveFrames:
                               nproc=2,
                               tmpdir=str(tmp_path),
                               saveas=str(out),
-                              show=False)
+                              no_show=True)
     assert result == str(out)
     assert out.exists()
     # the scratch directory must not leak its frame PNGs behind.
@@ -233,7 +233,7 @@ class TestCompileMovie:
 
   def test_gif_compile_via_pil(self, tmp_path):
     prefix = str(tmp_path / "frame")
-    paths = anim_mod.animate(_three_frames(), saveframes=prefix, show=False)
+    paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     out = tmp_path / "out.gif"
     anim_mod._compile_movie(paths, str(out), duration=100.0)
     assert out.exists()
@@ -245,7 +245,7 @@ class TestCompileMovie:
                               saveframes=prefix,
                               save=True,
                               saveas=str(out),
-                              show=False)
+                              no_show=True)
     assert out.exists()
     assert len(result) == 3
 
@@ -253,14 +253,14 @@ class TestCompileMovie:
       self, monkeypatch, tmp_path):
     monkeypatch.setattr(_ffmpeg, "resolve_ffmpeg", lambda: None)
     prefix = str(tmp_path / "frame")
-    paths = anim_mod.animate(_three_frames(), saveframes=prefix, show=False)
+    paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     with pytest.raises(RuntimeError, match="ffmpeg"):
       anim_mod._compile_movie(paths, str(tmp_path / "out.mp4"), duration=100.0)
 
   @needs_ffmpeg
   def test_mp4_compile_with_ffmpeg(self, tmp_path):
     prefix = str(tmp_path / "frame")
-    paths = anim_mod.animate(_three_frames(), saveframes=prefix, show=False)
+    paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     out = tmp_path / "out.mp4"
     anim_mod._compile_movie(paths, str(out), fps=10, duration=100.0)
     assert out.exists()

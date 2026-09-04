@@ -235,7 +235,7 @@ class GDataState:
     self._values = values
     if isinstance(values, gpython.GkylArray):
       # Cell layout is not derivable from the flat native array; it comes from
-      # ctx (set by the reader, and carried through copy(data=False)).
+      # ctx (set by the reader, and carried through metadata-only copies).
       self.ctx["num_comps"] = values.ncomp
     else:
       self.ctx["cells"] = np.array(values.shape[:-1], dtype=np.int64)
@@ -277,14 +277,17 @@ class GDataState:
     return self
 
   # ------------------------------------------------------------- duplication
-  def clone(self, data: bool = True) -> "GDataState":
+  def clone(self, metadata_only: bool = False) -> "GDataState":
     """Deep-copy without re-reading. Builds ``type(self)`` so subclasses
-    (e.g. the fluent ``GData``) propagate through every verb result."""
+    (e.g. the fluent ``GData``) propagate through every verb result.
+
+    Set ``metadata_only=True`` to omit the grid and values from the copy.
+    """
     new = type(self)(tag=self._tag, label=self._custom_label, ctx=self.ctx)
     new.set_label(self._label)
     new._file_name = self._file_name
     new.color = self.color
-    if data and self._values is not None:
+    if not metadata_only and self._values is not None:
       dup = (self._values.clone() if isinstance(self._values, gpython.GkylArray)
              else np.array(self._values, copy=True))
       new.push([np.array(g, copy=True) for g in self._grid], dup)
@@ -305,7 +308,7 @@ class GDataState:
     input -- so ``operations`` can be typed on ``GDataState`` yet return a fluent
     ``GData`` at runtime.
     """
-    target = self if inplace else self.clone(data=False)
+    target = self if inplace else self.clone(metadata_only=True)
     target.push(grid, values)
     if tag is not None:
       target.set_tag(tag)
@@ -364,13 +367,13 @@ class GDataState:
     return np.asarray(self._values, dtype=dtype)
 
   # -------------------------------------------------------------- reporting
-  def info(self, index: int = 0, header: bool = True) -> str:
-    """Build (and print) a human-readable summary of the dataset."""
+  def info(self, index: int = 0, no_header: bool = False) -> str:
+    """Build and print a summary; optionally omit its descriptive heading."""
     values, num_comps = self.get_values(), self.num_comps
     num_dims, num_cells = self.num_dims, self.num_cells
     lo, up = self.bounds
     out = ""
-    if header:
+    if not no_header:
       lbl = self.get_label()
       out += f"{lbl}{' ' if lbl else ''}({self.get_tag()}#{index})\n"
     if "time" in self.ctx:

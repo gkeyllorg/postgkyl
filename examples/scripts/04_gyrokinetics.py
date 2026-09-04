@@ -50,7 +50,7 @@ print("registered quantities:", pg.gk.available_quantities())
 m0, = pg.gk.load_quantity("M0", "ion", HMOM_NAME, "250", path=str(TEST_DATA))
 print("M0:", repr(m0), " label:", m0.get_label())
 
-fig = m0.plot(title=m0.get_label(), show=False)
+fig = m0.plot(title=m0.get_label(), no_show=True)
 fig.savefig(OUTPUT_DIR / "04_gyrokinetics_M0.png")
 
 # 2. "M1" needs the species mass to convert a momentum-like moment into a
@@ -71,7 +71,7 @@ jacobtot_inv, = pg.gk.load_quantity("geo_int_jacobtot_inv",
                                     path=str(TEST_DATA))
 print("(J B)^-1:", repr(jacobtot_inv), " label:", jacobtot_inv.get_label())
 
-fig = jacobtot_inv.plot(title=jacobtot_inv.get_label(), show=False)
+fig = jacobtot_inv.plot(title=jacobtot_inv.get_label(), no_show=True)
 fig.savefig(OUTPUT_DIR / "04_gyrokinetics_jacobtot_inv.png")
 
 # 4. The full electron distribution function: 3D (x, vpar, mu), built from
@@ -86,7 +86,7 @@ print("distf:", repr(distf))
 # It's a regular GData from here on -- e.g. select a fixed-mu slice down to
 # the (x, vpar) plane and plot it, same as any other 2D field.
 slice_2d = distf.select(z2=0.0)
-fig = slice_2d.plot(title="elc distf, mu=0 slice", show=False)
+fig = slice_2d.plot(title="elc distf, mu=0 slice", no_show=True)
 fig.savefig(OUTPUT_DIR / "04_gyrokinetics_distf_slice.png")
 
 print("04_gyrokinetics: OK")

@@ -6,7 +6,7 @@ from postgkyl.gdatastate import flatten_datasets
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
-def info(*datasets: GDataState, header: bool = True) -> list:
+def info(*datasets: GDataState, no_header: bool = False) -> list:
   """Print a summary for each dataset; return the list of summary strings.
 
   Accepts ``info(a, b)`` or ``info([a, b])``. Each dataset's own ``info`` method
@@ -14,7 +14,7 @@ def info(*datasets: GDataState, header: bool = True) -> list:
 
   Args:
     datasets: Datasets whose summaries are returned.
-    header: Include the descriptive heading in every summary.
+    no_header: Omit the descriptive heading from every summary.
   """
   states = flatten_datasets(datasets)
-  return [d.info(index=i, header=header) for i, d in enumerate(states)]
+  return [d.info(index=i, no_header=no_header) for i, d in enumerate(states)]

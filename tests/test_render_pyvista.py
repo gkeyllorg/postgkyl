@@ -2,7 +2,7 @@
 
 ``pyvista`` is a hard dependency (pyproject.toml) but needs a working
 (possibly software/off-screen) OpenGL context; every test here renders
-off-screen (``show=False``) and is skipped cleanly if that context is not
+off-screen (``no_show=True``) and is skipped cleanly if that context is not
 available on the host, per the layer instructions.
 """
 
@@ -56,14 +56,14 @@ def _volume(n=6) -> GDataState:
 class TestPyvista:
 
   def test_offscreen_volume_render_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=False)
+    pyvista(_volume(), no_show=True, volume=True)
 
   def test_offscreen_contour_render_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=True, contour_levels=4)
+    pyvista(_volume(), no_show=True, volume=False, contour_levels=4)
 
   def test_saves_a_png_screenshot(self, tmp_path):
     out = tmp_path / "out.png"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()
     assert out.stat().st_size > 0
 
@@ -72,66 +72,66 @@ class TestPyvista:
     # GL context; skip cleanly rather than mislabel it as a GL failure.
     pytest.importorskip("trame_vtk")
     out = tmp_path / "out.html"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()
 
   def test_log_color_scale_does_not_raise(self):
-    pyvista(_volume(), show=False, is_log=True)
+    pyvista(_volume(), no_show=True, is_log=True)
 
   def test_diverging_colormap_does_not_raise(self):
-    pyvista(_volume(), show=False, diverging=True)
+    pyvista(_volume(), no_show=True, diverging=True)
 
   def test_clip_plane_does_not_raise(self):
-    pyvista(_volume(), show=False, mesh_clip_plane=True)
+    pyvista(_volume(), no_show=True, mesh_clip_plane=True)
 
   def test_clip_plane_volume_mode_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=False, mesh_clip_plane=True)
+    pyvista(_volume(), no_show=True, volume=True, mesh_clip_plane=True)
 
   def test_hide_axes_does_not_raise(self):
-    pyvista(_volume(), show=False, hide_axes=True)
+    pyvista(_volume(), no_show=True, hide_axes=True)
 
   def test_cylindrical_to_cartesian_does_not_raise(self):
-    pyvista(_volume(), show=False, cylindrical_to_cartesian=True)
+    pyvista(_volume(), no_show=True, cylindrical_to_cartesian=True)
 
   def test_diverging_opacity_ramp_does_not_raise(self):
-    pyvista(_volume(), show=False, opacity="diverging")
+    pyvista(_volume(), no_show=True, opacity="diverging")
 
   def test_named_theme_does_not_raise(self):
-    pyvista(_volume(), show=False, theme="document")
+    pyvista(_volume(), no_show=True, theme="document")
 
   def test_hide_zeros_hides_exact_zero_points(self):
     d = _volume()
     d.values[0, 0, 0, 0] = 0.0
-    pyvista(d, show=False, hide_zeros=True)
+    pyvista(d, no_show=True, hide_zeros=True)
 
   def test_mesh_slice_plane_contour_mode_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=True, mesh_slice_plane=True)
+    pyvista(_volume(), no_show=True, volume=False, mesh_slice_plane=True)
 
   def test_mesh_slice_plane_volume_mode_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=False, mesh_slice_plane=True)
+    pyvista(_volume(), no_show=True, volume=True, mesh_slice_plane=True)
 
   def test_volume_clip_plane_does_not_raise(self):
-    pyvista(_volume(), show=False, is_contour=False, volume_clip_plane=True)
+    pyvista(_volume(), no_show=True, volume=True, volume_clip_plane=True)
 
   def test_saves_a_vector_graphic(self, tmp_path):
     out = tmp_path / "out.svg"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()
 
   def test_saves_a_gltf_export(self, tmp_path):
     out = tmp_path / "out.gltf"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()
 
   def test_saves_a_vtksz_export(self, tmp_path):
     # Like .html, PyVista's .vtksz export needs the optional "trame" extra.
     pytest.importorskip("trame")
     out = tmp_path / "out.vtksz"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert out.exists()
 
   def test_no_title_omits_add_text(self):
-    pyvista(_volume(), show=False, title=None)
+    pyvista(_volume(), no_show=True, title=None)
 
   def test_gl_context_errors_propagate_unwrapped(self):
     # _require_gl_context only wraps *unexpected* exceptions from the render
@@ -139,7 +139,7 @@ class TestPyvista:
     # an unknown theme name) should pass through as-is, not get relabeled as
     # a GL-context failure.
     with pytest.raises(ValueError, match="Theme"):
-      pyvista(_volume(), show=False, theme="bogus_theme_xyz")
+      pyvista(_volume(), no_show=True, theme="bogus_theme_xyz")
 
   def test_spin_rotates_camera_and_stops_after_interaction(self, monkeypatch):
     # The rotation timer/click-observer callbacks only ever run inside VTK's
@@ -161,7 +161,7 @@ class TestPyvista:
     monkeypatch.setattr(RenderWindowInteractor, "add_observer",
                         _fake_add_observer)
 
-    pyvista(_volume(), show=False, spin=True, is_contour=False)
+    pyvista(_volume(), no_show=True, no_spin=False, volume=True)
 
     assert "rotate" in captured and "click" in captured
     captured["rotate"](0)
@@ -175,7 +175,7 @@ class TestPyvista:
     monkeypatch.setattr(pv.Plotter, "export_html",
                         lambda self, path: called.setdefault("path", path))
     out = tmp_path / "out.html"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert called["path"] == str(out)
 
   def test_vtksz_saveas_dispatches_to_export_vtksz(self, monkeypatch, tmp_path):
@@ -184,16 +184,16 @@ class TestPyvista:
     monkeypatch.setattr(pv.Plotter, "export_vtksz",
                         lambda self, path: called.setdefault("path", path))
     out = tmp_path / "out.vtksz"
-    pyvista(_volume(), show=False, saveas=str(out))
+    pyvista(_volume(), no_show=True, saveas=str(out))
     assert called["path"] == str(out)
 
   def test_show_true_calls_plotter_show(self, monkeypatch):
     # A real interactive .show() blocks waiting for the window to close;
-    # stub it out to exercise the show=True branch without hanging the test.
+    # stub it out to exercise the no_show=False branch without hanging the test.
     calls = []
     monkeypatch.setattr(pv.Plotter, "show",
                         lambda self, *a, **k: calls.append(True))
-    pyvista(_volume(), show=True, is_contour=False)
+    pyvista(_volume(), no_show=False, volume=True)
     assert calls == [True]
 
   def test_show_bounds_axes_ranges_reflect_scale_and_shift(self, monkeypatch):
@@ -219,8 +219,8 @@ class TestPyvista:
     d.push(grid, values)
 
     pyvista(d,
-            show=False,
-            is_contour=False,
+            no_show=True,
+            volume=True,
             xscale=2.0,
             xshift=1.0,
             yscale=3.0,
@@ -247,8 +247,8 @@ class TestPyvistaValidation:
     d = GDataState()
     d.push([np.linspace(0.0, 1.0, 5)], np.ones((4, 1)))
     with pytest.raises(ValueError, match="3D"):
-      pyvista(d, show=False)
+      pyvista(d, no_show=True)
 
   def test_unsupported_saveas_extension_raises(self):
     with pytest.raises(ValueError, match="Unsupported"):
-      pyvista(_volume(), show=False, saveas="out.bogus")
+      pyvista(_volume(), no_show=True, saveas="out.bogus")

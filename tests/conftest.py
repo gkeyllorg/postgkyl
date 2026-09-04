@@ -15,11 +15,10 @@ imports) can run:
   ``webbrowser.open`` -- the mechanism ``render.plotly``'s ``open_preview``
   (default-off; see its docstring) uses to show a Plotly figure -- and, if
   PyVista is installed, ``pyvista.Plotter.show`` -- the analogous mechanism
-  for a PyVista render window (default-off there too; see
-  ``render.pyvista.pyvista``'s ``show`` parameter). Both render functions
-  already default their own ``show`` to ``False`` for exactly this reason;
-  this fixture is the backstop for any call (present or future) that forgets
-  to pass ``show=False`` explicitly.
+  for a PyVista render window (see ``render.pyvista.pyvista``'s ``no_show``
+  parameter). Plotly defaults ``show`` to ``False``; interactive-by-default
+  PyVista calls in tests pass ``no_show=True``. This fixture is the backstop
+  for any call that forgets to select its renderer's headless setting.
 
 Test data generation
 --------------------
@@ -85,8 +84,8 @@ def _block_gui_popups():
   def _no_browser(*_args, **_kwargs):
     raise AssertionError(
         "webbrowser.open() was called during tests -- a figure/preview would "
-        "have popped up on the desktop. Pass show=False (render.plotly's/"
-        "render.pyvista's default) or mock the call being tested.")
+        "have popped up on the desktop. Pass show=False for render.plotly or "
+        "no_show=True for render.pyvista, or mock the call being tested.")
 
   webbrowser.open = _no_browser
   webbrowser.open_new = _no_browser
@@ -98,8 +97,8 @@ def _block_gui_popups():
     def _no_plotter_show(*_args, **_kwargs):
       raise AssertionError(
           "pyvista.Plotter.show() was called during tests -- a render window "
-          "would have popped up on the desktop. Pass show=False (the default) "
-          "or mock the call being tested.")
+          "would have popped up on the desktop. Pass no_show=True or mock "
+          "the call being tested.")
 
     pyvista.Plotter.show = _no_plotter_show
   except ImportError:

@@ -42,7 +42,7 @@ def _masked(coord: np.ndarray, lo: float | None,
   return out
 
 
-def _update(i, ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin,
+def _update(i, ax, datasets, leap, no_velocity, xmin, xmax, ymin, ymax, zmin,
             zmax):
   """``FuncAnimation`` frame callback: redraw every dataset's trajectory up
   to (and current position at) frame ``i``."""
@@ -62,7 +62,7 @@ def _update(i, ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin,
     ax.plot(x, y, z, color=color)
     ax.scatter(x[t_idx], y[t_idx], z[t_idx], color=color)
 
-    if velocity and dataset.num_comps == 6:
+    if not no_velocity and dataset.num_comps == 6:
       if t_idx + leap >= len(time):
         dt = time[-1] - time[t_idx]
       else:
@@ -88,7 +88,7 @@ def trajectory(
     *datasets: "GDataState",
     fixaspect: bool = False,
     interval: int = 100,
-    velocity: bool = True,
+    no_velocity: bool = False,
     numframes: int | None = None,
     xmin: float | None = None,
     xmax: float | None = None,
@@ -108,8 +108,7 @@ def trajectory(
       per sample (the dynvector convention).
     fixaspect: Enforce the same scaling on all three axes.
     interval: Animation frame interval, in milliseconds.
-    velocity: Draw a velocity vector at the current position (only for
-      6-component datasets).
+    no_velocity: Do not draw a velocity vector at the current position.
     numframes: Number of animation frames; ``None`` uses one frame per
       sample. When given, samples are subsampled evenly (by
       ``floor(num_samples / numframes)``).
@@ -143,7 +142,7 @@ def trajectory(
   anim = FuncAnimation(fig,
                        _update,
                        num_pos,
-                       fargs=(ax, datasets, leap, velocity, xmin, xmax, ymin,
+                       fargs=(ax, datasets, leap, no_velocity, xmin, xmax, ymin,
                               ymax, zmin, zmax),
                        interval=interval)
 

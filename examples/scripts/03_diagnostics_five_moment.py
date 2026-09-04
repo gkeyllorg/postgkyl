@@ -70,10 +70,10 @@ try:
 except ValueError as exc:
   print("fm.density(modal) refuses:", exc)
 
-fig = density.plot(title="density (Sod shock tube)", show=False)
+fig = density.plot(title="density (Sod shock tube)", no_show=True)
 fig.savefig(OUTPUT_DIR / "03_diagnostics_density.png")
 
-fig = pressure.plot(title="pressure (Sod shock tube)", show=False)
+fig = pressure.plot(title="pressure (Sod shock tube)", no_show=True)
 fig.savefig(OUTPUT_DIR / "03_diagnostics_pressure.png")
 
 print("03_diagnostics_five_moment: OK")

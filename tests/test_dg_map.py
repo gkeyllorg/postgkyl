@@ -133,7 +133,7 @@ def test_eval_at_points_rejects_points_dim_mismatch():
 
 
 def test_eval_at_points_nodal_basis_path_matches_modal():
-  """A nodal-basis mapping file (``modal=False``) converts through the exact
+  """A nodal-basis mapping file (``nodal=True``) converts through the exact
   nodal<->modal change of basis, then evaluates identically to the modal path."""
   lower, upper, cells = 0.0, 4.0, 4
   modal, nodal = _project_1d(lambda z: z, lower, upper, cells, "serendipity", 1)
@@ -142,12 +142,12 @@ def test_eval_at_points_nodal_basis_path_matches_modal():
                                     targets[:, None],
                                     basis_type="serendipity",
                                     poly_order=1,
-                                    modal=True)
+                                    nodal=False)
   got_nodal = dg.map.eval_at_points(nodal, [lower], [upper], [cells],
                                     targets[:, None],
                                     basis_type="serendipity",
                                     poly_order=1,
-                                    modal=False)
+                                    nodal=True)
   np.testing.assert_allclose(got_nodal, got_modal, atol=1e-12)
   np.testing.assert_allclose(got_nodal, targets, atol=1e-12)
 

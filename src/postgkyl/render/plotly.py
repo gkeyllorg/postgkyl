@@ -7,10 +7,9 @@ through ``render.labels.latex_to_html`` instead.
 Like ``matplotlib.py``, ``plotly`` and ``plotly_animate`` own their *entire*
 save/preview lifecycle here --
 ``save``/``saveas``/``show`` (plus the rotating-export camera parameters) are
-real parameters of both functions, so e.g. ``pg.load(f).interpolate().plotly(show=True)``
-opens an auto-rotating browser preview with zero CLI glue, exactly as
-the generated CLI (which passes ``show=True`` explicitly to preserve the
-terminal's preview-by-default behavior). Both default to inert
+real parameters of both functions, so e.g.
+``pg.load(f).interpolate().plotly(show=True)`` opens an auto-rotating browser
+preview with zero CLI glue. Both default to inert
 (``show=False``, ``save=False``): a bare call just builds and returns the
 figure, so a script or unit test never has an unrequested file or browser
 side effect. The generated ``plotly`` and ``plotly_animate`` commands lower
@@ -478,9 +477,9 @@ def plotly(data: GDataState,
                                KeyValue()] = None,
            background: str = "dark",
            invert_cmap: bool = False,
-           legend: bool = True,
+           no_legend: bool = False,
            label_prefix: str = "",
-           colorbar: bool = True,
+           no_colorbar: bool = False,
            xlabel: str | None = None,
            ylabel: str | None = None,
            zlabel: str | None = None,
@@ -492,7 +491,7 @@ def plotly(data: GDataState,
            logc: bool = False,
            aspect: Annotated[str | float | None,
                              CliType(str | None)] = None,
-           showgrid: bool = True,
+           no_showgrid: bool = False,
            hashtag: bool = False,
            xkcd: bool = False,
            color: str | None = None,
@@ -531,9 +530,7 @@ def plotly(data: GDataState,
   separate preview render). All three default to inert (``show=False``,
   ``save=False``) -- a bare ``pg.load(f).interpolate().plotly()`` just
   builds and returns the figure, no file written and no browser opened;
-  the CLI's ``--show/--no-show`` defaults to *on* by passing ``show=True``
-  explicitly, since a human running it from a terminal does want to see
-  something.
+  the generated CLI has exactly the same defaults.
 
   Args:
     data: Point-value dataset to render.
@@ -559,9 +556,9 @@ def plotly(data: GDataState,
     rcParams: Matplotlib configuration overrides used while deriving styles.
     background: ``"dark"`` or ``"light"`` scene theme.
     invert_cmap: Reverse the selected colormap.
-    legend: Show labeled traces in the legend.
+    no_legend: Suppress labeled traces in the legend.
     label_prefix: Prefix for component trace names.
-    colorbar: Show the color bar.
+    no_colorbar: Suppress the color bar.
     xlabel: Horizontal-axis label override.
     ylabel: Vertical-axis label override.
     zlabel: Third-axis label override.
@@ -572,7 +569,7 @@ def plotly(data: GDataState,
     logz: Use a logarithmic third axis.
     logc: Use logarithmic color values.
     aspect: Scene aspect mode (``auto``, ``cube``, ``data``), or numeric ratio.
-    showgrid: Draw scene grid lines.
+    no_showgrid: Suppress scene grid lines.
     hashtag: Add a ``#pgkyl`` annotation.
     xkcd: Derive colors from Matplotlib's XKCD style.
     color: Replace the colormap with one fixed trace color.
@@ -707,11 +704,11 @@ def plotly(data: GDataState,
     z_axis_range = _axis_range(z, zrange, logz)
 
     scene_aspectmode, scene_aspectratio = _resolve_plotly_aspect(aspect)
-    scene = dict(xaxis=_scene_axis(xlabel, logx, x_axis_range, showgrid,
+    scene = dict(xaxis=_scene_axis(xlabel, logx, x_axis_range, not no_showgrid,
                                    theme_colors),
-                 yaxis=_scene_axis(ylabel, logy, y_axis_range, showgrid,
+                 yaxis=_scene_axis(ylabel, logy, y_axis_range, not no_showgrid,
                                    theme_colors),
-                 zaxis=_scene_axis(zlabel, logz, z_axis_range, showgrid,
+                 zaxis=_scene_axis(zlabel, logz, z_axis_range, not no_showgrid,
                                    theme_colors),
                  bgcolor=scene_color,
                  aspectmode=scene_aspectmode,
@@ -731,9 +728,9 @@ def plotly(data: GDataState,
 
     trace_colorscale = scalar_colorscale
     trace_colorbar_kwargs = dict(colorbar_kwargs)
-    show_colorbar = colorbar and comp_idx == 0 and not bool(color)
+    show_colorbar = not no_colorbar and comp_idx == 0 and not bool(color)
     trace_name = label or f"c{comp}"
-    show_trace_legend = legend and bool(label)
+    show_trace_legend = not no_legend and bool(label)
 
     if surface_mode:
       if logc:
@@ -878,8 +875,8 @@ def plotly_animate(data: Annotated[list[GDataState],
                    frame_labels: list[str] | None = None,
                    frame_duration: int = 50,
                    transition_duration: int = 0,
-                   fromcurrent: bool = True,
-                   redraw: bool = True,
+                   from_start: bool = False,
+                   no_redraw: bool = False,
                    save: bool = False,
                    saveas: str | None = None,
                    show: bool = False):
@@ -904,8 +901,8 @@ def plotly_animate(data: Annotated[list[GDataState],
     frame_labels: Optional label for each frame and slider step.
     frame_duration: Duration of each animation frame in milliseconds.
     transition_duration: Duration of transitions between frames.
-    fromcurrent: Start playback from the current slider frame.
-    redraw: Redraw traces between frames.
+    from_start: Start playback from the first rather than current slider frame.
+    no_redraw: Do not redraw traces between frames.
     save: Save the animation as ``plotly_animate.html``.
     saveas: Explicit HTML output path.
     show: Open the animation in a browser.
@@ -945,17 +942,17 @@ def plotly_animate(data: Annotated[list[GDataState],
   animation_args = {
       "frame": {
           "duration": int(frame_duration),
-          "redraw": bool(redraw)
+          "redraw": not no_redraw
       },
       "transition": {
           "duration": int(transition_duration)
       },
-      "fromcurrent": bool(fromcurrent)
+      "fromcurrent": not from_start
   }
   pause_args = {
       "frame": {
           "duration": 0,
-          "redraw": bool(redraw)
+          "redraw": not no_redraw
       },
       "transition": {
           "duration": 0
@@ -972,7 +969,7 @@ def plotly_animate(data: Annotated[list[GDataState],
           "mode": "immediate",
           "frame": {
               "duration": int(frame_duration),
-              "redraw": bool(redraw)
+              "redraw": not no_redraw
           },
           "transition": {
               "duration": int(transition_duration)

@@ -52,7 +52,7 @@ def interpolate(data: "GDataState",
                                 data.grid,
                                 poly_order=poly_order,
                                 basis_type=basis_type,
-                                modal=(value_form == "modal"),
+                                nodal=(value_form == "nodal"),
                                 num_interp=num_interp)
   return data._result(grid,
                       values,

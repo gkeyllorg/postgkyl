@@ -26,13 +26,17 @@ pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_
 
 Raw `.gkyl` files hold DG *coefficients*; `interpolate` bridges them onto a
 uniform mesh of plain values, `select` narrows down to one component (or one
-coordinate slice), and `plot` renders it. The CLI options are the Python
-parameters with dashes: `--show False` runs headless and `--saveas` writes a
+coordinate slice), and `plot` renders it. Boolean options default to `False`
+and imply `True` when supplied without a value; an explicit `True` or `False`
+is also accepted. The CLI mirrors the Python API exactly. A default-on
+behavior therefore has a negative, default-`False` API parameter and CLI
+name, so `no_show=False` / `--no_show False` displays a Matplotlib plot while
+`--no_show` (or `--no_show True`) runs headless. `--saveas` writes a
 PNG.
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl \
-    interpolate select --comp 0 plot --show False --saveas out.png
+    interpolate select --comp 0 plot --no_show --saveas out.png
 ```
 
 Any unambiguous command-name prefix is accepted as a spelling-only alias
@@ -53,7 +57,7 @@ boundaries.
 
 ```bash
 pgkyl tests/test_data/generated/distf_p2_0.gkyl \
-    local_poly select --z1 0.0 --z2 0.0 plot --show False --saveas out.png
+    local_poly select --z1 0.0 --z2 0.0 plot --no_show --saveas out.png
 ```
 
 ## 4. DynVector inspection and `fit`

@@ -104,6 +104,16 @@ pgkyl --help
 pgkyl --version
 ```
 
+### Boolean API/CLI contract
+
+Every public boolean parameter defaults to `False`. If the default behavior
+is enabled, name the parameter for disabling or selecting its inverse (for
+example, `no_show=False`, `volume=False`, or `nodal=False`) and implement the
+default behavior under the false branch. The generated CLI mirrors the API
+parameter name and default exactly; a bare boolean option means `True`, while
+an explicit `True` or `False` remains accepted. The CLI compiler rejects a
+public boolean whose API default is not `False`.
+
 ## Architecture — a strict, one-way layered DAG
 
 Every folder has **one job**, and imports point in **one direction only** (leaves at the

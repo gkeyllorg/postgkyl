@@ -47,12 +47,12 @@ def _require_gl_context(action):
                 result=ResultPolicy.SILENT))
 def pyvista(data: GDataState,
             *,
-            show: bool = True,
-            spin: bool = True,
+            no_show: bool = False,
+            no_spin: bool = False,
             max_points_per_axis: int = -1,
             contour_levels: int = 10,
             is_log: bool = False,
-            is_contour: bool = True,
+            volume: bool = False,
             is_shaded: bool = False,
             hide_axes: bool = False,
             mesh_clip_plane: bool = False,
@@ -90,15 +90,13 @@ def pyvista(data: GDataState,
 
   Args:
     data: dataset to plot; must be 3-D (after squeezing any size-1 axis).
-    show: open an interactive render window; off-screen otherwise (also
-      forced off-screen when saving to a raster image format).
-    spin: slowly auto-rotate the camera until the user interacts with it
-      (interactive windows only).
+    no_show: Do not open an interactive render window; render off-screen.
+    no_spin: Do not auto-rotate the camera in interactive windows.
     max_points_per_axis: downsample to at most this many points per axis;
       ``-1`` disables downsampling.
-    contour_levels: number of isosurfaces extracted when ``is_contour``.
+    contour_levels: Number of isosurfaces extracted unless ``volume`` is set.
     is_log: color by log10 of the scalar (non-positive values masked).
-    is_contour: render isosurface contours instead of a volume.
+    volume: Render a volume instead of isosurface contours.
     is_shaded: enable shading on the volume render (volume mode only).
     hide_axes: hide the bounding-box axes and labels.
     mesh_clip_plane: add an interactive clip plane along ``-x``.
@@ -198,7 +196,7 @@ def pyvista(data: GDataState,
     cx = np.linspace(0, 1, num=255)
     opacity = np.abs(cx - 0.5) * 2
 
-  off_screen = saveas.endswith((".png", ".jpg", ".jpeg")) or not show
+  off_screen = saveas.endswith((".png", ".jpg", ".jpeg")) or no_show
 
   def _build_and_render():
     pl = pv.Plotter(window_size=(1400, 900), off_screen=off_screen)
@@ -235,7 +233,7 @@ def pyvista(data: GDataState,
 
     scalar_bar_args = {"title": latex_to_unicode(clabel), "fmt": colorbarformat}
 
-    if is_contour:
+    if not volume:
       contours = grid3d.contour(isosurfaces=contour_levels, scalars="f_plot")
       if mesh_clip_plane:
         pl.add_mesh_clip_plane(contours,
@@ -322,7 +320,7 @@ def pyvista(data: GDataState,
 
     pl.camera.azimuth = camera_azimuth
     pl.camera.elevation = camera_elevation
-    if spin:
+    if not no_spin:
       state = {"angle": camera_azimuth, "interacting": False}
 
       def _rotate(_step):
@@ -349,7 +347,7 @@ def pyvista(data: GDataState,
       elif saveas.endswith(".vtksz"):
         pl.export_vtksz(saveas)
 
-    if show:
+    if not no_show:
       pl.show()
     else:
       pl.close()

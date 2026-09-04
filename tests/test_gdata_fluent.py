@@ -286,7 +286,7 @@ class TestKeywordPassthrough:
 class TestEndToEndChains:
 
   def test_interpolate_magsq_plot(self):
-    fig = pg.load(F2D_VEC).interpolate().magsq().plot(show=False)
+    fig = pg.load(F2D_VEC).interpolate().magsq().plot(no_show=True)
     assert fig is not None
 
   def test_interpolate_select_fft(self):
@@ -366,7 +366,7 @@ class TestGDataGroup:
     import matplotlib.figure
 
     g = ApiGDataGroup(self._frames())
-    fig = g.plot(show=False)
+    fig = g.plot(no_show=True)
     assert isinstance(fig, matplotlib.figure.Figure)
 
   def test_broadcast_write_returns_a_list_of_paths(self, tmp_path):
@@ -408,7 +408,7 @@ class TestGDataGroup:
     from matplotlib.animation import FuncAnimation
     frames = [pg.load(F1D).interpolate().select(comp=0) for _ in range(3)]
     g = ApiGDataGroup(frames)
-    anim = g.animate(show=False)
+    anim = g.animate(no_show=True)
     assert isinstance(anim, FuncAnimation)
 
   def test_with_and_and_preserve_the_concrete_class(self):

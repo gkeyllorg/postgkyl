@@ -41,7 +41,7 @@ class TestAnimateVerb:
 
   def test_already_interpolated_frames_pass_through(self):
     from matplotlib.animation import FuncAnimation
-    anim = operations.animate(_three_interpolated_frames(), show=False)
+    anim = operations.animate(_three_interpolated_frames(), no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 3
 
@@ -51,21 +51,21 @@ class TestAnimateVerb:
     from matplotlib.animation import FuncAnimation
     a = pg.load(F1D).to_nodal()
     b = pg.load(F1D).to_nodal()
-    anim = operations.animate([a, b], show=False)
+    anim = operations.animate([a, b], no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2
 
   def test_raw_modal_frame_without_representation_raises(self):
     a = pg.load(F1D)  # still modal coefficients
     with pytest.raises(ValueError, match="not plottable"):
-      operations.animate([a], show=False)
+      operations.animate([a], no_show=True)
 
   def test_grouped_frames_preserve_structure(self):
     from matplotlib.animation import FuncAnimation
     a = pg.load(F1D).interpolate()
     b = pg.load(F1D).interpolate()
     c = pg.load(F1D).interpolate()
-    anim = operations.animate([[a, b], [c]], show=False)
+    anim = operations.animate([[a, b], [c]], no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2
 
@@ -73,7 +73,7 @@ class TestAnimateVerb:
     prefix = str(tmp_path / "frame")
     paths = operations.animate(_three_interpolated_frames(),
                                saveframes=prefix,
-                               show=False)
+                               no_show=True)
     assert len(paths) == 3
     for p in paths:
       assert os.path.isfile(p)

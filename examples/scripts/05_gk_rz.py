@@ -22,7 +22,7 @@ data = pg.load(TEST_DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
 
 # The common path: geometry is inferred from FIELD's simulation prefix.
 mapped = data.gk_rz(z_axis=0.0, phi_tor=0.0, nz_interp=2)
-fig = mapped.plot(show=False)
+fig = mapped.plot(no_show=True)
 fig.savefig(OUTPUT_DIR / "05_gk_rz.png")
 
 # The functional spelling is the identical operation.

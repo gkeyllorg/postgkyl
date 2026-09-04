@@ -405,7 +405,7 @@ def test_plot_multi_dataset_1d_with_labels_shows_legend_and_title():
                     multiblock=True,
                     legend_labels=["first", "second"],
                     title="my title",
-                    show=False)
+                    no_show=True)
   assert fig is not None
   assert fig._suptitle is not None
   assert fig._suptitle.get_text() == "my title"
@@ -429,10 +429,10 @@ def test_plot_show_true_does_not_error_with_agg_backend(monkeypatch):
   # a genuinely headless Linux host (no DISPLAY) -- a deliberate
   # headless-friendliness special case, not something this test is about.
   # Force a DISPLAY so the assertion below exercises the actual behavior
-  # under test (Agg backend + show=True -> warn, don't raise) regardless of
+  # under test (Agg backend + no_show=False -> warn, don't raise) regardless of
   # whether this host has a real display.
   monkeypatch.setenv("DISPLAY", ":0")
   a = pg.load(F1).interpolate().select(comp=0)
   with pytest.warns(UserWarning, match="non-interactive"):
-    fig = a.plot(show=True)
+    fig = a.plot(no_show=False)
   assert fig is not None

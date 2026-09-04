@@ -140,7 +140,7 @@ def test_setitem_raises_when_empty():
 def test_copy_with_data_deep_copies_numpy_backend():
   d = GDataState()
   d.push([np.linspace(0.0, 1.0, 4)], np.ones((3, 2)))
-  c = d.clone(data=True)
+  c = d.clone()
   c.values[0, 0] = 99.0
   assert d.values[0, 0] == 1.0
   assert c.grid[0] is not d.grid[0]
@@ -149,7 +149,7 @@ def test_copy_with_data_deep_copies_numpy_backend():
 @needs_gkeyll
 def test_copy_with_data_deep_copies_gkyl_backend():
   d = pg.load(F1)
-  c = d.clone(data=True)
+  c = d.clone()
   assert c.native is not d.native
   np.testing.assert_allclose(c.values, d.values)
 
@@ -217,7 +217,7 @@ def test_cli_hidden_alias_pl_resolves_to_plot(tmp_path):
 
   out = tmp_path / "alias.png"
   result = CliRunner().invoke(cli, [
-      F1, "interp", "sel", "--comp", "0", "pl", "--show", "False", "--saveas",
+      F1, "interp", "sel", "--comp", "0", "pl", "--no_show", "--saveas",
       str(out)
   ])
   assert result.exit_code == 0, result.output

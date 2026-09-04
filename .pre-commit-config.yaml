@@ -8,3 +8,4 @@ repos:
     rev: v22.1.3
     hooks:
       - id: clang-format
+        types_or: [c, c++]

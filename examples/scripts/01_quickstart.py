@@ -44,7 +44,7 @@ print("interpolated:", repr(field))
 # 3a. Select by component -- pick out the x-component as its own 2D scalar
 #     field, and plot it.
 comp0 = field.select(comp=0)
-fig = comp0.plot(title="x-component", show=False)
+fig = comp0.plot(title="x-component", no_show=True)
 png_path = OUTPUT_DIR / "01_quickstart_comp0.png"
 fig.savefig(png_path)
 print("saved plot:", png_path)
@@ -54,7 +54,7 @@ print("saved plot:", png_path)
 #     narrows a coordinate, it doesn't drop the axis -- ``plot`` squeezes it
 #     away when rendering).
 lineout = field.select(z1=0.5)
-fig = lineout.plot(title="lineout at y=0.5", show=False)
+fig = lineout.plot(title="lineout at y=0.5", no_show=True)
 lineout_path = OUTPUT_DIR / "01_quickstart_lineout.png"
 fig.savefig(lineout_path)
 print("saved plot:", lineout_path)

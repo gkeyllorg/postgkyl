@@ -60,10 +60,10 @@ def _get_vt(species_grid: list[np.ndarray],
             num_moms: int | None = None,
             mass: float = 1.0,
             mu_0: float = 1.0,
-            sqrt2: bool = True,
+            no_sqrt2: bool = False,
             mhd: bool = False) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the thermal velocity ``v_th = sqrt(2 T/m)`` (or ``sqrt(T/m)``
-  when ``sqrt2`` is ``False``) of a species.
+  when ``no_sqrt2`` is ``True``) of a species.
 
   Args:
     species_grid: Species moment grid.
@@ -74,7 +74,7 @@ def _get_vt(species_grid: list[np.ndarray],
     mass: Particle mass.
     mu_0: Vacuum permeability, forwarded to the MHD temperature when
       ``mhd=True``.
-    sqrt2: If ``True`` (default), scale the result by ``sqrt(2)``.
+    no_sqrt2: Omit the conventional ``sqrt(2)`` scale factor.
     mhd: If ``True``, compute the temperature from MHD moments; otherwise
       use the fluid moments.
 
@@ -93,7 +93,7 @@ def _get_vt(species_grid: list[np.ndarray],
                                num_moms=num_moms)
 
   out_values = np.sqrt(temp / mass)
-  if sqrt2:
+  if not no_sqrt2:
     out_values = out_values * np.sqrt(2.0)
 
   return out_grid, out_values
@@ -172,11 +172,11 @@ def _get_lambdaD(
     charge: float = 1.0,
     epsilon_0: float = 1.0,
     mu_0: float = 1.0,
-    sqrt2: bool = True,
+    no_sqrt2: bool = False,
 ) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the Debye length ``lambda_D = v_th / omega_p``.
 
-  When ``sqrt2`` is ``True`` the extra ``sqrt(2)`` factor carried by
+  Unless ``no_sqrt2`` is set, the extra ``sqrt(2)`` factor carried by
   ``v_th`` is divided back out, so the conventional Debye length is
   returned.
   """
@@ -191,9 +191,9 @@ def _get_lambdaD(
                          num_moms=num_moms,
                          mass=mass,
                          mu_0=mu_0,
-                         sqrt2=sqrt2)
+                         no_sqrt2=no_sqrt2)
   out_values = vt / omegaP
-  if sqrt2:
+  if not no_sqrt2:
     out_values = out_values / np.sqrt(2.0)
 
   return out_grid, out_values
@@ -209,10 +209,10 @@ def _get_rho(species_grid: list[np.ndarray],
              mass: float = 1.0,
              charge: float = 1.0,
              mu_0: float = 1.0,
-             sqrt2: bool = True) -> tuple[list[np.ndarray], np.ndarray]:
+             no_sqrt2: bool = False) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the gyroradius (Larmor radius) ``rho = v_th / omega_c``.
 
-  When ``sqrt2`` is ``False`` the result is multiplied by ``sqrt(2)`` so the
+  When ``no_sqrt2`` is set the result is multiplied by ``sqrt(2)`` so the
   gyroradius stays consistent with a ``sqrt(2)``-scaled thermal velocity.
   """
   _, omegaC = _get_omegaC(field_grid, field_values, mass=mass, charge=charge)
@@ -222,10 +222,10 @@ def _get_rho(species_grid: list[np.ndarray],
                          num_moms=num_moms,
                          mass=mass,
                          mu_0=mu_0,
-                         sqrt2=sqrt2)
+                         no_sqrt2=no_sqrt2)
 
   out_values = vt / omegaC
-  if not sqrt2:
+  if no_sqrt2:
     out_values = out_values * np.sqrt(2.0)
 
   return out_grid, out_values
@@ -241,11 +241,11 @@ def _get_beta(
     num_moms: int | None = None,
     mass: float = 1.0,
     mu_0: float = 1.0,
-    sqrt2: bool = True,
+    no_sqrt2: bool = False,
 ) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the plasma beta ``v_th**2 / v_A**2``.
 
-  When ``sqrt2`` is ``False`` the result is multiplied by ``2`` to account
+  When ``no_sqrt2`` is set the result is multiplied by ``2`` to account
   for the missing ``sqrt(2)`` factor in the thermal velocity.
   """
   _, v_A = _get_vA(species_grid,
@@ -259,9 +259,9 @@ def _get_beta(
                          num_moms=num_moms,
                          mass=mass,
                          mu_0=mu_0,
-                         sqrt2=sqrt2)
+                         no_sqrt2=no_sqrt2)
   out_values = vt**2 / v_A**2
-  if not sqrt2:
+  if no_sqrt2:
     out_values = out_values * 2.0
 
   return out_grid, out_values
@@ -299,7 +299,7 @@ def vt(species: "GDataState",
        num_moms: int | None = None,
        mass: float = 1.0,
        mu_0: float = 1.0,
-       sqrt2: bool = True,
+       no_sqrt2: bool = False,
        mhd: bool = False,
        inplace: bool = False,
        tag: str | None = None,
@@ -314,7 +314,7 @@ def vt(species: "GDataState",
     mass: Particle mass.
     mu_0: Vacuum permeability, forwarded to the MHD temperature when
       ``mhd=True``.
-    sqrt2: If ``True`` (default), scale the result by ``sqrt(2)``.
+    no_sqrt2: Omit the conventional ``sqrt(2)`` scale factor.
     mhd: If ``True``, compute the temperature from MHD moments; otherwise
       use the fluid moments.
     inplace: mutate and return ``species`` instead of a new dataset.
@@ -334,7 +334,7 @@ def vt(species: "GDataState",
                          num_moms=num_moms,
                          mass=mass,
                          mu_0=mu_0,
-                         sqrt2=sqrt2,
+                         no_sqrt2=no_sqrt2,
                          mhd=mhd)
   return species._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -480,7 +480,7 @@ def lambdaD(species: "GDataState",
             charge: float = 1.0,
             epsilon_0: float = 1.0,
             mu_0: float = 1.0,
-            sqrt2: bool = True,
+            no_sqrt2: bool = False,
             inplace: bool = False,
             tag: str | None = None,
             label: str | None = None) -> "GDataState":
@@ -494,8 +494,8 @@ def lambdaD(species: "GDataState",
     charge: Particle charge.
     epsilon_0: Vacuum permittivity used in the plasma frequency.
     mu_0: Vacuum permeability forwarded to thermal-velocity calculation.
-    sqrt2: Use the ``sqrt(2*T/m)`` thermal-velocity convention; the extra
-      factor is removed from the returned conventional Debye length.
+    no_sqrt2: Use ``sqrt(T/m)`` internally; the returned conventional Debye
+      length remains unchanged.
     inplace: Mutate and return ``species`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -515,7 +515,7 @@ def lambdaD(species: "GDataState",
                               charge=charge,
                               epsilon_0=epsilon_0,
                               mu_0=mu_0,
-                              sqrt2=sqrt2)
+                              no_sqrt2=no_sqrt2)
   return species._result(grid, values, inplace=inplace, tag=tag, label=label)
 
 
@@ -527,7 +527,7 @@ def rho(species: "GDataState",
         mass: float = 1.0,
         charge: float = 1.0,
         mu_0: float = 1.0,
-        sqrt2: bool = True,
+        no_sqrt2: bool = False,
         inplace: bool = False,
         tag: str | None = None,
         label: str | None = None) -> "GDataState":
@@ -542,8 +542,8 @@ def rho(species: "GDataState",
     mass: Particle mass.
     charge: Particle charge.
     mu_0: Vacuum permeability forwarded to thermal-velocity calculation.
-    sqrt2: Select the thermal-velocity convention; the result is normalized
-      to the ``sqrt(2*T/m)`` convention either way.
+    no_sqrt2: Use ``sqrt(T/m)`` internally; the result is normalized to the
+      ``sqrt(2*T/m)`` convention either way.
     inplace: Mutate and return ``species`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -565,7 +565,7 @@ def rho(species: "GDataState",
                           mass=mass,
                           charge=charge,
                           mu_0=mu_0,
-                          sqrt2=sqrt2)
+                          no_sqrt2=no_sqrt2)
   return species._result(grid, values, inplace=inplace, tag=tag, label=label)
 
 
@@ -576,7 +576,7 @@ def beta(species: "GDataState",
          num_moms: int | None = None,
          mass: float = 1.0,
          mu_0: float = 1.0,
-         sqrt2: bool = True,
+         no_sqrt2: bool = False,
          inplace: bool = False,
          tag: str | None = None,
          label: str | None = None) -> "GDataState":
@@ -590,8 +590,8 @@ def beta(species: "GDataState",
     num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
     mass: Particle mass.
     mu_0: Vacuum permeability.
-    sqrt2: Select the thermal-velocity convention; the result is normalized
-      to the ``sqrt(2*T/m)`` convention either way.
+    no_sqrt2: Use ``sqrt(T/m)`` internally; the result is normalized to the
+      ``sqrt(2*T/m)`` convention either way.
     inplace: Mutate and return ``species`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -612,5 +612,5 @@ def beta(species: "GDataState",
                            num_moms=num_moms,
                            mass=mass,
                            mu_0=mu_0,
-                           sqrt2=sqrt2)
+                           no_sqrt2=no_sqrt2)
   return species._result(grid, values, inplace=inplace, tag=tag, label=label)
