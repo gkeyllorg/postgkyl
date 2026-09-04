@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M1Q4HYZS0SBN8VTY52JSMT54",
+  "session_id": "01a06e3d-4152-7e52-a8fa-7e1084883035",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-04T21:17:52.286725788Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [
+    ".github/workflows/test.yml",
+    ".pre-commit-config.yaml",
+    "README.md",
+    "pyproject.toml"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.6-sol",
+  "turn_id": "9d59e16f2260",
+  "checkpoint_transcript_start": 170,
+  "transcript_lines_at_start": 170,
+  "compact_transcript_start": 22,
+  "token_usage": {
+    "input_tokens": 19556,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 505351,
+    "output_tokens": 13112,
+    "api_call_count": 11
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-04T21:17:52.256720072Z",
+    "agent_lines": 7,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 7,
+    "total_committed": 7,
+    "total_lines_changed": 15,
+    "agent_percentage": 53.333333333333336,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 267,
+      "user_lines_removed": 7,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/.gitignore": 2,
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88,
+        ".github/workflows/test.yml": 82,
+        "README.md": 5
+      },
+      "user_removed_per_file": {
+        ".github/workflows/test.yml": 5,
+        "README.md": 2
+      }
+    }
+  ]
+}
