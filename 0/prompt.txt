@@ -1,0 +1,10 @@
+<task-notification>
+<task-id>bp19fyj2b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-maxwell-rosen-postgkyl/2ddf106d-a1d6-4641-a1f0-65d104d15c98/tasks/bp19fyj2b.output</output-file>
+<status>completed</status>
+<summary>Background command "cd /home/maxwell-rosen/postgkyl
+SCRATCH=/tmp/claude-1000/-home-maxwell-rosen-postgkyl/2ddf106d-a1d6-4641-a1f0-65d104d15c98/scratchpad
+valgrind --error-exitcode=99 python3 "$SCRATCH/stress_animate.py" 300 &gt; "$SCRATCH/vg_stress2.log" 2&gt;&amp;1
+echo "exit: $?"" completed (exit code 0)</summary>
+</task-notification>
