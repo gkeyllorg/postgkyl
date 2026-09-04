@@ -18,4 +18,3 @@ def info(*datasets: GDataState, header: bool = True) -> list:
   """
   states = flatten_datasets(datasets)
   return [d.info(index=i, header=header) for i, d in enumerate(states)]
-# end

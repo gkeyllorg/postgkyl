@@ -46,16 +46,12 @@ def latex_to_unicode(text: str) -> str:
   to their Unicode characters, stripping a surrounding ``$...$``."""
   if not text:
     return text
-  # end
   text = text.strip()
   if text.startswith("$") and text.endswith("$"):
     text = text[1:-1]
-  # end
   for latex, unicode_char in _LATEX_TO_UNICODE.items():
     text = text.replace(latex, unicode_char)
-  # end
   return text
-# end
 
 
 def latex_to_html(text: str) -> str:
@@ -66,16 +62,13 @@ def latex_to_html(text: str) -> str:
   """
   if not text:
     return text
-  # end
 
   text = text.strip()
   if text.startswith("$") and text.endswith("$"):
     text = text[1:-1]
-  # end
 
   def _replace_latex_commands(value: str) -> str:
     return latex_to_unicode(value)
-  # end
 
   text = re.sub(
       r'_\{([^{}]+)\}',
@@ -89,7 +82,6 @@ def latex_to_html(text: str) -> str:
   )
   text = _replace_latex_commands(text)
   return text
-# end
 
 
 __all__ = ["latex_to_html", "latex_to_unicode"]

@@ -8,12 +8,16 @@ import numpy as np
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def mask(data: "GDataState", mask_data: "GDataState | None" = None, *,
-    lower: float | None = None, upper: float | None = None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def mask(data: "GDataState",
+         mask_data: "GDataState | None" = None,
+         *,
+         lower: float | None = None,
+         upper: float | None = None,
+         inplace: bool = False,
+         tag: str | None = None,
+         label: str | None = None):
   """Mask out values using a mask dataset or numeric thresholds.
 
   Returns a dataset whose values are a ``numpy.ma`` masked array. Exactly
@@ -60,26 +64,19 @@ def mask(data: "GDataState", mask_data: "GDataState | None" = None, *,
     raise ValueError(
         "mask operates on interpolated (NumPy) values; call .interpolate() "
         "first -- masking raw DG coefficients has no basis-space meaning.")
-  # end
   values = data.values
   if mask_data is not None:
     mask_field = mask_data.values
     mask_rep = np.repeat(mask_field, data.num_comps, axis=-1)
     masked = np.ma.masked_where(mask_rep < 0.0, values)
-  # end
   elif lower is not None and upper is not None:
     masked = np.ma.masked_outside(values, lower, upper)
-  # end
   elif lower is not None:
     masked = np.ma.masked_less(values, lower)
-  # end
   elif upper is not None:
     masked = np.ma.masked_greater(values, upper)
-  # end
   else:
     raise ValueError(
         "mask: no masking information specified (provide mask_data, lower, "
         "or upper).")
-  # end
   return data._result(data.grid, masked, inplace=inplace, tag=tag, label=label)
-# end

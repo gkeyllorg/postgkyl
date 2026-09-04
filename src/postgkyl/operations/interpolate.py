@@ -8,11 +8,14 @@ from postgkyl import dg
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def interpolate(data: "GDataState", *, num_interp: int | None = None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def interpolate(data: "GDataState",
+                *,
+                num_interp: int | None = None,
+                inplace: bool = False,
+                tag: str | None = None,
+                label: str | None = None):
   """Interpolate DG (modal/nodal) data onto a uniform evaluation mesh.
 
   Basis, polynomial order, and value_form are properties of ``data`` itself,
@@ -33,24 +36,27 @@ def interpolate(data: "GDataState", *, num_interp: int | None = None,
     raise ValueError(
         "dataset has no 'basis_type' metadata; set it at load time "
         "(pg.load(..., basis_type=...) or the CLI's -b/--basis).")
-  # end
 
   poly_order = data.ctx.get("poly_order")
   if poly_order is None:
     raise ValueError(
         "dataset has no 'poly_order' metadata; set it at load time "
         "(pg.load(..., poly_order=...) or the CLI's -p/--poly_order).")
-  # end
 
   value_form = data.ctx.get("value_form", "modal")
   if data.backend == "gkyl" and value_form != "modal":
-    raise ValueError(
-        f"interpolate expects the modal value_form, not "
-        f"'{value_form}'; call .to_modal() first.")
-  # end
+    raise ValueError(f"interpolate expects the modal value_form, not "
+                     f"'{value_form}'; call .to_modal() first.")
 
-  grid, values = dg.interpolate(data.values, data.grid, poly_order=poly_order,
-      basis_type=basis_type, modal=(value_form == "modal"), num_interp=num_interp)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label,
-      interpolated=True)
-# end
+  grid, values = dg.interpolate(data.values,
+                                data.grid,
+                                poly_order=poly_order,
+                                basis_type=basis_type,
+                                modal=(value_form == "modal"),
+                                num_interp=num_interp)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True)

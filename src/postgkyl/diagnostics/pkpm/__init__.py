@@ -24,15 +24,16 @@ from ..vm.kinetic import transform_frame
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _REASON = "composing raw DG coefficients would mix basis functions"
 
 
 # --------------------------------------------------------- array-level math
-def _laguerre_compose(f_grid: list[np.ndarray], f_values: np.ndarray,
+def _laguerre_compose(
+    f_grid: list[np.ndarray],
+    f_values: np.ndarray,
     t_over_m_values: np.ndarray,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Compose PKPM expansion coefficients into a single distribution function.
 
   Args:
@@ -80,13 +81,15 @@ def _laguerre_compose(f_grid: list[np.ndarray], f_values: np.ndarray,
   f = f[..., np.newaxis]  # Adding the component index
 
   return [x, vpar, vperp], f
-# end
 
 
 # ---------------------------------------------------------------- GData verb
-def laguerre_compose(distribution: "GDataState", variables: "GDataState", *,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def laguerre_compose(distribution: "GDataState",
+                     variables: "GDataState",
+                     *,
+                     inplace: bool = False,
+                     tag: str | None = None,
+                     label: str | None = None) -> "GDataState":
   """Compose PKPM Laguerre coefficients into a full distribution function.
 
   Reconstructs the full distribution function ``f(x, v_par, v_perp)`` from
@@ -112,15 +115,22 @@ def laguerre_compose(distribution: "GDataState", variables: "GDataState", *,
   _require_field_domain(distribution, "laguerre_compose", _REASON)
   _require_field_domain(variables, "laguerre_compose", _REASON)
   grid, values = _laguerre_compose(distribution.grid, distribution.values,
-      variables.values)
-  return distribution._result(grid, values, inplace=inplace, tag=tag,
-      label=label)
-# end
+                                   variables.values)
+  return distribution._result(grid,
+                              values,
+                              inplace=inplace,
+                              tag=tag,
+                              label=label)
 
 
 # ------------------------------------------------------------------- loader
-def load_pkpm(name: str, species: str, idx: "str | int", poly_order: int, *,
-    tag: str | None = None, label: str | None = None) -> "GData":
+def load_pkpm(name: str,
+              species: str,
+              idx: "str | int",
+              poly_order: int,
+              *,
+              tag: str | None = None,
+              label: str | None = None) -> "GData":
   """Load, interpolate, and frame-transform Gkeyll PKPM data.
 
   Loads the PKPM distribution (its two Laguerre coefficients ``F0``/``G``)
@@ -143,9 +153,11 @@ def load_pkpm(name: str, species: str, idx: "str | int", poly_order: int, *,
     :class:`~postgkyl.gdata.gdata.GData`.
   """
   gf = GData(f"{name!s}-{species!s}_{idx!s}.gkyl",
-      basis_type="hybrid", poly_order=poly_order)
+             basis_type="hybrid",
+             poly_order=poly_order)
   gvars = GData(f"{name!s}-{species!s}_pkpm_vars_{idx!s}.gkyl",
-      basis_type="serendipity", poly_order=poly_order)
+                basis_type="serendipity",
+                poly_order=poly_order)
 
   c_dim = gf.num_dims - 1
 
@@ -160,12 +172,9 @@ def load_pkpm(name: str, species: str, idx: "str | int", poly_order: int, *,
 
   if tag is not None:
     out.set_tag(tag)
-  # end
   if label is not None:
     out.set_label(label)
-  # end
   return out
-# end
 
 
 __all__ = ["laguerre_compose", "load_pkpm"]

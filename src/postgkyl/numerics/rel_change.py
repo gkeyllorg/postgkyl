@@ -5,8 +5,10 @@ from __future__ import annotations
 import numpy as np
 
 
-def rel_change(grid: list[np.ndarray], values0: np.ndarray, values: np.ndarray,
-    comp: int | None = None) -> tuple[list[np.ndarray], np.ndarray]:
+def rel_change(grid: list[np.ndarray],
+               values0: np.ndarray,
+               values: np.ndarray,
+               comp: int | None = None) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute ``(values - values0) / values0``, component-wise.
 
   Args:
@@ -25,6 +27,4 @@ def rel_change(grid: list[np.ndarray], values0: np.ndarray, values: np.ndarray,
   for i in range(out.shape[-1]):
     denom = values0[..., int(comp)] if comp is not None else values0[..., i]
     out[..., i] = (values[..., i] - values0[..., i]) / denom
-  # end
   return list(grid), out
-# end

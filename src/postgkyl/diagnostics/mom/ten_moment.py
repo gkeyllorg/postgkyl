@@ -17,81 +17,85 @@ import numpy as np
 from ... import numerics
 from ...gdatastate.guards import require_field_domain as _require_field_domain
 from .five_moment import (
-    _get_density, _get_vx, _get_vy, _get_vz,
-    _get_p, _get_ke, _get_temp, _get_sound, _get_mach,
-    density, xvel, yvel, zvel, vel,
+    _get_density,
+    _get_vx,
+    _get_vy,
+    _get_vz,
+    _get_p,
+    _get_ke,
+    _get_temp,
+    _get_sound,
+    _get_mach,
+    density,
+    xvel,
+    yvel,
+    zvel,
+    vel,
 )
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _REASON = ("extracting primitive variables from raw DG coefficients would "
-    "mix basis functions")
+           "mix basis functions")
 _AGYRO_REASON = ("computing agyrotropy from raw DG coefficients would mix "
-    "basis functions")
+                 "basis functions")
 
 
 # --------------------------------------------------------- array-level math
 def _get_pxx(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_xx = M_xx - rho * vx * vx`` (component 4 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vx = _get_vx(grid, values)
   return list(grid), values[..., 4, np.newaxis] - rho * vx * vx
-# end
 
 
 def _get_pxy(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_xy = M_xy - rho * vx * vy`` (component 5 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vx = _get_vx(grid, values)
   _, vy = _get_vy(grid, values)
   return list(grid), values[..., 5, np.newaxis] - rho * vx * vy
-# end
 
 
 def _get_pxz(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_xz = M_xz - rho * vx * vz`` (component 6 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vx = _get_vx(grid, values)
   _, vz = _get_vz(grid, values)
   return list(grid), values[..., 6, np.newaxis] - rho * vx * vz
-# end
 
 
 def _get_pyy(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_yy = M_yy - rho * vy * vy`` (component 7 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vy = _get_vy(grid, values)
   return list(grid), values[..., 7, np.newaxis] - rho * vy * vy
-# end
 
 
 def _get_pyz(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_yz = M_yz - rho * vy * vz`` (component 8 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vy = _get_vy(grid, values)
   _, vz = _get_vz(grid, values)
   return list(grid), values[..., 8, np.newaxis] - rho * vy * vz
-# end
 
 
 def _get_pzz(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """``P_zz = M_zz - rho * vz * vz`` (component 9 of 10-moment data)."""
   _, rho = _get_density(grid, values)
   _, vz = _get_vz(grid, values)
   return list(grid), values[..., 9, np.newaxis] - rho * vz * vz
-# end
 
 
 def _get_pij(grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+             values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
   """Full symmetric pressure tensor, packed
   ``(P_xx, P_xy, P_xz, P_yy, P_yz, P_zz)``."""
   out_values = np.zeros(values[..., 4:10].shape)
@@ -110,12 +114,14 @@ def _get_pij(grid: list[np.ndarray],
   out_values[..., 5] = np.squeeze(pzz)
 
   return list(grid), out_values
-# end
 
 
-def _get_p_par(p_grid: list[np.ndarray], p_values: np.ndarray,
-    b_grid: list[np.ndarray], b_values: np.ndarray,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _get_p_par(
+    p_grid: list[np.ndarray],
+    p_values: np.ndarray,
+    b_grid: list[np.ndarray],
+    b_values: np.ndarray,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the pressure parallel to the magnetic field.
 
   Projects the pressure tensor onto the magnetic-field direction:
@@ -144,27 +150,30 @@ def _get_p_par(p_grid: list[np.ndarray], p_values: np.ndarray,
 
   grid, mag_b_sq = numerics.mag_sq(b_grid, b_values)
 
-  out = (b_x * b_x * p_xx + b_y * b_y * p_yy + b_z * b_z * p_zz
-      + 2.0 * (b_x * b_y * p_xy + b_x * b_z * p_xz + b_y * b_z * p_yz)
-      ) / mag_b_sq
+  out = (b_x * b_x * p_xx + b_y * b_y * p_yy + b_z * b_z * p_zz + 2.0 *
+         (b_x * b_y * p_xy + b_x * b_z * p_xz + b_y * b_z * p_yz)) / mag_b_sq
   return grid, out
-# end
 
 
-def _get_gkyl_10m_p_par(species_grid: list[np.ndarray], species_values: np.ndarray,
-    field_grid: list[np.ndarray], field_values: np.ndarray,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _get_gkyl_10m_p_par(
+    species_grid: list[np.ndarray],
+    species_values: np.ndarray,
+    field_grid: list[np.ndarray],
+    field_values: np.ndarray,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the parallel pressure directly from raw 10-moment species and
   EM field data (whose components 3:6 are ``(Bx, By, Bz)``)."""
   p_grid, p_values = _get_pij(species_grid, species_values)
   b_values = field_values[..., 3:6]
   return _get_p_par(p_grid, p_values, field_grid, b_values)
-# end
 
 
-def _get_p_perp(p_grid: list[np.ndarray], p_values: np.ndarray,
-    b_grid: list[np.ndarray], b_values: np.ndarray,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _get_p_perp(
+    p_grid: list[np.ndarray],
+    p_values: np.ndarray,
+    b_grid: list[np.ndarray],
+    b_values: np.ndarray,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the pressure perpendicular to the magnetic field.
 
   Uses the trace of the pressure tensor and the parallel pressure:
@@ -177,23 +186,27 @@ def _get_p_perp(p_grid: list[np.ndarray], p_values: np.ndarray,
   grid, p_par = _get_p_par(p_grid, p_values, b_grid, b_values)
 
   return grid, (p_xx + p_yy + p_zz - p_par) / 2.0
-# end
 
 
-def _get_gkyl_10m_p_perp(species_grid: list[np.ndarray], species_values: np.ndarray,
-    field_grid: list[np.ndarray], field_values: np.ndarray,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _get_gkyl_10m_p_perp(
+    species_grid: list[np.ndarray],
+    species_values: np.ndarray,
+    field_grid: list[np.ndarray],
+    field_values: np.ndarray,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the perpendicular pressure directly from raw 10-moment species
   and EM field data (whose components 3:6 are ``(Bx, By, Bz)``)."""
   p_grid, p_values = _get_pij(species_grid, species_values)
   b_values = field_values[..., 3:6]
   return _get_p_perp(p_grid, p_values, field_grid, b_values)
-# end
 
 
-def _get_agyro(p_grid: list[np.ndarray], p_values: np.ndarray,
-    b_grid: list[np.ndarray], b_values: np.ndarray, *,
-    measure: str = "swisdak") -> tuple[list[np.ndarray], np.ndarray]:
+def _get_agyro(p_grid: list[np.ndarray],
+               p_values: np.ndarray,
+               b_grid: list[np.ndarray],
+               b_values: np.ndarray,
+               *,
+               measure: str = "swisdak") -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the agyrotropy of the pressure tensor.
 
   The ``'swisdak'`` measure uses the tensor invariants and parallel pressure
@@ -233,53 +246,55 @@ def _get_agyro(p_grid: list[np.ndarray], p_values: np.ndarray,
   measure_lower = measure.lower()
   if measure_lower == "swisdak":
     I1 = p_xx + p_yy + p_zz
-    I2 = (p_xx * p_yy + p_xx * p_zz + p_yy * p_zz
-        - (p_xy * p_xy + p_xz * p_xz + p_yz * p_yz))
+    I2 = (p_xx * p_yy + p_xx * p_zz + p_yy * p_zz -
+          (p_xy * p_xy + p_xz * p_xz + p_yz * p_yz))
     # Tensor algebra of Appendix A of Swisdak 2015.
     out = np.sqrt(1 - 4 * I2 / ((I1 - p_par) * (I1 + 3 * p_par)))
-  # end
   elif measure_lower == "frobenius":
-    p_ixx = p_xx - (p_par * b_x * b_x / mag_b_sq
-        + p_perp * (1 - b_x * b_x / mag_b_sq))
-    p_ixy = p_xy - (p_par * b_x * b_y / mag_b_sq
-        + p_perp * (0 - b_x * b_y / mag_b_sq))
-    p_ixz = p_xz - (p_par * b_x * b_z / mag_b_sq
-        + p_perp * (0 - b_x * b_z / mag_b_sq))
-    p_iyy = p_yy - (p_par * b_y * b_y / mag_b_sq
-        + p_perp * (1 - b_y * b_y / mag_b_sq))
-    p_iyz = p_yz - (p_par * b_y * b_z / mag_b_sq
-        + p_perp * (0 - b_y * b_z / mag_b_sq))
-    p_izz = p_zz - (p_par * b_z * b_z / mag_b_sq
-        + p_perp * (1 - b_z * b_z / mag_b_sq))
-    out = (np.sqrt(p_ixx**2 + 2 * p_ixy**2 + 2 * p_ixz**2 + p_iyy**2
-        + 2 * p_iyz**2 + p_izz**2)
-        / np.sqrt(2 * p_perp**2 + 4 * p_par * p_perp))
-  # end
+    p_ixx = p_xx - (p_par * b_x * b_x / mag_b_sq + p_perp *
+                    (1 - b_x * b_x / mag_b_sq))
+    p_ixy = p_xy - (p_par * b_x * b_y / mag_b_sq + p_perp *
+                    (0 - b_x * b_y / mag_b_sq))
+    p_ixz = p_xz - (p_par * b_x * b_z / mag_b_sq + p_perp *
+                    (0 - b_x * b_z / mag_b_sq))
+    p_iyy = p_yy - (p_par * b_y * b_y / mag_b_sq + p_perp *
+                    (1 - b_y * b_y / mag_b_sq))
+    p_iyz = p_yz - (p_par * b_y * b_z / mag_b_sq + p_perp *
+                    (0 - b_y * b_z / mag_b_sq))
+    p_izz = p_zz - (p_par * b_z * b_z / mag_b_sq + p_perp *
+                    (1 - b_z * b_z / mag_b_sq))
+    out = (np.sqrt(p_ixx**2 + 2 * p_ixy**2 + 2 * p_ixz**2 + p_iyy**2 +
+                   2 * p_iyz**2 + p_izz**2) /
+           np.sqrt(2 * p_perp**2 + 4 * p_par * p_perp))
   else:
     raise ValueError(
         f"Measure specified is {measure_lower:s}; it needs to be either "
         "'swisdak' or 'frobenius'")
-  # end
 
   return grid, out
-# end
 
 
-def _get_gkyl_10m_agyro(species_grid: list[np.ndarray], species_values: np.ndarray,
-    field_grid: list[np.ndarray], field_values: np.ndarray, *,
+def _get_gkyl_10m_agyro(
+    species_grid: list[np.ndarray],
+    species_values: np.ndarray,
+    field_grid: list[np.ndarray],
+    field_values: np.ndarray,
+    *,
     measure: str = "swisdak") -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the agyrotropy directly from raw 10-moment species and EM field
   data (whose components 3:6 are ``(Bx, By, Bz)``)."""
   p_grid, p_values = _get_pij(species_grid, species_values)
   b_values = field_values[..., 3:6]
   return _get_agyro(p_grid, p_values, field_grid, b_values, measure=measure)
-# end
 
 
 # ---------------------------------------------------------------- GData verbs
-def pressure(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def pressure(data: "GDataState",
+             *,
+             gas_gamma: float = 5.0 / 3,
+             inplace: bool = False,
+             tag: str | None = None,
+             label: str | None = None) -> "GDataState":
   """Scalar pressure (trace of the pressure tensor over three) from
   10-moment fluid data.
 
@@ -297,15 +312,19 @@ def pressure(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
   _require_field_domain(data, "pressure", _REASON)
-  grid, values = _get_p(data.grid, data.values, gas_gamma=gas_gamma,
-      num_moms=10)
+  grid, values = _get_p(data.grid,
+                        data.values,
+                        gas_gamma=gas_gamma,
+                        num_moms=10)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def ke(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def ke(data: "GDataState",
+       *,
+       gas_gamma: float = 5.0 / 3,
+       inplace: bool = False,
+       tag: str | None = None,
+       label: str | None = None) -> "GDataState":
   """Kinetic (bulk-flow) energy density from 10-moment fluid data.
 
   Args:
@@ -322,15 +341,19 @@ def ke(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
   _require_field_domain(data, "ke", _REASON)
-  grid, values = _get_ke(data.grid, data.values, gas_gamma=gas_gamma,
-      num_moms=10)
+  grid, values = _get_ke(data.grid,
+                         data.values,
+                         gas_gamma=gas_gamma,
+                         num_moms=10)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def temp(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def temp(data: "GDataState",
+         *,
+         gas_gamma: float = 5.0 / 3,
+         inplace: bool = False,
+         tag: str | None = None,
+         label: str | None = None) -> "GDataState":
   """Temperature ``T = p / rho`` from 10-moment fluid data.
 
   Args:
@@ -347,15 +370,19 @@ def temp(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
   _require_field_domain(data, "temp", _REASON)
-  grid, values = _get_temp(data.grid, data.values, gas_gamma=gas_gamma,
-      num_moms=10)
+  grid, values = _get_temp(data.grid,
+                           data.values,
+                           gas_gamma=gas_gamma,
+                           num_moms=10)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def sound(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def sound(data: "GDataState",
+          *,
+          gas_gamma: float = 5.0 / 3,
+          inplace: bool = False,
+          tag: str | None = None,
+          label: str | None = None) -> "GDataState":
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)`` from 10-moment data.
 
   Args:
@@ -372,15 +399,19 @@ def sound(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
   _require_field_domain(data, "sound", _REASON)
-  grid, values = _get_sound(data.grid, data.values, gas_gamma=gas_gamma,
-      num_moms=10)
+  grid, values = _get_sound(data.grid,
+                            data.values,
+                            gas_gamma=gas_gamma,
+                            num_moms=10)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def mach(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def mach(data: "GDataState",
+         *,
+         gas_gamma: float = 5.0 / 3,
+         inplace: bool = False,
+         tag: str | None = None,
+         label: str | None = None) -> "GDataState":
   """Sonic Mach number ``M = |v| / c_s`` from 10-moment data.
 
   Args:
@@ -397,14 +428,18 @@ def mach(data: "GDataState", *, gas_gamma: float = 5.0 / 3,
     ValueError: if ``data`` is native modal (gkyl-backed).
   """
   _require_field_domain(data, "mach", _REASON)
-  grid, values = _get_mach(data.grid, data.values, gas_gamma=gas_gamma,
-      num_moms=10)
+  grid, values = _get_mach(data.grid,
+                           data.values,
+                           gas_gamma=gas_gamma,
+                           num_moms=10)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pxx(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pxx(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_xx`` pressure-tensor component.
 
   Args:
@@ -422,11 +457,13 @@ def pxx(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pxx", _REASON)
   grid, values = _get_pxx(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pxy(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pxy(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_xy`` pressure-tensor component.
 
   Args:
@@ -444,11 +481,13 @@ def pxy(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pxy", _REASON)
   grid, values = _get_pxy(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pxz(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pxz(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_xz`` pressure-tensor component.
 
   Args:
@@ -466,11 +505,13 @@ def pxz(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pxz", _REASON)
   grid, values = _get_pxz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pyy(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pyy(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_yy`` pressure-tensor component.
 
   Args:
@@ -488,11 +529,13 @@ def pyy(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pyy", _REASON)
   grid, values = _get_pyy(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pyz(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pyz(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_yz`` pressure-tensor component.
 
   Args:
@@ -510,11 +553,13 @@ def pyz(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pyz", _REASON)
   grid, values = _get_pyz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pzz(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pzz(data: "GDataState",
+        *,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "GDataState":
   """``P_zz`` pressure-tensor component.
 
   Args:
@@ -532,11 +577,13 @@ def pzz(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pzz", _REASON)
   grid, values = _get_pzz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def pressure_tensor(data: "GDataState", *, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "GDataState":
+def pressure_tensor(data: "GDataState",
+                    *,
+                    inplace: bool = False,
+                    tag: str | None = None,
+                    label: str | None = None) -> "GDataState":
   """Full symmetric pressure tensor
   ``(P_xx, P_xy, P_xz, P_yy, P_yz, P_zz)``.
 
@@ -555,12 +602,14 @@ def pressure_tensor(data: "GDataState", *, inplace: bool = False,
   _require_field_domain(data, "pressure_tensor", _REASON)
   grid, values = _get_pij(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def p_par(ptensor: "GDataState", bfield: "GDataState", *,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def p_par(ptensor: "GDataState",
+          bfield: "GDataState",
+          *,
+          inplace: bool = False,
+          tag: str | None = None,
+          label: str | None = None) -> "GDataState":
   """Pressure parallel to the magnetic field: ``(b . P . b) / |B|**2``.
 
   Args:
@@ -581,14 +630,16 @@ def p_par(ptensor: "GDataState", bfield: "GDataState", *,
   _require_field_domain(ptensor, "p_par", _REASON)
   _require_field_domain(bfield, "p_par", _REASON)
   grid, values = _get_p_par(ptensor.grid, ptensor.values, bfield.grid,
-      bfield.values)
+                            bfield.values)
   return ptensor._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def p_perp(ptensor: "GDataState", bfield: "GDataState", *,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def p_perp(ptensor: "GDataState",
+           bfield: "GDataState",
+           *,
+           inplace: bool = False,
+           tag: str | None = None,
+           label: str | None = None) -> "GDataState":
   """Pressure perpendicular to the magnetic field:
   ``(P_xx + P_yy + P_zz - p_par) / 2``.
 
@@ -610,14 +661,17 @@ def p_perp(ptensor: "GDataState", bfield: "GDataState", *,
   _require_field_domain(ptensor, "p_perp", _REASON)
   _require_field_domain(bfield, "p_perp", _REASON)
   grid, values = _get_p_perp(ptensor.grid, ptensor.values, bfield.grid,
-      bfield.values)
+                             bfield.values)
   return ptensor._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def agyro(ptensor: "GDataState", bfield: "GDataState", *,
-    measure: str = "frobenius", inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def agyro(ptensor: "GDataState",
+          bfield: "GDataState",
+          *,
+          measure: str = "frobenius",
+          inplace: bool = False,
+          tag: str | None = None,
+          label: str | None = None) -> "GDataState":
   """Agyrotropy from a pressure tensor and an EM field.
 
   Measures how far the pressure tensor departs from gyrotropy about the
@@ -645,15 +699,21 @@ def agyro(ptensor: "GDataState", bfield: "GDataState", *,
   """
   _require_field_domain(ptensor, "agyro", _AGYRO_REASON)
   _require_field_domain(bfield, "agyro", _AGYRO_REASON)
-  grid, values = _get_agyro(ptensor.grid, ptensor.values, bfield.grid,
-      bfield.values, measure=measure)
+  grid, values = _get_agyro(ptensor.grid,
+                            ptensor.values,
+                            bfield.grid,
+                            bfield.values,
+                            measure=measure)
   return ptensor._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def mom_agyro(species: "GDataState", field: "GDataState", *,
-    measure: str = "frobenius", inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def mom_agyro(species: "GDataState",
+              field: "GDataState",
+              *,
+              measure: str = "frobenius",
+              inplace: bool = False,
+              tag: str | None = None,
+              label: str | None = None) -> "GDataState":
   """Agyrotropy from raw 10-moment species data and an EM field.
 
   Convenience wrapper that first forms the pressure tensor from raw
@@ -681,16 +741,30 @@ def mom_agyro(species: "GDataState", field: "GDataState", *,
   """
   _require_field_domain(species, "mom_agyro", _AGYRO_REASON)
   _require_field_domain(field, "mom_agyro", _AGYRO_REASON)
-  grid, values = _get_gkyl_10m_agyro(species.grid, species.values,
-      field.grid, field.values, measure=measure)
+  grid, values = _get_gkyl_10m_agyro(species.grid,
+                                     species.values,
+                                     field.grid,
+                                     field.values,
+                                     measure=measure)
   return species._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
 VARIABLES = {
-    "density": density, "xvel": xvel, "yvel": yvel, "zvel": zvel, "vel": vel,
-    "pressure": pressure, "ke": ke, "temp": temp, "sound": sound,
+    "density": density,
+    "xvel": xvel,
+    "yvel": yvel,
+    "zvel": zvel,
+    "vel": vel,
+    "pressure": pressure,
+    "ke": ke,
+    "temp": temp,
+    "sound": sound,
     "mach": mach,
     "pressureTensor": pressure_tensor,
-    "pxx": pxx, "pxy": pxy, "pxz": pxz, "pyy": pyy, "pyz": pyz, "pzz": pzz,
+    "pxx": pxx,
+    "pxy": pxy,
+    "pxz": pxz,
+    "pyy": pyy,
+    "pyz": pyz,
+    "pzz": pzz,
 }

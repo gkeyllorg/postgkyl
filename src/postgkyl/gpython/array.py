@@ -19,7 +19,6 @@ class GkylArray:
 
   def __init__(self, cap):
     self._cap = cap
-  # end
 
   # ------------------------------------------------------------ constructors
   @classmethod
@@ -36,9 +35,7 @@ class GkylArray:
       raise ValueError(f"GkylArray.alloc: ncomp={ncomp} and size={size} "
                        "must both be positive (Gkeyll cannot allocate a "
                        "zero-sized array)")
-    # end
     return cls(_lib.require().array_new(ncomp, size))
-  # end
 
   @classmethod
   def from_numpy(cls, values: np.ndarray) -> "GkylArray":
@@ -56,29 +53,23 @@ class GkylArray:
     if buf.ndim < 1:
       raise ValueError("GkylArray.from_numpy: need at least a 1-D "
                        "(…, ncomp) array")
-    # end
     if buf.size == 0:
       raise ValueError("GkylArray.from_numpy: array is empty (Gkeyll "
                        "cannot allocate a zero-sized array)")
-    # end
     return cls(_lib.require().array_from_numpy(buf))
-  # end
 
   def clone(self) -> "GkylArray":
     """Deep copy through ``gkyl_array_clone`` (gkyl-owned)."""
     return GkylArray(_lib.require().array_clone(self._cap))
-  # end
 
   # ------------------------------------------------------------------ shape
   @property
   def ncomp(self) -> int:
     return int(_lib.require().array_ncomp(self._cap))
-  # end
 
   @property
   def size(self) -> int:
     return int(_lib.require().array_size(self._cap))
-  # end
 
   # ---------------------------------------------------------------- readout
   def view(self, cells=None) -> np.ndarray:
@@ -92,16 +83,11 @@ class GkylArray:
     flat = _lib.require().array_view(self._cap)
     if cells is None:
       return flat
-    # end
-    return flat.reshape(tuple(int(c) for c in cells) + (flat.shape[-1],))
-  # end
+    return flat.reshape(tuple(int(c) for c in cells) + (flat.shape[-1], ))
 
   def to_numpy(self, cells=None) -> np.ndarray:
     """By-value copy out of the C buffer (what the ``interpolate`` bridge returns)."""
     return np.array(self.view(cells), copy=True)
-  # end
 
   def __repr__(self) -> str:
     return f"<GkylArray {self.size} cells x {self.ncomp} comps (native)>"
-  # end
-# end

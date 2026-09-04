@@ -7,9 +7,13 @@ from postgkyl.gdatastate.gdatastate import GDataState
 from .fit import fit
 
 
-def growth(data: GDataState, *, guess: str | None = None,
-    min_n: int | None = None, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> GDataState:
+def growth(data: GDataState,
+           *,
+           guess: str | None = None,
+           min_n: int | None = None,
+           inplace: bool = False,
+           tag: str | None = None,
+           label: str | None = None) -> GDataState:
   """Fit exponential growth on the best leading data window.
 
   Args:
@@ -23,9 +27,14 @@ def growth(data: GDataState, *, guess: str | None = None,
   Returns:
     The fitted curve; rate, uncertainty, and R-squared are in its fit context.
   """
-  return fit(data, "exp2", guess=guess, window=True, min_n=min_n,
-      inplace=inplace, tag=tag, label=label)
-# end
+  return fit(data,
+             "exp2",
+             guess=guess,
+             window=True,
+             min_n=min_n,
+             inplace=inplace,
+             tag=tag,
+             label=label)
 
 
 __all__ = ["growth"]

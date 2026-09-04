@@ -17,21 +17,19 @@ sys.path.insert(0, SRC)  # dedup harmless across the shared test session
 from postgkyl import gpython  # noqa: E402
 from postgkyl.gpython import _lib  # noqa: E402
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 
 @needs_gkeyll
 def test_available_true_when_extension_loaded():
   assert _lib.available() is True
-# end
 
 
 @needs_gkeyll
 def test_require_returns_the_extension_module():
   mod = _lib.require()
   assert mod is sys.modules["postgkyl.gpython._gpython"]
-# end
 
 
 @needs_gkeyll
@@ -40,14 +38,12 @@ def test_lib_path_points_at_the_loaded_extension():
   assert p is not None
   assert p.name.startswith("_gpython")
   assert p.exists()
-# end
 
 
 @needs_gkeyll
 def test_handshake_version_matches():
   g0 = _lib.require()
   assert g0.api_version() == g0.GPYTHON_API_VERSION
-# end
 
 
 def test_available_false_when_extension_absent(monkeypatch):
@@ -61,9 +57,7 @@ def test_available_false_when_extension_absent(monkeypatch):
   assert _lib.available() is False
   with pytest.raises(RuntimeError, match="simulated: no _gpython.so found"):
     _lib.require()
-  # end
   assert _lib.lib_path() is None
-# end
 
 
 def _exec_independent_lib_copy():
@@ -81,7 +75,6 @@ def _exec_independent_lib_copy():
   mod = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(mod)
   return mod
-# end
 
 
 class _patched_gpython:
@@ -96,7 +89,6 @@ class _patched_gpython:
 
   def __init__(self, replacement):
     self._replacement = replacement
-  # end
 
   def __enter__(self):
     self._pkg = sys.modules["postgkyl.gpython"]
@@ -105,40 +97,30 @@ class _patched_gpython:
     self._old_sys_mod = sys.modules.get("postgkyl.gpython._gpython")
     if self._had_attr:
       delattr(self._pkg, "_gpython")
-    # end
     sys.modules["postgkyl.gpython._gpython"] = self._replacement
-  # end
 
   def __exit__(self, *exc):
     if self._had_attr:
       setattr(self._pkg, "_gpython", self._old_attr)
-    # end
     if self._old_sys_mod is not None:
       sys.modules["postgkyl.gpython._gpython"] = self._old_sys_mod
-    # end
     else:
       del sys.modules["postgkyl.gpython._gpython"]
-    # end
     return False
-  # end
-# end
 
 
 def test_import_error_when_extension_missing():
   """The actual `try: from . import _gpython / except ImportError` branch."""
   with _patched_gpython(None):  # sentinel: forces ImportError
     copy = _exec_independent_lib_copy()
-  # end
 
   assert copy.available() is False
   with pytest.raises(RuntimeError, match="Build the compiled bridge"):
     copy.require()
-  # end
   assert copy.lib_path() is None
   # The real package's bindings must be entirely unaffected by the above.
   assert gpython.available() is True
   assert isinstance(gpython.require(), types.ModuleType)
-# end
 
 
 @needs_gkeyll
@@ -152,13 +134,9 @@ def test_patched_gpython_cleans_up_sys_modules_when_never_previously_imported():
   try:
     with _patched_gpython(types.SimpleNamespace()):
       assert "postgkyl.gpython._gpython" in sys.modules
-    # end
     assert "postgkyl.gpython._gpython" not in sys.modules
-  # end
   finally:
     sys.modules["postgkyl.gpython._gpython"] = real
-  # end
-# end
 
 
 @needs_gkeyll
@@ -170,13 +148,10 @@ def test_version_mismatch_degrades_like_missing():
       GPYTHON_API_VERSION=real.GPYTHON_API_VERSION)
   with _patched_gpython(fake):
     copy = _exec_independent_lib_copy()
-  # end
 
   assert copy.available() is False
   with pytest.raises(RuntimeError, match="version mismatch"):
     copy.require()
-  # end
   # Unaffected real bindings.
   assert gpython.available() is True
   assert gpython.require() is real
-# end

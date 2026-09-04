@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import pytest
@@ -67,7 +68,6 @@ _exit_status: list[int] = []
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
   _exit_status.append(int(exitstatus))
-# end
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
@@ -75,8 +75,6 @@ def pytest_unconfigure(config: pytest.Config) -> None:
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(_exit_status[0])
-  # end
-# end
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -89,7 +87,6 @@ def _block_gui_popups():
         "webbrowser.open() was called during tests -- a figure/preview would "
         "have popped up on the desktop. Pass show=False (render.plotly's/"
         "render.pyvista's default) or mock the call being tested.")
-  # end
 
   webbrowser.open = _no_browser
   webbrowser.open_new = _no_browser
@@ -103,13 +100,10 @@ def _block_gui_popups():
           "pyvista.Plotter.show() was called during tests -- a render window "
           "would have popped up on the desktop. Pass show=False (the default) "
           "or mock the call being tested.")
-    # end
+
     pyvista.Plotter.show = _no_plotter_show
-  # end
   except ImportError:
     pass
-  # end
-# end
 
 
 @pytest.fixture(autouse=True)
@@ -119,7 +113,6 @@ def _close_matplotlib_figures():
 
   import matplotlib.pyplot as plt
   plt.close("all")
-# end
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -132,4 +125,3 @@ def pytest_configure(config: pytest.Config) -> None:
   # exactly once, in the true parent process, before collection or any
   # forking begins, so this is immune to that regardless of --forked.
   generate_all(GEN_DIR)
-# end

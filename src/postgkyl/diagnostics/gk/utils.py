@@ -46,7 +46,6 @@ def read_gfile(file_name: str) -> tuple[list[np.ndarray], np.ndarray, GData]:
   values = gdata.get_values()
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), gdata
-# end
 
 
 def read_gfile_if_present(
@@ -63,10 +62,8 @@ def read_gfile_if_present(
   """
   if not os.path.exists(file_name):
     return False, None, None, None
-  # end
   grid, values, gdata = read_gfile(file_name)
   return True, grid, values, gdata
-# end
 
 
 def read_time_trace_if_present(
@@ -85,12 +82,14 @@ def read_time_trace_if_present(
   found, grid, values, gdata = read_gfile_if_present(file_name)
   time = grid[0] if found else None
   return found, time, values, gdata
-# end
 
 
-def read_interpolated_gfile(file_name: str, poly_order: int, basis_type: str,
+def read_interpolated_gfile(
+    file_name: str,
+    poly_order: int,
+    basis_type: str,
     comp: int | str | None = None,
-    ) -> tuple[list[np.ndarray], np.ndarray, GData]:
+) -> tuple[list[np.ndarray], np.ndarray, GData]:
   """Read a Gkeyll file and interpolate it onto a uniform mesh.
 
   Args:
@@ -109,15 +108,15 @@ def read_interpolated_gfile(file_name: str, poly_order: int, basis_type: str,
   interpolated = gdata.interpolate()
   if comp is not None:
     interpolated = interpolated.select(comp=comp)
-  # end
   grid = interpolated.get_grid()
   values = interpolated.get_values()
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), interpolated
-# end
 
 
-def interpolated_grid_values(data: GData, *,
+def interpolated_grid_values(
+    data: GData,
+    *,
     comp: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
   """Interpolate ``data``'s DG coefficients onto its computational mesh.
 
@@ -144,14 +143,13 @@ def interpolated_grid_values(data: GData, *,
   cells = field.values.shape[:-1]
   centers = numerics.nodal_to_cell_centered_grid(field.grid, cells)
   return field.grid, centers, field.values[..., comp]
-# end
+
 
 def set_tick_font_size(ax, size: float) -> None:
   """Set an axes' tick-label and offset-text font size to ``size``."""
   ax.tick_params(axis="both", labelsize=size)
   ax.yaxis.get_offset_text().set_size(size)
   ax.xaxis.get_offset_text().set_size(size)
-# end
 
 
 def dict_get_bool(dict_in: dict, key: str, default: bool) -> bool:
@@ -162,13 +160,10 @@ def dict_get_bool(dict_in: dict, key: str, default: bool) -> bool:
   """
   if key not in dict_in:
     return default
-  # end
   val = dict_in[key]
   if isinstance(val, str):
     return val.strip().lower() in ("1", "true")
-  # end
   return bool(val)
-# end
 
 
 def parse_slice_string(value: str) -> slice:
@@ -182,13 +177,9 @@ def parse_slice_string(value: str) -> slice:
   for p in parts:
     try:
       parsed_parts.append(int(p) if p else None)
-    # end
     except ValueError:
       raise ValueError(f"Invalid slice part: {p}")
-    # end
-  # end
   return slice(*parsed_parts)
-# end
 
 
 def get_block_indices(multib: str, file_path_name: str) -> list[int]:
@@ -210,32 +201,24 @@ def get_block_indices(multib: str, file_path_name: str) -> list[int]:
     NameError: if ``multib`` is neither ``"-10"``/``"-1"``, a comma-separated
       list, a slice string, nor a single integer.
   """
+
   def _is_int(s: str) -> bool:
     try:
       int(s)
       return True
-    # end
     except ValueError:
       return False
-    # end
-  # end
 
   if multib == "-10":
     return [0]
-  # end
   if multib == "-1":
     return list(range(len(glob.glob(file_path_name))))
-  # end
   if "," in multib:
     return [int(b) for b in multib.split(",")]
-  # end
   if ":" in multib:
     s = parse_slice_string(multib)
     return list(range(*s.indices(MAX_NUM_BLOCKS)))
-  # end
   if _is_int(multib):
     return [int(multib)]
-  # end
   raise NameError(
       "Blocks given to --multib -m must be a comma separated list or slice.")
-# end

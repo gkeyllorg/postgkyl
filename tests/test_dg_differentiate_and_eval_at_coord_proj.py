@@ -21,8 +21,8 @@ sys.path.insert(0, SRC)  # dedup harmless across the shared test session
 import postgkyl as pg  # noqa: E402
 from postgkyl import dg, gpython, operations  # noqa: E402
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 DATA = os.path.join(ROOT, "test_data")
 GKHYB = os.path.join(DATA, "rt_gk_tcv_iwl_1x2v_p1-elc_250.gkyl")
@@ -38,12 +38,16 @@ def test_differentiate_first_order_on_a_linear_field():
   c1 = 1.0 / np.sqrt(1.5)
   a = gpython.GkylArray.from_numpy(np.array([[c0, c1]]))
 
-  out = dg.modal.differentiate("serendipity", 1, 1, a, dir=0, diff_order=1,
-      dx=2.0)
+  out = dg.modal.differentiate("serendipity",
+                               1,
+                               1,
+                               a,
+                               dir=0,
+                               diff_order=1,
+                               dx=2.0)
 
   # A constant field 1 has coefficient c0' = sqrt(2), c1' = 0.
   np.testing.assert_allclose(out.view(), [[np.sqrt(2.0), 0.0]], atol=1e-12)
-# end
 
 
 @needs_gkeyll
@@ -58,13 +62,17 @@ def test_differentiate_second_order_on_a_quadratic_field():
   c2 = 1.0 / (3.0 * np.sqrt(5.0 / 8.0))
   a = gpython.GkylArray.from_numpy(np.array([[c0, 0.0, c2]]))
 
-  out = dg.modal.differentiate("serendipity", 1, 2, a, dir=0, diff_order=2,
-      dx=2.0)
+  out = dg.modal.differentiate("serendipity",
+                               1,
+                               2,
+                               a,
+                               dir=0,
+                               diff_order=2,
+                               dx=2.0)
 
   expected_c0 = 2.0 * np.sqrt(2.0)  # constant field "2" -> coeff0 = 2*sqrt(2)
   np.testing.assert_allclose(out.view()[0, 0], expected_c0, atol=1e-10)
   np.testing.assert_allclose(out.view()[0, 1:], [0.0, 0.0], atol=1e-10)
-# end
 
 
 @needs_gkeyll
@@ -72,13 +80,10 @@ def test_differentiate_rejects_out_of_table_combinations():
   a = gpython.GkylArray.alloc(4, 1)  # 1x p1 serendipity-shaped, but wrong basis
   with pytest.raises(NotImplementedError, match="serendipity/tensor"):
     dg.modal.differentiate("gkhybrid", 2, 1, a, dir=0, diff_order=1, dx=1.0)
-  # end
 
   a3 = gpython.GkylArray.alloc(gpython.basis.num_basis("tensor", 3, 1), 1)
   with pytest.raises(NotImplementedError, match="ndim"):
     dg.modal.differentiate("tensor", 3, 1, a3, dir=0, diff_order=1, dx=1.0)
-  # end
-# end
 
 
 # ======================================================== eval_at_coord_proj
@@ -102,8 +107,13 @@ def test_eval_at_coord_proj_matches_direct_polynomial_evaluation():
   grid = {"ndim": ndim, "lower": lower, "upper": upper, "cells": cells}
   y0 = 0.3
   keep_dirs, cells_tar, out, btype, po_tar, cdim_tar, vdim_tar = (
-      dg.modal.eval_at_coord_proj(grid, basis_type, ndim, poly_order, a,
-          eval_dirs=[1], eval_coords=[y0]))
+      dg.modal.eval_at_coord_proj(grid,
+                                  basis_type,
+                                  ndim,
+                                  poly_order,
+                                  a,
+                                  eval_dirs=[1],
+                                  eval_coords=[y0]))
 
   assert keep_dirs == [0]
   assert cells_tar == [2]
@@ -115,11 +125,10 @@ def test_eval_at_coord_proj_matches_direct_polynomial_evaluation():
   zx = 2 * (x0 - 0.5) / 1.0
   zy = 2 * (y0 - 0.5) / 1.0
   donor_val = gpython.basis.eval_matrix(basis_type, ndim, poly_order,
-      np.array([[zx, zy]])) @ coeffs[0]
-  target_val = gpython.basis.eval_matrix(btype, 1, po_tar,
-      np.array([[zx]])) @ out.view()[0]
+                                        np.array([[zx, zy]])) @ coeffs[0]
+  target_val = gpython.basis.eval_matrix(btype, 1, po_tar, np.array(
+      [[zx]])) @ out.view()[0]
   np.testing.assert_allclose(target_val, donor_val, atol=1e-10)
-# end
 
 
 @needs_gkeyll
@@ -131,13 +140,17 @@ def test_eval_at_coord_proj_full_reduction_uses_the_degenerate_1d_target():
   grid = {"ndim": ndim, "lower": [0.0], "upper": [1.0], "cells": [1]}
 
   keep_dirs, cells_tar, out, btype, po_tar, cdim_tar, vdim_tar = (
-      dg.modal.eval_at_coord_proj(grid, basis_type, ndim, poly_order, a,
-          eval_dirs=[0], eval_coords=[0.5]))
+      dg.modal.eval_at_coord_proj(grid,
+                                  basis_type,
+                                  ndim,
+                                  poly_order,
+                                  a,
+                                  eval_dirs=[0],
+                                  eval_coords=[0.5]))
 
   assert keep_dirs == []
   assert cells_tar == [1]
   assert out.size == 1
-# end
 
 
 @needs_gkeyll
@@ -145,14 +158,18 @@ def test_eval_at_coord_proj_rejects_eval_dirs_out_of_range():
   a = gpython.GkylArray.alloc(gpython.basis.num_basis("serendipity", 2, 1), 1)
   grid = {"ndim": 2, "lower": [0.0, 0.0], "upper": [1.0, 1.0], "cells": [1, 1]}
   with pytest.raises(ValueError, match="out of range"):
-    dg.modal.eval_at_coord_proj(grid, "serendipity", 2, 1, a,
-        eval_dirs=[2], eval_coords=[0.0])
-  # end
-# end
+    dg.modal.eval_at_coord_proj(grid,
+                                "serendipity",
+                                2,
+                                1,
+                                a,
+                                eval_dirs=[2],
+                                eval_coords=[0.0])
 
 
 @needs_gkeyll
-def test_eval_at_coord_proj_on_real_gkhybrid_data_matches_donor_reconstruction():
+def test_eval_at_coord_proj_on_real_gkhybrid_data_matches_donor_reconstruction(
+):
   """Real 1x2v gkhybrid data: eliminating the vpar direction should produce
   a target whose basis Gkeyll reports (possibly a different TYPE than the
   donor's, since no gkhybrid convention has a mu-only velocity space), and
@@ -175,12 +192,12 @@ def test_eval_at_coord_proj_on_real_gkhybrid_data_matches_donor_reconstruction()
   zmu = 0.0
 
   donor_val = gpython.basis.eval_matrix("gkhybrid", 3, 1,
-      np.array([[zx, zy, zmu]])) @ np.asarray(d.native.view())[0]
-  target_val = gpython.basis.eval_matrix(out.ctx["basis_type"], 2,
-      out.ctx["poly_order"], np.array([[zx, zmu]])) @ np.asarray(
-          out.native.view())[0]
+                                        np.array([[zx, zy, zmu]])) @ np.asarray(
+                                            d.native.view())[0]
+  target_val = gpython.basis.eval_matrix(
+      out.ctx["basis_type"], 2, out.ctx["poly_order"], np.array(
+          [[zx, zmu]])) @ np.asarray(out.native.view())[0]
   np.testing.assert_allclose(target_val, donor_val, atol=1e-8)
-# end
 
 
 # =================================================== operations.eval_at_coord_proj
@@ -189,13 +206,10 @@ def test_ops_eval_at_coord_proj_rejects_numpy_backed_and_non_modal():
   interpolated = pg.load(GKHYB).interpolate()
   with pytest.raises(ValueError, match="native modal data"):
     interpolated.eval_at_coord_proj([1], [0.0])
-  # end
 
   nodal = pg.load(GKHYB).to_nodal()
   with pytest.raises(ValueError, match="modal value_form"):
     nodal.eval_at_coord_proj([1], [0.0])
-  # end
-# end
 
 
 @needs_gkeyll
@@ -204,8 +218,6 @@ def test_ops_eval_at_coord_proj_rejects_missing_basis_metadata():
   del a.ctx["poly_order"]
   with pytest.raises(ValueError, match="basis_type/poly_order"):
     a.eval_at_coord_proj([1], [0.0])
-  # end
-# end
 
 
 @needs_gkeyll
@@ -222,4 +234,3 @@ def test_ops_eval_at_coord_proj_tag_label_inplace():
   mutated = b.eval_at_coord_proj([1], [y0], inplace=True)
   assert mutated is b
   assert b.num_dims == 2
-# end

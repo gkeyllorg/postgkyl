@@ -57,10 +57,16 @@ class GDataGroup(GDataStateGroup):
   """A group whose members' fluent verbs broadcast over the whole group."""
 
   # ------------------------------------------------------- data lifecycle
-  def load(self, file_name: str, *, tag: str = "default", label: str = "",
-      ctx: dict | None = None, value_form: str | None = None,
-      basis_type: str | None = None, poly_order: int | None = None,
-      **read_kwargs) -> "GDataGroup":
+  def load(self,
+           file_name: str,
+           *,
+           tag: str = "default",
+           label: str = "",
+           ctx: dict | None = None,
+           value_form: str | None = None,
+           basis_type: str | None = None,
+           poly_order: int | None = None,
+           **read_kwargs) -> "GDataGroup":
     """Load and append one file (or a glob) and return this group.
 
     Successive calls accumulate members, enabling chains such as::
@@ -77,37 +83,35 @@ class GDataGroup(GDataStateGroup):
     # fluent group-returning verbs.
     from .load import load as load_data
 
-    loaded = load_data(file_name, tag=tag, label=label, ctx=ctx,
-        value_form=value_form, basis_type=basis_type,
-        poly_order=poly_order, **read_kwargs)
+    loaded = load_data(file_name,
+                       tag=tag,
+                       label=label,
+                       ctx=ctx,
+                       value_form=value_form,
+                       basis_type=basis_type,
+                       poly_order=poly_order,
+                       **read_kwargs)
     if isinstance(loaded, GDataStateGroup):
       additions = loaded.datasets
-    # end
     else:
       additions = [loaded]
-    # end
     self._datasets.extend(additions)
     return self
-  # end
 
   def __getattr__(self, name: str):
     if name.startswith("_"):
       raise AttributeError(name)
-    # end
     values = [getattr(member, name) for member in self._datasets]
     if values and not all(callable(v) for v in values):
       return values
-    # end
 
     def broadcast(*args, **kwargs):
       results = [v(*args, **kwargs) for v in values]
       if results and all(isinstance(r, GDataState) for r in results):
         return type(self)(results)
-      # end
       return results
-    # end
+
     return broadcast
-  # end
 
   # ------------------------------------------------------- combining (typed)
   # Overridden (not inherited) so the result stays the caller's concrete
@@ -115,61 +119,71 @@ class GDataGroup(GDataStateGroup):
   def with_(self, *others) -> "GDataGroup":
     """Return a new group (same concrete class) with ``others`` appended."""
     return type(self)(self._datasets + list(others))
-  # end
 
   __and__ = with_
 
   def sort(self, *, reverse: bool = False) -> "GDataGroup":
     """Return a naturally filename-sorted group (see ``operations.sort``)."""
     return type(self)(verbs.sort(*self._datasets, reverse=reverse))
-  # end
 
   def __getitem__(self, index):
     """Index or slice; a slice returns a group of the same concrete class."""
     result = self._datasets[index]
     return type(self)(result) if isinstance(index, slice) else result
-  # end
 
   # ------------------------------------------------------- terminal (typed)
   def info(self, *, header: bool = True) -> list:
     """Summarize every member (see ``operations.info``); returns a list of strings."""
     return operations.info(*self._datasets, header=header)
-  # end
 
   # Binding the canonical variadic function passes this iterable group as its
   # first input; render.plot flattens it and keeps group calls on one figure.
   plot = verbs.plot
 
-  def collect(self, *, sumdata: bool = False, period: float | None = None,
-      offset: float = 0.0, chunk: int | None = None, tag: str | None = None,
-      label: str | None = None):
+  def collect(self,
+              *,
+              sumdata: bool = False,
+              period: float | None = None,
+              offset: float = 0.0,
+              chunk: int | None = None,
+              tag: str | None = None,
+              label: str | None = None):
     """Combine the members into one dataset along a time axis (see
     ``api.verbs.collect``). Returns a list of datasets when ``chunk`` is given."""
-    return verbs.collect(*self._datasets, sumdata=sumdata, period=period,
-        offset=offset, chunk=chunk, tag=tag, label=label)
-  # end
+    return verbs.collect(*self._datasets,
+                         sumdata=sumdata,
+                         period=period,
+                         offset=offset,
+                         chunk=chunk,
+                         tag=tag,
+                         label=label)
 
-  def evaluate(self, chain: str, *, tag: str | None = None, label: str | None = None):
+  def evaluate(self,
+               chain: str,
+               *,
+               tag: str | None = None,
+               label: str | None = None):
     """Evaluate an RPN expression over the members (see ``api.verbs.evaluate``)."""
     return verbs.evaluate(chain, *self._datasets, tag=tag, label=label)
-  # end
 
   def animate(self, **kwargs):
     """Animate the members, one frame each (see ``api.verbs.animate``)."""
     return verbs.animate(self._datasets, **kwargs)
-  # end
 
   def plotly_animate(self, **kwargs):
     """Animate the members with Plotly, one frame each (see ``api.verbs.plotly_animate``)."""
     return verbs.plotly_animate(self._datasets, **kwargs)
-  # end
-# end
 
 
 for _name in (
-    "load", "with_", "sort", "info", "collect", "evaluate", "animate",
+    "load",
+    "with_",
+    "sort",
+    "info",
+    "collect",
+    "evaluate",
+    "animate",
     "plotly_animate",
 ):
   hidden("the functional callable is the canonical command source")(
       GDataGroup.__dict__[_name])
-# end

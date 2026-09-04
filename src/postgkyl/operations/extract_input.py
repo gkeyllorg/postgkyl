@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
 def extract_input(data: "GDataState") -> str:
@@ -32,6 +31,4 @@ def extract_input(data: "GDataState") -> str:
   encoded = data.ctx.get("input_file")
   if encoded:
     return base64.decodebytes(encoded.encode("utf-8")).decode("utf-8")
-  # end
   return ""
-# end

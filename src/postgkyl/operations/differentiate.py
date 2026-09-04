@@ -32,11 +32,14 @@ from ._curvilinear import block_for_axis, curvilinear_blocks
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def differentiate(data: "GDataState", *, direction: int | None = None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def differentiate(data: "GDataState",
+                  *,
+                  direction: int | None = None,
+                  inplace: bool = False,
+                  tag: str | None = None,
+                  label: str | None = None):
   """Numerical gradient of field-domain data.
 
   With ``direction=None``, differentiates along every spatial axis and
@@ -70,7 +73,6 @@ def differentiate(data: "GDataState", *, direction: int | None = None,
         "differentiate operates on interpolated (NumPy) values; call "
         ".interpolate() first -- np.gradient has no basis-space meaning for raw "
         "DG coefficients.")
-  # end
   grid = data.grid
   values = data.values
   num_dims = data.num_dims
@@ -84,26 +86,19 @@ def differentiate(data: "GDataState", *, direction: int | None = None,
     if info is None:
       zc = 0.5 * (grid[d][1:] + grid[d][:-1])  # cell centered values
       return np.gradient(values, zc, edge_order=2, axis=d)
-    # end
     off, dims = info
     if off not in block_grad_cache:
       block_coords = [grid[dd] for dd in dims]
       block_grad_cache[off] = curvilinear.physical_gradient(
           block_coords, values, tuple(dims))
-    # end
     return block_grad_cache[off][..., dims.index(d)]
-  # end
 
   if direction is None:
     out_shape = list(values.shape)
     out_shape[-1] = nc * num_dims
     out_values = np.zeros(out_shape)
     for d in range(num_dims):
-      out_values[..., d*nc:(d + 1)*nc] = grad_along(d)
-    # end
-  # end
+      out_values[..., d * nc:(d + 1) * nc] = grad_along(d)
   else:
     out_values = grad_along(int(direction))
-  # end
   return data._result(grid, out_values, inplace=inplace, tag=tag, label=label)
-# end

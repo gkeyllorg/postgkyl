@@ -32,8 +32,16 @@ INTEGRATE_OPS = {"none": 0, "abs": 1, "sq": 2}
 # kernel pointer that gkyl_dg_mul_op/div_op call with NO null check at all
 # (a segfault, not an assert). Both must be refused here.
 _WEAK_MAX_POLY_ORDER = {
-    "serendipity": {1: 3, 2: 3, 3: 3},
-    "tensor": {1: 3, 2: 2, 3: 2},
+    "serendipity": {
+        1: 3,
+        2: 3,
+        3: 3
+    },
+    "tensor": {
+        1: 3,
+        2: 2,
+        3: 2
+    },
 }
 # gkyl_dg_inv_op's kernel table (ser_inv_list) has no dim bound check
 # whatsoever (a raw out-of-bounds array read for ndim >= 4) and only fills
@@ -41,45 +49,37 @@ _WEAK_MAX_POLY_ORDER = {
 _WEAK_INV_DIMS = (1, 2, 3)
 
 
-def _check_weak(basis_type: str, ndim: int, poly_order: int,
-    *arrays: GkylArray):
+def _check_weak(basis_type: str, ndim: int, poly_order: int, *arrays:
+                GkylArray):
   basis_type = basis_type.lower()
   limits = _WEAK_MAX_POLY_ORDER.get(basis_type)
   if limits is None:
     raise NotImplementedError(
         f"Gkeyll weak ops support {_WEAK_BASES}, not '{basis_type}'")
-  # end
   max_p = limits.get(ndim)
   if max_p is None:
     raise NotImplementedError(
         f"Gkeyll's weak (DG) mul/div kernels support ndim 1..3, got {ndim}")
-  # end
   if not 0 <= poly_order <= max_p:
     raise NotImplementedError(
         f"Gkeyll's weak {basis_type} mul/div kernels in {ndim}D support "
         f"poly_order 0..{max_p}, got {poly_order}")
-  # end
   first = arrays[0]
   for a in arrays[1:]:
     if (a.ncomp, a.size) != (first.ncomp, first.size):
       raise ValueError(f"operand shape mismatch: {a.ncomp}x{a.size} vs "
                        f"{first.ncomp}x{first.size}")
-    # end
-  # end
-# end
 
 
 def _fields(arr: GkylArray, num_basis: int) -> int:
   if arr.ncomp % num_basis:
     raise ValueError(f"ncomp {arr.ncomp} is not a multiple of "
                      f"num_basis {num_basis}")
-  # end
   return arr.ncomp // num_basis
-# end
 
 
-def weak_mul(basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray, b: GkylArray) -> GkylArray:
+def weak_mul(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
+             b: GkylArray) -> GkylArray:
   """Weak (DG) product ``a * b``, field by field, via ``gkyl_dg_mul_op``."""
   _check_weak(basis_type, ndim, poly_order, a, b)
   basis = get_basis(basis_type, ndim, poly_order)
@@ -87,11 +87,10 @@ def weak_mul(basis_type: str, ndim: int, poly_order: int,
   out = GkylArray.alloc(a.ncomp, a.size)
   _lib.require().dg_mul(basis._cap, out._cap, a._cap, b._cap)
   return out
-# end
 
 
-def weak_div(basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray, b: GkylArray) -> GkylArray:
+def weak_div(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
+             b: GkylArray) -> GkylArray:
   """Weak (DG) quotient ``a / b`` via ``gkyl_dg_div_op`` (per-cell solve)."""
   _check_weak(basis_type, ndim, poly_order, a, b)
   basis = get_basis(basis_type, ndim, poly_order)
@@ -99,29 +98,25 @@ def weak_div(basis_type: str, ndim: int, poly_order: int,
   out = GkylArray.alloc(a.ncomp, a.size)
   _lib.require().dg_div(basis._cap, out._cap, a._cap, b._cap)
   return out
-# end
 
 
 def weak_inv(basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray) -> GkylArray:
+             a: GkylArray) -> GkylArray:
   """Weak reciprocal ``1 / a`` via ``gkyl_dg_inv_op`` (Gkeyll: ser p=1, ndim<=3 only)."""
   if basis_type.lower() != "serendipity" or poly_order != 1:
     raise NotImplementedError(
         "gkyl_dg_inv_op supports serendipity p=1 only (a Gkeyll limit); "
         "use weak division instead.")
-  # end
   if ndim not in _WEAK_INV_DIMS:
     raise NotImplementedError(
         f"gkyl_dg_inv_op supports ndim {_WEAK_INV_DIMS} only, got {ndim} "
         "(a Gkeyll limit; its kernel table has no bounds check at all, so "
         "this guard is load-bearing, not decorative)")
-  # end
   basis = get_basis(basis_type, ndim, poly_order)
   _fields(a, basis.num_basis)
   out = GkylArray.alloc(a.ncomp, a.size)
   _lib.require().dg_inv(basis._cap, out._cap, a._cap)
   return out
-# end
 
 
 # -------------------------------------------------- conf-space x phase-space
@@ -140,65 +135,87 @@ def weak_inv(basis_type: str, ndim: int, poly_order: int,
 # guarded explicitly below, transcribed from ser_cross_mul_list /
 # ten_cross_mul_list in gkyl_dg_bin_ops_priv.h.
 _CROSS_MUL_SER = {
-    2: {1: {1, 2, 3}},
-    3: {1: {1, 2, 3}, 2: {1, 2, 3}},
-    4: {1: {1, 2, 3}, 2: {1, 2, 3}, 3: {1, 2, 3}},
-    5: {2: {1, 2}, 3: {1, 2}},
-    6: {3: {1}},
+    2: {
+        1: {1, 2, 3}
+    },
+    3: {
+        1: {1, 2, 3},
+        2: {1, 2, 3}
+    },
+    4: {
+        1: {1, 2, 3},
+        2: {1, 2, 3},
+        3: {1, 2, 3}
+    },
+    5: {
+        2: {1, 2},
+        3: {1, 2}
+    },
+    6: {
+        3: {1}
+    },
 }
 _CROSS_MUL_TEN = {
-    2: {1: {1, 2}},
-    3: {1: {1, 2}, 2: {1, 2}},
-    4: {1: {1, 2}, 2: {1, 2}, 3: {1}},
-    5: {2: {1, 2}, 3: {1}},
-    6: {3: {1}},
+    2: {
+        1: {1, 2}
+    },
+    3: {
+        1: {1, 2},
+        2: {1, 2}
+    },
+    4: {
+        1: {1, 2},
+        2: {1, 2},
+        3: {1}
+    },
+    5: {
+        2: {1, 2},
+        3: {1}
+    },
+    6: {
+        3: {1}
+    },
 }
 _CROSS_MUL_TABLES = {"serendipity": _CROSS_MUL_SER, "tensor": _CROSS_MUL_TEN}
 
 
 def _check_mul_conf_phase(conf_basis_type: str, phase_basis_type: str,
-    conf_ndim: int, phase_ndim: int, poly_order: int):
+                          conf_ndim: int, phase_ndim: int, poly_order: int):
   conf_basis_type = conf_basis_type.lower()
   phase_basis_type = phase_basis_type.lower()
   if phase_ndim <= conf_ndim:
     raise ValueError(
         f"phase_ndim ({phase_ndim}) must exceed conf_ndim ({conf_ndim})")
-  # end
   if phase_basis_type in ("hybrid", "gkhybrid"):
     if conf_basis_type != "serendipity":
       raise NotImplementedError(
           "Gkeyll pairs a hybrid/gkhybrid phase basis with a serendipity "
           f"conf basis only (its own PKPM/GK convention), not "
           f"'{conf_basis_type}'")
-    # end
     return
-  # end
   if phase_basis_type in ("serendipity", "tensor"):
     if conf_basis_type != phase_basis_type:
       raise NotImplementedError(
           "gkyl_dg_mul_conf_phase_op_range picks its kernel from the phase "
           f"basis type alone ('{phase_basis_type}'); pair it with a conf "
           f"basis of the same type, not '{conf_basis_type}'")
-    # end
-    valid = _CROSS_MUL_TABLES[phase_basis_type].get(phase_ndim, {}).get(
-        conf_ndim)
+    valid = _CROSS_MUL_TABLES[phase_basis_type].get(phase_ndim,
+                                                    {}).get(conf_ndim)
     if not valid or poly_order not in valid:
       raise NotImplementedError(
           f"Gkeyll has no {phase_basis_type} conf*phase cross-mul kernel "
           f"for conf_ndim={conf_ndim}, phase_ndim={phase_ndim}, "
           f"poly_order={poly_order}")
-    # end
     return
-  # end
   raise NotImplementedError(
       "Gkeyll's conf*phase cross-mul supports serendipity, tensor, hybrid, "
       f"gkhybrid phase bases, not '{phase_basis_type}'")
-# end
 
 
 def weak_mul_conf_phase(conf_basis_type: str, conf_ndim: int,
-    phase_basis_type: str, phase_ndim: int, poly_order: int,
-    conf_cells, phase_cells, cop: GkylArray, pop: GkylArray) -> GkylArray:
+                        phase_basis_type: str, phase_ndim: int, poly_order: int,
+                        conf_cells, phase_cells, cop: GkylArray,
+                        pop: GkylArray) -> GkylArray:
   """Conf-space x phase-space weak product ``cop * pop`` via
   ``gkyl_dg_mul_conf_phase_op_range`` -- e.g. a density (conf-space) times a
   distribution function (phase-space) in PKPM/gyrokinetic post-processing.
@@ -219,26 +236,23 @@ def weak_mul_conf_phase(conf_basis_type: str, conf_ndim: int,
   serendipity/tensor.
   """
   _check_mul_conf_phase(conf_basis_type, phase_basis_type, conf_ndim,
-      phase_ndim, poly_order)
+                        phase_ndim, poly_order)
   cbasis = get_basis(conf_basis_type, conf_ndim, poly_order)
   pbasis = get_basis(phase_basis_type, phase_ndim, poly_order)
   if cop.ncomp != cbasis.num_basis:
     raise ValueError(
         f"cop.ncomp ({cop.ncomp}) must equal the conf basis's num_basis "
         f"({cbasis.num_basis}); mul_conf_phase is single-field only")
-  # end
   if pop.ncomp != pbasis.num_basis:
     raise ValueError(
         f"pop.ncomp ({pop.ncomp}) must equal the phase basis's num_basis "
         f"({pbasis.num_basis}); mul_conf_phase is single-field only")
-  # end
   conf_cells = np.asarray(conf_cells, dtype=np.int32)
   phase_cells = np.asarray(phase_cells, dtype=np.int32)
   out = GkylArray.alloc(pop.ncomp, pop.size)
-  _lib.require().dg_mul_conf_phase(cbasis._cap, pbasis._cap, out._cap,
-      cop._cap, pop._cap, conf_cells, phase_cells)
+  _lib.require().dg_mul_conf_phase(cbasis._cap, pbasis._cap, out._cap, cop._cap,
+                                   pop._cap, conf_cells, phase_cells)
   return out
-# end
 
 
 # ------------------------------------------------------- linear coefficient ops
@@ -246,13 +260,11 @@ def lincomb(ca: float, a: GkylArray, cb: float, b: GkylArray) -> GkylArray:
   """``ca*a + cb*b`` on the DG coefficients (gkyl_array_set + accumulate)."""
   if (a.ncomp, a.size) != (b.ncomp, b.size):
     raise ValueError("operand shape mismatch in lincomb")
-  # end
   g0 = _lib.require()
   out = GkylArray.alloc(a.ncomp, a.size)
   g0.array_set(out._cap, ca, a._cap)
   g0.array_accumulate(out._cap, cb, b._cap)
   return out
-# end
 
 
 def scale(a: GkylArray, factor: float) -> GkylArray:
@@ -260,7 +272,6 @@ def scale(a: GkylArray, factor: float) -> GkylArray:
   out = a.clone()
   _lib.require().array_scale(out._cap, factor)
   return out
-# end
 
 
 def shiftc(a: GkylArray, val: float, comp: int) -> GkylArray:
@@ -268,7 +279,6 @@ def shiftc(a: GkylArray, val: float, comp: int) -> GkylArray:
   out = a.clone()
   _lib.require().array_shiftc(out._cap, float(val), comp)
   return out
-# end
 
 
 # ---------------------------------------------------------------- reductions
@@ -281,11 +291,10 @@ def reduce(a: GkylArray, op: int) -> np.ndarray:
   :func:`dg_reduce` for the field-aware version.
   """
   return _lib.require().array_reduce(a._cap, op)
-# end
 
 
 def dg_reduce(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
-    comp: int, op: str) -> float:
+              comp: int, op: str) -> float:
   """MIN/MAX/SUM of the field ``comp`` actually represents (gkyl_array_dg_reducec).
 
   Evaluates the DG expansion at each cell's Gauss-Legendre quadrature nodes
@@ -310,19 +319,22 @@ def dg_reduce(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
   """
   if op not in REDUCE_OPS:
     raise ValueError(f"dg_reduce op '{op}' not in {sorted(REDUCE_OPS)}")
-  # end
   basis = get_basis(basis_type, ndim, poly_order)
   nfields = _fields(a, basis.num_basis)
   if not 0 <= comp < nfields:
     raise ValueError(f"comp {comp} out of range for {nfields} field(s)")
-  # end
   return float(_lib.require().array_dg_reduce(basis._cap, a._cap, comp,
-      REDUCE_OPS[op]))
-# end
+                                              REDUCE_OPS[op]))
 
 
-def array_average(grid: dict, basis_type: str, poly_order: int, ndim_avg: int,
-    cells_avg, avg_dim, a: GkylArray, weight: GkylArray | None = None) -> GkylArray:
+def array_average(grid: dict,
+                  basis_type: str,
+                  poly_order: int,
+                  ndim_avg: int,
+                  cells_avg,
+                  avg_dim,
+                  a: GkylArray,
+                  weight: GkylArray | None = None) -> GkylArray:
   """Single-field weighted (or plain) average of ``a`` via ``gkyl_array_average``:
   ``int f w dx^avg / int w dx^avg`` (or ``int f dx^avg / int dx^avg`` when
   ``weight`` is omitted).
@@ -343,43 +355,43 @@ def array_average(grid: dict, basis_type: str, poly_order: int, ndim_avg: int,
   if basis_type.lower() != "serendipity" or poly_order not in (1, 2):
     raise NotImplementedError(
         "gkyl_array_average kernels in libg0core cover serendipity p1-p2")
-  # end
   ndim = int(grid["ndim"])
   if ndim not in (1, 2, 3):
     raise NotImplementedError(
         f"gkyl_array_average kernels in libg0core cover ndim 1-3, got {ndim}")
-  # end
   basis = get_basis(basis_type, ndim, poly_order)
   basis_avg = get_basis(basis_type, ndim_avg, poly_order)
   if a.ncomp != basis.num_basis:
     raise ValueError(
         f"average: a.ncomp ({a.ncomp}) must equal the donor basis's "
         f"num_basis ({basis.num_basis}); average is single-field only")
-  # end
-  if weight is not None and (weight.ncomp, weight.size) != (basis.num_basis, a.size):
+  if weight is not None and (weight.ncomp, weight.size) != (basis.num_basis,
+                                                            a.size):
     raise ValueError(
         f"average: weight must be single-field ({basis.num_basis} comps) "
         f"and share the donor array's size ({a.size} cells)")
-  # end
   lower = np.asarray(grid["lower"], dtype=np.float64)
   upper = np.asarray(grid["upper"], dtype=np.float64)
   cells = np.asarray(grid["cells"], dtype=np.int32)
   if int(np.prod(cells)) != a.size:
     raise ValueError(f"grid cells {tuple(cells)} do not cover the array "
                      f"({int(np.prod(cells))} vs {a.size} cells)")
-  # end
   cells_avg = np.asarray(cells_avg, dtype=np.int32)
   avg_dim = np.asarray(avg_dim, dtype=np.int32)
   out = GkylArray.alloc(basis_avg.num_basis, int(np.prod(cells_avg)))
   _lib.require().array_average(lower, upper, cells, basis._cap, basis_avg._cap,
-      cells_avg, avg_dim, weight._cap if weight is not None else None,
-      a._cap, out._cap)
+                               cells_avg, avg_dim,
+                               weight._cap if weight is not None else None,
+                               a._cap, out._cap)
   return out
-# end
 
 
-def integrate(grid: dict, basis_type: str, poly_order: int, a: GkylArray,
-    op: str = "none", factor: float = 1.0) -> np.ndarray:
+def integrate(grid: dict,
+              basis_type: str,
+              poly_order: int,
+              a: GkylArray,
+              op: str = "none",
+              factor: float = 1.0) -> np.ndarray:
   """``int dx op(f)`` per field via ``gkyl_array_integrate`` -- one value per field.
 
   ``grid`` is the dict from ``rio`` (ndim/lower/upper/cells). Guarded to the
@@ -392,16 +404,13 @@ def integrate(grid: dict, basis_type: str, poly_order: int, a: GkylArray,
   """
   if op not in INTEGRATE_OPS:
     raise ValueError(f"integrate op '{op}' not in {sorted(INTEGRATE_OPS)}")
-  # end
   if basis_type.lower() != "serendipity" or poly_order not in (1, 2):
     raise NotImplementedError(
         "gkyl_array_integrate kernels in libg0core cover serendipity p1-p2")
-  # end
   ndim = int(grid["ndim"])
   if ndim not in (1, 2, 3):
     raise NotImplementedError(
         f"gkyl_array_integrate kernels in libg0core cover ndim 1-3, got {ndim}")
-  # end
   basis = get_basis(basis_type, ndim, poly_order)
   nfields = _fields(a, basis.num_basis)
   lower = np.asarray(grid["lower"], dtype=np.float64)
@@ -410,15 +419,19 @@ def integrate(grid: dict, basis_type: str, poly_order: int, a: GkylArray,
   if int(np.prod(cells)) != a.size:
     raise ValueError(f"grid cells {tuple(cells)} do not cover the array "
                      f"({int(np.prod(cells))} vs {a.size} cells)")
-  # end
-  return _lib.require().array_integrate(lower, upper, cells, basis._cap,
-      nfields, INTEGRATE_OPS[op], float(factor), a._cap)
-# end
+  return _lib.require().array_integrate(lower, upper, cells,
+                                        basis._cap, nfields, INTEGRATE_OPS[op],
+                                        float(factor), a._cap)
 
 
 # -------------------------------------------------------------------- powsqrt
-def powsqrt(basis_type: str, ndim: int, poly_order: int, cells, a: GkylArray,
-    exponent: float, num_quad: int | None = None) -> GkylArray:
+def powsqrt(basis_type: str,
+            ndim: int,
+            poly_order: int,
+            cells,
+            a: GkylArray,
+            exponent: float,
+            num_quad: int | None = None) -> GkylArray:
   """Single-field ``pow(sqrt(a), exponent)`` (i.e. ``a ** (exponent/2)``) via
   ``gkyl_proj_powsqrt_on_basis`` -- a Gauss-Legendre-quadrature projection,
   not a fixed per-(basis_type, ndim, poly_order) kernel table like every
@@ -440,23 +453,18 @@ def powsqrt(basis_type: str, ndim: int, poly_order: int, cells, a: GkylArray,
     raise ValueError(
         f"powsqrt: a.ncomp ({a.ncomp}) must equal the basis's num_basis "
         f"({basis.num_basis}); powsqrt is single-field only")
-  # end
   if num_quad is None:
     num_quad = poly_order + 1
-  # end
   if num_quad < 1:
     raise ValueError(f"num_quad must be >= 1, got {num_quad}")
-  # end
   cells = np.asarray(cells, dtype=np.int32)
   if int(np.prod(cells)) != a.size:
     raise ValueError(f"cells {tuple(cells)} do not cover the array "
                      f"({int(np.prod(cells))} vs {a.size} cells)")
-  # end
   out = GkylArray.alloc(basis.num_basis, a.size)
   _lib.require().powsqrt(basis._cap, int(num_quad), float(exponent), cells,
-      out._cap, a._cap)
+                         out._cap, a._cap)
   return out
-# end
 
 
 # --------------------------------------------------------------- differentiate
@@ -466,43 +474,44 @@ def powsqrt(basis_type: str, ndim: int, poly_order: int, cells, a: GkylArray,
 # `assert(diff_op)` on a NULL table entry -- a process abort, not a Python
 # exception), so this guard must run before every call.
 _DIFFERENTIATE_MAX_POLY_ORDER = {
-    "serendipity": {1: 2, 2: 2, 3: 1},
-    "tensor": {1: 2, 2: 2},  # ndim 3: no tensor differentiate kernels at all
+    "serendipity": {
+        1: 2,
+        2: 2,
+        3: 1
+    },
+    "tensor": {
+        1: 2,
+        2: 2
+    },  # ndim 3: no tensor differentiate kernels at all
 }
 
 
-def _check_differentiate(basis_type: str, ndim: int, poly_order: int,
-    dir: int, diff_order: int):
+def _check_differentiate(basis_type: str, ndim: int, poly_order: int, dir: int,
+                         diff_order: int):
   basis_type = basis_type.lower()
   limits = _DIFFERENTIATE_MAX_POLY_ORDER.get(basis_type)
   if limits is None:
     raise NotImplementedError(
         f"gkyl_dg_differentiate_op_local supports serendipity/tensor, not "
         f"'{basis_type}'")
-  # end
   max_p = limits.get(ndim)
   if max_p is None:
     raise NotImplementedError(
         f"Gkeyll's {basis_type} differentiate kernels support ndim "
         f"{sorted(limits)}, got {ndim}")
-  # end
   if not 1 <= poly_order <= max_p:
     raise NotImplementedError(
         f"Gkeyll's {basis_type} differentiate kernels in {ndim}D support "
         f"poly_order 1..{max_p}, got {poly_order}")
-  # end
   if not 0 <= dir < ndim:
     raise ValueError(f"differentiate dir {dir} out of range for a {ndim}D "
                      "field")
-  # end
   if diff_order not in (1, 2):
     raise ValueError(f"differentiate order must be 1 or 2, got {diff_order}")
-  # end
-# end
 
 
 def weak_differentiate(basis_type: str, ndim: int, poly_order: int, dir: int,
-    diff_order: int, dx: float, a: GkylArray) -> GkylArray:
+                       diff_order: int, dx: float, a: GkylArray) -> GkylArray:
   """Local DG derivative ``d^diff_order/dx_dir^diff_order a`` via
   ``gkyl_dg_differentiate_op_local``, field by field.
 
@@ -516,9 +525,8 @@ def weak_differentiate(basis_type: str, ndim: int, poly_order: int, dir: int,
   basis = get_basis(basis_type, ndim, poly_order)
   out = GkylArray.alloc(a.ncomp, a.size)
   _lib.require().dg_differentiate(basis._cap, dir, diff_order, float(dx),
-      out._cap, a._cap)
+                                  out._cap, a._cap)
   return out
-# end
 
 
 # ------------------------------------------------------- evaluate-and-project
@@ -530,8 +538,19 @@ def weak_differentiate(basis_type: str, ndim: int, poly_order: int, dir: int,
 # above, an out-of-coverage combination is a process abort (an unconditional
 # `assert(kers->ev_ker)` on a NULL table entry), not a Python exception.
 _EVAL_AT_COORD_PROJ_MAX_POLY_ORDER = {
-    "serendipity": {1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1},
-    "tensor": {1: 1, 2: 2, 3: 1},
+    "serendipity": {
+        1: 2,
+        2: 2,
+        3: 2,
+        4: 2,
+        5: 1,
+        6: 1
+    },
+    "tensor": {
+        1: 1,
+        2: 2,
+        3: 1
+    },
 }
 
 # gkyl_basis_type ordinals (gkeyll/core/zero/gkyl_basis.h) -- the target
@@ -549,46 +568,38 @@ _BASIS_TYPE_ORDINALS = {
 
 
 def _check_eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
-    eval_dirs):
+                              eval_dirs):
   basis_type = basis_type.lower()
   if basis_type == "gkhybrid":
     if poly_order != 1:
       raise NotImplementedError(
           "gkyl_dg_eval_at_coord_proj's gkhybrid kernels exist at "
           f"poly_order 1 only, got {poly_order}")
-    # end
-  # end
   else:
     limits = _EVAL_AT_COORD_PROJ_MAX_POLY_ORDER.get(basis_type)
     if limits is None:
       raise NotImplementedError(
           "gkyl_dg_eval_at_coord_proj supports serendipity/tensor/gkhybrid, "
           f"not '{basis_type}'")
-    # end
     max_p = limits.get(ndim)
     if max_p is None:
       raise NotImplementedError(
           f"Gkeyll's {basis_type} eval_at_coord_proj kernels support ndim "
           f"{sorted(limits)}, got {ndim}")
-    # end
     if not 1 <= poly_order <= max_p:
       raise NotImplementedError(
           f"Gkeyll's {basis_type} eval_at_coord_proj kernels in {ndim}D "
           f"support poly_order 1..{max_p}, got {poly_order}")
-    # end
-  # end
   eval_dirs = sorted(set(int(d) for d in eval_dirs))
   if not eval_dirs or eval_dirs[0] < 0 or eval_dirs[-1] >= ndim:
     raise ValueError(f"eval_dirs {eval_dirs} out of range for a {ndim}D "
                      "field")
-  # end
   return eval_dirs
-# end
 
 
 def eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
-    cdim_do: int, grid: dict, eval_dirs, eval_coords, ndim_tar: int,
-    cells_tar, a: GkylArray):
+                       cdim_do: int, grid: dict, eval_dirs, eval_coords,
+                       ndim_tar: int, cells_tar, a: GkylArray):
   """Evaluate ``a`` at ``eval_coords`` in ``eval_dirs`` and project onto the
   lower-dimensional target basis Gkeyll picks for that elimination, via
   ``gkyl_dg_eval_at_coord_proj``.
@@ -609,8 +620,7 @@ def eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
     metadata (which can differ in TYPE from the donor's, e.g. eliminating a
     gkhybrid velocity direction can yield a plain serendipity target).
   """
-  eval_dirs = _check_eval_at_coord_proj(basis_type, ndim, poly_order,
-      eval_dirs)
+  eval_dirs = _check_eval_at_coord_proj(basis_type, ndim, poly_order, eval_dirs)
   basis = get_basis(basis_type, ndim, poly_order)
   lower = np.asarray(grid["lower"], dtype=np.float64)
   upper = np.asarray(grid["upper"], dtype=np.float64)
@@ -618,17 +628,14 @@ def eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
   if int(np.prod(cells)) != a.size:
     raise ValueError(f"grid cells {tuple(cells)} do not cover the array "
                      f"({int(np.prod(cells))} vs {a.size} cells)")
-  # end
   eval_dirs_arr = np.asarray(eval_dirs, dtype=np.int32)
   eval_coords_arr = np.asarray(eval_coords, dtype=np.float64)
   if eval_coords_arr.shape != eval_dirs_arr.shape:
     raise ValueError("eval_dirs and eval_coords must have the same length")
-  # end
   cells_tar = np.asarray(cells_tar, dtype=np.int32)
   out_cap, btype, poly_order_tar, cdim_tar, vdim_tar = (
-      _lib.require().eval_at_coord_proj(basis._cap, int(cdim_do), lower,
-          upper, cells, eval_dirs_arr, eval_coords_arr, int(ndim_tar),
-          cells_tar, a._cap))
+      _lib.require().eval_at_coord_proj(basis._cap, int(cdim_do), lower, upper,
+                                        cells, eval_dirs_arr, eval_coords_arr,
+                                        int(ndim_tar), cells_tar, a._cap))
   return (GkylArray(out_cap), _BASIS_TYPE_ORDINALS[btype], poly_order_tar,
-      cdim_tar, vdim_tar)
-# end
+          cdim_tar, vdim_tar)

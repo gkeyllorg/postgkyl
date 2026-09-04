@@ -20,7 +20,6 @@ def resolve_ffmpeg() -> str | None:
   except ImportError:
     return None
   return imageio_ffmpeg.get_ffmpeg_exe()
-# end
 
 
 def require_ffmpeg(context: str) -> str:
@@ -30,4 +29,3 @@ def require_ffmpeg(context: str) -> str:
         f"{context}: ffmpeg is required but was not found on PATH and "
         "imageio-ffmpeg is not installed.")
   return path
-# end

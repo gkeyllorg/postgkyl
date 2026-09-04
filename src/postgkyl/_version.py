@@ -18,21 +18,22 @@ import subprocess
 from postgkyl import gpython
 from postgkyl.cli_spec import hidden
 
-_DEPENDENCIES = ("numpy", "scipy", "click", "matplotlib", "msgpack", "plotly", "pyvista")
+_DEPENDENCIES = ("numpy", "scipy", "click", "matplotlib", "msgpack", "plotly",
+                 "pyvista")
 
 
 def _git(repo_dir: pathlib.Path, *args: str) -> str | None:
   if not (repo_dir / ".git").is_dir():
     return None
-  # end
   try:
     result = subprocess.run(["git", "-C", str(repo_dir), *args],
-        capture_output=True, text=True, timeout=5, check=True)
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                            check=True)
   except (OSError, subprocess.CalledProcessError):
     return None
-  # end
   return result.stdout.strip() or None
-# end
 
 
 def _postgkyl_commit() -> str:
@@ -44,22 +45,17 @@ def _postgkyl_commit() -> str:
     baked = build["postgkyl_build_commit"] if build else None
     if baked and baked != "unknown":
       return f"{baked[:12]} (baked at build time, not a git checkout)"
-    # end
     return "unknown (not a git checkout)"
-  # end
   dirty = _git(repo_dir, "status", "--porcelain", "--untracked-files=no")
   return f"{commit}{'-dirty' if dirty else ''}"
-# end
 
 
 def _gkeyll_info() -> str:
   build = gpython.build_info()
   if build is None:
     return "not built (no compiled Gkeyll bridge -- see scripts/build_gkeyll.sh)"
-  # end
   return (f"{build['gkeyll_commit'][:12]} ({build['gkeyll_branch']}, "
-      f"committed {build['gkeyll_commit_date']})")
-# end
+          f"committed {build['gkeyll_commit_date']})")
 
 
 def _dependency_versions() -> str:
@@ -69,10 +65,7 @@ def _dependency_versions() -> str:
       versions.append(f"{name} {importlib.metadata.version(name)}")
     except importlib.metadata.PackageNotFoundError:
       continue
-    # end
-  # end
   return ", ".join(versions)
-# end
 
 
 def version_report(version: str) -> str:
@@ -89,7 +82,6 @@ def version_report(version: str) -> str:
   if build is not None:
     arch = build["build_arch_flags"] or "compiler default"
     bridge += f" (built {build['build_date']}, CC={build['build_cc']}, ARCH_FLAGS={arch})"
-  # end
   return "\n".join([
       f"pgkyl, version {version}",
       f"postgkyl commit: {_postgkyl_commit()}",
@@ -99,7 +91,6 @@ def version_report(version: str) -> str:
       f"Platform:        {platform.platform()}",
       f"Dependencies:    {_dependency_versions()}",
   ])
-# end
 
 
 hidden("version reporting is handled by the manual --version front end")(

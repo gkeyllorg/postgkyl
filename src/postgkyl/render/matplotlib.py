@@ -21,10 +21,19 @@ from matplotlib.figure import Figure
 from matplotlib.typing import ColorType
 
 from postgkyl.cli_spec import (
-    CliType, CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+    CliType,
+    CommandSpec,
+    Execution,
+    KeyValue,
+    ResultPolicy,
+    Section,
+    command,
 )
 from postgkyl.gdatastate import (
-    GDataState, GDataStateGroup, flatten_datasets, group_blocks,
+    GDataState,
+    GDataStateGroup,
+    flatten_datasets,
+    group_blocks,
     materialize_point_values,
 )
 
@@ -35,21 +44,18 @@ _AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
 _INDEX_AXES_LABELS = [rf"$i_{i}$" for i in range(6)]
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
-    | dict[int, tuple[float, float]])
+               | dict[int, tuple[float, float]])
 
 
 def _indexed_saveas(saveas, index: int, indexed: bool):
   """Add a family index to every requested output path when needed."""
   if saveas is None or not indexed:
     return saveas
-  # end
   if isinstance(saveas, (str, os.PathLike)):
     path = os.fspath(saveas)
     stem, extension = os.path.splitext(path)
     return f"{stem}_{index}{extension}"
-  # end
   return tuple(_indexed_saveas(path, index, True) for path in saveas)
-# end
 
 
 def _default_output_stem(states) -> str:
@@ -59,15 +65,11 @@ def _default_output_stem(states) -> str:
     file_name = getattr(data, "_file_name", "") or ""
     if file_name:
       stem = os.path.basename(file_name).split(".")[0]
-    # end
     else:
       label = data.get_label() if hasattr(data, "get_label") else ""
       stem = label.replace(" ", "_") if label else f"dataset_{i}"
-    # end
     stems.append(stem)
-  # end
   return "_".join(stems) or "matplotlib_output"
-# end
 
 
 def _output_paths(save, saveas, states) -> tuple[str, ...]:
@@ -78,23 +80,19 @@ def _output_paths(save, saveas, states) -> tuple[str, ...]:
   backend. Extension-less names retain the historical PNG default.
   """
   empty_path = (isinstance(saveas, (str, os.PathLike))
-      and not os.fspath(saveas))
+                and not os.fspath(saveas))
   if saveas is None or empty_path:
     if not save:
       return ()
-    # end
     paths = [_default_output_stem(states)]
-  # end
   elif isinstance(saveas, (str, os.PathLike)):
     paths = [saveas]
-  # end
   else:
     try:
       paths = list(saveas)
     except TypeError as err:
-      raise TypeError("'saveas' must be a path or an iterable of paths") from err
-    # end
-  # end
+      raise TypeError(
+          "'saveas' must be a path or an iterable of paths") from err
 
   normalized = []
   for path in paths:
@@ -102,20 +100,15 @@ def _output_paths(save, saveas, states) -> tuple[str, ...]:
       path = os.fspath(path)
     except TypeError as err:
       raise TypeError("every 'saveas' entry must be path-like") from err
-    # end
     _, ext = os.path.splitext(path)
     ext = ext.lower()
     if not ext:
       path = f"{path}.png"
-    # end
     elif ext not in _OUTPUT_EXTENSIONS:
       raise ValueError("Unsupported file format for saving. Supported formats "
-          "are: .png, .pdf")
-    # end
+                       "are: .png, .pdf")
     normalized.append(path)
-  # end
   return tuple(normalized)
-# end
 
 
 def _normalize_line_colors(color):
@@ -126,60 +119,47 @@ def _normalize_line_colors(color):
   """
   if color is None or colors.is_color_like(color):
     return None
-  # end
   if isinstance(color, str):
     return None  # let Matplotlib report its usual error for an invalid color
-  # end
   try:
     line_colors = tuple(color)
   except TypeError:
     return None
-  # end
   if not line_colors:
     raise ValueError("'color' must not be an empty sequence")
-  # end
   if not all(colors.is_color_like(line_color) for line_color in line_colors):
-    raise ValueError("every entry in a 'color' sequence must be a valid Matplotlib color")
-  # end
+    raise ValueError(
+        "every entry in a 'color' sequence must be a valid Matplotlib color")
   return line_colors
-# end
 
 
 def _normalize_linestyles(linestyle, num_datasets: int):
   """Return one linestyle per dataset, or ``None`` for a scalar style."""
   if linestyle is None or isinstance(linestyle, str):
     return None
-  # end
   # A Matplotlib custom dash pattern, e.g. ``(0, (5, 2))``, is one style
   # despite being a sequence itself.
   try:
     is_dash_pattern = (len(linestyle) == 2 and np.isscalar(linestyle[0])
-        and not isinstance(linestyle[1], str)
-        and all(np.isscalar(value) for value in linestyle[1]))
+                       and not isinstance(linestyle[1], str)
+                       and all(np.isscalar(value) for value in linestyle[1]))
   except (TypeError, IndexError):
     is_dash_pattern = False
-  # end
   if is_dash_pattern:
     return None
-  # end
   try:
     linestyles = tuple(linestyle)
   except TypeError:
     return None
-  # end
   if not linestyles:
     raise ValueError("'linestyle' must not be an empty sequence")
-  # end
   if len(linestyles) == 1:
     return linestyles * num_datasets
-  # end
   if len(linestyles) != num_datasets:
     raise ValueError(
         f"'linestyle' contains {len(linestyles)} entries; expected either 1 "
         f"(applied to every dataset) or {num_datasets} (one per dataset)")
-  # end
   return linestyles
-# end
 
 
 def _pgkyl_colorbar(im, fig, ax, *, label: str = "", extend: str | None = None):
@@ -190,7 +170,6 @@ def _pgkyl_colorbar(im, fig, ax, *, label: str = "", extend: str | None = None):
   divider = make_axes_locatable(ax)
   cax2 = divider.append_axes("right", size="3%", pad=0.05)
   return fig.colorbar(im, cax=cax2, label=label or "", extend=extend)
-# end
 
 
 def get_xkcd_safely():
@@ -206,14 +185,12 @@ def get_xkcd_safely():
   if required_fonts.isdisjoint(available_fonts):
     warnings.warn(
         "No xkcd-style font found (xkcd/xkcd Script/Comic Neue/Comic Sans "
-        "MS); falling back to the default sans-serif font.", stacklevel=2)
+        "MS); falling back to the default sans-serif font.",
+        stacklevel=2)
     font_rc = {"font.family": "sans-serif"}
-  # end
   else:
     font_rc = {"font.family": "Comic Sans MS"}
-  # end
   return plt.xkcd, font_rc
-# end
 
 
 def _nodal_grid(grid: list, cells: np.ndarray) -> list:
@@ -226,40 +203,27 @@ def _nodal_grid(grid: list, cells: np.ndarray) -> list:
   num_dims = len(grid)
   if num_dims != len(cells):
     raise ValueError("Number dimensions for 'grid' and 'values' doesn't match")
-  # end
   out = []
   for d in range(num_dims):
     g = grid[d]
     if g.ndim == 1:
       if g.shape[0] == cells[d]:
         out.append(g)
-      # end
       elif g.shape[0] == cells[d] + 1:
         out.append(0.5 * (g[:-1] + g[1:]))
-      # end
       else:
         raise ValueError("Something is terribly wrong...")
-    # end
-      # end
     else:
       if g.shape[d] == cells[d]:
         out.append(g)
-      # end
       elif g.shape[d] == cells[d] + 1:
         if num_dims == 1:
           out.append(0.5 * (g[:-1] + g[1:]))
-        # end
         else:
           out.append(0.5 * (g[:-1, :-1] + g[1:, 1:]))
-      # end
-        # end
       else:
         raise ValueError("Something is terribly wrong...")
-      # end
-    # end
-  # end
   return out
-# end
 
 
 def _shared_component_range(states, zshift: float, zscale: float) -> list:
@@ -284,18 +248,14 @@ def _shared_component_range(states, zshift: float, zscale: float) -> list:
       values = state.values
       if comp >= values.shape[-1]:
         continue
-      # end
       z = (values[..., comp] + zshift) * zscale
       if not np.any(np.isfinite(z)):
         continue
-      # end
       low = min(low, float(np.nanmin(z)))
       high = max(high, float(np.nanmax(z)))
-    # end
-    ranges.append((low, high) if np.isfinite(low) and low < high else (None, None))
-  # end
+    ranges.append((low, high) if np.isfinite(low) and low < high else (None,
+                                                                       None))
   return ranges
-# end
 
 
 def _split_ylim_for_component(limits, comp: int):
@@ -307,107 +267,131 @@ def _split_ylim_for_component(limits, comp: int):
   """
   if limits is None:
     return None
-  # end
   if isinstance(limits, dict):
     limits = limits.get(comp)
     if limits is None:
       return None
-    # end
-  # end
   else:
     try:
       is_shared_pair = (len(limits) == 2
-          and all(value is None or np.isscalar(value) for value in limits))
+                        and all(value is None or np.isscalar(value)
+                                for value in limits))
     except TypeError as err:
       raise TypeError("split y-limits must be a (min, max) pair, a sequence "
-          "of pairs, or a component-indexed mapping") from err
-    # end
+                      "of pairs, or a component-indexed mapping") from err
     if not is_shared_pair:
       if comp >= len(limits):
         return None
-      # end
       limits = limits[comp]
       if limits is None:
         return None
-      # end
-  # end
   try:
     if len(limits) != 2:
       raise ValueError
-    # end
   except (TypeError, ValueError) as err:
     raise ValueError("each split y-limit must be a (min, max) pair") from err
-  # end
   return tuple(limits)
-# end
 
 
-def plot(*datasets: GDataState | Iterable[GDataState],
+def plot(
+    *datasets: GDataState | Iterable[GDataState],
     multiblock: bool = False,
     args: list[str] | None = None,
     figure: Annotated[int | str | Figure | None,
-        CliType(int | None)] = None,
+                      CliType(int | None)] = None,
     squeeze: bool = False,
-    transpose: bool = False, grid_indices: bool = False,
-    num_axes: int | None = None, start_axes: int = 0,
+    transpose: bool = False,
+    grid_indices: bool = False,
+    num_axes: int | None = None,
+    start_axes: int = 0,
     spread_axes: bool = True,
-    num_subplot_row: int | None = None, num_subplot_col: int | None = None,
-    streamline: bool = False, sdensity: int = 1, quiver: bool = False,
-    contour: bool = False, clevels: str | None = None,
-    cnlevels: int | None = None, cont_label: bool = False,
-    surface: bool = False, comparison: bool = False, alpha: float | None = None,
-    diverging: bool = False, lineouts: int | None = None,
-    xmin: float | None = None, xmax: float | None = None,
-    xscale: float = 1.0, xshift: float = 0.0,
-    ymin: float | None = None, ymax: float | None = None,
-    yscale: float = 1.0, yshift: float = 0.0,
-    zmin: float | None = None, zmax: float | None = None,
-    zscale: float = 1.0, zshift: float = 0.0,
-    relax: bool = False, style: str | None = None,
+    num_subplot_row: int | None = None,
+    num_subplot_col: int | None = None,
+    streamline: bool = False,
+    sdensity: int = 1,
+    quiver: bool = False,
+    contour: bool = False,
+    clevels: str | None = None,
+    cnlevels: int | None = None,
+    cont_label: bool = False,
+    surface: bool = False,
+    comparison: bool = False,
+    alpha: float | None = None,
+    diverging: bool = False,
+    lineouts: int | None = None,
+    xmin: float | None = None,
+    xmax: float | None = None,
+    xscale: float = 1.0,
+    xshift: float = 0.0,
+    ymin: float | None = None,
+    ymax: float | None = None,
+    yscale: float = 1.0,
+    yshift: float = 0.0,
+    zmin: float | None = None,
+    zmax: float | None = None,
+    zscale: float = 1.0,
+    zshift: float = 0.0,
+    relax: bool = False,
+    style: str | None = None,
     rcParams: Annotated[dict[str, object] | None,
-        CliType(dict[str, str] | None), KeyValue()] = None,
-    legend: bool = True, legend_labels: list[str] | None = None,
+                        CliType(dict[str, str] | None),
+                        KeyValue()] = None,
+    legend: bool = True,
+    legend_labels: list[str] | None = None,
     legend_subplot: int | None = None,
     legend_loc: Annotated[str | int | tuple[float, float],
-        CliType(str)] = "best",
+                          CliType(str)] = "best",
     forcelegend: bool = False,
     colorbar: bool = True,
-    xlabel: str | None = None, ylabel: str | None = None,
-    clabel: str | None = None, title: str | None = None,
-    subplot_titles: str | None = None, subplot_xlabels: str | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    clabel: str | None = None,
+    title: str | None = None,
+    subplot_titles: str | None = None,
+    subplot_xlabels: str | None = None,
     subplot_ylabels: str | None = None,
-    logx: bool = False, logy: bool = False, logz: bool = False,
-    split_linear_log: bool = False, split_point: float = 0.0,
+    logx: bool = False,
+    logy: bool = False,
+    logz: bool = False,
+    split_linear_log: bool = False,
+    split_point: float = 0.0,
     split_log_side: str = "right",
     split_width_ratios: tuple[float, float] = (1.0, 1.0),
     split_gap: float = 0.0,
     split_linear_ylim: Annotated[_AxisLimits | None,
-        CliType(tuple[float, float] | None)] = None,
+                                 CliType(tuple[float, float] | None)] = None,
     split_log_ylim: Annotated[_AxisLimits | None,
-        CliType(tuple[float, float] | None)] = None,
-    split_right_ticks: bool = True, split_legend_side: str = "log",
-    split_log_base: float = 10.0, split_log_nonpositive: str = "clip",
+                              CliType(tuple[float, float] | None)] = None,
+    split_right_ticks: bool = True,
+    split_legend_side: str = "log",
+    split_log_base: float = 10.0,
+    split_log_nonpositive: str = "clip",
     split_seam_ticklabels: str = "left",
-    fixaspect: bool = False, aspect: float | None = None,
-    edgecolors: str | None = None, showgrid: bool = True,
-    hashtag: bool = False, xkcd: bool = False,
+    fixaspect: bool = False,
+    aspect: float | None = None,
+    edgecolors: str | None = None,
+    showgrid: bool = True,
+    hashtag: bool = False,
+    xkcd: bool = False,
     color: Annotated[ColorType | Iterable[ColorType] | None,
-        CliType(str | None)] = None,
+                     CliType(str | None)] = None,
     markersize: float | None = None,
     linewidth: float | None = None,
     linestyle: Annotated[str | Iterable[str] | None,
-        CliType(str | None)] = None,
+                         CliType(str | None)] = None,
     figsize: Annotated[tuple[float, float] | str | None,
-        CliType(tuple[float, float] | None)] = None,
-    jet: bool = False, cmap: str | None = None,
-    cval: float | None = None, cval_min: float | None = None,
+                       CliType(tuple[float, float] | None)] = None,
+    jet: bool = False,
+    cmap: str | None = None,
+    cval: float | None = None,
+    cval_min: float | None = None,
     cval_max: float | None = None,
     save: bool = False,
-    saveas: Annotated[
-        str | os.PathLike | Iterable[str | os.PathLike] | None,
-        CliType(str | None)] = None,
+    saveas: Annotated[str | os.PathLike | Iterable[str | os.PathLike] | None,
+                      CliType(str | None)] = None,
     dpi: int = 200,
-    show: bool = True, clear: bool = False):
+    show: bool = True,
+    clear: bool = False):
   """Plot one or more datasets onto a shared figure and return it.
 
   Accepts ``plot(a)`` or ``plot(a, b, multiblock=True)``. The first dataset sets
@@ -580,13 +564,12 @@ def plot(*datasets: GDataState | Iterable[GDataState],
   states = flatten_datasets(datasets)
   if not states:
     raise ValueError("nothing to plot")
-  # end
   group_call = len(datasets) == 1 and isinstance(datasets[0], GDataStateGroup)
-  families = ([states] if multiblock or group_call or figure is not None
-      else group_blocks(states))
-  indexed = len(families) > 1 or (
-      save and saveas is not None and isinstance(saveas, (str, os.PathLike))
-      and not os.path.splitext(os.fspath(saveas))[1])
+  families = ([states] if multiblock or group_call or figure is not None else
+              group_blocks(states))
+  indexed = len(families) > 1 or (save and saveas is not None and isinstance(
+      saveas,
+      (str, os.PathLike)) and not os.path.splitext(os.fspath(saveas))[1])
   figures = []
   plot_args = () if args is None else args
   for family_index, states in enumerate(families):
@@ -595,8 +578,6 @@ def plot(*datasets: GDataState | Iterable[GDataState],
     for st in states:
       if st.values is None:
         raise ValueError("dataset has no values to plot")
-      # end
-    # end
 
     line_colors = _normalize_line_colors(color)
     line_styles = _normalize_linestyles(linestyle, len(states))
@@ -606,38 +587,27 @@ def plot(*datasets: GDataState | Iterable[GDataState],
     if rcParams:
       for key, value in rcParams.items():
         mpl.rcParams[key] = value
-      # end
-    # end
     if cmap:
       mpl.rcParams["image.cmap"] = cmap
-    # end
     elif diverging:
       mpl.rcParams["image.cmap"] = "RdBu_r"
-    # end
     if jet:  # not for general use -- only for comparing against literature
       mpl.rcParams["image.cmap"] = "jet"
-    # end
     if xkcd:
       xkcd_cm, xkcd_rc = get_xkcd_safely()
-    # end
     else:
       xkcd_cm, xkcd_rc = nullcontext, {}
-    # end
     if color is not None and line_colors is None:
       mpl.rcParams["lines.color"] = color
-    # end
     if linewidth:
       mpl.rcParams["lines.linewidth"] = linewidth
-    # end
     if linestyle is not None and line_styles is None:
       mpl.rcParams["lines.linestyle"] = linestyle
-    # end
 
     with xkcd_cm(), mpl.rc_context(rc=xkcd_rc):
 
       if not aspect:
         aspect = 1.0
-      # end
 
       # ---- Phase 1: figure/axes layout, from the first dataset ----
       ref = states[0]
@@ -645,96 +615,80 @@ def plot(*datasets: GDataState | Iterable[GDataState],
       ref_num_dims = len(ref_cells) - int(np.sum(ref_cells <= 1))
       if ref_num_dims > 2:
         raise ValueError("Only 1D and 2D plots are currently supported")
-      # end
       if line_colors is not None and ref_num_dims != 1:
         raise ValueError("a 'color' sequence is only supported for 1D plots")
-      # end
       line_colors_by_dataset = False
       if line_colors is not None:
         component_step = 2 if (streamline or quiver) else 1
-        expected_colors = sum(st.values.shape[-1] // component_step for st in states)
+        expected_colors = sum(st.values.shape[-1] // component_step
+                              for st in states)
         if len(line_colors) == len(states):
           line_colors_by_dataset = True
-        # end
         elif len(line_colors) != expected_colors:
           raise ValueError(
               f"'color' contains {len(line_colors)} entries; expected either "
               f"{len(states)} (one per dataset) or {expected_colors} "
               "(one per line)")
-        # end
-      # end
       if split_linear_log:
         if ref_num_dims != 1:
           raise ValueError("'split_linear_log' is only supported for 1D plots")
-        # end
         if transpose:
-          raise ValueError("'split_linear_log' cannot be combined with 'transpose'")
-        # end
+          raise ValueError(
+              "'split_linear_log' cannot be combined with 'transpose'")
         if logy:
           raise ValueError("'logy' is redundant with 'split_linear_log'; use "
-              "'split_log_side' to choose the logarithmic half")
-        # end
+                           "'split_log_side' to choose the logarithmic half")
         if split_log_side not in {"left", "right"}:
           raise ValueError("'split_log_side' must be 'left' or 'right'")
-        # end
         if split_legend_side not in {"linear", "log", "left", "right"}:
           raise ValueError("'split_legend_side' must be 'linear', 'log', "
-              "'left', or 'right'")
-        # end
+                           "'left', or 'right'")
         if split_log_nonpositive not in {"clip", "mask"}:
           raise ValueError("'split_log_nonpositive' must be 'clip' or 'mask'")
-        # end
         if split_seam_ticklabels not in {"left", "right", "both", "none"}:
           raise ValueError("'split_seam_ticklabels' must be 'left', 'right', "
-              "'both', or 'none'")
-        # end
+                           "'both', or 'none'")
         try:
           split_point = float(split_point)
         except (TypeError, ValueError) as err:
           raise TypeError("'split_point' must be a finite number") from err
-        # end
         if not np.isfinite(split_point):
           raise ValueError("'split_point' must be a finite number")
-        # end
         try:
           split_log_base = float(split_log_base)
         except (TypeError, ValueError) as err:
           raise TypeError("'split_log_base' must be a number") from err
-        # end
-        if not np.isfinite(split_log_base) or split_log_base <= 0 or split_log_base == 1:
-          raise ValueError("'split_log_base' must be positive and not equal to 1")
-        # end
+        if not np.isfinite(
+            split_log_base) or split_log_base <= 0 or split_log_base == 1:
+          raise ValueError(
+              "'split_log_base' must be positive and not equal to 1")
         try:
           split_width_ratios = tuple(float(v) for v in split_width_ratios)
-          if (len(split_width_ratios) != 2 or any(not np.isfinite(v) or v <= 0
-              for v in split_width_ratios)):
+          if (len(split_width_ratios) != 2
+              or any(not np.isfinite(v) or v <= 0 for v in split_width_ratios)):
             raise ValueError
-          # end
         except (TypeError, ValueError) as err:
-          raise ValueError("'split_width_ratios' must contain two positive values") from err
-        # end
+          raise ValueError(
+              "'split_width_ratios' must contain two positive values") from err
         try:
           split_gap = float(split_gap)
         except (TypeError, ValueError) as err:
           raise TypeError("'split_gap' must be a number") from err
-        # end
         if not np.isfinite(split_gap) or split_gap < 0:
           raise ValueError("'split_gap' must be non-negative")
-        # end
-      # end
 
       # Surface plots need 3D axes; only meaningful for 2D data.
       use_3d = bool(surface) and ref_num_dims == 2
       subplot_kw = {"projection": "3d"} if use_3d else {}
 
       coordinate_labels = _INDEX_AXES_LABELS if grid_indices else _AXES_LABELS
-      default_xlabel, default_ylabel = coordinate_labels[0], coordinate_labels[1]
+      default_xlabel, default_ylabel = coordinate_labels[0], coordinate_labels[
+          1]
       if transpose and ref_num_dims == 2:
         # The data axes are swapped before drawing, so the default label base
         # names swap too; the shift/scale annotations below keep their
         # screen-axis meaning (xshift still shifts the horizontal axis).
         default_xlabel, default_ylabel = default_ylabel, default_xlabel
-      # end
       layout_xlabel = xlabel
       layout_ylabel = ylabel
       layout_clabel = clabel
@@ -742,136 +696,110 @@ def plot(*datasets: GDataState | Iterable[GDataState],
         layout_xlabel = default_xlabel if lineouts != 1 else coordinate_labels[1]
         if xshift != 0.0 and xscale != 1.0:
           layout_xlabel = rf"({layout_xlabel:s} + {xshift:.2e}) $\times$ {xscale:.2e}"
-        # end
         elif xshift != 0.0:
           layout_xlabel = rf"{layout_xlabel:s} + {xshift:.2e}"
-        # end
         elif xscale != 1.0:
           layout_xlabel = rf"{layout_xlabel:s} $\times$ {xscale:.2e}"
-        # end
-      # end
       if layout_ylabel is None and ref_num_dims == 2 and lineouts is None:
         layout_ylabel = default_ylabel
         # NB: these elif conditions check xshift/xscale, not yshift/yscale --
         # a literal main bug (commands.plot's ylabel branch), kept for fidelity.
         if yshift != 0.0 and yscale != 1.0:
           layout_ylabel = rf"({layout_ylabel:s} + {yshift:.2e}) $\times$ {yscale:.2e}"
-        # end
         elif xshift != 0.0:
           layout_ylabel = rf"{layout_ylabel:s} + {yshift:.2e}"
-        # end
         elif xscale != 1.0:
           layout_ylabel = rf"{layout_ylabel:s} $\times$ {yscale:.2e}"
-        # end
-      # end
       if zscale != 1.0:
-        layout_clabel = (rf"{layout_clabel:s} $\times$ {zscale:.3e}" if layout_clabel
-                          else rf"$\times$ {zscale:.3e}")
-      # end
+        layout_clabel = (rf"{layout_clabel:s} $\times$ {zscale:.3e}"
+                         if layout_clabel else rf"$\times$ {zscale:.3e}")
       if transpose and ref_num_dims == 1:
         # The coordinate moves to the vertical axis, so the (resolved) labels
         # follow it -- including the shift/scale annotation, which travels with
         # the data it describes.
         layout_xlabel, layout_ylabel = layout_ylabel, layout_xlabel
-      # end
 
       if isinstance(figsize, str):
         parts = figsize.split(",")
         figsize = (float(parts[0]), float(parts[1]))
-      # end
 
       if figure is None:
         mpl_fig = plt.figure(figsize=figsize)
-      # end
       elif isinstance(figure, int):
         mpl_fig = plt.figure(figure, figsize=figsize)
-      # end
       elif isinstance(figure, mpl.figure.Figure):
         mpl_fig = figure
-      # end
       elif isinstance(figure, str):
         mpl_fig = plt.figure(int(figure), figsize=figsize)
-      # end
       else:
         raise TypeError(
             "'figure' keyword needs to be one of None (default), int, str, "
             "or a Matplotlib Figure")
-      # end
       if clear:
         mpl_fig.clf()
-      # end
 
       step = 2 if (streamline or quiver) else 1
       ref_idx_comps = range(int(np.floor(ref.num_comps / step)))
       layout_num_comps = num_axes if num_axes else len(ref_idx_comps)
 
       physical_num_axes = (2 * (1 if squeeze else layout_num_comps)
-          if split_linear_log else (1 if squeeze else layout_num_comps))
+                           if split_linear_log else
+                           (1 if squeeze else layout_num_comps))
       if mpl_fig.axes:
         ax = mpl_fig.axes
         if physical_num_axes > len(ax):
           raise ValueError("Trying to plot into figure with not enough axes")
-        # end
-        # end
       else:
         if split_linear_log:
           # Each logical component owns a nested 1x2 GridSpec.  Nesting keeps
           # the within-pair gap independent from spacing between components.
           logical_num_axes = 1 if squeeze else layout_num_comps
-          num_rows, num_cols = ((1, 1) if squeeze else
-              subplot_grid(logical_num_axes, num_subplot_row, num_subplot_col))
+          num_rows, num_cols = ((1, 1) if squeeze else subplot_grid(
+              logical_num_axes, num_subplot_row, num_subplot_col))
           outer = mpl_fig.add_gridspec(num_rows, num_cols)
           ax = []
           shared_left = None
           shared_right = None
           for logical_idx in range(logical_num_axes):
             row, col = divmod(logical_idx, num_cols)
-            inner = outer[row, col].subgridspec(1, 2,
-                width_ratios=split_width_ratios, wspace=split_gap)
+            inner = outer[row, col].subgridspec(1,
+                                                2,
+                                                width_ratios=split_width_ratios,
+                                                wspace=split_gap)
             left_ax = mpl_fig.add_subplot(inner[0], sharex=shared_left)
             right_ax = mpl_fig.add_subplot(inner[1], sharex=shared_right)
             if shared_left is None:
               shared_left, shared_right = left_ax, right_ax
-            # end
             ax.extend((left_ax, right_ax))
-          # end
 
           if title:
             mpl_fig.suptitle(title)
-          # end
           if layout_xlabel:
             mpl_fig.supxlabel(layout_xlabel)
-          # end
           if layout_ylabel:
             mpl_fig.supylabel(layout_ylabel)
-          # end
           sub_titles = subplot_titles.split(",") if subplot_titles else []
           sub_xlabels = subplot_xlabels.split(",") if subplot_xlabels else []
           sub_ylabels = subplot_ylabels.split(",") if subplot_ylabels else []
-          pair_center = (split_width_ratios[0] + split_width_ratios[1]) / (
-              2.0 * split_width_ratios[0])
+          pair_center = (split_width_ratios[0] +
+                         split_width_ratios[1]) / (2.0 * split_width_ratios[0])
           for logical_idx in range(logical_num_axes):
             left_ax, right_ax = ax[2 * logical_idx:2 * logical_idx + 2]
             sub_title = (sub_titles[logical_idx]
-                if logical_idx < len(sub_titles) else "")
+                         if logical_idx < len(sub_titles) else "")
             sub_xlabel = (sub_xlabels[logical_idx]
-                if logical_idx < len(sub_xlabels) else "")
+                          if logical_idx < len(sub_xlabels) else "")
             sub_ylabel = (sub_ylabels[logical_idx]
-                if logical_idx < len(sub_ylabels) else "")
+                          if logical_idx < len(sub_ylabels) else "")
             left_ax.set_ylabel(sub_ylabel)
             if sub_xlabel:
               left_ax.set_xlabel(sub_xlabel)
               left_ax.xaxis.set_label_coords(pair_center, -0.1)
-            # end
             if sub_title:
               left_ax.set_title(sub_title, x=pair_center, y=1.08)
-            # end
             if split_right_ticks:
               right_ax.yaxis.tick_right()
               right_ax.yaxis.set_label_position("right")
-            # end
-          # end
-        # end
         elif squeeze:  # Plotting into 1 panel
           mpl_fig.subplots(1, 1, subplot_kw=subplot_kw)
           ax = mpl_fig.axes
@@ -879,71 +807,61 @@ def plot(*datasets: GDataState | Iterable[GDataState],
           ax[0].set_ylabel(layout_ylabel)
           if title is not None:
             ax[0].set_title(title, y=1.08)
-        # end
-          # end
         else:  # Plotting each component into its own subplot
           num_rows, num_cols = subplot_grid(layout_num_comps, num_subplot_row,
-              num_subplot_col)
+                                            num_subplot_col)
           if ref_num_dims == 1 or lineouts is not None:
-            mpl_fig.subplots(num_rows, num_cols, sharex=True, subplot_kw=subplot_kw)
-          # end
+            mpl_fig.subplots(num_rows,
+                             num_cols,
+                             sharex=True,
+                             subplot_kw=subplot_kw)
           elif use_3d:  # 3D axes cannot share x/y with each other
             mpl_fig.subplots(num_rows, num_cols, subplot_kw=subplot_kw)
-          # end
           else:  # In 2D, share y-axis as well
             mpl_fig.subplots(num_rows, num_cols, sharex=True, sharey=True)
-          # end
           ax = mpl_fig.axes
           for extra in ax[layout_num_comps:]:
             extra.axis("off")
-          # end
           if title:
             mpl_fig.suptitle(title)
-          # end
           if layout_xlabel:
             mpl_fig.supxlabel(layout_xlabel)
-          # end
           if layout_ylabel:
             mpl_fig.supylabel(layout_ylabel)
-          # end
 
           for ax_idx in range(len(ax)):
             sub_titles = subplot_titles.split(",") if subplot_titles else []
             sub_xlabels = subplot_xlabels.split(",") if subplot_xlabels else []
             sub_ylabels = subplot_ylabels.split(",") if subplot_ylabels else []
             sub_title = sub_titles[ax_idx] if ax_idx < len(sub_titles) else ""
-            sub_xlabel = sub_xlabels[ax_idx] if ax_idx < len(sub_xlabels) else ""
-            sub_ylabel = sub_ylabels[ax_idx] if ax_idx < len(sub_ylabels) else ""
+            sub_xlabel = sub_xlabels[ax_idx] if ax_idx < len(
+                sub_xlabels) else ""
+            sub_ylabel = sub_ylabels[ax_idx] if ax_idx < len(
+                sub_ylabels) else ""
             ax[ax_idx].set_xlabel(sub_xlabel)
             ax[ax_idx].set_ylabel(sub_ylabel)
             if sub_title:
               ax[ax_idx].set_title(sub_title, y=1.08)
-            # end
-          # end
-        # end
-      # end
 
       # One color scale for every dataset drawn here (see
       # _shared_component_range). Only the plain 2-D pcolormesh path consumes
       # it: surface/contour/quiver/streamline/lineouts each own their own
       # normalization, and an explicit zmin/zmax always wins.
       shared_z = None
-      if (len(states) > 1 and ref_num_dims == 2 and zmin is None and zmax is None
+      if (len(states) > 1 and ref_num_dims == 2 and zmin is None
+          and zmax is None
           and not (surface or contour or quiver or streamline or diverging)
           and lineouts is None):
         shared_z = _shared_component_range(states, zshift, zscale)
-      # end
 
       if legend_subplot is not None:
         num_legend_subplots = 1 if squeeze else layout_num_comps
         if not isinstance(legend_subplot, int):
           raise TypeError("'legend_subplot' must be an integer or None")
-        # end
         if legend_subplot < 0 or legend_subplot >= num_legend_subplots:
           raise ValueError(
-              f"'legend_subplot' must be between 0 and {num_legend_subplots - 1}")
-        # end
-      # end
+              f"'legend_subplot' must be between 0 and {num_legend_subplots - 1}"
+          )
 
       # ---- Phase 2: draw each dataset ----
       im = None
@@ -953,15 +871,12 @@ def plot(*datasets: GDataState | Iterable[GDataState],
         if legend_labels is not None and ds_i < len(legend_labels):
           label_prefix = legend_labels[ds_i]
           explicit_legend_label = True
-        # end
         elif len(states) > 1 or forcelegend:
           label_prefix = data.get_label()
           explicit_legend_label = False
-        # end
         else:
           label_prefix = ""
           explicit_legend_label = False
-        # end
 
         cells = data.num_cells
         grid = list(data.grid)
@@ -969,10 +884,9 @@ def plot(*datasets: GDataState | Iterable[GDataState],
         num_dims = len(cells) - int(np.sum(cells <= 1))
         if num_dims > 2:
           raise ValueError("Only 1D and 2D plots are currently supported")
-        # end
         if split_linear_log and num_dims != 1:
-          raise ValueError("every dataset must be 1D when 'split_linear_log' is set")
-        # end
+          raise ValueError(
+              "every dataset must be 1D when 'split_linear_log' is set")
 
         axes_labels = list(coordinate_labels)
         if len(grid) > num_dims:
@@ -981,7 +895,6 @@ def plot(*datasets: GDataState | Iterable[GDataState],
           if idx:
             for d in reversed(idx):
               grid.pop(d)
-            # end
             cells = np.delete(cells, idx)
             axes_labels = list(np.delete(np.array(axes_labels), idx))
             values = np.squeeze(values, tuple(idx))
@@ -989,26 +902,19 @@ def plot(*datasets: GDataState | Iterable[GDataState],
               for d in range(num_dims):
                 for i in reversed(idx):
                   grid[d] = np.mean(grid[d], axis=i)
-                # end
-              # end
-            # end
-          # end
-        # end
 
         if transpose and num_dims == 2:  # swap the horizontal and vertical axes
           values = np.swapaxes(values, 0, 1)
           g0, g1 = grid[1], grid[0]
           if g0.ndim > 1:  # curvilinear coordinate arrays span both axes jointly
             g0, g1 = g0.transpose(), g1.transpose()
-          # end
           grid[0], grid[1] = g0, g1
-          cells = cells[[1, 0]]  # fancy indexing: num_cells may alias ctx["cells"]
+          cells = cells[[1,
+                         0]]  # fancy indexing: num_cells may alias ctx["cells"]
           axes_labels[0], axes_labels[1] = axes_labels[1], axes_labels[0]
-        # end
 
         if grid_indices:
           grid = [np.arange(int(num_cells)) for num_cells in cells]
-        # end
 
         num_comps = values.shape[-1]
         idx_comps = range(int(np.floor(num_comps / step)))
@@ -1018,17 +924,16 @@ def plot(*datasets: GDataState | Iterable[GDataState],
           if split_linear_log:
             component_axes = ax[2 * logical_ax_idx:2 * logical_ax_idx + 2]
             cax = component_axes[0]
-          # end
           else:
             cax = ax[logical_ax_idx]
             component_axes = [cax]
-          # end
           comp_label = (label_prefix if explicit_legend_label else
-              (f"{label_prefix:s}_c{comp:d}".strip("_")
-               if len(idx_comps) > 1 else label_prefix))
-          comp_legend = (legend and (legend_subplot is None
-              or (logical_ax_idx == legend_subplot if split_linear_log
-                  else cax is ax[legend_subplot])))
+                        (f"{label_prefix:s}_c{comp:d}".strip("_")
+                         if len(idx_comps) > 1 else label_prefix))
+          comp_legend = (legend and
+                         (legend_subplot is None or
+                          (logical_ax_idx == legend_subplot
+                           if split_linear_log else cax is ax[legend_subplot])))
           comp_colorbar = colorbar
 
           if num_dims == 1:
@@ -1037,55 +942,45 @@ def plot(*datasets: GDataState | Iterable[GDataState],
             y = (values[..., comp] + yshift) * yscale
             if transpose:  # put the coordinate on the vertical axis
               x, y = y, x
-            # end
             # Color the line from the colormap when a 'cval' is given (1D only).
             if line_colors is None:
               line_color = color
-            # end
             elif line_colors_by_dataset:
               line_color = line_colors[ds_i]
-            # end
             else:
               line_color = line_colors[line_color_idx]
-            # end
             line_color_idx += 1
             if cmap and cval is not None:
               if cval_max is not None and cval_min is not None and cval_max != cval_min:
                 t = (cval - cval_min) / (cval_max - cval_min)
-              # end
               else:
                 t = 0.5
-              # end
               line_color = plt.get_cmap(cmap)(t)
-            # end
             line_style = line_styles[ds_i] if line_styles is not None else None
-            line_kwargs = dict(
-                color=line_color, label=comp_label, markersize=markersize)
+            line_kwargs = dict(color=line_color,
+                               label=comp_label,
+                               markersize=markersize)
             if line_style is not None:
               line_kwargs["linestyle"] = line_style
-            # end
             if split_linear_log:
               left_mask = x < split_point
               split_masks = (left_mask, ~left_mask)
               im = []
               for split_ax, mask in zip(component_axes, split_masks):
-                im.extend(split_ax.plot(
-                    x[mask], y[mask], *plot_args, **line_kwargs))
-              # end
-            # end
+                im.extend(
+                    split_ax.plot(x[mask], y[mask], *plot_args, **line_kwargs))
             else:
               im = cax.plot(x, y, *plot_args, **line_kwargs)
-            # end
             # Add a colorbar describing the cval-to-color mapping once per axes.
             if (cmap and cval is not None and comp_colorbar
-                and cval_max is not None and cval_min is not None and cval_max != cval_min
+                and cval_max is not None and cval_min is not None
+                and cval_max != cval_min
                 and not getattr(cax, "_pgkyl_cval_cbar", False)):
-              mappable = cm.ScalarMappable(
-                  norm=colors.Normalize(vmin=cval_min, vmax=cval_max), cmap=plt.get_cmap(cmap))
+              mappable = cm.ScalarMappable(norm=colors.Normalize(vmin=cval_min,
+                                                                 vmax=cval_max),
+                                           cmap=plt.get_cmap(cmap))
               _pgkyl_colorbar(mappable, mpl_fig, cax, label=layout_clabel)
               cax._pgkyl_cval_cbar = True
-            # end
-          # end
 
           elif num_dims == 2:
             extend = None
@@ -1097,61 +992,60 @@ def plot(*datasets: GDataState | Iterable[GDataState],
               z = (values[..., comp].transpose() + zshift) * zscale
               if xg.ndim == 1:
                 xg, yg = np.meshgrid(xg, yg)
-              # end
               else:
                 xg, yg = xg.transpose(), yg.transpose()
-              # end
               # Count how many overlays already live on these axes so each gets
               # a distinct color (used for both surface and contour comparisons).
               overlay_count = getattr(cax, "_pgkyl_overlay_count", 0)
               cax._pgkyl_overlay_count = overlay_count + 1
               if comparison or bool(color):
                 surf_color = color if bool(color) else f"C{overlay_count:d}"
-                im = cax.plot_surface(xg, yg, z, color=surf_color,
-                    alpha=alpha if alpha is not None else 0.6,
-                    linewidth=0, antialiased=True, shade=True)
+                im = cax.plot_surface(xg,
+                                      yg,
+                                      z,
+                                      color=surf_color,
+                                      alpha=alpha if alpha is not None else 0.6,
+                                      linewidth=0,
+                                      antialiased=True,
+                                      shade=True)
                 if comp_label:
                   handles = getattr(cax, "_pgkyl_handles", [])
-                  handles.append(patches.Patch(color=surf_color, label=comp_label))
+                  handles.append(
+                      patches.Patch(color=surf_color, label=comp_label))
                   cax._pgkyl_handles = handles
-                # end
-              # end
               else:
-                im = cax.plot_surface(xg, yg, z, cmap=mpl.rcParams["image.cmap"],
-                    alpha=alpha if alpha is not None else 1.0,
-                    linewidth=0, antialiased=True)
+                im = cax.plot_surface(xg,
+                                      yg,
+                                      z,
+                                      cmap=mpl.rcParams["image.cmap"],
+                                      alpha=alpha if alpha is not None else 1.0,
+                                      linewidth=0,
+                                      antialiased=True)
                 if comp_colorbar:
-                  mpl_fig.colorbar(im, ax=cax, label=layout_clabel or "",
-                      shrink=0.6, pad=0.1)
-                # end
-              # end
+                  mpl_fig.colorbar(im,
+                                   ax=cax,
+                                   label=layout_clabel or "",
+                                   shrink=0.6,
+                                   pad=0.1)
               if layout_clabel:
                 cax.set_zlabel(layout_clabel)
-              # end
               if zmin is not None or zmax is not None:
                 cax.set_zlim(zmin, zmax)
-              # end
               comp_colorbar = False
-            # end
 
             elif contour:  # ------------------------------------------------------
               levels = 10
               if cnlevels:
                 levels = int(cnlevels) - 1
-              # end
               elif clevels:
                 if ":" in clevels:
                   s = clevels.split(":")
                   levels = np.linspace(float(s[0]), float(s[1]), int(s[2]))
-                # end
                 else:
                   levels = np.array(clevels.split(","))
                   levels = np.array(list(filter(None, levels)))
-                # end
-              # end
               if isinstance(levels, np.ndarray) and len(levels) == 1:
                 comp_colorbar = False
-              # end
               nodal_grid = _nodal_grid(grid, cells)
               x = (nodal_grid[0] + xshift) * xscale
               y = (nodal_grid[1] + yshift) * yscale
@@ -1164,17 +1058,20 @@ def plot(*datasets: GDataState | Iterable[GDataState],
                 cont_colors = f"C{overlay_count:d}"
                 if comp_label:
                   handles = getattr(cax, "_pgkyl_handles", [])
-                  handles.append(patches.Patch(color=cont_colors, label=comp_label))
+                  handles.append(
+                      patches.Patch(color=cont_colors, label=comp_label))
                   cax._pgkyl_handles = handles
-                # end
                 comp_colorbar = False
-              # end
-              im = cax.contour(x, y, z, levels, *plot_args, origin="lower",
-                  colors=cont_colors, linewidths=linewidth)
+              im = cax.contour(x,
+                               y,
+                               z,
+                               levels,
+                               *plot_args,
+                               origin="lower",
+                               colors=cont_colors,
+                               linewidths=linewidth)
               if cont_label:
                 cax.clabel(im, inline=1)
-            # end
-              # end
 
             elif quiver:  # -----------------------------------------------------
               skip = int(np.max((len(grid[0]), len(grid[1]))) // 15)
@@ -1183,34 +1080,35 @@ def plot(*datasets: GDataState | Iterable[GDataState],
               if nodal_grid[0].ndim == 1:
                 x = (nodal_grid[0][skip2::skip] + xshift) * xscale
                 y = (nodal_grid[1][skip2::skip] + yshift) * yscale
-              # end
               else:
                 x = (nodal_grid[0][skip2::skip, skip2::skip] + xshift) * xscale
                 y = (nodal_grid[1][skip2::skip, skip2::skip] + yshift) * yscale
-              # end
-              z1 = (values[skip2::skip, skip2::skip, 2 * comp].transpose()
-                    + zshift) * zscale
-              z2 = (values[skip2::skip, skip2::skip, 2 * comp + 1].transpose()
-                    + zshift) * zscale
+              z1 = (values[skip2::skip, skip2::skip, 2 * comp].transpose() +
+                    zshift) * zscale
+              z2 = (values[skip2::skip, skip2::skip, 2 * comp + 1].transpose() +
+                    zshift) * zscale
               im = cax.quiver(x, y, z1, z2)
-            # end
 
             elif streamline:  # -------------------------------------------------
               if color:
                 cl = color
-              # end
               else:
-                cl = np.sqrt(values[..., 2 * comp] ** 2
-                    + values[..., 2 * comp + 1] ** 2).transpose()
-              # end
+                cl = np.sqrt(values[..., 2 * comp]**2 +
+                             values[..., 2 * comp + 1]**2).transpose()
               nodal_grid = _nodal_grid(grid, cells)
               x = (nodal_grid[0] + xshift) * xscale
               y = (nodal_grid[1] + yshift) * yscale
               z1 = (values[..., 2 * comp].transpose() + zshift) * zscale
               z2 = (values[..., 2 * comp + 1].transpose() + zshift) * zscale
-              im = cax.streamplot(x, y, z1, z2, *plot_args, density=sdensity,
-                  broken_streamlines=False, color=cl, linewidth=linewidth)
-            # end
+              im = cax.streamplot(x,
+                                  y,
+                                  z1,
+                                  z2,
+                                  *plot_args,
+                                  density=sdensity,
+                                  broken_streamlines=False,
+                                  color=cl,
+                                  linewidth=linewidth)
 
             elif lineouts is not None:  # ---------------------------------------
               num_lines = values.shape[1] if lineouts == 0 else values.shape[0]
@@ -1221,44 +1119,36 @@ def plot(*datasets: GDataState | Iterable[GDataState],
                 line_vmin = (nodal_grid[1][0] + yshift) * yscale
                 line_vmax = (nodal_grid[1][-1] + yshift) * yscale
                 cbar_label = clabel or axes_labels[1]
-              # end
               else:
                 x = (nodal_grid[1] + xshift) * xscale
                 line_vmin = (nodal_grid[0][0] + yshift) * yscale
                 line_vmax = (nodal_grid[0][-1] + yshift) * yscale
                 cbar_label = clabel or axes_labels[0]
-              # end
               line_idx = [slice(0, u) for u in values.shape]
               line_idx[-1] = comp
               for line in range(num_lines):
                 line_color = cm.inferno(line / (num_lines - 1))
                 if lineouts == 0:
                   line_idx[1] = line
-                # end
                 else:
                   line_idx[0] = line
-                # end
                 y = (values[tuple(line_idx)] + yshift) * yscale
                 im = cax.plot(x, y, *plot_args, color=line_color)
-              # end
-              mappable = cm.ScalarMappable(
-                  norm=colors.Normalize(vmin=line_vmin, vmax=line_vmax, clip=False),
-                  cmap=cm.inferno)
+              mappable = cm.ScalarMappable(norm=colors.Normalize(vmin=line_vmin,
+                                                                 vmax=line_vmax,
+                                                                 clip=False),
+                                           cmap=cm.inferno)
               _pgkyl_colorbar(mappable, mpl_fig, cax, label=cbar_label)
               comp_colorbar = False
               comp_legend = False
-            # end
 
             else:  # ------------------------------------------------------------
               if zmin is not None and zmax is not None:
                 extend = "both"
-              # end
               elif zmax is not None:
                 extend = "max"
-              # end
               elif zmin is not None:
                 extend = "min"
-              # end
               x = (grid[0] + xshift) * xscale
               y = (grid[1] + yshift) * yscale
               z = (values[..., comp].transpose() + zshift) * zscale
@@ -1266,34 +1156,37 @@ def plot(*datasets: GDataState | Iterable[GDataState],
                 nodal_grid = _nodal_grid(grid, cells)
                 x = (nodal_grid[0] + xshift) * xscale
                 y = (nodal_grid[1] + yshift) * yscale
-              # end
               if x.ndim > 1:
                 x, y = x.transpose(), y.transpose()
-              # end
               comp_zmin, comp_zmax = zmin, zmax
               if diverging:
                 comp_zmax = np.abs(z).max()
                 comp_zmin = -comp_zmax
-              # end
               elif shared_z is not None and comp < len(shared_z):
                 comp_zmin, comp_zmax = shared_z[comp]
-              # end
               vmax, vmin = comp_zmax, comp_zmin
               norm = None
               if logz:
                 if diverging:
                   tmp = vmax / 1000
-                  norm = colors.SymLogNorm(linthresh=tmp, linscale=tmp,
-                      vmin=vmin, vmax=vmax, base=10)
-                # end
+                  norm = colors.SymLogNorm(linthresh=tmp,
+                                           linscale=tmp,
+                                           vmin=vmin,
+                                           vmax=vmax,
+                                           base=10)
                 else:
                   norm = colors.LogNorm(vmin=vmin, vmax=vmax)
-                # end
                 vmin, vmax = None, None
-              # end
-              im = cax.pcolormesh(x, y, z, norm=norm, vmin=vmin, vmax=vmax,
-                  edgecolors=edgecolors, linewidth=0.1, shading="auto", *plot_args)
-            # end
+              im = cax.pcolormesh(x,
+                                  y,
+                                  z,
+                                  norm=norm,
+                                  vmin=vmin,
+                                  vmax=vmax,
+                                  edgecolors=edgecolors,
+                                  linewidth=0.1,
+                                  shading="auto",
+                                  *plot_args)
             # One colorbar per (panel, component), not one per dataset drawn
             # into it: with several datasets on shared axes (multiblock blocks,
             # overlays) the per-dataset call used to stack an identical
@@ -1304,134 +1197,115 @@ def plot(*datasets: GDataState | Iterable[GDataState],
             drawn = getattr(cax, "_pgkyl_cbar_comps", None)
             if drawn is None:
               drawn = cax._pgkyl_cbar_comps = set()
-            # end
             if not color and comp_colorbar and not streamline and comp not in drawn:
-              _pgkyl_colorbar(im, mpl_fig, cax, extend=extend, label=layout_clabel)
+              _pgkyl_colorbar(im,
+                              mpl_fig,
+                              cax,
+                              extend=extend,
+                              label=layout_clabel)
               drawn.add(comp)
-          # end
-            # end
           else:
             raise ValueError(f"{num_dims:d}D data not supported")
-          # end
 
           legend_ax = cax
           if split_linear_log:
             if split_legend_side == "left":
               legend_ax = component_axes[0]
-            # end
             elif split_legend_side == "right":
               legend_ax = component_axes[1]
-            # end
             elif split_legend_side == "linear":
               legend_ax = component_axes[0 if split_log_side == "right" else 1]
-            # end
             else:  # log
               legend_ax = component_axes[0 if split_log_side == "left" else 1]
-            # end
-          # end
           if comp_legend:
             if getattr(legend_ax, "_pgkyl_handles", None):
               # Overlaid 2D datasets (surface/contour comparison): real legend.
               legend_ax.legend(handles=legend_ax._pgkyl_handles, loc=legend_loc)
-            # end
             elif num_dims == 1 and comp_label != "":
               legend_ax.legend(loc=legend_loc)
-            # end
             elif not (surface and num_dims == 2):
-              legend_ax.text(0.03, 0.96, comp_label,
-                  bbox={"facecolor": "w", "edgecolor": "w", "alpha": 0.8,
-                        "boxstyle": "round"},
-                  verticalalignment="top", horizontalalignment="left",
-                  transform=legend_ax.transAxes)
-            # end
-          # end
+              legend_ax.text(0.03,
+                             0.96,
+                             comp_label,
+                             bbox={
+                                 "facecolor": "w",
+                                 "edgecolor": "w",
+                                 "alpha": 0.8,
+                                 "boxstyle": "round"
+                             },
+                             verticalalignment="top",
+                             horizontalalignment="left",
+                             transform=legend_ax.transAxes)
           for side_idx, side_ax in enumerate(component_axes):
             side_ax.grid(showgrid)
             if hashtag and (not split_linear_log or side_ax is legend_ax):
-              side_ax.text(0.97, 0.03, "#pgkyl",
-                  bbox={"facecolor": "w", "edgecolor": "w", "alpha": 0.8,
-                        "boxstyle": "round"},
-                  verticalalignment="bottom", horizontalalignment="right",
-                  transform=side_ax.transAxes)
-            # end
+              side_ax.text(0.97,
+                           0.03,
+                           "#pgkyl",
+                           bbox={
+                               "facecolor": "w",
+                               "edgecolor": "w",
+                               "alpha": 0.8,
+                               "boxstyle": "round"
+                           },
+                           verticalalignment="bottom",
+                           horizontalalignment="right",
+                           transform=side_ax.transAxes)
             if logx:
               side_ax.set_xscale("log")
-            # end
             if logy:
               side_ax.set_yscale("log")
-            # end
             if split_linear_log:
               is_log_side = ((side_idx == 0 and split_log_side == "left")
-                  or (side_idx == 1 and split_log_side == "right"))
+                             or (side_idx == 1 and split_log_side == "right"))
               if is_log_side:
-                side_ax.set_yscale("log", base=split_log_base,
-                    nonpositive=split_log_nonpositive)
+                side_ax.set_yscale("log",
+                                   base=split_log_base,
+                                   nonpositive=split_log_nonpositive)
                 side_ylim = _split_ylim_for_component(split_log_ylim, comp)
-              # end
               else:
                 side_ax.set_yscale("linear")
                 side_ylim = _split_ylim_for_component(split_linear_ylim, comp)
-              # end
-            # end
             else:
               side_ylim = None
-            # end
             if num_dims == 1 and not relax:  # this causes troubles with contours
               side_ax.autoscale(enable=True, axis="x", tight=True)
               side_ax.autoscale(enable=True, axis="y")
-            # end
             if split_linear_log:
               if side_idx == 0:
                 side_ax.set_xlim(xmin, split_point)
-              # end
               else:
                 side_ax.set_xlim(split_point, xmax)
-              # end
               if not logx:
                 prune = None
                 if ((split_seam_ticklabels == "left" and side_idx == 1)
                     or (split_seam_ticklabels == "right" and side_idx == 0)
                     or split_seam_ticklabels == "none"):
                   prune = "upper" if side_idx == 0 else "lower"
-                # end
                 if prune is not None:
                   side_ax.xaxis.get_major_locator().set_params(prune=prune)
-                # end
-              # end
             elif xmin is not None or xmax is not None:
               side_ax.set_xlim(xmin, xmax)
-            # end
             if ymin is not None or ymax is not None:
               side_ax.set_ylim(ymin, ymax)
-            # end
             if side_ylim is not None:
               side_ax.set_ylim(*side_ylim)
-            # end
             if fixaspect and not (surface and num_dims == 2):
               plt.setp(side_ax, aspect=aspect)
-            # end
-          # end
-          # end
-        # end component loop
 
         if num_axes and spread_axes:
           cur_start_axes += num_comps
-      # end
-        # end
-      # end dataset loop
 
       mpl_fig.tight_layout()
       for output_path in _output_paths(save, family_saveas, states):
         mpl_fig.savefig(output_path, dpi=dpi)
-      # end
     figures.append(mpl_fig)
-  # end
   if show:
     plt.show()
-  # end
   return figures[0] if len(figures) == 1 else figures
-# end
 
 
-command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
-    result=ResultPolicy.SILENT))(plot)
+command(
+    CommandSpec(Section.RENDER,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))(plot)

@@ -22,13 +22,9 @@ def curvilinear_blocks(grid: list, mapped_axes: dict) -> dict:
   for d, off in mapped_axes.items():
     if grid[d].ndim > 1:
       blocks.setdefault(off, []).append(d)
-    # end
-  # end
   for dims in blocks.values():
     dims.sort()
-  # end
   return blocks
-# end
 
 
 def block_for_axis(blocks: dict, axis: int):
@@ -36,7 +32,4 @@ def block_for_axis(blocks: dict, axis: int):
   for off, dims in blocks.items():
     if axis in dims:
       return off, dims
-    # end
-  # end
   return None
-# end

@@ -19,13 +19,17 @@ from postgkyl.gdatastate.gdatastate import GDataState
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState as _GDataState
-# end
 
 
-def map(data: "_GDataState", mapping: "str | _GDataState", *,
-    space: str = "conf", basis_type: str | None = None,
-    poly_order: int | None = None, inplace: bool = False,
-    tag: str | None = None, label: str | None = None) -> "_GDataState":
+def map(data: "_GDataState",
+        mapping: "str | _GDataState",
+        *,
+        space: str = "conf",
+        basis_type: str | None = None,
+        poly_order: int | None = None,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None) -> "_GDataState":
   """Replace a block of ``data``'s grid axes with mapped coordinates.
 
   Evaluates the mapping's DG coefficients at ``data``'s existing grid
@@ -81,31 +85,26 @@ def map(data: "_GDataState", mapping: "str | _GDataState", *,
     raise ValueError(
         "map operates on interpolated (NumPy) target grids; call .interpolate() "
         "first -- deforming a native modal grid has no basis-space meaning.")
-  # end
 
   # basis_type/poly_order are load-time properties of the mapping dataset;
   # they only apply here when this call is the one loading it (a filename),
   # threaded straight into GDataState's own override mechanism -- the one
   # home for "correct a file's missing/mislabeled basis metadata."
-  map_data = (mapping if isinstance(mapping, GDataState) else
-      GDataState(mapping, basis_type=basis_type, poly_order=poly_order))
+  map_data = (mapping if isinstance(mapping, GDataState) else GDataState(
+      mapping, basis_type=basis_type, poly_order=poly_order))
   m = map_data.num_dims
   num_dims = data.num_dims
 
   if space == "conf":
     offset = 0
-  # end
   elif space == "vel":
     offset = num_dims - m
-  # end
   else:
     raise ValueError(f"map: 'space' must be 'conf' or 'vel', got {space!r}.")
-  # end
 
   if offset < 0 or offset + m > num_dims:
     raise ValueError(
         f"map: a {m}D {space} map does not fit a {num_dims}D dataset.")
-  # end
 
   resolved_basis_type = map_data.ctx.get("basis_type")
   resolved_poly_order = map_data.ctx.get("poly_order")
@@ -114,7 +113,6 @@ def map(data: "_GDataState", mapping: "str | _GDataState", *,
         "map: the mapping dataset has no 'basis_type'/'poly_order' "
         "metadata; pass basis_type=.../poly_order=... (mapping as a "
         "filename), or load it explicitly first with those set.")
-  # end
 
   # Velocity-space maps (mapc2p_vel) are diagonal: each mapped dimension is
   # its own separate 1-D map, so its basis is 1-D regardless of m; a
@@ -125,9 +123,8 @@ def map(data: "_GDataState", mapping: "str | _GDataState", *,
     raise ValueError(
         f"map: mapping has {map_data.num_comps} component(s), expected "
         f"m * num_basis = {m} * {num_basis} = {m * num_basis} for a "
-        f"{basis_dim}D {resolved_basis_type} p{resolved_poly_order} map"
-        + (" per velocity dimension." if space == "vel" else "."))
-  # end
+        f"{basis_dim}D {resolved_basis_type} p{resolved_poly_order} map" +
+        (" per velocity dimension." if space == "vel" else "."))
 
   target_axes = list(data.grid[offset:offset + m])
   map_ctx = {
@@ -139,15 +136,14 @@ def map(data: "_GDataState", mapping: "str | _GDataState", *,
       "value_form": map_data.ctx.get("value_form", "modal"),
   }
   if space == "vel":
-    new_axes = dg.map_grid_separable(map_data.get_values(), map_ctx, target_axes)
+    new_axes = dg.map_grid_separable(map_data.get_values(), map_ctx,
+                                     target_axes)
   else:
     new_axes = dg.map_grid(map_data.get_values(), map_ctx, target_axes)
-  # end
 
   grid = list(data.grid)
   for d in range(m):
     grid[offset + d] = new_axes[d]
-  # end
 
   # Record, per absolute dimension, the offset of the mapped block it
   # belongs to -- a curvilinear (m > 1) grid array's own axis k corresponds
@@ -158,6 +154,10 @@ def map(data: "_GDataState", mapping: "str | _GDataState", *,
   mapped_axes = dict(data.ctx.get("mapped_axes", {}))
   mapped_axes.update({offset + d: offset for d in range(m)})
 
-  return data._result(grid, data.values, inplace=inplace, tag=tag,
-      label=label, grid_type="mapped", mapped_axes=mapped_axes)
-# end
+  return data._result(grid,
+                      data.values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      grid_type="mapped",
+                      mapped_axes=mapped_axes)

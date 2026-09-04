@@ -15,24 +15,31 @@ from .registry import gk_quant_registry
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
 def available_quantities() -> list[str]:
   """Return the sorted list of registered quantity names."""
   return gk_quant_registry.list()
-# end
 
 
 def load_quantity(
     quantity: Annotated[str, ChoiceProvider(available_quantities)],
-    species: str | None, name: str, frame: str | None = None, *,
-    path: str = "./", tag: str = "default", label: str | None = None,
-    direction: int | None = None, mass: float | None = None,
-    charge: float | None = None, gamma_e: float | None = None,
-    gamma_i: float | None = None, kind: str | None = None,
-    read_options: Annotated[dict[str, str] | None, KeyValue()] = None,
-    ) -> list:
+    species: str | None,
+    name: str,
+    frame: str | None = None,
+    *,
+    path: str = "./",
+    tag: str = "default",
+    label: str | None = None,
+    direction: int | None = None,
+    mass: float | None = None,
+    charge: float | None = None,
+    gamma_e: float | None = None,
+    gamma_i: float | None = None,
+    kind: str | None = None,
+    read_options: Annotated[dict[str, str] | None,
+                            KeyValue()] = None,
+) -> list:
   """Load and compute a pre-named gyrokinetic quantity.
 
   Args:
@@ -63,18 +70,15 @@ def load_quantity(
   """
   extra = dict(read_options or {})
   for key, value in (("dir", direction), ("mass", mass), ("charge", charge),
-      ("gamma_e", gamma_e), ("gamma_i", gamma_i), ("kind", kind)):
+                     ("gamma_e", gamma_e), ("gamma_i", gamma_i), ("kind",
+                                                                  kind)):
     if value is not None:
       extra[key] = value
-    # end
-  # end
 
   if not gk_quant_registry.has(quantity):
     valid = gk_quant_registry.list()
-    raise ValueError(
-        f"Unknown quantity '{quantity}'. Available quantities: "
-        f"{', '.join(valid)}.")
-  # end
+    raise ValueError(f"Unknown quantity '{quantity}'. Available quantities: "
+                     f"{', '.join(valid)}.")
 
   gkquant = gk_quant_registry.get(quantity)
   path = path.rstrip("/") + "/"
@@ -90,7 +94,6 @@ def load_quantity(
       raise ValueError(
           f"Quantity '{quantity}' combines several species, so it needs a "
           "species list, e.g. --species elc,ion.")
-    # end
 
     src_combo_idx, frames = gkquant.get_avail_source_multi(
         path, name, species_list, frame_inp)
@@ -98,19 +101,16 @@ def load_quantity(
     datasets: list["GDataState"] = []
     for fr in frames:
       out = gkquant.fetch_multi(path, name, species_list, fr, src_combo_idx,
-          **extra)
+                                **extra)
 
       out_label = label if label is not None else gkquant.get_label()
       if len(frames) > 1:
         out_label += f" f{fr}"
-      # end
       out.set_label(out_label)
       out.set_tag(tag)
 
       datasets.append(out)
-    # end
     return datasets
-  # end
 
   datasets: list["GDataState"] = []
   for species_idx, sp in enumerate(species_list):
@@ -126,21 +126,15 @@ def load_quantity(
       default_label = gkquant.get_label(species=sp, direction=extra.get("dir"))
       if label is not None:
         out_label = label + (f" {sp}" if len(species_list) > 1 else "")
-      # end
       else:
         out_label = default_label
-      # end
       if len(frames) > 1:
         out_label += f" f{fr}"
-      # end
       out.set_label(out_label)
 
       out_tag = tag + (f"_{sp}" if len(species_list) > 1 else "")
       out.set_tag(out_tag)
 
       datasets.append(out)
-    # end
-  # end
 
   return datasets
-# end

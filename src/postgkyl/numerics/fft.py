@@ -13,8 +13,11 @@ import numpy as np
 import scipy.fft
 
 
-def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
-    iso: bool = False) -> tuple[list[np.ndarray], np.ndarray]:
+def fft(grid: list[np.ndarray],
+        values: np.ndarray,
+        *,
+        psd: bool = False,
+        iso: bool = False) -> tuple[list[np.ndarray], np.ndarray]:
   """FFT (or power spectral density, optionally isotropic) of gridded data.
 
   Args:
@@ -45,10 +48,8 @@ def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
   if idx:
     for i in idx[::-1]:
       grid.pop(i)
-    # end
     values = np.squeeze(values, tuple(idx))
     num_dims = len(grid)
-  # end
   num_comps = values.shape[-1]
 
   if num_dims == 1:
@@ -58,14 +59,11 @@ def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
     ft_values = np.zeros(values.shape, "complex")
     for comp in np.arange(num_comps):
       ft_values[..., comp] = scipy.fft.fft(values[..., comp])
-    # end
 
     if psd:
       freq[0] = freq[0][:N // 2]
       ft_values = np.abs(ft_values[:N // 2, :])**2
-    # end
     return freq, ft_values
-  # end
 
   if num_dims > 3:
     # src_bak raised this same message, but only from deep inside the
@@ -73,7 +71,6 @@ def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
     # ``N = np.zeros(3)`` below always raises a confusing IndexError first
     # for num_dims > 3, psd or not. Raise it up front instead.
     raise ValueError("Only 1D, 2D, and 3D data are currently supported.")
-  # end
 
   N = np.zeros(3, dtype=int)
   dx = np.zeros(3)
@@ -82,31 +79,23 @@ def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
     N[i] = len(grid[i])
     dx[i] = grid[i][1] - grid[i][0]
     freq.append(scipy.fft.fftfreq(N[i], dx[i]))
-  # end
   ft_values = np.zeros(values.shape, "complex")
   for comp in np.arange(num_comps):
     ft_values[..., comp] = scipy.fft.fftn(values[..., comp])
-  # end
   if not psd:
     return freq, ft_values
-  # end
 
   for i in range(num_dims):
     freq[i] = freq[i][:N[i] // 2]
-  # end
   if num_dims == 2:
     ft_values = np.abs(ft_values[:N[0] // 2, :N[1] // 2, :])**2
     if iso:
       freq.append(0)  # dummy third index, only meaningful to init_polar below
-    # end
-  # end
   else:  # num_dims == 3 (num_dims > 3 already raised above)
     ft_values = np.abs(ft_values[:N[0] // 2, :N[1] // 2, :N[2] // 2, :])**2
-  # end
 
   if not iso:
     return freq, ft_values
-  # end
 
   nkpolar = int(np.sqrt(np.sum(N[:]**2)))
   nkx = N[0] // 2
@@ -117,10 +106,8 @@ def fft(grid: list[np.ndarray], values: np.ndarray, *, psd: bool = False,
   fft_iso = np.zeros((nkpolar, num_comps))
   for comp in np.arange(num_comps):
     fft_iso[:, comp] = polar_isotropic(nkpolar, nkx, nky, nkz, polar_index,
-        nbin, ft_values[..., comp], kx, ky, kz)
-  # end
+                                       nbin, ft_values[..., comp], kx, ky, kz)
   return [akp], fft_iso
-# end
 
 
 def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
@@ -156,10 +143,10 @@ def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
     nbin = 0
     polar_index = []
     akplim = []
-  # end
   elif nkz == 0:
     nbin = np.zeros(nkpolar)  # Number of kx,ky in each polar bins
-    polar_index = np.zeros((nkx, nky), dtype=int)  # Polar index to simplify binning
+    polar_index = np.zeros((nkx, nky),
+                           dtype=int)  # Polar index to simplify binning
     if nkx == 1 and nky == 1:
       # NB: src_bak wrote this as ``nkx == 1 & nky == 1``. ``&`` binds
       # tighter than ``==``, so that parsed as
@@ -168,22 +155,18 @@ def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
       # the evidently intended ``and``, proven by the parity-sensitive
       # test in test_numerics_fft.py.
       dkp = 0
-    # end
     elif nkx == 1:
       dkp = ky[1]
-    # end
     elif nky == 1:
       dkp = kx[1]
-    # end
     else:
       dkp = max(kx[1], ky[1])
-    # end
     akp = (np.linspace(1, nkpolar, nkpolar)) * dkp  # Kperp grid
-    akplim = dkp / 2 + (np.linspace(0, nkpolar, nkpolar + 1))*dkp  # Bin limits
+    akplim = dkp / 2 + (np.linspace(0, nkpolar,
+                                    nkpolar + 1)) * dkp  # Bin limits
     # Re-written to avoid loops. Necessary for large grids.
     [kxg, kyg] = np.meshgrid(
-        ky, kx
-    )  # Deal with meshgrid weirdness (so do not have to transpose)
+        ky, kx)  # Deal with meshgrid weirdness (so do not have to transpose)
     kp = np.sqrt(kxg**2 + kyg**2)
     pn = np.where(kp >= akplim[nkpolar])
     polar_index[pn[0], pn[1]] = nkpolar - 1
@@ -192,8 +175,6 @@ def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
       pn = np.where((kp < akplim[ik + 1]) & (kp >= akplim[ik]))
       polar_index[pn[0], pn[1]] = ik
       nbin[ik] = nbin[ik] + len(pn[0])
-    # end
-  # end
   else:
     # 3D data
     nbin = np.zeros(nkpolar)
@@ -202,21 +183,17 @@ def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
       # NB: same ``&``-vs-``==``-precedence bug as the 2D branch above,
       # fixed the same way.
       dkp = 0
-    # end
     elif nkx == 1:
       dkp = max(ky[1], kz[1])
-    # end
     elif nky == 1:
       dkp = max(kx[1], kz[1])
-    # end
     elif nkz == 1:
       dkp = max(kx[1], ky[1])
-    # end
     else:
       dkp = max(kx[1], ky[1], kz[1])
-    # end
     akp = (np.linspace(1, nkpolar, nkpolar)) * dkp  # kperp grid
-    akplim = dkp / 2 + (np.linspace(0, nkpolar, nkpolar + 1)) * dkp  # bin limits
+    akplim = dkp / 2 + (np.linspace(0, nkpolar,
+                                    nkpolar + 1)) * dkp  # bin limits
     # Re-written to avoid loops
     [kxg, kyg, kzg] = np.meshgrid(ky, kx, kz)
     kp = np.sqrt(kxg**2 + kyg**2 + kzg**2)
@@ -227,14 +204,12 @@ def init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar):
       pn = np.where((kp < akplim[ik + 1]) & (kp >= akplim[ik]))
       polar_index[pn[0], pn[1], pn[2]] = ik
       nbin[ik] = nbin[ik] + len(pn[0])
-    # end
-  # end
 
   return akp, nbin, polar_index, akplim
-# end
 
 
-def polar_isotropic(nkpolar, nkx, nky, nkz, polar_index, nbin, fft_matrix, kx, ky, kz):
+def polar_isotropic(nkpolar, nkx, nky, nkz, polar_index, nbin, fft_matrix, kx,
+                    ky, kz):
   """Average a spectrum over polar (k-perpendicular) shells.
 
   Accumulates the values of ``fft_matrix`` into the polar bins defined by
@@ -268,20 +243,15 @@ def polar_isotropic(nkpolar, nkx, nky, nkz, polar_index, nbin, fft_matrix, kx, k
   if nkz == 0:
     for i in range(nkx):
       for j in range(nky):
-        fft_isok[polar_index[i, j]] = fft_isok[polar_index[i, j]] + fft_matrix[i, j]
-  # end
-      # end
-    # end
+        fft_isok[polar_index[i,
+                             j]] = fft_isok[polar_index[i, j]] + fft_matrix[i,
+                                                                            j]
   else:
     for i in range(nkx):
       for j in range(nky):
         for k in range(nkz):
-          fft_isok[polar_index[i, j, k]] = fft_isok[polar_index[i, j, k]] + fft_matrix[i, j, k]
-        # end
-      # end
-    # end
-  # end
+          fft_isok[polar_index[
+              i, j, k]] = fft_isok[polar_index[i, j, k]] + fft_matrix[i, j, k]
 
   fft_isok = fft_isok / nbin[:]
   return fft_isok
-# end

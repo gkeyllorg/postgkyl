@@ -150,6 +150,20 @@ two prerequisites (compiler, or the clone) is missing, or whether the built
 extension is stale relative to the shim header — the fix in that last case
 is always `scripts/build_gpython.sh`.
 
+## Formatting
+
+Install the repository's Git hook and run both formatters over all tracked
+Python and C sources with:
+
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+YAPF reads `.style.yapf`; clang-format reads `.clang-format`. CI runs the same
+pre-commit hooks and fails when either formatter would change a file.
+
 ## Testing
 
 Postgkyl utilizes [pytest](https://docs.pytest.org/) for testing. The tests can

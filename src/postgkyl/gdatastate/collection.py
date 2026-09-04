@@ -27,19 +27,13 @@ def flatten_datasets(items) -> list:
   for it in items:
     if isinstance(it, GDataState):
       out.append(it)
-    # end
     elif isinstance(it, (str, bytes)):
       out.append(it)
-    # end
     elif hasattr(it, "__iter__"):
       out.extend(flatten_datasets(it))
-    # end
     else:
       out.append(it)
-    # end
-  # end
   return out
-# end
 
 
 def _family_key(data) -> tuple | None:
@@ -58,10 +52,8 @@ def _family_key(data) -> tuple | None:
   """
   if not isinstance(data, GDataState) or data.ctx.get("block") is None:
     return None
-  # end
   return (data.tag, data.ctx.get("sim"), data.ctx.get("quantity"),
-      data.ctx.get("frame"))
-# end
+          data.ctx.get("frame"))
 
 
 def group_blocks(datasets) -> list[list]:
@@ -89,18 +81,13 @@ def group_blocks(datasets) -> list[list]:
     if key is None:
       out.append([data])
       continue
-    # end
     if key not in families:
       families[key] = []
       out.append(families[key])
-    # end
     families[key].append(data)
-  # end
   for family in families.values():
     family.sort(key=lambda d: int(d.ctx["block"]))
-  # end
   return out
-# end
 
 
 def group_frames(datasets) -> list[list]:
@@ -112,9 +99,8 @@ def group_frames(datasets) -> list[list]:
   groups: dict[int | None, list] = {}
   for data in flatten_datasets(datasets):
     frame = data.ctx.get("frame")
-    groups.setdefault(int(frame) if frame is not None else None, []).append(data)
-  # end
+    groups.setdefault(int(frame) if frame is not None else None,
+                      []).append(data)
   known = sorted(frame for frame in groups if frame is not None)
-  return [groups[frame] for frame in known] + (
-      [groups[None]] if None in groups else [])
-# end
+  return [groups[frame]
+          for frame in known] + ([groups[None]] if None in groups else [])

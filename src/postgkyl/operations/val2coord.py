@@ -10,7 +10,6 @@ from postgkyl.gdatastate.gdatastategroup import GDataStateGroup
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
 def _get_range(str_in: str, length: int) -> np.ndarray:
@@ -22,28 +21,27 @@ def _get_range(str_in: str, length: int) -> np.ndarray:
   """
   if len(str_in.split(",")) > 1:
     return np.array(str_in.split(","), dtype=int)
-  # end
   elif str_in.find(":") >= 0:
     parts = str_in.split(":")
     s_idx = 0 if parts[0] == "" else int(parts[0])
     if s_idx < 0:
       s_idx = length + s_idx
-    # end
     e_idx = length if parts[1] == "" else int(parts[1])
     if e_idx < 0:
       e_idx = length + e_idx
-    # end
     inc = int(parts[2]) if len(parts) > 2 and parts[2] != "" else 1
     return np.arange(s_idx, e_idx, inc)
-  # end
   else:
     return np.array([int(str_in)])
-# end
-  # end
 
 
-def val2coord(data: "GDataState", *, x: str, y: str, periodic: bool = False,
-    tag: str | None = None, label: str | None = None) -> GDataStateGroup:
+def val2coord(data: "GDataState",
+              *,
+              x: str,
+              y: str,
+              periodic: bool = False,
+              tag: str | None = None,
+              label: str | None = None) -> GDataStateGroup:
   """Build new (x, y) datasets from columns of a DynVector.
 
   Reinterprets columns of ``data`` (typically a DynVector / diagnostic
@@ -77,7 +75,6 @@ def val2coord(data: "GDataState", *, x: str, y: str, periodic: bool = False,
     raise ValueError(
         "val2coord operates on interpolated (NumPy) values; call .interpolate() "
         "first -- raw DG coefficients are not tabular columns.")
-  # end
   values = data.values
   x_comps = _get_range(x, values.shape[-1])
   y_comps = _get_range(y, values.shape[-1])
@@ -87,7 +84,6 @@ def val2coord(data: "GDataState", *, x: str, y: str, periodic: bool = False,
         f"val2coord: number of x-components ({len(x_comps):d}) is greater "
         f"than 1 and not equal to the number of y-components "
         f"({len(y_comps):d}).")
-  # end
 
   out = []
   for i, yc in enumerate(y_comps):
@@ -97,10 +93,7 @@ def val2coord(data: "GDataState", *, x: str, y: str, periodic: bool = False,
     if periodic:
       xv = np.append(xv, np.atleast_1d(xv[0]), axis=0)
       yv = np.append(yv, np.atleast_1d(yv[0]), axis=0)
-    # end
     res = data._result([xv], yv[..., np.newaxis], tag=tag, label=label)
     res.color = "C0"
     out.append(res)
-  # end
   return GDataStateGroup(out)
-# end

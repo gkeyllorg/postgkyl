@@ -30,8 +30,11 @@ from . import mapping
 class FlashH5Reader:
   """Provides a framework to read FLASH HDF5 output."""
 
-  def __init__(self, file_name: str, ctx: dict | None = None,
-      var_name: str | None = None, **kwargs):
+  def __init__(self,
+               file_name: str,
+               ctx: dict | None = None,
+               var_name: str | None = None,
+               **kwargs):
     """Initialize the instance of the FLASH reader.
 
     Args:
@@ -46,20 +49,16 @@ class FlashH5Reader:
     self.var_name = var_name
 
     self.ctx = ctx if ctx is not None else {}
-  # end
 
   def is_compatible(self) -> bool:
     """Checks if the file can be read with the FLASH reader."""
     try:
       fh = tables.open_file(self._file_name, "r")
-    # end
     except (tables.exceptions.HDF5ExtError, OSError):
       return False
-    # end
     out = "coordinates" in fh.root
     fh.close()
     return out
-  # end
 
   def _read_frame(self) -> tuple:
     fh = tables.open_file(self._file_name, "r")
@@ -80,26 +79,22 @@ class FlashH5Reader:
     for b in range(num_blocks):
       if ntype[b] == 1:
         mult = np.ceil(bsize[:, b] / res)
-        idxx = math.floor((coord[0, b] - bsize[0, b] / 2 - lower[0]) / res[0] * nxb)
-        idxy = math.floor((coord[1, b] - bsize[1, b] / 2 - lower[1]) / res[1] * nyb)
+        idxx = math.floor(
+            (coord[0, b] - bsize[0, b] / 2 - lower[0]) / res[0] * nxb)
+        idxy = math.floor(
+            (coord[1, b] - bsize[1, b] / 2 - lower[1]) / res[1] * nyb)
         for i in range(nxb):
           for j in range(nyb):
             data[
-                idxx + i * int(mult[0]) : idxx + (i + 1) * int(mult[0]) + 1,
-                idxy + j * int(mult[1]) : idxy + (j + 1) * int(mult[1]) + 1,
+                idxx + i * int(mult[0]):idxx + (i + 1) * int(mult[0]) + 1,
+                idxy + j * int(mult[1]):idxy + (j + 1) * int(mult[1]) + 1,
             ] = bdata[i, j, 0, b]
-          # end
-        # end
-      # end
-    # end
     return data.shape, lower[:2], upper[:2], data[..., np.newaxis]
-  # end
 
   # ---- Exposed functions -----
   def preload(self) -> None:
     """Loads metadata. FLASH block reassembly needs the full field, so there
     is nothing cheaper to precompute here."""
-  # end
 
   def load(self) -> Tuple[list, np.ndarray]:
     """Loads data.
@@ -117,7 +112,6 @@ class FlashH5Reader:
       raise ValueError(
           "FlashH5Reader requires 'var_name' (the FLASH block variable to "
           "read, e.g. 'dens') to load data.")
-    # end
 
     cells, lower, upper, data = self._read_frame()
     self.ctx["cells"] = cells
@@ -127,7 +121,6 @@ class FlashH5Reader:
     self.ctx["grid_type"] = "uniform"
 
     grid = mapping.uniform_grid(np.asarray(lower, dtype=float),
-        np.asarray(upper, dtype=float), np.asarray(cells))
+                                np.asarray(upper, dtype=float),
+                                np.asarray(cells))
     return grid, data
-  # end
-# end

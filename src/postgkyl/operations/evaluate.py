@@ -61,7 +61,6 @@ from postgkyl.operations.select import select
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 # RPN tokens with an exact Gkeyll weak-kernel meaning on modal data.
 _MODAL_BINARY_OPS = {"+", "-", "*", "/", "pow"}
@@ -73,8 +72,24 @@ _MODAL_BINARY_OPS = {"+", "-", "*", "/", "pow"}
 # grad2, int, div, curl) is a reduction or a finite-difference derivative
 # and must leave the native domain instead.
 _POINTWISE_TOKENS = frozenset({
-    "+", "-", "*", "/", "pow", "sq", "sqrt", "sin", "cos", "tan", "abs",
-    "log", "log10", "exp", "max2", "min2", "scale_comp", "scale_zi_axis",
+    "+",
+    "-",
+    "*",
+    "/",
+    "pow",
+    "sq",
+    "sqrt",
+    "sin",
+    "cos",
+    "tan",
+    "abs",
+    "log",
+    "log10",
+    "exp",
+    "max2",
+    "min2",
+    "scale_comp",
+    "scale_zi_axis",
 })
 
 # f, f0, f12 ... with optional [comp] selection and optional .ctxkey suffix.
@@ -83,16 +98,13 @@ _DATA_TOKEN = re.compile(r"^f(\d*)(?:\[([^\]]*)\])?(?:\.(\w+))?$")
 
 def _rep_of(ctx: dict) -> str:
   return ctx.get("value_form", "modal")
-# end
 
 
 def _compare(a, b) -> bool:
   """Equality that also handles NumPy arrays (used when merging ctx dicts)."""
   if isinstance(a, np.ndarray):
     return np.array_equal(a, b)
-  # end
   return a == b
-# end
 
 
 def _modal_view(value, ctx: dict):
@@ -100,30 +112,23 @@ def _modal_view(value, ctx: dict):
   pointwise fallback; anything else passes through unchanged."""
   if dg.modal.is_native(value):
     return value.view(ctx.get("cells"))
-  # end
   return value
-# end
 
 
 def _basis_of(ctx: dict):
   basis_type, poly_order = ctx.get("basis_type"), ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError("modal operand has no basis_type/poly_order metadata")
-  # end
   return str(basis_type), int(poly_order)
-# end
 
 
 def _as_scalar(value):
   """A Python float if ``value`` is scalar-shaped, else None."""
   if isinstance(value, (int, float, np.integer, np.floating)):
     return float(value)
-  # end
   if isinstance(value, np.ndarray) and value.ndim == 0:
     return float(value)
-  # end
   return None
-# end
 
 
 def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
@@ -145,22 +150,19 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
   is_modal = [dg.modal.is_native(v) for v in tmp_values]
   if not any(is_modal):
     return None
-  # end
 
   try:
     if len(tmp_values) == 1:
       if token != "sq":
         raise ValueError(f"'{token}' has no weak-kernel form")
-      # end
       basis_type, poly_order = _basis_of(tmp_ctx[0])
-      out = dg.modal.power(basis_type, len(tmp_grid[0]), poly_order, tmp_values[0], 2)
+      out = dg.modal.power(basis_type, len(tmp_grid[0]), poly_order,
+                           tmp_values[0], 2)
       return [tmp_grid[0]], [out]
-    # end
 
     if len(tmp_values) == 2:
       if token not in _MODAL_BINARY_OPS:
         raise ValueError(f"'{token}' has no weak-kernel form")
-      # end
       # RPN order: tmp_values[0] is "b" (top of stack), tmp_values[1] is "a".
       a, b = tmp_values[1], tmp_values[0]
       a_modal, b_modal = is_modal[1], is_modal[0]
@@ -169,25 +171,20 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
         grid = tmp_grid[1] if tmp_grid[1] is not None else tmp_grid[0]
         basis_a, basis_b = _basis_of(tmp_ctx[1]), _basis_of(tmp_ctx[0])
         if basis_a != basis_b:
-          raise ValueError(f"operands have different DG bases ({basis_a} vs {basis_b})")
-        # end
+          raise ValueError(
+              f"operands have different DG bases ({basis_a} vs {basis_b})")
         basis_type, poly_order = basis_a
         ndim = len(grid)
         if token == "+":
           out = dg.modal.lincomb(1.0, a, 1.0, b)
-        # end
         elif token == "-":
           out = dg.modal.lincomb(1.0, a, -1.0, b)
-        # end
         elif token in ("*", "/"):
           fn = dg.modal.weak_mul if token == "*" else dg.modal.weak_div
           out = fn(basis_type, ndim, poly_order, a, b)
-        # end
         else:
           raise ValueError("'pow' is not defined between two modal datasets")
-        # end
         return [grid], [out]
-      # end
 
       # Exactly one operand is modal; the other must be a plain scalar.
       modal_arr, modal_ctx, modal_grid = (a, tmp_ctx[1], tmp_grid[1]) if a_modal \
@@ -196,48 +193,44 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
       scalar = _as_scalar(other)
       if scalar is None:
         raise ValueError("cannot mix native modal data with a plain array")
-      # end
       basis_type, poly_order = _basis_of(modal_ctx)
       ndim = len(modal_grid)
       scalar_first = not a_modal  # the scalar came first in the expression
 
       if token == "*":
         out = dg.modal.scale(modal_arr, scalar)
-      # end
       elif token == "/":
-        out = (dg.modal.scale(dg.modal.weak_inv(basis_type, ndim, poly_order, modal_arr), scalar)
+        out = (dg.modal.scale(
+            dg.modal.weak_inv(basis_type, ndim, poly_order, modal_arr), scalar)
                if scalar_first else dg.modal.scale(modal_arr, 1.0 / scalar))
-      # end
       elif token == "+":
-        out = dg.modal.shift_mean(basis_type, ndim, poly_order, modal_arr, scalar)
-      # end
+        out = dg.modal.shift_mean(basis_type, ndim, poly_order, modal_arr,
+                                  scalar)
       elif token == "-":
         out = (dg.modal.shift_mean(basis_type, ndim, poly_order,
-                   dg.modal.scale(modal_arr, -1.0), scalar) if scalar_first
-               else dg.modal.shift_mean(basis_type, ndim, poly_order, modal_arr, -scalar))
-      # end
+                                   dg.modal.scale(modal_arr, -1.0), scalar)
+               if scalar_first else dg.modal.shift_mean(
+                   basis_type, ndim, poly_order, modal_arr, -scalar))
       else:  # pow
         if scalar_first or not float(scalar).is_integer() or scalar < 1:
           raise ValueError(
               f"modal 'pow' needs a modal base and a positive integer "
-              f"exponent, got exponent {scalar!r} (scalar_first={scalar_first})")
-        # end
-        out = dg.modal.power(basis_type, ndim, poly_order, modal_arr, int(scalar))
-      # end
+              f"exponent, got exponent {scalar!r} (scalar_first={scalar_first})"
+          )
+        out = dg.modal.power(basis_type, ndim, poly_order, modal_arr,
+                             int(scalar))
       return [modal_grid], [out]
-    # end
 
-    raise ValueError(f"'{token}' has no weak-kernel form for {len(tmp_values)} operands")
-  # end
+    raise ValueError(
+        f"'{token}' has no weak-kernel form for {len(tmp_values)} operands")
   except Exception as err:
     warnings.warn(
         f"evaluate: '{token}' on native modal (raw DG coefficient) data: {err}; "
         "falling back to plain math on the raw coefficient view -- exact only "
         "if coefficient 0 already IS the point value (e.g. p0 data, or a file "
-        "whose 'modal' tag is wrong; see --value_form).", stacklevel=3)
+        "whose 'modal' tag is wrong; see --value_form).",
+        stacklevel=3)
     return None
-  # end
-# end
 
 
 def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
@@ -264,29 +257,28 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
   is_native = [dg.modal.is_native(v) for v in tmp_values]
   if not any(is_native):
     return None
-  # end
 
-  reps = {_rep_of(c) for v, c, native in zip(tmp_values, tmp_ctx, is_native) if native}
+  reps = {
+      _rep_of(c)
+      for v, c, native in zip(tmp_values, tmp_ctx, is_native) if native
+  }
   if reps == {"modal"}:
     return _modal_kernel(token, tmp_grid, tmp_values, tmp_ctx)
-  # end
 
   if len(reps) > 1:
     warnings.warn(
         f"evaluate: '{token}' mixes native operands in different "
         f"value_forms ({sorted(reps)}); falling back to plain math on "
-        "the raw views.", stacklevel=3)
+        "the raw views.",
+        stacklevel=3)
     return None
-  # end
 
   if token not in _POINTWISE_TOKENS:
     return None
-  # end
 
   view_values = [_modal_view(v, c) for v, c in zip(tmp_values, tmp_ctx)]
   out_grid, out_values = func(tmp_grid, view_values)
   return out_grid, [dg.rep.wrap(v) for v in out_values]
-# end
 
 
 def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
@@ -312,7 +304,6 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
   """
   if token not in ev_cmds:
     return False
-  # end
   num_in = ev_cmds[token]["num_in"]
   num_out = ev_cmds[token]["num_out"]
   func = ev_cmds[token]["func"]
@@ -323,12 +314,10 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
     in_values.append(value_stack.pop())
     in_ctx.append(ctx_stack.pop())
     num_sets.append(len(in_values[-1]))
-  # end
   for _ in range(num_out):
     grid_stack.append([])
     value_stack.append([])
     ctx_stack.append([])
-  # end
 
   for set_idx in range(max(num_sets)):
     tmp_grid, tmp_values, tmp_ctx = [], [], []
@@ -336,20 +325,15 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
       tmp_grid.append(in_grid[i][min(set_idx, num_sets[i] - 1)])
       tmp_values.append(in_values[i][min(set_idx, num_sets[i] - 1)])
       tmp_ctx.append(in_ctx[i][min(set_idx, num_sets[i] - 1)])
-    # end
     try:
       native_out = _native_kernel(token, tmp_grid, tmp_values, tmp_ctx, func)
       if native_out is not None:
         out_grid, out_values = native_out
-      # end
       else:
         view_values = [_modal_view(v, c) for v, c in zip(tmp_values, tmp_ctx)]
         out_grid, out_values = func(tmp_grid, view_values)
-      # end
-    # end
     except Exception as err:
       raise ValueError(str(err)) from err
-    # end
 
     # Merge ctx of all inputs; drop keys that disagree between inputs.
     out_ctx: dict = {}
@@ -358,18 +342,12 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
       for key in tmp_ctx[i]:
         if key in out_ctx and _compare(tmp_ctx[i][key], out_ctx[key]):
           pass  # already copied and matches; nothing to do
-        # end
         elif key in out_ctx:
           remove_list.append(key)  # discrepancy; mark for removal
-        # end
         else:
           out_ctx[key] = tmp_ctx[i][key]
-        # end
-      # end
-    # end
     for key in dict.fromkeys(remove_list):
       out_ctx.pop(key)
-    # end
 
     # A native nodal/quad operand whose result did *not* come back wrapped
     # native (a genuine reduction/derivative, per _native_kernel) has left
@@ -389,15 +367,12 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
       if was_native_nonmodal and not dg.modal.is_native(out_values[i]):
         this_ctx.pop("value_form", None)
         this_ctx["interpolated"] = True
-      # end
       ctx_stack[-num_out + i].append(this_ctx)
-    # end
-  # end
   return True
-# end
 
 
-def _push_token(token: str, datasets, grid_stack, value_stack, ctx_stack) -> bool:
+def _push_token(token: str, datasets, grid_stack, value_stack,
+                ctx_stack) -> bool:
   """Push a single non-operator ``token`` (data reference or literal).
 
   Returns False only if the token cannot be interpreted at all.
@@ -410,10 +385,9 @@ def _push_token(token: str, datasets, grid_stack, value_stack, ctx_stack) -> boo
     dat = datasets[idx]
     if ctx_key is not None:
       if ctx_key not in dat.ctx:
-        raise ValueError(f"evaluate: unknown ctx key '{ctx_key}' on dataset f{idx}")
-      # end
+        raise ValueError(
+            f"evaluate: unknown ctx key '{ctx_key}' on dataset f{idx}")
       grid, values = None, np.array(dat.ctx[ctx_key])
-    # end
     elif comp is None and dat.backend == "gkyl":
       # Keep native data on the stack (rather than forcing it through
       # select()'s point-value guard), regardless of value_form: RPN
@@ -422,7 +396,6 @@ def _push_token(token: str, datasets, grid_stack, value_stack, ctx_stack) -> boo
       # when the operator supports it, or warns/falls back to the raw view
       # otherwise -- see _native_kernel.
       grid, values = dat.grid, dat.native
-    # end
     else:
       # select() carries the shared operability guard (raw modal coefficients
       # refuse; nodal/quad value_forms, already point values, pass) for
@@ -434,42 +407,35 @@ def _push_token(token: str, datasets, grid_stack, value_stack, ctx_stack) -> boo
       selected = select(dat, comp=comp)
       grid = selected.grid
       values = selected.native if selected.backend == "gkyl" else selected.values
-    # end
     grid_stack.append([grid])
     value_stack.append([values])
     ctx_stack.append([dat.ctx])
     return True
-  # end
 
   # Numeric / axis literal fallback (mirrors the CLI token parser).
   if "(" in token or "[" in token:
     value_stack.append([eval(token)])  # noqa: S307 -- trusted expression source
-  # end
   elif ":" in token or "," in token:
     value_stack.append([str(token)])
-  # end
   else:
     try:
       value_stack.append([np.array(float(token))])
-    # end
     except ValueError:
       return False
-    # end
-  # end
   grid_stack.append([None])
   ctx_stack.append([{}])
   return True
-# end
 
 
 def available_operators() -> list[str]:
   """The RPN operator tokens ``evaluate`` recognizes (e.g. ``'+'``, ``'sqrt'``)."""
   return sorted(ev_cmds)
-# end
 
 
-def evaluate(chain: str, *datasets: "GDataState", tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def evaluate(chain: str,
+             *datasets: "GDataState",
+             tag: str | None = None,
+             label: str | None = None) -> "GDataState":
   """Evaluate an RPN expression over an explicit list of datasets.
 
   ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
@@ -493,28 +459,26 @@ def evaluate(chain: str, *datasets: "GDataState", tag: str | None = None,
   """
   if not datasets:
     raise ValueError("evaluate: at least one dataset is required.")
-  # end
 
   grid_stack, value_stack, ctx_stack = [], [], []
   for token in filter(None, chain.split(" ")):
     if apply_operator(grid_stack, value_stack, ctx_stack, token):
       continue
-    # end
     if not _push_token(token, datasets, grid_stack, value_stack, ctx_stack):
-      raise ValueError(f"evaluate: token '{token}' is neither data nor an operator")
-    # end
-  # end
+      raise ValueError(
+          f"evaluate: token '{token}' is neither data nor an operator")
 
   if not value_stack:
     raise ValueError("evaluate: expression produced no result")
-  # end
 
   final_grid = grid_stack[-1][0]
   final_values = value_stack[-1][0]
   final_ctx = dict(ctx_stack[-1][0])
   out_grid = final_grid if final_grid is not None else datasets[0].grid
-  result = datasets[0]._result(out_grid, final_values,
-      tag=(tag or "default"), label=(label if label is not None else chain))
+  result = datasets[0]._result(out_grid,
+                               final_values,
+                               tag=(tag or "default"),
+                               label=(label if label is not None else chain))
   # The result's ctx is the RPN merge (apply_operator already resolved every
   # conflict), not datasets[0]'s ctx that '_result' copied as a starting
   # point -- a key apply_operator dropped as conflicting must not survive
@@ -526,4 +490,3 @@ def evaluate(chain: str, *datasets: "GDataState", tag: str | None = None,
   result.ctx = final_ctx
   result.ctx.update(kept)
   return result
-# end

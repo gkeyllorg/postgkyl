@@ -17,7 +17,6 @@ from postgkyl import dg
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
 def _native_basis(data: "GDataState"):
@@ -26,24 +25,24 @@ def _native_basis(data: "GDataState"):
         "eval_at_coord_proj wraps gkyl_dg_eval_at_coord_proj and needs "
         "native modal data; it is not available after .interpolate() or "
         "without the Gkeyll library.")
-  # end
   if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError(
-        f"eval_at_coord_proj expects the modal value_form, not "
-        f"'{data.ctx['value_form']}'; call .to_modal() first.")
-  # end
+    raise ValueError(f"eval_at_coord_proj expects the modal value_form, not "
+                     f"'{data.ctx['value_form']}'; call .to_modal() first.")
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError("eval_at_coord_proj: data has no basis_type/poly_order "
                      "metadata")
-  # end
   return str(basis_type), int(poly_order)
-# end
 
 
-def eval_at_coord_proj(data: "GDataState", eval_dirs, eval_coords, *,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def eval_at_coord_proj(data: "GDataState",
+                       eval_dirs,
+                       eval_coords,
+                       *,
+                       inplace: bool = False,
+                       tag: str | None = None,
+                       label: str | None = None):
   """Evaluate ``data`` at ``eval_coords`` in ``eval_dirs`` and project onto
   the surviving directions' target basis.
 
@@ -90,12 +89,16 @@ def eval_at_coord_proj(data: "GDataState", eval_dirs, eval_coords, *,
 
   if keep_dirs:
     new_grid = [np.asarray(data.grid[d]) for d in keep_dirs]
-  # end
   else:
     new_grid = [np.array([0.0, 1.0])]
-  # end
 
-  return data._result(new_grid, out_native, inplace=inplace, tag=tag,
-      label=label, cells=np.asarray(cells_tar), basis_type=btype_tar,
-      poly_order=poly_order_tar, num_cdim=cdim_tar, num_vdim=vdim_tar)
-# end
+  return data._result(new_grid,
+                      out_native,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      cells=np.asarray(cells_tar),
+                      basis_type=btype_tar,
+                      poly_order=poly_order_tar,
+                      num_cdim=cdim_tar,
+                      num_vdim=vdim_tar)

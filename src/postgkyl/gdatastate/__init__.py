@@ -6,6 +6,10 @@ from .gdatastategroup import GDataStateGroup
 from .materialize import materialize_point_values
 
 __all__ = [
-    "GDataState", "flatten_datasets", "group_blocks", "group_frames",
-    "GDataStateGroup", "materialize_point_values",
+    "GDataState",
+    "flatten_datasets",
+    "group_blocks",
+    "group_frames",
+    "GDataStateGroup",
+    "materialize_point_values",
 ]

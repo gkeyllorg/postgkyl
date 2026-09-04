@@ -37,5 +37,7 @@ from ._lib import available, build_info, lib_path, require
 from .array import GkylArray
 from . import basis, kernels, rio
 
-__all__ = ["available", "build_info", "lib_path", "require", "GkylArray",
-    "basis", "kernels", "rio"]
+__all__ = [
+    "available", "build_info", "lib_path", "require", "GkylArray", "basis",
+    "kernels", "rio"
+]

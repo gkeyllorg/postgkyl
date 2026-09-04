@@ -31,9 +31,7 @@ try:
         f"gpython shim version mismatch: _gpython.so was built for API "
         f"{_mod.api_version()}, postgkyl expects {_mod.GPYTHON_API_VERSION}; "
         "rebuild with scripts/build_gpython.sh")
-  # end
   _ERROR = None
-# end
 except (ImportError, ValueError) as exc:
   _mod = None
   _ERROR = (f"{exc}\nBuild the compiled bridge with scripts/build_gkeyll.sh "
@@ -43,28 +41,23 @@ except (ImportError, ValueError) as exc:
             "-- reinstall with `pip install -e . --no-build-isolation` so "
             "the build step and the installed environment use the same "
             "NumPy, then rebuild the bridge.")
-# end
 
 
 def available() -> bool:
   """True when the compiled Gkeyll bridge is loaded (the capability switch)."""
   return _mod is not None
-# end
 
 
 def require():
   """The ``_gpython`` module, or a RuntimeError explaining how to build it."""
   if _mod is None:
     raise RuntimeError(f"postgkyl's Gkeyll bridge is unavailable: {_ERROR}")
-  # end
   return _mod
-# end
 
 
 def lib_path() -> pathlib.Path | None:
   """Path of the loaded extension (which is rpath-bound to its libg0core)."""
   return pathlib.Path(_mod.__file__) if _mod is not None else None
-# end
 
 
 def build_info() -> dict[str, str] | None:
@@ -78,12 +71,12 @@ def build_info() -> dict[str, str] | None:
     from . import _build_info as _bi
   except ImportError:
     return None
-  # end
-  return {"gkeyll_commit": _bi.GKEYLL_COMMIT,
+  return {
+      "gkeyll_commit": _bi.GKEYLL_COMMIT,
       "gkeyll_commit_date": _bi.GKEYLL_COMMIT_DATE,
       "gkeyll_branch": _bi.GKEYLL_BRANCH,
       "postgkyl_build_commit": _bi.POSTGKYL_BUILD_COMMIT,
       "build_date": _bi.BUILD_DATE,
       "build_cc": _bi.BUILD_CC,
-      "build_arch_flags": _bi.BUILD_ARCH_FLAGS}
-# end
+      "build_arch_flags": _bi.BUILD_ARCH_FLAGS
+  }

@@ -23,15 +23,18 @@ from ...gdatastate.guards import require_field_domain as _require_field_domain
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _REASON = "rotating raw DG coefficients would mix basis functions"
 
 
 # --------------------------------------------------------- array-level math
-def _parrotate(grid: list[np.ndarray], values: np.ndarray,
-    rotator_values: np.ndarray, *, rotate_coords: str = "0:3",
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _parrotate(
+    grid: list[np.ndarray],
+    values: np.ndarray,
+    rotator_values: np.ndarray,
+    *,
+    rotate_coords: str = "0:3",
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Rotate a three-component field into the direction of a rotator field.
 
   Args:
@@ -59,34 +62,41 @@ def _parrotate(grid: list[np.ndarray], values: np.ndarray,
         "parrotate requires three-component vector fields; data has "
         f"{values.shape[-1]:d} components, rotator (after 'rotate_coords' "
         f"slicing) has {valuesrot.shape[-1]:d}")
-  # end
 
-  scale = np.sum(values * valuesrot, axis=-1) / np.sum(
-      valuesrot * valuesrot, axis=-1)
+  scale = np.sum(values * valuesrot, axis=-1) / np.sum(valuesrot * valuesrot,
+                                                       axis=-1)
   outrot = scale[..., np.newaxis] * valuesrot
 
   return list(grid), outrot
-# end
 
 
-def _perprotate(grid: list[np.ndarray], values: np.ndarray,
-    rotator_values: np.ndarray, *, rotate_coords: str = "0:3",
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _perprotate(
+    grid: list[np.ndarray],
+    values: np.ndarray,
+    rotator_values: np.ndarray,
+    *,
+    rotate_coords: str = "0:3",
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Rotate a three-component field perpendicular to a rotator field.
 
   Computed as the remainder after :func:`_parrotate`:
   ``u - (u . v_hat) v_hat``.
   """
-  grid, par = _parrotate(grid, values, rotator_values,
-      rotate_coords=rotate_coords)
+  grid, par = _parrotate(grid,
+                         values,
+                         rotator_values,
+                         rotate_coords=rotate_coords)
   return grid, values - par
-# end
 
 
 # ---------------------------------------------------------------- GData verbs
-def parrotate(array: "GDataState", rotator: "GDataState", *,
-    coords: str = "0:3", inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def parrotate(array: "GDataState",
+              rotator: "GDataState",
+              *,
+              coords: str = "0:3",
+              inplace: bool = False,
+              tag: str | None = None,
+              label: str | None = None) -> "GDataState":
   """Component of ``array`` parallel to ``rotator``: ``(u . v_hat) v_hat``.
 
   Projects the three-component vector field ``array`` (u) onto the unit
@@ -115,15 +125,20 @@ def parrotate(array: "GDataState", rotator: "GDataState", *,
   """
   _require_field_domain(array, "parrotate", _REASON)
   _require_field_domain(rotator, "parrotate", _REASON)
-  grid, values = _parrotate(array.grid, array.values, rotator.values,
-      rotate_coords=coords)
+  grid, values = _parrotate(array.grid,
+                            array.values,
+                            rotator.values,
+                            rotate_coords=coords)
   return array._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def perprotate(array: "GDataState", rotator: "GDataState", *,
-    coords: str = "0:3", inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def perprotate(array: "GDataState",
+               rotator: "GDataState",
+               *,
+               coords: str = "0:3",
+               inplace: bool = False,
+               tag: str | None = None,
+               label: str | None = None) -> "GDataState":
   """Component of ``array`` perpendicular to ``rotator``:
   ``u - (u . v_hat) v_hat``.
 
@@ -151,15 +166,19 @@ def perprotate(array: "GDataState", rotator: "GDataState", *,
   """
   _require_field_domain(array, "perprotate", _REASON)
   _require_field_domain(rotator, "perprotate", _REASON)
-  grid, values = _perprotate(array.grid, array.values, rotator.values,
-      rotate_coords=coords)
+  grid, values = _perprotate(array.grid,
+                             array.values,
+                             rotator.values,
+                             rotate_coords=coords)
   return array._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def bparrotate(array: "GDataState", field: "GDataState", *,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def bparrotate(array: "GDataState",
+               field: "GDataState",
+               *,
+               inplace: bool = False,
+               tag: str | None = None,
+               label: str | None = None) -> "GDataState":
   """Project an array parallel to the magnetic field.
 
   Args:
@@ -169,14 +188,20 @@ def bparrotate(array: "GDataState", field: "GDataState", *,
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
   """
-  return parrotate(array, field, coords="3:6", inplace=inplace, tag=tag,
-      label=label)
-# end
+  return parrotate(array,
+                   field,
+                   coords="3:6",
+                   inplace=inplace,
+                   tag=tag,
+                   label=label)
 
 
-def bperprotate(array: "GDataState", field: "GDataState", *,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def bperprotate(array: "GDataState",
+                field: "GDataState",
+                *,
+                inplace: bool = False,
+                tag: str | None = None,
+                label: str | None = None) -> "GDataState":
   """Project an array perpendicular to the magnetic field.
 
   Args:
@@ -186,9 +211,12 @@ def bperprotate(array: "GDataState", field: "GDataState", *,
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
   """
-  return perprotate(array, field, coords="3:6", inplace=inplace, tag=tag,
-      label=label)
-# end
+  return perprotate(array,
+                    field,
+                    coords="3:6",
+                    inplace=inplace,
+                    tag=tag,
+                    label=label)
 
 
 __all__ = ["parrotate", "perprotate", "bparrotate", "bperprotate"]

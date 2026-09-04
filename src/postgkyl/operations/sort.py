@@ -28,6 +28,6 @@ def sort(*datasets: GDataState, reverse: bool = False) -> list[GDataState]:
     The same datasets, reordered by their source filename's natural sort key.
   """
   states = flatten_datasets(datasets)
-  return sorted(states, key=lambda d: numerics.natural_sort_key(d.file_name),
-      reverse=reverse)
-# end
+  return sorted(states,
+                key=lambda d: numerics.natural_sort_key(d.file_name),
+                reverse=reverse)

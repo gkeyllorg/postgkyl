@@ -11,11 +11,11 @@ from postgkyl.numerics import idx_parser
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int, offset: int,
-    values_shape: tuple, touched: set) -> np.ndarray:
+def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int,
+                             offset: int, values_shape: tuple,
+                             touched: set) -> np.ndarray:
   """A 1-D coordinate curve along ``grid_arr``'s relative axis ``rel``.
 
   Holds every other axis fixed at cell 0. That is exact only if
@@ -39,7 +39,6 @@ def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int, offset: int
   for k in range(grid_arr.ndim):
     if k == rel or k in touched or values_shape[offset + k] == 1:
       continue
-    # end
     if np.ptp(grid_arr, axis=k).max() > 1e-9 * full_range:
       raise ValueError(
           f"select: z{d}'s physical coordinate also varies along another "
@@ -47,15 +46,21 @@ def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int, offset: int
           "value or slice string has no single answer -- select an "
           "integer index for that other axis first (narrowing it to one "
           f"cell), or pass an integer index for z{d} itself.")
-    # end
-  # end
   return grid_arr[fixed]
-# end
 
 
-def select(data: "GDataState", *, comp=None,
-    z0=None, z1=None, z2=None, z3=None, z4=None, z5=None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def select(data: "GDataState",
+           *,
+           comp=None,
+           z0=None,
+           z1=None,
+           z2=None,
+           z3=None,
+           z4=None,
+           z5=None,
+           inplace: bool = False,
+           tag: str | None = None,
+           label: str | None = None):
   """Select part of a dataset by coordinate (``z0``-``z5``) and/or component.
 
   Each selector accepts an int index, a float coordinate value, or a slice
@@ -105,7 +110,6 @@ def select(data: "GDataState", *, comp=None,
         "nodal/quad value_forms; call .interpolate()/.to_nodal()/"
         ".to_quad() first -- slicing raw modal DG coefficients would mix "
         "basis functions.")
-  # end
   zs = (z0, z1, z2, z3, z4, z5)
   grid = list(data.grid)
   values = data.values
@@ -120,7 +124,6 @@ def select(data: "GDataState", *, comp=None,
   block_dims: dict[int, list[int]] = {}
   for dd, off in mapped_axes.items():
     block_dims.setdefault(off, []).append(dd)
-  # end
   # per-block set of relative axes already given a selector earlier in this
   # same call -- lets a later axis's coordinate search skip the
   # separability check on a sibling the caller has deliberately pinned.
@@ -129,7 +132,6 @@ def select(data: "GDataState", *, comp=None,
   for d, z in enumerate(zs):
     if d >= num_dims or z is None:
       continue
-    # end
     grid_arr = grid[d]
     curvilinear = grid_arr.ndim > 1  # a .map()-deformed grid axis
     # a curvilinear array's own axis k corresponds to absolute dimension
@@ -143,26 +145,22 @@ def select(data: "GDataState", *, comp=None,
     if curvilinear and isinstance(z, int):
       idx = z
     elif curvilinear:
-      coord_curve = _curvilinear_coord_curve(
-          grid_arr, rel, d, offset, values.shape, touched.get(offset, set()))
+      coord_curve = _curvilinear_coord_curve(grid_arr, rel, d, offset,
+                                             values.shape,
+                                             touched.get(offset, set()))
       idx = idx_parser(z, coord_curve, is_matching)
     else:
       idx = idx_parser(z, grid_arr, is_matching)
-    # end
     if isinstance(idx, int):
       if idx < 0:
         idx = values.shape[d] + idx
-      # end
       v_idx = slice(idx, idx + 1)
       g_idx = slice(idx, idx + 1) if is_matching else slice(idx, idx + 2)
-    # end
     elif isinstance(idx, slice):
       v_idx = idx
       g_idx = idx if is_matching else slice(idx.start, idx.stop + 1)
-    # end
     else:
       raise TypeError("Coordinate selector must be a single index or a slice.")
-    # end
     if curvilinear:
       # every axis in the same mapped block shares this array shape, so
       # slicing relative axis `rel` in lockstep keeps them all consistent
@@ -171,24 +169,18 @@ def select(data: "GDataState", *, comp=None,
       for dd in block_dims.get(offset, [d]):
         arr = grid[dd]
         grid[dd] = arr[tuple(g_idx if k == rel else slice(None)
-            for k in range(arr.ndim))]
-      # end
+                             for k in range(arr.ndim))]
       touched.setdefault(offset, set()).add(rel)
-    # end
     else:
       grid[d] = grid_arr[g_idx]
-    # end
     values_idx[d] = v_idx
-  # end
 
   if comp is not None:
     values_idx[-1] = idx_parser(comp)
-  # end
 
   values_out = values[tuple(values_idx)]
   if num_dims == values_out.ndim:  # restore the squeezed component axis
     values_out = values_out[..., np.newaxis]
-  # end
 
   ctx_updates = {}
   if data.backend == "gkyl":
@@ -202,8 +194,10 @@ def select(data: "GDataState", *, comp=None,
     # the same way ``average``/``eval_at_coord_proj`` do.
     ctx_updates["cells"] = np.array(values_out.shape[:-1], dtype=np.int64)
     values_out = dg.rep.wrap(values_out)
-  # end
 
-  return data._result(grid, values_out, inplace=inplace, tag=tag, label=label,
-      **ctx_updates)
-# end
+  return data._result(grid,
+                      values_out,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      **ctx_updates)

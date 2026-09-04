@@ -10,7 +10,6 @@ from postgkyl.render import _ffmpeg
 def test_resolve_prefers_path(monkeypatch):
   monkeypatch.setattr(_ffmpeg.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
   assert _ffmpeg.resolve_ffmpeg() == "/usr/bin/ffmpeg"
-# end
 
 
 def test_resolve_falls_back_to_imageio_ffmpeg(monkeypatch):
@@ -21,18 +20,14 @@ def test_resolve_falls_back_to_imageio_ffmpeg(monkeypatch):
   monkeypatch.setattr(_ffmpeg.shutil, "which", lambda _name: None)
   monkeypatch.setitem(__import__("sys").modules, "imageio_ffmpeg", fake_module)
   assert _ffmpeg.resolve_ffmpeg() == "/fake/imageio_ffmpeg/ffmpeg"
-# end
 
 
 def test_require_raises_clearly_when_nothing_resolves(monkeypatch):
   monkeypatch.setattr(_ffmpeg, "resolve_ffmpeg", lambda: None)
   with pytest.raises(RuntimeError, match="ffmpeg"):
     _ffmpeg.require_ffmpeg("animate")
-  # end
-# end
 
 
 def test_require_returns_resolved_path(monkeypatch):
   monkeypatch.setattr(_ffmpeg, "resolve_ffmpeg", lambda: "/usr/bin/ffmpeg")
   assert _ffmpeg.require_ffmpeg("animate") == "/usr/bin/ffmpeg"
-# end

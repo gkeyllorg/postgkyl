@@ -20,6 +20,7 @@ import importlib
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,24 +40,18 @@ class TestGeometryEnum:
   def test_mapc2p_index_matches_gkeyll_header(self):
     # gkeyll/core/zero/gkyl_eqn_type.h: GKYL_GEOMETRY_MAPC2P = 3.
     assert nodes.GKYL_GEOMETRY_ID.index("GKYL_GEOMETRY_MAPC2P") == 3
-  # end
-# end
 
 
 class TestIsGeoMapc2p:
 
   def test_defaults_true_when_absent(self):
     assert nodes.is_geo_mapc2p({}) is True
-  # end
 
   def test_true_for_mapc2p(self):
     assert nodes.is_geo_mapc2p({"geometry_type": 3}) is True
-  # end
 
   def test_false_for_tokamak(self):
     assert nodes.is_geo_mapc2p({"geometry_type": 1}) is False
-  # end
-# end
 
 
 class TestNodesToRZ:
@@ -64,40 +59,37 @@ class TestNodesToRZ:
   def test_mapc2p_2d(self):
     # A 3x2 grid of Cartesian (X, Y, Z) nodes on the unit circle at Z=0.
     shape = (3, 2)
-    nodes_arr = np.zeros(shape + (3,))
+    nodes_arr = np.zeros(shape + (3, ))
     nodes_arr[..., 0] = 1.0  # X
     nodes_arr[..., 1] = 0.0  # Y
     nodes_arr[..., 2] = 5.0  # Z
     major_r, vert_z = nodes.nodes_to_RZ(nodes_arr, is_mapc2p=True)
     np.testing.assert_allclose(major_r, 1.0)
     np.testing.assert_allclose(vert_z, 5.0)
-  # end
 
   def test_non_mapc2p_2d(self):
     shape = (3, 2)
-    nodes_arr = np.zeros(shape + (2,))
+    nodes_arr = np.zeros(shape + (2, ))
     nodes_arr[..., 0] = 2.0  # R
     nodes_arr[..., 1] = -1.0  # Z
     major_r, vert_z = nodes.nodes_to_RZ(nodes_arr, is_mapc2p=False)
     np.testing.assert_allclose(major_r, 2.0)
     np.testing.assert_allclose(vert_z, -1.0)
-  # end
 
   def test_mapc2p_1d(self):
-    shape = (4,)
-    nodes_arr = np.zeros(shape + (3,))
+    shape = (4, )
+    nodes_arr = np.zeros(shape + (3, ))
     nodes_arr[..., 0] = 3.0
     nodes_arr[..., 1] = 4.0
     nodes_arr[..., 2] = 7.0
     major_r, vert_z = nodes.nodes_to_RZ(nodes_arr, is_mapc2p=True)
     np.testing.assert_allclose(major_r, 5.0)  # sqrt(3^2+4^2)
     np.testing.assert_allclose(vert_z, 7.0)
-  # end
 
   def test_mapc2p_3d_slices_at_yidx_zero(self):
     # cdim == 3 slices the y axis at index 0 before extracting X, Y, Z.
     shape = (2, 3, 2)
-    nodes_arr = np.zeros(shape + (3,))
+    nodes_arr = np.zeros(shape + (3, ))
     nodes_arr[:, 0, :, 0] = 1.0  # X at y-index 0
     nodes_arr[:, 0, :, 1] = 0.0  # Y at y-index 0
     nodes_arr[:, 0, :, 2] = 9.0  # Z at y-index 0
@@ -105,82 +97,65 @@ class TestNodesToRZ:
     major_r, vert_z = nodes.nodes_to_RZ(nodes_arr, is_mapc2p=True)
     np.testing.assert_allclose(major_r, 1.0)
     np.testing.assert_allclose(vert_z, 9.0)
-  # end
-# end
 
 
 class TestMultibTag:
 
   def test_single_block_no_suffix(self):
     assert nodes.multib_tag("nodes", 0, 1) == "nodes"
-  # end
 
   def test_multiblock_suffix(self):
     assert nodes.multib_tag("nodes", 2, 3) == "nodes_b2"
-  # end
-# end
 
 
 class TestParseLevels:
 
   def test_none_returns_cnlevels(self):
     assert nodes._parse_levels(None, 11) == 11
-  # end
 
   def test_range_string(self):
     out = nodes._parse_levels("0:1:3", 11)
     np.testing.assert_allclose(out, [0.0, 0.5, 1.0])
-  # end
 
   def test_comma_list(self):
     out = nodes._parse_levels("0.1,0.2,0.3", 11)
     np.testing.assert_allclose(out, [0.1, 0.2, 0.3])
-  # end
-# end
 
 
 class _FakeGData:
+
   def __init__(self, grid, values, ctx=None):
     self._grid = grid
     self._values = values
     self.ctx = ctx or {}
-  # end
 
   def get_grid(self):
     return self._grid
-  # end
 
   def get_values(self):
     return self._values
-  # end
 
   def interpolate(self, num_interp=None):
     return self
-  # end
-# end
 
 
 class _StubFiles:
+
   def __init__(self, monkeypatch):
     self._registry: dict[str, _FakeGData] = {}
     monkeypatch.setattr(gk_utils, "GData", self._dispatch)
-  # end
 
   def _dispatch(self, file_name, **kwargs):
     return self._registry[file_name]
-  # end
 
   def add(self, file_name: str, grid, values, ctx=None) -> None:
     open(file_name, "w").close()
     self._registry[file_name] = _FakeGData(grid, values, ctx)
-  # end
-# end
 
 
 @pytest.fixture
 def stub(monkeypatch):
   return _StubFiles(monkeypatch)
-# end
 
 
 def _square_nodes(nx=3, ny=3):
@@ -195,23 +170,20 @@ def _square_nodes(nx=3, ny=3):
   out[..., 1] = yy
   out[..., 2] = xx  # Z varies with x, giving a nonzero vertical extent.
   return out
-# end
 
 
 class TestGkNodesSynthetic:
 
   def test_single_block_no_overlays(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0), np.arange(3.0)], _square_nodes())
+    stub.add(f"{path}sim-nodes.gkyl",
+             [np.arange(3.0), np.arange(3.0)], _square_nodes())
     fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
       assert len(fig.axes) == 1
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_multiblock_sums_extrema_across_blocks(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -222,27 +194,22 @@ class TestGkNodesSynthetic:
     fig = nodes.nodes("sim", path=path, multib="0,1")
     try:
       assert fig is not None
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_non_mapc2p_geometry_type(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     rz_nodes = np.zeros((3, 3, 2))
     rz_nodes[..., 0] = np.linspace(1.0, 2.0, 3)[:, None]
     rz_nodes[..., 1] = np.linspace(-1.0, 1.0, 3)[None, :]
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, rz_nodes,
-        ctx={"geometry_type": 1})
+    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2,
+             rz_nodes,
+             ctx={"geometry_type": 1})
     fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_wall_file_overlay(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -252,11 +219,8 @@ class TestGkNodesSynthetic:
     fig = nodes.nodes("sim", path=path, wall_file="wall.csv")
     try:
       assert fig is not None
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_absolute_nodes_file_override(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -265,27 +229,24 @@ class TestGkNodesSynthetic:
     fig = nodes.nodes("sim", path=path, nodes_file=abs_file)
     try:
       assert fig is not None
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_xlim_ylim_and_saveas(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
     out_path = str(tmp_path / "out.png")
-    fig = nodes.nodes("sim", path=path, xlim=(0.0, 2.0), ylim=(-1.0, 1.0),
-        saveas=out_path)
+    fig = nodes.nodes("sim",
+                      path=path,
+                      xlim=(0.0, 2.0),
+                      ylim=(-1.0, 1.0),
+                      saveas=out_path)
     try:
       assert fig.axes[0].get_xlim() == (0.0, 2.0)
       assert fig.axes[0].get_ylim() == (-1.0, 1.0)
       assert os.path.exists(out_path)
-    # end
     finally:
       plt.close(fig)
-  # end
-    # end
 
   def test_1d_node_array_uses_line_plot_branch(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -296,10 +257,8 @@ class TestGkNodesSynthetic:
     fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
-    # end
     finally:
       plt.close(fig)
-  # end
 
   def test_show_calls_plt_show(self, stub, tmp_path, monkeypatch):
     path = str(tmp_path) + "/"
@@ -309,12 +268,8 @@ class TestGkNodesSynthetic:
     fig = nodes.nodes("sim", path=path, show=True)
     try:
       assert calls == [True]
-    # end
     finally:
       plt.close(fig)
-  # end
-# end
-    # end
 
 
 class TestGkNodesPsiOverlay:
@@ -328,7 +283,6 @@ class TestGkNodesPsiOverlay:
     psi_grid = [np.linspace(0.0, 3.0, 4), np.linspace(-1.0, 1.0, 3)]
     psi_values = np.ones((3, 2))
     stub.add(f"{path}sim-psi.gkyl", psi_grid, psi_values)
-  # end
 
   def test_pcolormesh_with_colorbar(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -337,10 +291,8 @@ class TestGkNodesPsiOverlay:
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl")
     try:
       assert len(fig.axes) == 2
-    # end
     finally:
       plt.close(fig)
-  # end
 
   def test_contour(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -349,10 +301,8 @@ class TestGkNodesPsiOverlay:
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", contour=True)
     try:
       assert len(fig.axes) == 2
-    # end
     finally:
       plt.close(fig)
-  # end
 
   def test_single_level_clevels_suppresses_colorbar(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -361,10 +311,8 @@ class TestGkNodesPsiOverlay:
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", clevels="0.5")
     try:
       assert len(fig.axes) == 1
-    # end
     finally:
       plt.close(fig)
-  # end
 
   def test_absolute_psi_file_override(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -375,12 +323,8 @@ class TestGkNodesPsiOverlay:
     fig = nodes.nodes("sim", path=path, psi_file=abs_psi)
     try:
       assert len(fig.axes) == 2
-    # end
     finally:
       plt.close(fig)
-  # end
-# end
-    # end
 
 
 class TestGkNodesPsiOverlayRealFixtures:
@@ -398,16 +342,12 @@ class TestGkNodesPsiOverlayRealFixtures:
     candidate = os.path.join(GENERATED, "2d_mt_p2.gkyl")
     if not os.path.exists(candidate):
       pytest.skip(f"no p2 tensor-basis 2-D fixture at '{candidate}'.")
-    # end
     num_comps = pg.load(candidate).num_comps
     if num_comps == 1:
       pytest.fail("fixture is now single-component -- wire up a real "
-          "psi-overlay assertion here")
-    # end
+                  "psi-overlay assertion here")
     pytest.skip(
         f"'{candidate}' has {num_comps} components; nodes(psi_file=...) "
         "never selects a single component before pcolormesh/contour, so "
         "this fixture cannot exercise that path meaningfully. See "
         "TestGkNodesSynthetic for the node-plotting coverage instead.")
-  # end
-# end

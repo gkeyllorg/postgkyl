@@ -52,22 +52,18 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
   """
   if ctx is None:
     ctx = {}
-  # end
   if not os.path.exists(file_name):
     raise FileNotFoundError(f"No such file: '{file_name}'")
-  # end
   for reader_cls in _READERS.values():
     reader = reader_cls(file_name=file_name, ctx=ctx, **kwargs)
     if reader.is_compatible():
       reader.preload()
       return reader.load()
-    # end
-  # end
   raise NameError(
       f"'{file_name}' cannot be read with any known reader: {list(_READERS)}")
-# end
 
 
-__all__ = ["read", "save", "mapping", "naming", "OutputName",
-    "parse_output_name", "GkylCReader", "GkylReader", "GkylH5Reader",
-    "FlashH5Reader"]
+__all__ = [
+    "read", "save", "mapping", "naming", "OutputName", "parse_output_name",
+    "GkylCReader", "GkylReader", "GkylH5Reader", "FlashH5Reader"
+]

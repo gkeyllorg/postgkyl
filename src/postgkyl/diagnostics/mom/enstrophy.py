@@ -42,11 +42,11 @@ class EnstrophyTraces:
 
   enstrophy: np.ndarray
   incompressible_enstrophy: np.ndarray
-# end
 
 
 def _enstrophy_terms(rho: np.ndarray, px: np.ndarray, py: np.ndarray,
-    pz: np.ndarray, dx: float, dy: float, dz: float) -> tuple[float, float]:
+                     pz: np.ndarray, dx: float, dy: float,
+                     dz: float) -> tuple[float, float]:
   """Pure array math: the general and incompressible enstrophy integrals
   for one frame of five-moment (density + momentum) data.
 
@@ -71,7 +71,7 @@ def _enstrophy_terms(rho: np.ndarray, px: np.ndarray, py: np.ndarray,
   v_x, v_y, v_z = v_grad
   w_x, w_y, w_z = w_grad
 
-  curl_mag = (w_y - v_z) ** 2 + (u_z - w_x) ** 2 + (v_x - u_y) ** 2
+  curl_mag = (w_y - v_z)**2 + (u_z - w_x)**2 + (v_x - u_y)**2
   enstrophy = np.sum(curl_mag, axis=(0, 1, 2)) * dx * dy * dz
 
   nx, ny, nz = rho.shape
@@ -81,13 +81,9 @@ def _enstrophy_terms(rho: np.ndarray, px: np.ndarray, py: np.ndarray,
       for k in range(nz - 1):
         cell = grad_tensor[:, :, c, j, k]
         incom_mag[c, j, k] = np.trace(np.transpose(cell) * cell) * rho[c, j, k]
-      # end
-    # end
-  # end
   incompressible_enstrophy = np.sum(incom_mag, axis=(0, 1, 2)) * dx * dy * dz
 
   return enstrophy, incompressible_enstrophy
-# end
 
 
 def enstrophy(
@@ -125,8 +121,6 @@ def enstrophy(
     rho, px, py, pz = (values[..., c] for c in range(4))
     enstrophy_trace[r], incompressible_trace[r] = _enstrophy_terms(
         rho, px, py, pz, dx, dy, dz)
-  # end
 
   return EnstrophyTraces(enstrophy=enstrophy_trace,
-      incompressible_enstrophy=incompressible_trace)
-# end
+                         incompressible_enstrophy=incompressible_trace)

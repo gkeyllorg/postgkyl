@@ -19,7 +19,6 @@ class Section(Enum):
   DIAGNOSTICS = "Diagnostics"
   RENDER = "Render"
   UTILITY = "Utility"
-# end
 
 
 class Execution(Enum):
@@ -32,7 +31,6 @@ class Execution(Enum):
   TERMINAL_EACH = auto()
   TERMINAL_ALL = auto()
   LOAD = auto()
-# end
 
 
 class ResultPolicy(Enum):
@@ -41,7 +39,6 @@ class ResultPolicy(Enum):
   DATA = auto()
   VALUE = auto()
   SILENT = auto()
-# end
 
 
 @dataclass(frozen=True)
@@ -57,32 +54,24 @@ class CommandSpec:
   def __post_init__(self) -> None:
     if not isinstance(self.section, Section) or not isinstance(
         self.execution, Execution) or not isinstance(self.result, ResultPolicy):
-      raise TypeError("CommandSpec section, execution, and result must be enums")
-    # end
+      raise TypeError(
+          "CommandSpec section, execution, and result must be enums")
     if not isinstance(self.consumes_inputs, bool):
       raise TypeError("CommandSpec consumes_inputs must be a bool value")
-    # end
     if not isinstance(self.order, int) or isinstance(self.order, bool):
       raise TypeError("CommandSpec order must be an integer")
-    # end
     if self.execution is Execution.LOAD:
       if self.consumes_inputs:
         raise ValueError("LOAD commands cannot consume working-set inputs")
-    # end
-    if self.consumes_inputs and self.execution not in (
-        Execution.MAP_APPEND, Execution.COMBINE):
+    if self.consumes_inputs and self.execution not in (Execution.MAP_APPEND,
+                                                       Execution.COMBINE):
       raise ValueError(
           "only MAP_APPEND and COMBINE commands may consume their inputs")
-    # end
     if self.execution in (Execution.TERMINAL_EACH, Execution.TERMINAL_ALL):
       if self.consumes_inputs:
         raise ValueError("terminal commands cannot consume working-set inputs")
-      # end
       if self.result is ResultPolicy.DATA:
         raise ValueError("terminal commands need a non-DATA result policy")
-      # end
-  # end
-# end
 
 
 @dataclass(frozen=True)
@@ -94,14 +83,11 @@ class DatasetRef:
   def __post_init__(self) -> None:
     if self.default_tag is not None and not self.default_tag:
       raise ValueError("DatasetRef default_tag must be non-empty when supplied")
-    # end
-# end
 
 
 @dataclass(frozen=True)
 class PipelineInput:
   """Inject this parameter from the selected CLI working set."""
-# end
 
 
 @dataclass(frozen=True)
@@ -109,13 +95,11 @@ class CliType:
   """Lossless CLI input type for a broader direct-Python annotation."""
 
   annotation: object
-# end
 
 
 @dataclass(frozen=True)
 class CliArgument:
   """Expose this API parameter as a positional command-line argument."""
-# end
 
 
 @dataclass(frozen=True)
@@ -127,14 +111,11 @@ class ChoiceProvider:
   def __post_init__(self) -> None:
     if not callable(self.provider):
       raise TypeError("ChoiceProvider requires a callable provider")
-    # end
-# end
 
 
 @dataclass(frozen=True)
 class KeyValue:
   """Parse a mapping as repeated ``key=value`` option values."""
-# end
 
 
 @dataclass(frozen=True)
@@ -146,9 +127,6 @@ class CliHidden:
   def __post_init__(self) -> None:
     if not self.reason.strip():
       raise ValueError("CliHidden requires a non-empty reason")
-    # end
-  # end
-# end
 
 
 _COMMAND_ATTR = "__postgkyl_command_spec__"
@@ -159,21 +137,17 @@ def command(spec: CommandSpec):
   """Attach ``spec`` to a callable without wrapping or registering it."""
   if not isinstance(spec, CommandSpec):
     raise TypeError("command() requires a CommandSpec")
-  # end
 
   def decorate(fn):
     if hasattr(fn, _HIDDEN_ATTR):
       raise ValueError(f"{fn!r} is already marked CliHidden")
-    # end
     previous = getattr(fn, _COMMAND_ATTR, None)
     if previous is not None and previous != spec:
       raise ValueError(f"{fn!r} already has a different CommandSpec")
-    # end
     setattr(fn, _COMMAND_ATTR, spec)
     return fn
-  # end
+
   return decorate
-# end
 
 
 def hidden(reason: str):
@@ -183,28 +157,36 @@ def hidden(reason: str):
   def decorate(fn):
     if hasattr(fn, _COMMAND_ATTR):
       raise ValueError(f"{fn!r} already has a CommandSpec")
-    # end
     setattr(fn, _HIDDEN_ATTR, marker)
     return fn
-  # end
+
   return decorate
-# end
 
 
 def command_spec(fn) -> CommandSpec | None:
   """Return the immutable command metadata attached to ``fn``."""
   return getattr(fn, _COMMAND_ATTR, None)
-# end
 
 
 def hidden_spec(fn) -> CliHidden | None:
   """Return the explicit CLI exclusion attached to ``fn``."""
   return getattr(fn, _HIDDEN_ATTR, None)
-# end
 
 
 __all__ = [
-    "ChoiceProvider", "CliArgument", "CliHidden", "CliType", "CommandSpec",
-    "DatasetRef", "Execution", "KeyValue", "PipelineInput", "ResultPolicy",
-    "Section", "command", "command_spec", "hidden", "hidden_spec",
+    "ChoiceProvider",
+    "CliArgument",
+    "CliHidden",
+    "CliType",
+    "CommandSpec",
+    "DatasetRef",
+    "Execution",
+    "KeyValue",
+    "PipelineInput",
+    "ResultPolicy",
+    "Section",
+    "command",
+    "command_spec",
+    "hidden",
+    "hidden_spec",
 ]

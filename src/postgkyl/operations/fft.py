@@ -8,11 +8,15 @@ from postgkyl import numerics
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def fft(data: "GDataState", *, psd: bool = False, iso: bool = False,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def fft(data: "GDataState",
+        *,
+        psd: bool = False,
+        iso: bool = False,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None):
   """Fourier transform (or power spectral density) of field-domain data.
 
   Wraps ``numerics.fft``: each component is transformed over the spatial
@@ -46,13 +50,11 @@ def fft(data: "GDataState", *, psd: bool = False, iso: bool = False,
   if data.backend == "gkyl":
     raise ValueError(
         "fft operates on interpolated (NumPy) values; call .interpolate() first "
-        "-- Fourier transforming raw DG coefficients would mix basis functions.")
-  # end
+        "-- Fourier transforming raw DG coefficients would mix basis functions."
+    )
   grid, values = data.grid, data.values
   num_cells = values.shape[:-1]
   if any(grid[d].shape[0] == num_cells[d] + 1 for d in range(len(grid))):
     grid = numerics.nodal_to_cell_centered_grid(grid, num_cells)
-  # end
   freq, ft_values = numerics.fft(grid, values, psd=psd, iso=iso)
   return data._result(freq, ft_values, inplace=inplace, tag=tag, label=label)
-# end

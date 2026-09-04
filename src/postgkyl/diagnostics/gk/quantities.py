@@ -38,7 +38,6 @@ from postgkyl import operations
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
 def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
@@ -56,14 +55,12 @@ def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
     val = kwargs[key]
     if not isinstance(val, (list, tuple)):
       return val
-    # end
     species_idx = kwargs.get("species_idx")
     if species_idx is None:
       raise KeyError(
           f"fetch function: '--extra {key}=' was given {len(val)} values "
           "but this quantity is not resolved per species here, so there is "
           "no way to tell which one to use. Pass a single value instead.")
-    # end
     if species_idx >= len(val):
       species = kwargs.get("species")
       raise ValueError(
@@ -71,17 +68,13 @@ def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
           f"values but species #{species_idx}"
           f"{f' ({species})' if species else ''} was requested. Give one "
           "value per species, in the order of '--species'.")
-    # end
     return val[species_idx]
-  # end
   if gdata.ctx.get(key) is not None:
     return gdata.ctx[key]
-  # end
   raise KeyError(
       f"fetch function: context key '{key}' not found in the dataset; "
       f"pass it as '--extra {key}=<value>', or as one value per species "
       f"with '--extra {key}=<value1>,<value2>,...'.")
-# end
 
 
 def _ensure_interpolated(d: "GDataState") -> "GDataState":
@@ -94,40 +87,38 @@ def _ensure_interpolated(d: "GDataState") -> "GDataState":
   """
   if d.ctx.get("interpolated"):
     return d
-  # end
   return operations.interpolate(d)
-# end
 
 
 def _component(d: "GDataState", comp: int | None) -> "GDataState":
   """Interpolate ``d`` and select physical component ``comp`` (all if None)."""
   interpolated = _ensure_interpolated(d)
-  return interpolated if comp is None else operations.select(interpolated, comp=comp)
-# end
+  return interpolated if comp is None else operations.select(interpolated,
+                                                             comp=comp)
 
 
 # --------------------------------------------------- generic fetch factories
 def _make_fetch_comp(icomp: int | None):
   """A fetch function that extracts the ``icomp``-th physical component."""
+
   def fetch(gdatas, **kwargs):
     return _component(gdatas[0], icomp)
-  # end
+
   fetch.__name__ = f"fetch_comp{icomp}" if icomp is not None else "fetch_compAll"
   return fetch
-# end
 
 
 def _make_fetch_binop(si: int, ci: int, sj: int, cj: int, op):
   """A fetch function combining component ``ci`` of source ``si`` with
   component ``cj`` of source ``sj`` via ``op`` (both interpolated first)."""
+
   def fetch(gdatas, **kwargs):
     a = _component(gdatas[si], ci)
     b = _component(gdatas[sj], cj)
     return a._result(a.grid, op(a.values, b.values))
-  # end
+
   fetch.__name__ = f"fetch_s{si}c{ci}_{op.__name__}_s{sj}c{cj}"
   return fetch
-# end
 
 
 # Extract a single component.
@@ -153,7 +144,6 @@ def fetch_M1_from_H(gdatas, **kwargs):
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   values = hmom.values[..., 0, np.newaxis] * hmom.values[..., 1, np.newaxis]
   return hmom._result(hmom.grid, values / mass)
-# end
 
 
 def fetch_Tpar_from_BiMax(gdatas, **kwargs):
@@ -161,7 +151,6 @@ def fetch_Tpar_from_BiMax(gdatas, **kwargs):
   Tpar = fetch_s0c2(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return Tpar._result(Tpar.grid, mass * Tpar.values)
-# end
 
 
 def fetch_Tpar_from_M0_M1_M2par(gdatas, **kwargs):
@@ -171,7 +160,6 @@ def fetch_Tpar_from_M0_M1_M2par(gdatas, **kwargs):
   upar = m1.values / m0.values
   values = mass * (m2par.values - upar * m1.values) / m0.values
   return m0._result(m0.grid, values)
-# end
 
 
 def fetch_Tperp_from_BiMax(gdatas, **kwargs):
@@ -179,7 +167,6 @@ def fetch_Tperp_from_BiMax(gdatas, **kwargs):
   Tperp = fetch_s0c3(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return Tperp._result(Tperp.grid, mass * Tperp.values)
-# end
 
 
 def fetch_Tperp_from_M0_M2perp(gdatas, **kwargs):
@@ -187,7 +174,6 @@ def fetch_Tperp_from_M0_M2perp(gdatas, **kwargs):
   Tperp = fetch_s1c0_div_s0c0(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return Tperp._result(Tperp.grid, 0.5 * mass * Tperp.values)
-# end
 
 
 def fetch_temp_from_Max(gdatas, **kwargs):
@@ -195,7 +181,6 @@ def fetch_temp_from_Max(gdatas, **kwargs):
   temp = fetch_s0c2(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return temp._result(temp.grid, mass * temp.values)
-# end
 
 
 def fetch_temp_from_Tpar_Tperp(gdatas, **kwargs):
@@ -203,16 +188,15 @@ def fetch_temp_from_Tpar_Tperp(gdatas, **kwargs):
   Tpar, Tperp = (_ensure_interpolated(g) for g in gdatas)
   values = (Tpar.values + 2.0 * Tperp.values) / 3.0
   return Tpar._result(Tpar.grid, values)
-# end
 
 
 def fetch_press_from_Max(gdatas, **kwargs):
   """Pressure from Maxwellian moments: ``press = mass * comp0 * comp2``."""
   maxmom = _ensure_interpolated(gdatas[0])
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  values = mass * maxmom.values[..., 0, np.newaxis] * maxmom.values[..., 2, np.newaxis]
+  values = mass * maxmom.values[..., 0, np.newaxis] * maxmom.values[..., 2,
+                                                                    np.newaxis]
   return maxmom._result(maxmom.grid, values)
-# end
 
 
 def fetch_press_from_BiMax(gdatas, **kwargs):
@@ -224,14 +208,12 @@ def fetch_press_from_BiMax(gdatas, **kwargs):
   temp_vals = mass * (Tpar_vals + 2.0 * Tperp_vals) / 3.0
   values = bimax.values[..., 0, np.newaxis] * temp_vals
   return bimax._result(bimax.grid, values)
-# end
 
 
 def fetch_press_p(gdatas, **kwargs):
   """Perpendicular/parallel pressure in J/m^3: ``p_p = n * T_p``."""
   m0, Tp = (_ensure_interpolated(g) for g in gdatas)
   return m0._result(m0.grid, m0.values * Tp.values)
-# end
 
 
 def _make_fetch_q(name: str):
@@ -246,14 +228,14 @@ def _make_fetch_q(name: str):
   energy. Both are in W/m^2 (kg/s^3). ``gdatas``: ``[M3par]`` or
   ``[M3perp]``.
   """
+
   def fetch(gdatas, **kwargs):
     m3 = _ensure_interpolated(gdatas[0])
     mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
     return m3._result(m3.grid, 0.5 * mass * m3.values)
-  # end
+
   fetch.__name__ = f"fetch_q{name}"
   return fetch
-# end
 
 
 fetch_qpar = _make_fetch_q("par")
@@ -284,17 +266,14 @@ def _make_fetch_q_fluid(name: str):
     u_m2 = upar * m2.values
 
     if is_par:
-      values = m3.values - 3.0 * u_m2 + 2.0 * upar ** 2 * m1.values
-    # end
+      values = m3.values - 3.0 * u_m2 + 2.0 * upar**2 * m1.values
     else:
       values = m3.values - u_m2
-    # end
 
     return m0._result(m0.grid, 0.5 * mass * values)
-  # end
+
   fetch.__name__ = f"fetch_q{name}_fluid"
   return fetch
-# end
 
 
 fetch_qpar_fluid = _make_fetch_q_fluid("par")
@@ -307,7 +286,6 @@ def fetch_vt(gdatas, **kwargs):
   temp = _ensure_interpolated(gdatas[0])
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return temp._result(temp.grid, np.sqrt(temp.values / mass))
-# end
 
 
 def fetch_larmor_radius(gdatas, **kwargs):
@@ -318,7 +296,6 @@ def fetch_larmor_radius(gdatas, **kwargs):
   charge = abs(_get_ctx_val(gdatas[0], "charge", **kwargs))
   values = np.sqrt(mass * temp.values) / (charge * bmag.values)
   return temp._result(temp.grid, values)
-# end
 
 
 def fetch_debye_length(gdatas, **kwargs):
@@ -326,9 +303,8 @@ def fetch_debye_length(gdatas, **kwargs):
   ``gdatas``: ``[temp, M0]``."""
   temp, m0 = (_ensure_interpolated(g) for g in gdatas)
   charge = _get_ctx_val(gdatas[0], "charge", **kwargs)
-  values = np.sqrt(constants.epsilon_0 * temp.values / (m0.values * charge ** 2))
+  values = np.sqrt(constants.epsilon_0 * temp.values / (m0.values * charge**2))
   return temp._result(temp.grid, values)
-# end
 
 
 def _split_elc_ions(gdatas, quantity: str, **kwargs):
@@ -344,7 +320,6 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
   species_names = kwargs.get("species", [])
   if len(species_names) != len(gdatas):
     species_names = [f"#{i}" for i in range(len(gdatas))]
-  # end
 
   elcs, ions = [], []
   for species_idx, (name, srcs) in enumerate(zip(species_names, gdatas)):
@@ -356,20 +331,16 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
         "charge": _get_ctx_val(srcs[0], "charge", **species_kwargs),
     }
     (elcs if entry["charge"] < 0.0 else ions).append(entry)
-  # end
 
   if len(elcs) != 1:
     raise ValueError(
         f"{quantity}: expected exactly one negatively charged (electron) "
         f"species but found {len(elcs)} in {list(species_names)}.")
-  # end
   if not ions:
     raise ValueError(
         f"{quantity}: found no positively charged (ion) species in "
         f"{list(species_names)}.")
-  # end
   return elcs[0], ions
-# end
 
 
 def _weighted_sum(entries, weights, comp: int) -> "GDataState":
@@ -378,7 +349,6 @@ def _weighted_sum(entries, weights, comp: int) -> "GDataState":
   base = entries[0]["srcs"][comp]
   total = sum(w * e["srcs"][comp].values for e, w in zip(entries, weights))
   return base._result(base.grid, total)
-# end
 
 
 def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
@@ -396,13 +366,12 @@ def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
   charge_states = [ion["charge"] / e for ion in ions]
 
   numer = _weighted_sum(
-      ions, [z ** 2 / ion["mass"] for z, ion in zip(charge_states, ions)], 0)
+      ions, [z**2 / ion["mass"] for z, ion in zip(charge_states, ions)], 0)
   denom = _weighted_sum(ions, charge_states, 0)
 
   temp_e = elc["srcs"][1]
   values = np.sqrt(temp_e.values * numer.values / denom.values)
   return temp_e._result(temp_e.grid, values)
-# end
 
 
 def _fetch_c_s_thermo(gdatas, **kwargs):
@@ -424,12 +393,10 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
   for ion in ions:
     m0_i, temp_i = ion["srcs"]
     numer_vals = numer_vals + gamma_i * m0_i.values * temp_i.values
-  # end
 
   denom = _weighted_sum(ions, [ion["mass"] for ion in ions], 0)
   values = np.sqrt(numer_vals / denom.values)
   return temp_e._result(temp_e.grid, values)
-# end
 
 
 def fetch_c_s(gdatas, **kwargs):
@@ -456,22 +423,20 @@ def fetch_c_s(gdatas, **kwargs):
     raise ValueError(
         f"fetch_c_s: unknown kind '{kind}'. Select one with '--extra "
         f"kind=<kind>' from: {', '.join(sorted(c_s_kinds))}.")
-  # end
   return c_s_kinds[kind](gdatas, **kwargs)
-# end
 
 
 def fetch_beta_from_bmag_press(gdatas, **kwargs):
   """``beta = 2*mu_0*press / bmag**2``."""
   bmag, press = (_ensure_interpolated(g) for g in gdatas)
-  values = 2.0 * constants.mu_0 * press.values / bmag.values ** 2
+  values = 2.0 * constants.mu_0 * press.values / bmag.values**2
   return bmag._result(bmag.grid, values)
-# end
 
 
 # ------------------------------------------------------------ drift speeds
-def _b_cross_grad_div_b_component(scalar: "GDataState", jacobtot_inv: "GDataState",
-    b_i: "GDataState", comp: int) -> "GDataState":
+def _b_cross_grad_div_b_component(scalar: "GDataState",
+                                  jacobtot_inv: "GDataState", b_i: "GDataState",
+                                  comp: int) -> "GDataState":
   """The ``comp``-th component of ``b x grad(f) / (J B)``.
 
   ``(b x grad f)_k / B = epsilon_{ijk} * b_i * d(f)/dx^j / (J B)``, where
@@ -501,28 +466,20 @@ def _b_cross_grad_div_b_component(scalar: "GDataState", jacobtot_inv: "GDataStat
     diff_dir_pos = bi_c_neg = cdim - 1
     if cdim < 3:
       calc_term = [True, False]
-  # end
-    # end
   elif comp == 1:
     bi_c_pos, bi_c_neg = 2, 0
     diff_dir_neg, diff_dir_pos = cdim - 1, 0
     if cdim == 1:
       calc_term = [False, True]
-  # end
-    # end
   elif comp == 2:
     diff_dir_neg = bi_c_pos = 0
     diff_dir_pos = bi_c_neg = 1
     if cdim == 1:
       calc_term = [False, False]
-    # end
     elif cdim == 2:
       calc_term = [False, True]
-  # end
-    # end
   else:
     raise KeyError("comp must be 0, 1, or 2.")
-  # end
 
   b_i_i = _ensure_interpolated(b_i)
   jacobtot_inv_i = _ensure_interpolated(jacobtot_inv)
@@ -532,15 +489,12 @@ def _b_cross_grad_div_b_component(scalar: "GDataState", jacobtot_inv: "GDataStat
   if calc_term[0]:
     d_pos = operations.differentiate(f, direction=diff_dir_pos)
     pos_term = d_pos.values * b_i_i.values[..., bi_c_pos, np.newaxis]
-  # end
   if calc_term[1]:
     d_neg = operations.differentiate(f, direction=diff_dir_neg)
     neg_term = -d_neg.values * b_i_i.values[..., bi_c_neg, np.newaxis]
-  # end
 
   values = (pos_term + neg_term) * jacobtot_inv_i.values
   return f._result(f.grid, values)
-# end
 
 
 def fetch_ExB_vel(gdatas, **kwargs):
@@ -550,10 +504,8 @@ def fetch_ExB_vel(gdatas, **kwargs):
   """
   if "dir" not in kwargs:
     raise KeyError("fetch_ExB_vel: select the k-th component with dir=<int>.")
-  # end
   jacobtot_inv, _bmag, b_i, phi = gdatas
   return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, kwargs["dir"])
-# end
 
 
 def fetch_gradB_vel(gdatas, **kwargs):
@@ -563,7 +515,6 @@ def fetch_gradB_vel(gdatas, **kwargs):
   """
   if "dir" not in kwargs:
     raise KeyError("fetch_gradB_vel: select the k-th component with dir=<int>.")
-  # end
   jacobtot_inv, bmag, b_i, Tperp = gdatas
   out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, kwargs["dir"])
   bmag_i = _ensure_interpolated(bmag)
@@ -571,7 +522,6 @@ def fetch_gradB_vel(gdatas, **kwargs):
   charge = _get_ctx_val(Tperp, "charge", **kwargs)
   values = out.values * Tperp_i.values / bmag_i.values / charge
   return out._result(out.grid, values)
-# end
 
 
 def fetch_diamag_vel(gdatas, **kwargs):
@@ -580,15 +530,15 @@ def fetch_diamag_vel(gdatas, **kwargs):
   ``gdatas``: ``(jacobtot_inv, bmag, b_i, m0, pressperp)``.
   """
   if "dir" not in kwargs:
-    raise KeyError("fetch_diamag_vel: select the k-th component with dir=<int>.")
-  # end
+    raise KeyError(
+        "fetch_diamag_vel: select the k-th component with dir=<int>.")
   jacobtot_inv, bmag, b_i, m0, pressperp = gdatas
-  out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i, kwargs["dir"])
+  out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i,
+                                      kwargs["dir"])
   m0_i = _ensure_interpolated(m0)
   charge = _get_ctx_val(pressperp, "charge", **kwargs)
   values = out.values / m0_i.values / charge
   return out._result(out.grid, values)
-# end
 
 
 # --------------------------------------------------------- phase space (f)
@@ -605,11 +555,15 @@ def load_distf(gdatas, **kwargs):
   from .utils import dict_get_bool
 
   prefix = kwargs.get("path", "").rstrip("/") + "/" + kwargs.get("name", "")
-  extra = {k: v for k, v in kwargs.items()
-           if k not in ("path", "name", "species", "frame")}
+  extra = {
+      k: v
+      for k, v in kwargs.items()
+      if k not in ("path", "name", "species", "frame")
+  }
 
   return load_distf(
-      name=prefix, species=kwargs.get("species", ""),
+      name=prefix,
+      species=kwargs.get("species", ""),
       frame=int(kwargs.get("frame", 0)),
       suffix=str(extra.get("suffix", "")),
       use_c2p_vel=dict_get_bool(extra, "c2p_vel", True),
@@ -618,7 +572,6 @@ def load_distf(gdatas, **kwargs):
       block_idx=extra.get("block", None),
       num_interp=0,
   )
-# end
 
 
 # ----------------------------------------------------- normalized quantities
@@ -627,14 +580,14 @@ def _make_fetch_q_norm(name: str):
   free-streaming estimate ``n*T*c_s``: ``q_norm = q / (n*T*c_s)``.
   ``gdatas`` (in this order): ``[q, M0, temp, c_s]``.
   """
+
   def fetch(gdatas, **kwargs):
     q, m0, temp, c_s = (_ensure_interpolated(g) for g in gdatas)
     values = q.values / (m0.values * temp.values * c_s.values)
     return q._result(q.grid, values)
-  # end
+
   fetch.__name__ = f"fetch_q{name}_norm"
   return fetch
-# end
 
 
 fetch_qpar_norm = _make_fetch_q_norm("par")
@@ -646,7 +599,6 @@ def fetch_rho_over_lambda(gdatas, **kwargs):
   ``rho/lambda_D``. ``gdatas``: ``[rho, lambda_D]``."""
   rho, lambda_d = (_ensure_interpolated(g) for g in gdatas)
   return rho._result(rho.grid, rho.values / lambda_d.values)
-# end
 
 
 def fetch_phi_norm(gdatas, **kwargs):
@@ -655,4 +607,3 @@ def fetch_phi_norm(gdatas, **kwargs):
   phi, temp = (_ensure_interpolated(g) for g in gdatas)
   values = constants.elementary_charge * phi.values / temp.values
   return phi._result(phi.grid, values)
-# end

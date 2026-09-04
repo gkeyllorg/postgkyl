@@ -17,8 +17,6 @@ class _StubData(pg.GData):
     super().__init__()
     self._file_name = str(file_name)
     self.load_kwargs = kwargs
-  # end
-# end
 
 
 @pytest.fixture
@@ -26,7 +24,6 @@ def stub_load(monkeypatch):
   load_module = importlib.import_module("postgkyl.gdata.load")
   monkeypatch.setattr(load_module, "GData", _StubData)
   return load_module.load
-# end
 
 
 def test_literal_filename_returns_one_dataset(stub_load):
@@ -35,23 +32,22 @@ def test_literal_filename_returns_one_dataset(stub_load):
   assert not isinstance(out, pg.GDataGroup)
   assert out.file_name == "frame_0.gkyl"
   assert out.load_kwargs["tag"] == "moments"
-# end
 
 
 def test_pathlike_literal_remains_supported(stub_load, tmp_path):
   out = stub_load(tmp_path / "frame_0.gkyl")
   assert isinstance(out, _StubData)
   assert out.file_name == str(tmp_path / "frame_0.gkyl")
-# end
 
 
 def test_glob_returns_group_in_natural_frame_order(stub_load, tmp_path):
   for frame in (10, 2, 1):
     (tmp_path / f"frame_{frame}.gkyl").touch()
-  # end
 
-  out = stub_load(str(tmp_path / "frame_*.gkyl"), label="series",
-      basis_type="serendipity", poly_order=1)
+  out = stub_load(str(tmp_path / "frame_*.gkyl"),
+                  label="series",
+                  basis_type="serendipity",
+                  poly_order=1)
 
   assert isinstance(out, pg.GDataGroup)
   assert [d.file_name for d in out] == [
@@ -62,7 +58,6 @@ def test_glob_returns_group_in_natural_frame_order(stub_load, tmp_path):
   assert all(d.load_kwargs["label"] == "series" for d in out)
   assert all(d.load_kwargs["basis_type"] == "serendipity" for d in out)
   assert all(d.load_kwargs["poly_order"] == 1 for d in out)
-# end
 
 
 def test_single_match_glob_still_returns_group(stub_load, tmp_path):
@@ -70,15 +65,12 @@ def test_single_match_glob_still_returns_group(stub_load, tmp_path):
   out = stub_load(str(tmp_path / "frame_*.gkyl"))
   assert isinstance(out, pg.GDataGroup)
   assert len(out) == 1
-# end
 
 
 def test_unmatched_glob_has_a_targeted_error(stub_load, tmp_path):
   pattern = str(tmp_path / "missing_*.gkyl")
   with pytest.raises(FileNotFoundError, match="No files match pattern"):
     stub_load(pattern)
-  # end
-# end
 
 
 def test_group_load_appends_and_returns_the_same_group(stub_load):
@@ -89,13 +81,12 @@ def test_group_load_appends_and_returns_the_same_group(stub_load):
   assert out is group
   assert [data.file_name for data in group] == ["frame_0.gkyl", "frame_1.gkyl"]
   assert group[0].load_kwargs["tag"] == "moments"
-# end
 
 
-def test_group_load_appends_every_glob_match_in_natural_order(stub_load, tmp_path):
+def test_group_load_appends_every_glob_match_in_natural_order(
+    stub_load, tmp_path):
   for frame in (10, 2, 1):
     (tmp_path / f"frame_{frame}.gkyl").touch()
-  # end
 
   group = pg.GDataGroup().load(str(tmp_path / "frame_*.gkyl"))
 
@@ -104,7 +95,6 @@ def test_group_load_appends_every_glob_match_in_natural_order(stub_load, tmp_pat
       str(tmp_path / "frame_2.gkyl"),
       str(tmp_path / "frame_10.gkyl"),
   ]
-# end
 
 
 def test_failed_group_load_keeps_existing_members(stub_load, tmp_path):
@@ -112,11 +102,9 @@ def test_failed_group_load_keeps_existing_members(stub_load, tmp_path):
 
   with pytest.raises(FileNotFoundError, match="No files match pattern"):
     group.load(str(tmp_path / "missing_*.gkyl"))
-  # end
 
   assert len(group) == 1
   assert group[0].file_name == "frame_0.gkyl"
-# end
 
 
 def test_instance_load_mutates_and_returns_the_same_dataset(monkeypatch):
@@ -124,17 +112,24 @@ def test_instance_load_mutates_and_returns_the_same_dataset(monkeypatch):
 
   def fake_read(file_name, ctx, **kwargs):
     calls.append((file_name, kwargs))
-    ctx.update(cells=np.array([2]), basis_type="tensor", poly_order=1,
-        value_form="modal", source="reader")
+    ctx.update(cells=np.array([2]),
+               basis_type="tensor",
+               poly_order=1,
+               value_form="modal",
+               source="reader")
     return [np.linspace(0.0, 1.0, 3)], np.ones((2, 2))
-  # end
 
   state_module = importlib.import_module("postgkyl.gdatastate.gdatastate")
   monkeypatch.setattr(state_module.io, "read", fake_read)
 
   data = pg.GData(tag="moments", label="ions", ctx={"seed": 7})
-  out = data.load("frame_0.gkyl", tag="loaded", label="electrons",
-      basis_type="tensor", poly_order=1, value_form="modal", z0=3)
+  out = data.load("frame_0.gkyl",
+                  tag="loaded",
+                  label="electrons",
+                  basis_type="tensor",
+                  poly_order=1,
+                  value_form="modal",
+                  z0=3)
 
   assert out is data
   assert data.file_name == "frame_0.gkyl"
@@ -144,20 +139,23 @@ def test_instance_load_mutates_and_returns_the_same_dataset(monkeypatch):
   assert data.ctx["source"] == "reader"
   assert data.values.shape == (2, 2)
   assert calls == [("frame_0.gkyl", {
-      "value_form": "modal", "basis_type": "tensor", "poly_order": 1,
-      "z0": 3})]
-# end
+      "value_form": "modal",
+      "basis_type": "tensor",
+      "poly_order": 1,
+      "z0": 3
+  })]
 
 
 def test_instance_reload_does_not_retain_old_file_metadata(monkeypatch):
+
   def fake_read(file_name, ctx, **kwargs):
-    ctx.update(cells=np.array([1]), basis_type="serendipity", poly_order=0,
-        value_form="nodal")
+    ctx.update(cells=np.array([1]),
+               basis_type="serendipity",
+               poly_order=0,
+               value_form="nodal")
     if file_name == "first.gkyl":
       ctx["first_file_only"] = True
-    # end
     return [np.array([0.0, 1.0])], np.ones((1, 1))
-  # end
 
   state_module = importlib.import_module("postgkyl.gdatastate.gdatastate")
   monkeypatch.setattr(state_module.io, "read", fake_read)
@@ -167,7 +165,6 @@ def test_instance_reload_does_not_retain_old_file_metadata(monkeypatch):
 
   assert data.file_name == "second.gkyl"
   assert "first_file_only" not in data.ctx
-# end
 
 
 def test_failed_instance_load_leaves_existing_dataset_unchanged(monkeypatch):
@@ -179,26 +176,20 @@ def test_failed_instance_load_leaves_existing_dataset_unchanged(monkeypatch):
 
   def fail_read(*args, **kwargs):
     raise FileNotFoundError("missing")
-  # end
 
   monkeypatch.setattr(state_module.io, "read", fail_read)
   with pytest.raises(FileNotFoundError, match="missing"):
     data.load("missing.gkyl")
-  # end
 
   assert data.grid is old_grid
   assert data.values is old_values
   assert data.ctx is old_ctx
   assert data.file_name == ""
-# end
 
 
 def test_instance_load_rejects_empty_names_and_globs():
   data = pg.GData()
   with pytest.raises(ValueError, match="non-empty filename"):
     data.load("")
-  # end
   with pytest.raises(ValueError, match=r"pg\.load\(pattern\)"):
     data.load("frame_*.gkyl")
-  # end
-# end

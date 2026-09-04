@@ -8,11 +8,13 @@ import numpy as np
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def grid(data: "GDataState", *, inplace: bool = False, tag: str | None = None,
-    label: str | None = None):
+def grid(data: "GDataState",
+         *,
+         inplace: bool = False,
+         tag: str | None = None,
+         label: str | None = None):
   """Turn a dataset's grid into a dataset of coordinate values.
 
   Builds a new dataset whose values, at each grid node, are the physical
@@ -39,7 +41,6 @@ def grid(data: "GDataState", *, inplace: bool = False, tag: str | None = None,
     raise ValueError(
         "grid operates on interpolated (NumPy) values; call .interpolate() "
         "first -- raw DG coefficients have no per-node coordinates.")
-  # end
   grid_in = data.grid
   num_dims = data.num_dims
   num_cells = data.num_cells
@@ -47,7 +48,6 @@ def grid(data: "GDataState", *, inplace: bool = False, tag: str | None = None,
     raise ValueError(
         f"grid: dataset reports {num_dims:d} dimension(s) but its grid has "
         f"{len(grid_in):d} axis (axes); shapes are inconsistent.")
-  # end
 
   grid_out = [np.arange(nc + 2) for nc in num_cells]
 
@@ -55,16 +55,10 @@ def grid(data: "GDataState", *, inplace: bool = False, tag: str | None = None,
   values = np.zeros(shape)
   if num_dims == 1:
     values[..., 0] = grid_in[0]
-  # end
   elif len(grid_in[0].shape) == 1:  # uniform mesh or separable mapping
     for d, t in enumerate(np.meshgrid(*grid_in, indexing="ij")):
       values[..., d] = t
-  # end
-    # end
   else:  # curvilinear mapped grid
     for d, t in enumerate(grid_in):
       values[..., d] = t
-    # end
-  # end
   return data._result(grid_out, values, inplace=inplace, tag=tag, label=label)
-# end

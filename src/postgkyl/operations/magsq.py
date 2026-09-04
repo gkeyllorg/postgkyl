@@ -8,11 +8,14 @@ from postgkyl import numerics
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def magsq(data: "GDataState", *, coords: str = "0:3", inplace: bool = False,
-    tag: str | None = None, label: str | None = None):
+def magsq(data: "GDataState",
+          *,
+          coords: str = "0:3",
+          inplace: bool = False,
+          tag: str | None = None,
+          label: str | None = None):
   """Magnitude squared of a vector field.
 
   Sums the squares of the selected components (``numerics.mag_sq``),
@@ -35,8 +38,7 @@ def magsq(data: "GDataState", *, coords: str = "0:3", inplace: bool = False,
   if data.backend == "gkyl":
     raise ValueError(
         "magsq operates on interpolated (NumPy) values; call .interpolate() "
-        "first -- summing squares of raw DG coefficients would mix basis functions.")
-  # end
+        "first -- summing squares of raw DG coefficients would mix basis functions."
+    )
   grid, values = numerics.mag_sq(data.grid, data.values, coords=coords)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end

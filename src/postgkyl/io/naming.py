@@ -79,7 +79,6 @@ class OutputName:
     """
     base = self.sim if self.block is None else f"{self.sim}_b{self.block:d}"
     return os.path.join(self.directory, base) if self.directory else base
-  # end
 
   @property
   def stem(self) -> str:
@@ -88,7 +87,6 @@ class OutputName:
     stem)."""
     tail = f"-{self.quantity}" if self.quantity else ""
     return f"{os.path.basename(self.prefix)}{tail}"
-  # end
 
   @property
   def field_key(self) -> tuple:
@@ -99,8 +97,6 @@ class OutputName:
     set on.
     """
     return (self.sim, self.quantity, self.frame)
-  # end
-# end
 
 
 def parse_output_name(path: str | None) -> OutputName | None:
@@ -122,21 +118,17 @@ def parse_output_name(path: str | None) -> OutputName | None:
   """
   if not path:
     return None
-  # end
   directory, base = os.path.split(str(path))
   stem = os.path.splitext(base)[0]
 
   restart = stem.endswith(_RESTART_SUFFIX)
   if restart:
-    stem = stem[: -len(_RESTART_SUFFIX)]
-  # end
+    stem = stem[:-len(_RESTART_SUFFIX)]
 
   if "-" in stem:
     sim_part, quantity = stem.rsplit("-", 1)
-  # end
   else:
     sim_part, quantity = stem, ""
-  # end
 
   # The frame index trails the *last* component of the name -- the quantity
   # normally, the sim itself for a dash-less name.
@@ -146,21 +138,20 @@ def parse_output_name(path: str | None) -> OutputName | None:
   if match:
     tail = match.group("quantity")
     frame = int(match.group("frame"))
-  # end
   if quantity:
     quantity = tail
-  # end
   else:
     sim_part = tail
-  # end
 
   block = None
   match = _BLOCK_RE.match(sim_part)
   if match:
     sim_part = match.group("sim")
     block = int(match.group("block"))
-  # end
 
-  return OutputName(directory=directory, sim=sim_part, block=block,
-      quantity=quantity, frame=frame, restart=restart)
-# end
+  return OutputName(directory=directory,
+                    sim=sim_part,
+                    block=block,
+                    quantity=quantity,
+                    frame=frame,
+                    restart=restart)

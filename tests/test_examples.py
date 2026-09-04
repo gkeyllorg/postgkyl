@@ -24,16 +24,14 @@ matplotlib.use("Agg")
 from postgkyl import gpython
 from postgkyl.cli.app import cli
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
 SCRIPTS = sorted(
-    script
-    for script in glob.glob(os.path.join(EXAMPLES, "scripts", "*.py"))
-    if not os.path.basename(script).startswith("_")
-)
+    script for script in glob.glob(os.path.join(EXAMPLES, "scripts", "*.py"))
+    if not os.path.basename(script).startswith("_"))
 TUTORIAL = os.path.join(EXAMPLES, "cli_tutorial.md")
 
 
@@ -42,7 +40,6 @@ def _extract_cli_commands(markdown_path):
   in a tutorial markdown file, joining ``\\``-continued lines."""
   with open(markdown_path) as fh:
     text = fh.read()
-  # end
 
   commands = []
   for block in re.findall(r"```bash\n(.*?)```", text, re.DOTALL):
@@ -51,21 +48,15 @@ def _extract_cli_commands(markdown_path):
       line = line.rstrip()
       if not line:
         continue
-      # end
       if line.endswith("\\"):
         pending.append(line[:-1])
         continue
-      # end
       pending.append(line)
       full = " ".join(pending).strip()
       pending = []
       if full.startswith("pgkyl "):
         commands.append(full[len("pgkyl "):])
-      # end
-    # end
-  # end
   return commands
-# end
 
 
 CLI_COMMANDS = _extract_cli_commands(TUTORIAL)
@@ -77,13 +68,13 @@ class TestTutorialScripts:
   ``AssertionError`` inside the example surfaces as this test's failure."""
 
   @needs_gkeyll
-  @pytest.mark.parametrize("script", SCRIPTS, ids=[os.path.basename(s) for s in SCRIPTS])
+  @pytest.mark.parametrize("script",
+                           SCRIPTS,
+                           ids=[os.path.basename(s) for s in SCRIPTS])
   def test_script_runs_clean(self, script, tmp_path, monkeypatch):
     monkeypatch.setenv("PGKYL_EXAMPLE_OUTPUT", str(tmp_path))
     monkeypatch.syspath_prepend(os.path.dirname(script))
     runpy.run_path(script, run_name="__main__")
-  # end
-# end
 
 
 class TestCliTutorial:
@@ -96,7 +87,6 @@ class TestCliTutorial:
     # leave the parametrized test below with zero cases -- a green suite
     # that covers nothing.
     assert len(CLI_COMMANDS) >= 8
-  # end
 
   @needs_gkeyll
   @pytest.mark.parametrize("command", CLI_COMMANDS)
@@ -110,5 +100,3 @@ class TestCliTutorial:
     result = CliRunner().invoke(cli, shlex.split(command))
     assert result.exit_code == 0, (
         f"`pgkyl {command}` failed:\n{result.output}\n{result.exception}")
-  # end
-# end

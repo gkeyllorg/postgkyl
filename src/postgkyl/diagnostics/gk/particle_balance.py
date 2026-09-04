@@ -49,7 +49,6 @@ class ParticleBalanceTraces:
   bflux_tot: np.ndarray | None
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
-# end
 
 
 def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
@@ -57,31 +56,26 @@ def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
   the caller's array is never mutated in place."""
   addend = np.asarray(addend)
   return addend.copy() if target is None else target + addend
-# end
 
 
 def particle_balance_error(fdot: np.ndarray, src: np.ndarray,
-    bflux_tot: np.ndarray) -> np.ndarray:
+                           bflux_tot: np.ndarray) -> np.ndarray:
   """The particle-balance residual: ``S - bflux - df/dt``."""
   return src - bflux_tot - fdot
-# end
 
 
 def _block_prefix(file_prefix: str, block_idx: int) -> str:
   return file_prefix.replace("*", str(block_idx))
-# end
 
 
 def _resolve(path: str, override: str | None, default: str,
-    block_idx: int) -> str:
+             block_idx: int) -> str:
   """Resolve a file-family member's path: ``override`` (with ``*``
   substituted for the block index) if given, else the naming-convention
   ``default``."""
   if override is None:
     return default
-  # end
   return (path + override).replace("*", str(block_idx))
-# end
 
 
 def particle_balance(
@@ -169,16 +163,17 @@ def particle_balance(
     block_prefix = _block_prefix(file_prefix, block_idx)
 
     fdot_name = _resolve(path, fdot_file,
-        block_prefix + species + "_fdot_integrated_moms.gkyl", block_idx)
+                         block_prefix + species + "_fdot_integrated_moms.gkyl",
+                         block_idx)
     found, t, v, _ = utils.read_time_trace_if_present(fdot_name)
     if not found:
       raise FileNotFoundError(f"Required file not found: {fdot_name}")
-    # end
     time_fdot = t
     fdot_pb = v[:, _DENSITY_MOMENT]
 
     src_name = _resolve(path, source_file,
-        block_prefix + species + "_source_integrated_moms.gkyl", block_idx)
+                        block_prefix + species + "_source_integrated_moms.gkyl",
+                        block_idx)
     has_src, t, v, _ = utils.read_time_trace_if_present(src_name)
     src_pb = v[:, _DENSITY_MOMENT] if has_src else 0.0 * fdot_pb
 
@@ -186,23 +181,19 @@ def particle_balance(
     for d in _DIRS:
       for e in _EDGES:
         key = d + e
-        bf_name = _resolve(path, bflux_files.get(key),
-            block_prefix + species + f"_bflux_{d}{e}_integrated_HamiltonianMoments.gkyl",
-            block_idx)
+        bf_name = _resolve(
+            path, bflux_files.get(key), block_prefix + species +
+            f"_bflux_{d}{e}_integrated_HamiltonianMoments.gkyl", block_idx)
         found_b, t, v, _ = utils.read_time_trace_if_present(bf_name)
         if found_b:
           has_bflux = True
           time_bflux_tot = t
           bflux_terms.append(v[:, _DENSITY_MOMENT])
-        # end
-      # end
-    # end
     bflux_pb = sum(bflux_terms) if bflux_terms else 0.0 * fdot_pb
 
     fdot = _accumulate(fdot, fdot_pb)
     src = _accumulate(src, src_pb)
     bflux_tot = _accumulate(bflux_tot, bflux_pb)
-  # end
 
   legend_handles = []
   legend_strings = []
@@ -217,12 +208,14 @@ def particle_balance(
       h, = ax.plot(time_fdot, absy_func(src), linestyle=_LINE_STYLES[2])
       legend_handles.append(h)
       legend_strings.append(r"$\mathcal{S}$")
-    # end
     if has_bflux:
-      h, = ax.plot(time_bflux_tot, absy_func(-bflux_tot), linestyle=_LINE_STYLES[1])
+      h, = ax.plot(time_bflux_tot,
+                   absy_func(-bflux_tot),
+                   linestyle=_LINE_STYLES[1])
       legend_handles.append(h)
-      legend_strings.append(r"$-\int_{\partial \Omega}\mathrm{d}\mathbf{S}\cdot\mathbf{\dot{R}}f$")
-    # end
+      legend_strings.append(
+          r"$-\int_{\partial \Omega}\mathrm{d}\mathbf{S}\cdot\mathbf{\dot{R}}f$"
+      )
     h, = ax.plot(time_fdot, absy_func(-fdot), linestyle=_LINE_STYLES[0])
     legend_handles.append(h)
     legend_strings.append(r"$-\dot{f}$")
@@ -230,24 +223,27 @@ def particle_balance(
     legend_handles.append(h)
     legend_strings.append(r"$E_{\dot{\mathcal{N}}}=$" + "".join(legend_strings))
 
-    ax.legend(legend_handles, legend_strings, fontsize=_LEGEND_FONT_SIZE, frameon=False)
+    ax.legend(legend_handles,
+              legend_strings,
+              fontsize=_LEGEND_FONT_SIZE,
+              frameon=False)
 
     ylabel_string = ylabel or ""
     title_string = title or r"Particle balance"
     mom_err_norm = None
-  # end
   else:
-    dt_name = _resolve(path, dt_file, file_prefix.replace("_b*", "") + "dt.gkyl", 0)
+    dt_name = _resolve(path, dt_file,
+                       file_prefix.replace("_b*", "") + "dt.gkyl", 0)
     _, time_dt, dt, _ = utils.read_time_trace_if_present(dt_name)
 
     distf = None
     for block_idx in blocks:
       block_prefix = _block_prefix(file_prefix, block_idx)
       f_name = _resolve(path, f_file,
-          block_prefix + species + "_integrated_moms.gkyl", block_idx)
+                        block_prefix + species + "_integrated_moms.gkyl",
+                        block_idx)
       _, t, v, _ = utils.read_time_trace_if_present(f_name)
       distf = _accumulate(distf, v[:, _DENSITY_MOMENT])
-    # end
 
     fdot, src, bflux_tot, distf = fdot[1:], src[1:], bflux_tot[1:], distf[1:]
     mom_err = particle_balance_error(fdot, src, bflux_tot)
@@ -258,14 +254,11 @@ def particle_balance(
     ylabel_string = ylabel or r"$E_{\dot{\mathcal{N}}}~\Delta t/\mathcal{N}$"
     title_string = title or r"Relative error in particle conservation"
     mom_err = None
-  # end
 
   if logy:
     ax.set_yscale("log")
-  # end
   if absy and ylabel_string:
     ylabel_string = r"|" + ylabel_string + r"|"
-  # end
 
   ax.set_xlabel(xlabel, fontsize=_XY_LABEL_FONT_SIZE)
   ax.set_ylabel(ylabel_string, fontsize=_XY_LABEL_FONT_SIZE)
@@ -275,14 +268,13 @@ def particle_balance(
 
   if saveas:
     fig.savefig(saveas)
-  # end
   if show:
     plt.show()
-  # end
 
-  traces = ParticleBalanceTraces(
-      time=time_fdot, fdot=fdot, src=src if has_src else None,
-      bflux_tot=bflux_tot if has_bflux else None,
-      mom_err=mom_err, mom_err_norm=mom_err_norm)
+  traces = ParticleBalanceTraces(time=time_fdot,
+                                 fdot=fdot,
+                                 src=src if has_src else None,
+                                 bflux_tot=bflux_tot if has_bflux else None,
+                                 mom_err=mom_err,
+                                 mom_err_norm=mom_err_norm)
   return fig, traces
-# end

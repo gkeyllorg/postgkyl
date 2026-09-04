@@ -32,11 +32,10 @@ def is_native(value) -> bool:
   import-contract boundary; see ``operations.evaluate``).
   """
   return isinstance(value, GkylArray)
-# end
 
 
-def shift_mean(basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray, val: float) -> GkylArray:
+def shift_mean(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
+               val: float) -> GkylArray:
   """``f + val`` for a modal field: only the mean coefficient moves.
 
   The normalized constant basis function is ``b_0 = 2^(-ndim/2)``, so a shift
@@ -44,13 +43,11 @@ def shift_mean(basis_type: str, ndim: int, poly_order: int,
   applied per field (``gkyl_array_shiftc`` on each field's coefficient 0).
   """
   nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
-  coeff_shift = float(val) * 2.0 ** (ndim / 2.0)
+  coeff_shift = float(val) * 2.0**(ndim / 2.0)
   out = a
   for f in range(a.ncomp // nb):
     out = gpython.kernels.shiftc(out, coeff_shift, f * nb)
-  # end
   return out
-# end
 
 
 def shift_all(a: GkylArray, val: float) -> GkylArray:
@@ -59,13 +56,16 @@ def shift_all(a: GkylArray, val: float) -> GkylArray:
   out = a.clone()
   for k in range(a.ncomp):
     out = gpython.kernels.shiftc(out, float(val), k)
-  # end
   return out
-# end
 
 
-def average(grid: dict, basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray, avg_dirs, weight: GkylArray | None = None):
+def average(grid: dict,
+            basis_type: str,
+            ndim: int,
+            poly_order: int,
+            a: GkylArray,
+            avg_dirs,
+            weight: GkylArray | None = None):
   """``int f w dx^avg / int w dx^avg`` (or the plain average) of a modal
   field over ``avg_dirs``, field by field.
 
@@ -94,7 +94,6 @@ def average(grid: dict, basis_type: str, ndim: int, poly_order: int,
   if not avg_dirs or avg_dirs[0] < 0 or avg_dirs[-1] >= ndim:
     raise ValueError(
         f"average dirs {avg_dirs} out of range for a {ndim}D field")
-  # end
   keep_dirs = [d for d in range(ndim) if d not in avg_dirs]
   ndim_avg = len(keep_dirs) if keep_dirs else 1
   cells = np.asarray(grid["cells"])
@@ -104,28 +103,35 @@ def average(grid: dict, basis_type: str, ndim: int, poly_order: int,
   nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
   if a.ncomp % nb:
     raise ValueError(f"ncomp {a.ncomp} is not a multiple of num_basis {nb}")
-  # end
   nfields = a.ncomp // nb
   if weight is not None and weight.ncomp != nb:
     raise ValueError(f"average weight ncomp ({weight.ncomp}) must equal "
                      f"the donor basis's num_basis ({nb})")
-  # end
 
   if nfields == 1:
-    out = gpython.kernels.array_average(grid, basis_type, poly_order,
-        ndim_avg, cells_avg, avg_dim, a, weight=weight)
-  # end
+    out = gpython.kernels.array_average(grid,
+                                        basis_type,
+                                        poly_order,
+                                        ndim_avg,
+                                        cells_avg,
+                                        avg_dim,
+                                        a,
+                                        weight=weight)
   else:
     a_view = a.view().reshape(a.size, nfields, nb)
     fields_out = []
     for f in range(nfields):
       a_f = GkylArray.from_numpy(np.ascontiguousarray(a_view[:, f, :]))
-      out_f = gpython.kernels.array_average(grid, basis_type, poly_order,
-          ndim_avg, cells_avg, avg_dim, a_f, weight=weight)
+      out_f = gpython.kernels.array_average(grid,
+                                            basis_type,
+                                            poly_order,
+                                            ndim_avg,
+                                            cells_avg,
+                                            avg_dim,
+                                            a_f,
+                                            weight=weight)
       fields_out.append(out_f.view())
-    # end
     out = GkylArray.from_numpy(np.concatenate(fields_out, axis=-1))
-  # end
 
   if not keep_dirs and weight is None:
     # Full reduction (every donor dim averaged), unweighted only: Gkeyll's
@@ -138,25 +144,22 @@ def average(grid: dict, basis_type: str, ndim: int, poly_order: int,
     # coefficient 0 means the same thing ("value = coeff0 * b0") as every
     # other modal dataset in the system -- verified against
     # gkyl_array_integrate on a constant field (see test_dg_modal_average).
-    out = gpython.kernels.scale(out, 2.0 ** (ndim_avg / 2.0))
-  # end
+    out = gpython.kernels.scale(out, 2.0**(ndim_avg / 2.0))
   return keep_dirs, cells_avg, out
-# end
 
 
 def differentiate(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
-    dir: int, diff_order: int, dx: float) -> GkylArray:
+                  dir: int, diff_order: int, dx: float) -> GkylArray:
   """``d^diff_order/dx_dir^diff_order a``, field by field
   (``gkyl_dg_differentiate_op_local`` -- exact on the polynomial each cell
   already represents; no inter-cell stencil). The field loop lives in the
   shim (like :func:`weak_mul`), so this is a direct pass-through."""
-  return gpython.kernels.weak_differentiate(basis_type, ndim, poly_order,
-      dir, diff_order, dx, a)
-# end
+  return gpython.kernels.weak_differentiate(basis_type, ndim, poly_order, dir,
+                                            diff_order, dx, a)
 
 
-def eval_at_coord_proj(grid: dict, basis_type: str, ndim: int,
-    poly_order: int, a: GkylArray, eval_dirs, eval_coords):
+def eval_at_coord_proj(grid: dict, basis_type: str, ndim: int, poly_order: int,
+                       a: GkylArray, eval_dirs, eval_coords):
   """Evaluate a modal field at ``eval_coords`` in ``eval_dirs`` and project
   onto the surviving directions' target basis (``gkyl_dg_eval_at_coord_proj``).
 
@@ -174,9 +177,7 @@ def eval_at_coord_proj(grid: dict, basis_type: str, ndim: int,
   """
   eval_dirs = sorted(set(int(d) for d in eval_dirs))
   if not eval_dirs or eval_dirs[0] < 0 or eval_dirs[-1] >= ndim:
-    raise ValueError(
-        f"eval_dirs {eval_dirs} out of range for a {ndim}D field")
-  # end
+    raise ValueError(f"eval_dirs {eval_dirs} out of range for a {ndim}D field")
   keep_dirs = [d for d in range(ndim) if d not in eval_dirs]
   cells = np.asarray(grid["cells"])
   ndim_tar = len(keep_dirs) if keep_dirs else 1
@@ -184,15 +185,18 @@ def eval_at_coord_proj(grid: dict, basis_type: str, ndim: int,
   cdim_do, _vdim_do = gpython.basis.cdim_vdim(basis_type, ndim)
 
   out, btype, poly_order_tar, cdim_tar, vdim_tar = (
-      gpython.kernels.eval_at_coord_proj(basis_type, ndim, poly_order,
-          cdim_do, grid, eval_dirs, eval_coords, ndim_tar, cells_tar, a))
-  return (keep_dirs, cells_tar, out, btype, poly_order_tar, cdim_tar,
-      vdim_tar)
-# end
+      gpython.kernels.eval_at_coord_proj(basis_type, ndim, poly_order, cdim_do,
+                                         grid, eval_dirs, eval_coords, ndim_tar,
+                                         cells_tar, a))
+  return (keep_dirs, cells_tar, out, btype, poly_order_tar, cdim_tar, vdim_tar)
 
 
-def power(basis_type: str, ndim: int, poly_order: int,
-    a: GkylArray, exponent, cells=None) -> GkylArray:
+def power(basis_type: str,
+          ndim: int,
+          poly_order: int,
+          a: GkylArray,
+          exponent,
+          cells=None) -> GkylArray:
   """``f ** n``.
 
   A positive integer ``n`` takes the cheap, exact path: repeated weak
@@ -206,20 +210,21 @@ def power(basis_type: str, ndim: int, poly_order: int,
     out = a.clone()
     for _ in range(int(n) - 1):
       out = weak_mul(basis_type, ndim, poly_order, out, a)
-    # end
     return out
-  # end
   if cells is None:
     raise ValueError(
         f"modal power with exponent {n!r} (not a positive integer) needs "
         "cells= to build the powsqrt kernel's index range.")
-  # end
   return powsqrt(basis_type, ndim, poly_order, cells, a, 2.0 * float(n))
-# end
 
 
-def powsqrt(basis_type: str, ndim: int, poly_order: int, cells,
-    a: GkylArray, exponent: float, num_quad: int | None = None) -> GkylArray:
+def powsqrt(basis_type: str,
+            ndim: int,
+            poly_order: int,
+            cells,
+            a: GkylArray,
+            exponent: float,
+            num_quad: int | None = None) -> GkylArray:
   """``pow(sqrt(f), exponent)`` (i.e. ``f ** (exponent/2)``), field by field.
 
   ``gkyl_proj_powsqrt_on_basis`` has no field-index argument (like
@@ -230,19 +235,25 @@ def powsqrt(basis_type: str, ndim: int, poly_order: int, cells,
   nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
   if a.ncomp % nb:
     raise ValueError(f"ncomp {a.ncomp} is not a multiple of num_basis {nb}")
-  # end
   nfields = a.ncomp // nb
   if nfields == 1:
-    return gpython.kernels.powsqrt(basis_type, ndim, poly_order, cells, a,
-        exponent, num_quad=num_quad)
-  # end
+    return gpython.kernels.powsqrt(basis_type,
+                                   ndim,
+                                   poly_order,
+                                   cells,
+                                   a,
+                                   exponent,
+                                   num_quad=num_quad)
   a_view = a.view().reshape(a.size, nfields, nb)
   fields_out = []
   for f in range(nfields):
     a_f = GkylArray.from_numpy(np.ascontiguousarray(a_view[:, f, :]))
-    out_f = gpython.kernels.powsqrt(basis_type, ndim, poly_order, cells, a_f,
-        exponent, num_quad=num_quad)
+    out_f = gpython.kernels.powsqrt(basis_type,
+                                    ndim,
+                                    poly_order,
+                                    cells,
+                                    a_f,
+                                    exponent,
+                                    num_quad=num_quad)
     fields_out.append(out_f.view())
-  # end
   return GkylArray.from_numpy(np.concatenate(fields_out, axis=-1))
-# end

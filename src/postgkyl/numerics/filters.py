@@ -15,7 +15,10 @@ import numpy as np
 from scipy.signal import butter, lfilter
 
 
-def fft_filtering(data: np.ndarray, dt: float = 1.0, *, cutoff: float) -> np.ndarray:
+def fft_filtering(data: np.ndarray,
+                  dt: float = 1.0,
+                  *,
+                  cutoff: float) -> np.ndarray:
   """Low-pass filter ``data`` by zeroing FFT bins above ``cutoff``.
 
   Args:
@@ -34,7 +37,6 @@ def fft_filtering(data: np.ndarray, dt: float = 1.0, *, cutoff: float) -> np.nda
   FT[freq < -cutoff] = 0
 
   return np.fft.ifft(FT)
-# end
 
 
 def _butter_lowpass(cutoff: float, fs: float, order: int = 5):
@@ -42,16 +44,20 @@ def _butter_lowpass(cutoff: float, fs: float, order: int = 5):
   normal_cutoff = cutoff / nyq
   b, a = butter(order, normal_cutoff, btype="low", analog=False)
   return b, a
-# end
 
 
-def _butter_lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5):
+def _butter_lowpass_filter(data: np.ndarray,
+                           cutoff: float,
+                           fs: float,
+                           order: int = 5):
   b, a = _butter_lowpass(cutoff, fs, order=order)
   return lfilter(b, a, data)
-# end
 
 
-def butter_filtering(data: np.ndarray, dt: float = 1.0, *, cutoff: float) -> np.ndarray:
+def butter_filtering(data: np.ndarray,
+                     dt: float = 1.0,
+                     *,
+                     cutoff: float) -> np.ndarray:
   """Low-pass filter ``data`` with a 6th-order Butterworth filter.
 
   Args:
@@ -65,4 +71,3 @@ def butter_filtering(data: np.ndarray, dt: float = 1.0, *, cutoff: float) -> np.
   order = 6
   fs = 1 / dt  # sample rate
   return _butter_lowpass_filter(data, cutoff, fs, order)
-# end

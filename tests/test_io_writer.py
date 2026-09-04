@@ -20,6 +20,7 @@ SRC = os.path.join(ROOT, "src")
 sys.path.insert(0, SRC)  # dedup harmless across the shared test session
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import postgkyl as pg  # noqa: E402
@@ -28,7 +29,8 @@ from postgkyl.io import writer  # noqa: E402
 from postgkyl.gdatastate.gdatastate import GDataState  # noqa: E402
 
 DATA = os.path.join(ROOT, "tests", "test_data")
-F1 = os.path.join(DATA, "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl")
+F1 = os.path.join(
+    DATA, "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl")
 F2D = os.path.join(DATA, "generated", "2d_ms_p1.gkyl")
 
 
@@ -37,12 +39,9 @@ def _make_state(grid, values, *, time=None, frame=None):
   d.push(grid, values)
   if time is not None:
     d.ctx["time"] = time
-  # end
   if frame is not None:
     d.ctx["frame"] = frame
-  # end
   return d
-# end
 
 
 # --------------------------------------------------------------------- vtk
@@ -52,10 +51,8 @@ def test_vtk_writes_a_well_formed_legacy_header_1d(tmp_path):
   assert os.path.exists(out)
   with open(out, "rb") as fh:
     header = fh.read(96)
-  # end
   assert header.startswith(b"# vtk DataFile Version")
   assert b"STRUCTURED_GRID" in header
-# end
 
 
 def test_vtk_writes_a_well_formed_legacy_header_2d(tmp_path):
@@ -64,22 +61,22 @@ def test_vtk_writes_a_well_formed_legacy_header_2d(tmp_path):
   assert os.path.exists(out)
   with open(out, "rb") as fh:
     header = fh.read(96)
-  # end
   assert header.startswith(b"# vtk DataFile Version")
-# end
 
 
 def test_vtk_writes_a_3d_volume(tmp_path):
-  grid = [np.linspace(0.0, 1.0, 3), np.linspace(0.0, 1.0, 4), np.linspace(0.0, 1.0, 5)]
+  grid = [
+      np.linspace(0.0, 1.0, 3),
+      np.linspace(0.0, 1.0, 4),
+      np.linspace(0.0, 1.0, 5)
+  ]
   values = np.arange(2 * 3 * 4 * 1, dtype=float).reshape(2, 3, 4, 1)
   d = _make_state(grid, values)
   out = writer.save(d, out_name=str(tmp_path / "out3d.vtk"), extension="vtk")
   assert os.path.exists(out)
   with open(out, "rb") as fh:
     header = fh.read(96)
-  # end
   assert header.startswith(b"# vtk DataFile Version")
-# end
 
 
 def test_vtk_rejects_unsupported_dimensionality(tmp_path):
@@ -89,8 +86,6 @@ def test_vtk_rejects_unsupported_dimensionality(tmp_path):
   d = _make_state(grid, values)
   with pytest.raises(ValueError, match="1-3 dimensions"):
     _write_vtk(str(tmp_path / "bad.vtk"), d, 4, d.num_cells, values)
-  # end
-# end
 
 
 def test_vtk_series_file_accumulates_entries_across_two_writes(tmp_path):
@@ -98,21 +93,29 @@ def test_vtk_series_file_accumulates_entries_across_two_writes(tmp_path):
   values = np.array([[1.0], [2.0], [3.0]])
 
   a = _make_state(grid, values, time=0.1)
-  out1 = writer.save(a, out_name=str(tmp_path / "solution_0001.vtk"), extension="vtk")
+  out1 = writer.save(a,
+                     out_name=str(tmp_path / "solution_0001.vtk"),
+                     extension="vtk")
   b = _make_state(grid, values, time=0.2)
-  out2 = writer.save(b, out_name=str(tmp_path / "solution_0002.vtk"), extension="vtk")
+  out2 = writer.save(b,
+                     out_name=str(tmp_path / "solution_0002.vtk"),
+                     extension="vtk")
 
   series_path = tmp_path / "solution.vtk.series"
   assert series_path.exists()
   with open(series_path) as fh:
     series = json.load(fh)
-  # end
   assert series["file-series-version"] == "1.0"
   assert series["files"] == [
-      {"name": os.path.basename(out1), "time": 0.1},
-      {"name": os.path.basename(out2), "time": 0.2},
+      {
+          "name": os.path.basename(out1),
+          "time": 0.1
+      },
+      {
+          "name": os.path.basename(out2),
+          "time": 0.2
+      },
   ]
-# end
 
 
 def test_vtk_series_file_updates_existing_entry_in_place(tmp_path):
@@ -128,10 +131,8 @@ def test_vtk_series_file_updates_existing_entry_in_place(tmp_path):
 
   with open(tmp_path / "solution.vtk.series") as fh:
     series = json.load(fh)
-  # end
   assert len(series["files"]) == 1
   assert series["files"][0]["time"] == pytest.approx(0.15)
-# end
 
 
 def test_vtk_series_uses_frame_when_time_is_absent(tmp_path):
@@ -141,9 +142,7 @@ def test_vtk_series_uses_frame_when_time_is_absent(tmp_path):
   writer.save(a, out_name=str(tmp_path / "run_0003.vtk"), extension="vtk")
   with open(tmp_path / "run.vtk.series") as fh:
     series = json.load(fh)
-  # end
   assert series["files"][0]["time"] == pytest.approx(3.0)
-# end
 
 
 def test_vtk_series_recovers_from_a_corrupt_sidecar(tmp_path):
@@ -154,9 +153,7 @@ def test_vtk_series_recovers_from_a_corrupt_sidecar(tmp_path):
   writer.save(a, out_name=str(tmp_path / "bad_0001.vtk"), extension="vtk")
   with open(tmp_path / "bad.vtk.series") as fh:
     series = json.load(fh)
-  # end
   assert len(series["files"]) == 1
-# end
 
 
 # ------------------------------------------------------------------- gkyl rt
@@ -172,8 +169,6 @@ def test_gkyl_roundtrip_preserves_grid_and_values_exactly(tmp_path):
   grid, _ = io.read(out)
   for g_out, g_in in zip(a.grid, grid):
     np.testing.assert_allclose(g_in, g_out)
-  # end
 
   back = pg.load(out)
   np.testing.assert_allclose(np.asarray(back.values), np.asarray(a.values))
-# end

@@ -22,11 +22,12 @@ import click
 
 from postgkyl import __version__, version_report
 from postgkyl.cli.compiler import (
-    build_click_command, compile_public_surface, group_by_section,
+    build_click_command,
+    compile_public_surface,
+    group_by_section,
 )
 from postgkyl.cli.discovery import discover_public_surface
 from postgkyl.cli.state import DataSpace
-
 
 # Compilation validates the complete discovered surface before registration.
 # These aliases add spellings only; they never replace a generated command or
@@ -44,23 +45,17 @@ class PgkylGroup(click.Group):
     cmd = super().get_command(ctx, name)
     if cmd is not None:
       return cmd
-    # end
     if name in COMMAND_ALIASES:
       target = COMMAND_ALIASES[name]
       command = super().get_command(ctx, target)
       if command is not None:
         return command
-      # end
-    # end
     matches = [c for c in self.list_commands(ctx) if c.startswith(name)]
     if len(matches) == 1:
       return super().get_command(ctx, matches[0])
-    # end
     if matches:
       ctx.fail(f"Ambiguous command '{name}': {', '.join(sorted(matches))}")
-    # end
     return None
-  # end
 
   def resolve_command(self, ctx, args):
     """Expand a bare file pattern to the canonical ``load --file_name`` form."""
@@ -70,10 +65,7 @@ class PgkylGroup(click.Group):
       alias = COMMAND_ALIASES.get(token)
       if exact is None and alias is None and glob(token):
         args[:1] = ["load", "--file_name", token]
-      # end
-    # end
     return super().resolve_command(ctx, args)
-  # end
 
   def format_commands(self, ctx, formatter) -> None:
     """Group ``pgkyl --help``'s command listing under section headers.
@@ -90,30 +82,28 @@ class PgkylGroup(click.Group):
         cmd = self.get_command(ctx, name)
         if cmd is None:
           continue
-        # end
         rows.append((name, cmd.get_short_help_str(limit=formatter.width - 6)))
-      # end
       if rows:
         with formatter.section(section):
           formatter.write_dl(rows)
-  # end
-# end
 
 
 def _print_version(ctx, param, value) -> None:
   if not value or ctx.resilient_parsing:
     return
-  # end
   click.echo(version_report(__version__))
   ctx.exit()
-# end
 
 
-@click.group(cls=PgkylGroup, chain=True,
-    context_settings=dict(help_option_names=["-h", "--help"]))
-@click.option("--version", is_flag=True, expose_value=False, is_eager=True,
-    callback=_print_version,
-    help="Show version, commit, Gkeyll build info, and exit.")
+@click.group(cls=PgkylGroup,
+             chain=True,
+             context_settings=dict(help_option_names=["-h", "--help"]))
+@click.option("--version",
+              is_flag=True,
+              expose_value=False,
+              is_eager=True,
+              callback=_print_version,
+              help="Show version, commit, Gkeyll build info, and exit.")
 @click.pass_context
 def cli(ctx) -> None:
   """Postprocessing and plotting tool for Gkeyll data.
@@ -123,20 +113,19 @@ def cli(ctx) -> None:
       pgkyl file.gkyl interpolate select --z0 0 plot
   """
   ctx.obj = DataSpace()
-# end
 
 
 for _command in COMMANDS:
   cli.add_command(_command)
-# end
-
 
 __all__ = [
-    "COMMANDS", "COMMAND_ALIASES", "COMMAND_SECTIONS", "MODELS", "PgkylGroup",
+    "COMMANDS",
+    "COMMAND_ALIASES",
+    "COMMAND_SECTIONS",
+    "MODELS",
+    "PgkylGroup",
     "cli",
 ]
 
-
 if __name__ == "__main__":
   cli()
-# end

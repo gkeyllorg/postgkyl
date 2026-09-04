@@ -9,10 +9,8 @@ def grids_compatible(grid_a: list, grid_b: list, rtol: float = 1e-9) -> bool:
   """Whether two nodal grids describe the same mesh (same shapes & nodes)."""
   if len(grid_a) != len(grid_b):
     return False
-  # end
   return all(a.shape == b.shape and np.allclose(a, b, rtol=rtol)
              for a, b in zip(grid_a, grid_b))
-# end
 
 
 def grid_is_prefix(small: list, big: list, rtol: float = 1e-9) -> bool:
@@ -22,7 +20,5 @@ def grid_is_prefix(small: list, big: list, rtol: float = 1e-9) -> bool:
   lower-dimensional conf-space grid with extra (velocity-space) dimensions."""
   if not 0 < len(small) < len(big):
     return False
-  # end
   return all(a.shape == b.shape and np.allclose(a, b, rtol=rtol)
              for a, b in zip(small, big[:len(small)]))
-# end

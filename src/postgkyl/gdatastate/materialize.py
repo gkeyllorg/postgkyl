@@ -8,7 +8,6 @@ from postgkyl.dg import rep
 
 if TYPE_CHECKING:
   from .gdatastate import GDataState
-# end
 
 
 def materialize_point_values(data: "GDataState") -> "GDataState":
@@ -20,20 +19,17 @@ def materialize_point_values(data: "GDataState") -> "GDataState":
   """
   if data.backend != "gkyl":
     return data
-  # end
   value_form = data.ctx.get("value_form", "modal")
   if value_form == "modal":
     raise ValueError(
         "modal DG coefficients are not plottable; choose explicitly: "
         ".interpolate() (uniform evaluation mesh), .to_nodal() or .to_quad() "
         "(plot at the basis/quadrature points).")
-  # end
-  grid, values = rep.materialize(
-      str(data.ctx["basis_type"]), data.num_dims,
-      int(data.ctx["poly_order"]), data.native, data.grid, value_form,
-      data.ctx.get("num_quad"))
+  grid, values = rep.materialize(str(data.ctx["basis_type"]), data.num_dims,
+                                 int(data.ctx["poly_order"]),
+                                 data.native, data.grid, value_form,
+                                 data.ctx.get("num_quad"))
   return data._result(grid, values)
-# end
 
 
 __all__ = ["materialize_point_values"]

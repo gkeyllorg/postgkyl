@@ -17,8 +17,8 @@ sys.path.insert(0, SRC)  # dedup harmless across the shared test session
 from postgkyl import gpython  # noqa: E402
 from postgkyl.gpython.array import GkylArray  # noqa: E402
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 pytestmark = needs_gkeyll
 
@@ -28,7 +28,6 @@ def test_alloc_is_zeroed_with_the_requested_shape():
   a = GkylArray.alloc(3, 5)
   assert (a.ncomp, a.size) == (3, 5)
   assert np.array_equal(a.view(), np.zeros((5, 3)))
-# end
 
 
 def test_from_numpy_preserves_values_and_shape():
@@ -36,7 +35,6 @@ def test_from_numpy_preserves_values_and_shape():
   a = GkylArray.from_numpy(values)
   assert (a.ncomp, a.size) == (2, 4)
   assert np.array_equal(a.view(), values)
-# end
 
 
 def test_from_numpy_copies_non_contiguous_input_correctly():
@@ -45,7 +43,6 @@ def test_from_numpy_copies_non_contiguous_input_correctly():
   assert not sliced.flags["C_CONTIGUOUS"]
   a = GkylArray.from_numpy(sliced)
   assert np.array_equal(a.view(), sliced)
-# end
 
 
 def test_from_numpy_converts_other_dtypes():
@@ -53,7 +50,6 @@ def test_from_numpy_converts_other_dtypes():
   a = GkylArray.from_numpy(values)
   assert a.view().dtype == np.float64
   assert np.array_equal(a.view(), values.astype(np.float64))
-# end
 
 
 def test_clone_is_a_deep_copy():
@@ -64,39 +60,29 @@ def test_clone_is_a_deep_copy():
   gpython.kernels.scale(a, 0.0)  # returns a NEW array; `a` itself is untouched
   assert np.array_equal(a.view(), np.ones((3, 2)))
   assert np.array_equal(b.view(), np.ones((3, 2)))
-# end
 
 
 # ---------------------------------------------------------- invalid construction
 def test_alloc_rejects_zero_size():
   with pytest.raises(ValueError, match="positive"):
     GkylArray.alloc(2, 0)
-  # end
-# end
 
 
 def test_alloc_rejects_zero_ncomp():
   with pytest.raises(ValueError, match="positive"):
     GkylArray.alloc(0, 3)
-  # end
-# end
 
 
 def test_alloc_rejects_negative_args():
   with pytest.raises(ValueError, match="positive"):
     GkylArray.alloc(-1, 3)
-  # end
   with pytest.raises(ValueError, match="positive"):
     GkylArray.alloc(2, -1)
-  # end
-# end
 
 
 def test_from_numpy_rejects_empty_array():
   with pytest.raises(ValueError, match="empty"):
     GkylArray.from_numpy(np.zeros((0, 3)))
-  # end
-# end
 
 
 def test_from_numpy_promotes_0d_to_a_single_cell():
@@ -107,7 +93,6 @@ def test_from_numpy_promotes_0d_to_a_single_cell():
   a = GkylArray.from_numpy(np.array(5.0))
   assert (a.ncomp, a.size) == (1, 1)
   assert a.view()[0, 0] == 5.0
-# end
 
 
 # --------------------------------------------------------------- memory safety
@@ -117,7 +102,6 @@ def test_view_pins_native_memory_after_source_is_dropped():
   v = GkylArray.from_numpy(expected).view()  # array is garbage immediately
   gc.collect()
   assert np.array_equal(v, expected)
-# end
 
 
 def test_view_pins_native_memory_for_alloc_too():
@@ -127,7 +111,6 @@ def test_view_pins_native_memory_for_alloc_too():
   del a
   gc.collect()
   assert np.array_equal(v, np.zeros((3, 2)))  # `a` was never mutated in place
-# end
 
 
 def test_to_numpy_is_a_by_value_copy():
@@ -138,15 +121,12 @@ def test_to_numpy_is_a_by_value_copy():
   assert not view.flags.writeable
   copy[0, 0] = 99.0
   assert view[0, 0] == 1.0  # the native buffer is untouched
-# end
 
 
 def test_view_is_read_only():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(ValueError):
     a.view()[0, 0] = 1.0
-  # end
-# end
 
 
 def test_repeated_alloc_and_release_does_not_leak_or_crash():
@@ -154,20 +134,16 @@ def test_repeated_alloc_and_release_does_not_leak_or_crash():
     a = GkylArray.alloc(4, 10)
     a.view()
     del a
-  # end
   gc.collect()
-# end
 
 
 def test_view_reshapes_with_explicit_cells():
   a = GkylArray.alloc(2, 6)
   shaped = a.view(cells=(2, 3))
   assert shaped.shape == (2, 3, 2)
-# end
 
 
 def test_repr_reports_shape():
   a = GkylArray.alloc(3, 5)
   assert "5 cells" in repr(a)
   assert "3 comps" in repr(a)
-# end

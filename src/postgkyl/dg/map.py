@@ -21,9 +21,15 @@ import numpy as np
 from postgkyl import gpython
 
 
-def eval_at_points(coeffs: np.ndarray, lower: np.ndarray, upper: np.ndarray,
-    cells: np.ndarray, points: np.ndarray, *, basis_type: str,
-    poly_order: int, modal: bool = True) -> np.ndarray:
+def eval_at_points(coeffs: np.ndarray,
+                   lower: np.ndarray,
+                   upper: np.ndarray,
+                   cells: np.ndarray,
+                   points: np.ndarray,
+                   *,
+                   basis_type: str,
+                   poly_order: int,
+                   modal: bool = True) -> np.ndarray:
   """Evaluate one coordinate's DG coefficients at arbitrary computational points.
 
   Args:
@@ -59,18 +65,15 @@ def eval_at_points(coeffs: np.ndarray, lower: np.ndarray, upper: np.ndarray,
     raise ValueError(
         f"eval_at_points: coeffs cell shape {coeffs.shape[:-1]} does not "
         f"match cells {tuple(cells)}")
-  # end
   points = np.asarray(points, dtype=np.float64)
   if points.shape[-1] != m:
     raise ValueError(
         f"eval_at_points: points last axis has length {points.shape[-1]}, "
         f"expected {m} (len(lower))")
-  # end
 
   if not modal:
     n2m = gpython.basis.nodal_to_modal_matrix(basis_type, m, poly_order)
     coeffs = np.einsum("jk,...k->...j", n2m, coeffs)
-  # end
 
   shape = points.shape[:-1]
   z = points.reshape(-1, m)
@@ -84,7 +87,7 @@ def eval_at_points(coeffs: np.ndarray, lower: np.ndarray, upper: np.ndarray,
 
   flat_coeffs = coeffs.reshape(-1, coeffs.shape[-1])
   cell_lin = np.ravel_multi_index(tuple(idx[:, d] for d in range(m)),
-      tuple(int(c) for c in cells))
+                                  tuple(int(c) for c in cells))
 
   # Step 3: group points by containing cell -> one matrix-vector product each.
   out = np.empty(z.shape[0], dtype=np.float64)
@@ -92,15 +95,13 @@ def eval_at_points(coeffs: np.ndarray, lower: np.ndarray, upper: np.ndarray,
     sel = cell_lin == lin
     b = gpython.basis.eval_matrix(basis_type, m, poly_order, eta[sel])
     out[sel] = b @ flat_coeffs[lin]
-  # end
 
   # Step 4: reshape to the point-set shape.
   return out.reshape(shape)
-# end
 
 
 def map_grid(map_coeffs: np.ndarray, map_ctx: dict,
-    target_axes: list[np.ndarray]) -> list[np.ndarray]:
+             target_axes: list[np.ndarray]) -> list[np.ndarray]:
   """Evaluate every mapped dimension's coordinates at the target's grid points.
 
   Args:
@@ -129,24 +130,24 @@ def map_grid(map_coeffs: np.ndarray, map_ctx: dict,
 
   if m == 1:
     points = np.asarray(target_axes[0], dtype=np.float64)[:, np.newaxis]
-  # end
   else:
-    points = np.stack(
-        np.meshgrid(*target_axes, indexing="ij"), axis=-1)
-  # end
+    points = np.stack(np.meshgrid(*target_axes, indexing="ij"), axis=-1)
 
   nb = gpython.basis.num_basis(basis_type, m, poly_order)
   return [
-      eval_at_points(map_coeffs[..., d * nb:(d + 1) * nb], lower, upper,
-          cells, points, basis_type=basis_type, poly_order=poly_order,
-          modal=modal)
-      for d in range(m)
+      eval_at_points(map_coeffs[..., d * nb:(d + 1) * nb],
+                     lower,
+                     upper,
+                     cells,
+                     points,
+                     basis_type=basis_type,
+                     poly_order=poly_order,
+                     modal=modal) for d in range(m)
   ]
-# end
 
 
 def map_grid_separable(map_coeffs: np.ndarray, map_ctx: dict,
-    target_axes: list[np.ndarray]) -> list[np.ndarray]:
+                       target_axes: list[np.ndarray]) -> list[np.ndarray]:
   """Evaluate each mapped dimension's coordinates independently.
 
   Gkeyll's velocity-space coordinate maps (``mapc2p_vel``) are diagonal:
@@ -186,9 +187,13 @@ def map_grid_separable(map_coeffs: np.ndarray, map_ctx: dict,
     idx[d] = slice(None)
     coeffs_d = map_coeffs[tuple(idx)][:, d * nb:(d + 1) * nb]
     points = np.asarray(target_axes[d], dtype=np.float64)[:, np.newaxis]
-    new_axes.append(eval_at_points(coeffs_d, lower[d:d + 1], upper[d:d + 1],
-        cells[d:d + 1], points, basis_type=basis_type, poly_order=poly_order,
-        modal=modal))
-  # end
+    new_axes.append(
+        eval_at_points(coeffs_d,
+                       lower[d:d + 1],
+                       upper[d:d + 1],
+                       cells[d:d + 1],
+                       points,
+                       basis_type=basis_type,
+                       poly_order=poly_order,
+                       modal=modal))
   return new_axes
-# end

@@ -19,17 +19,22 @@ from .five_moment import _get_ke, _get_p
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _REASON = "decomposing energy from raw DG coefficients would mix basis functions"
 
 
 # --------------------------------------------------------- array-level math
-def _energetics(elc_grid: list[np.ndarray], elc_values: np.ndarray,
-    ion_grid: list[np.ndarray], ion_values: np.ndarray,
-    field_grid: list[np.ndarray], field_values: np.ndarray, *,
-    gas_gamma: float = 5.0 / 3, num_moms: int | None = None,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _energetics(
+    elc_grid: list[np.ndarray],
+    elc_values: np.ndarray,
+    ion_grid: list[np.ndarray],
+    ion_values: np.ndarray,
+    field_grid: list[np.ndarray],
+    field_values: np.ndarray,
+    *,
+    gas_gamma: float = 5.0 / 3,
+    num_moms: int | None = None,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Separate a two-species plasma's energy into its constituent parts.
 
   Args:
@@ -49,7 +54,7 @@ def _energetics(elc_grid: list[np.ndarray], elc_values: np.ndarray,
     ``(electron thermal, electron kinetic, ion thermal, ion kinetic,
     electric, magnetic, total)``.
   """
-  out = np.zeros(field_values.shape[:-1] + (7,))
+  out = np.zeros(field_values.shape[:-1] + (7, ))
 
   _, pre = _get_p(elc_grid, elc_values, gas_gamma=gas_gamma, num_moms=num_moms)
   _, kee = _get_ke(elc_grid, elc_values, gas_gamma=gas_gamma, num_moms=num_moms)
@@ -67,12 +72,16 @@ def _energetics(elc_grid: list[np.ndarray], elc_values: np.ndarray,
   out[..., 6] = np.squeeze(pre + kee + pri + kei + esq / 2.0 + bsq / 2.0)
 
   return list(field_grid), out
-# end
 
 
-def _accumulate_current(grid: list[np.ndarray], values: np.ndarray, *,
-    qbym: bool = False, charge: float | None = None, mass: float | None = None,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _accumulate_current(
+    grid: list[np.ndarray],
+    values: np.ndarray,
+    *,
+    qbym: bool = False,
+    charge: float | None = None,
+    mass: float | None = None,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Scale a species' moment data into its contribution to the current.
 
   Args:
@@ -90,20 +99,22 @@ def _accumulate_current(grid: list[np.ndarray], values: np.ndarray, *,
   """
   if qbym and mass and charge is not None:
     factor = charge / mass
-  # end
   else:
     factor = -1.0
-  # end
 
   return list(grid), factor * values
-# end
 
 
 # ---------------------------------------------------------------- GData verbs
-def energetics(elc: "GDataState", ion: "GDataState", field: "GDataState", *,
-    gas_gamma: float = 5.0 / 3, num_moms: int | None = None,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def energetics(elc: "GDataState",
+               ion: "GDataState",
+               field: "GDataState",
+               *,
+               gas_gamma: float = 5.0 / 3,
+               num_moms: int | None = None,
+               inplace: bool = False,
+               tag: str | None = None,
+               label: str | None = None) -> "GDataState":
   """Decompose energy (kinetic, thermal, EM) for a two-species plasma.
 
   Splits the plasma energy into its constituent parts for a two-species
@@ -143,16 +154,25 @@ def energetics(elc: "GDataState", ion: "GDataState", field: "GDataState", *,
   _require_field_domain(elc, "energetics", _REASON)
   _require_field_domain(ion, "energetics", _REASON)
   _require_field_domain(field, "energetics", _REASON)
-  grid, values = _energetics(elc.grid, elc.values, ion.grid, ion.values,
-      field.grid, field.values, gas_gamma=gas_gamma, num_moms=num_moms)
+  grid, values = _energetics(elc.grid,
+                             elc.values,
+                             ion.grid,
+                             ion.values,
+                             field.grid,
+                             field.values,
+                             gas_gamma=gas_gamma,
+                             num_moms=num_moms)
   return field._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end
 
 
-def accumulate_current(data: "GDataState", *, qbym: bool = False,
-    charge: float | None = None, mass: float | None = None,
-    inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def accumulate_current(data: "GDataState",
+                       *,
+                       qbym: bool = False,
+                       charge: float | None = None,
+                       mass: float | None = None,
+                       inplace: bool = False,
+                       tag: str | None = None,
+                       label: str | None = None) -> "GDataState":
   """Accumulate current from species moments.
 
   Scales the species' momentum/flow moments by a per-species factor to
@@ -185,13 +205,13 @@ def accumulate_current(data: "GDataState", *, qbym: bool = False,
         ".interpolate() first -- scaling raw DG coefficients by a per-species "
         "factor is still valid numerically, but this verb is field-domain "
         "only.")
-  # end
   if qbym and (charge is None or not mass):
     raise ValueError(
         "accumulate_current: qbym=True requires both 'charge' and a "
         f"nonzero 'mass' -- got charge={charge!r}, mass={mass!r}.")
-  # end
-  grid, values = _accumulate_current(data.grid, data.values, qbym=qbym,
-      charge=charge, mass=mass)
+  grid, values = _accumulate_current(data.grid,
+                                     data.values,
+                                     qbym=qbym,
+                                     charge=charge,
+                                     mass=mass)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
-# end

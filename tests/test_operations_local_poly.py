@@ -18,8 +18,8 @@ import pytest
 import postgkyl as pg
 from postgkyl import gpython
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 pytestmark = needs_gkeyll
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +45,6 @@ def test_matches_hand_evaluated_basis_at_cell_faces():
   np.testing.assert_allclose(lp.get_values()[1, 0], expect_right)
   assert lp.grid[0][0] == pytest.approx(0.0)
   assert lp.grid[0][1] == pytest.approx(1.0 / d.num_cells[0])
-# end
 
 
 def test_inserts_nan_at_every_interior_cell_interface():
@@ -69,8 +68,6 @@ def test_inserts_nan_at_every_interior_cell_interface():
   # coordinate, so plotting breaks the line without leaving a coordinate gap.
   for pos in nan_positions:
     assert lp.grid[0][pos] == pytest.approx(lp.grid[0][pos - 1])
-  # end
-# end
 
 
 def test_backend_and_flags_after_local_poly():
@@ -78,7 +75,6 @@ def test_backend_and_flags_after_local_poly():
   assert lp.backend == "numpy"
   assert lp.is_interpolated
   assert lp.ctx["interpolated"] is True
-# end
 
 
 def test_default_npoints_is_two():
@@ -87,15 +83,14 @@ def test_default_npoints_is_two():
   lp = d.local_poly()
   # 2 raw points/cell + one NaN at each of the (num_cells - 1) interior faces.
   assert lp.get_values().shape[0] == 2 * num_cells + (num_cells - 1)
-# end
 
 
 def test_2d_and_3d_shapes():
   d2 = pg.load(F2D)
   lp2 = d2.local_poly(npoints=4)
   nx, ny = (int(c) for c in d2.num_cells)
-  assert lp2.grid[0].shape == (4 * nx + (nx - 1),)
-  assert lp2.grid[1].shape == (4 * ny + (ny - 1),)
+  assert lp2.grid[0].shape == (4 * nx + (nx - 1), )
+  assert lp2.grid[1].shape == (4 * ny + (ny - 1), )
   # `d2.num_comps` counts raw modal coefficients (fields * num_basis); this
   # fixture holds a single field.
   assert lp2.get_values().shape == (4 * nx + (nx - 1), 4 * ny + (ny - 1), 1)
@@ -104,7 +99,6 @@ def test_2d_and_3d_shapes():
   lp3 = d3.local_poly()
   assert lp3.num_dims == 3
   assert not np.all(np.isnan(lp3.get_values()))
-# end
 
 
 def test_missing_poly_order_raises():
@@ -112,8 +106,6 @@ def test_missing_poly_order_raises():
   del d.ctx["poly_order"]
   with pytest.raises(ValueError, match="poly_order"):
     d.local_poly()
-  # end
-# end
 
 
 def test_missing_basis_type_raises():
@@ -121,16 +113,12 @@ def test_missing_basis_type_raises():
   del d.ctx["basis_type"]
   with pytest.raises(ValueError, match="basis_type"):
     d.local_poly()
-  # end
-# end
 
 
 def test_rejects_non_modal_value_form():
   d = pg.load(F1D).to_nodal()
   with pytest.raises(ValueError, match="modal value_form"):
     d.local_poly()
-  # end
-# end
 
 
 def test_inplace_and_tag_label():
@@ -144,4 +132,3 @@ def test_inplace_and_tag_label():
   new = d2.local_poly(tag="lp2")
   assert new is not d2
   assert new.tag == "lp2"
-# end

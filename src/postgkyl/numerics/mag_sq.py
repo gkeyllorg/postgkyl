@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 
-def mag_sq(grid: list[np.ndarray], values: np.ndarray,
-    coords: str = "0:3") -> tuple[list[np.ndarray], np.ndarray]:
+def mag_sq(grid: list[np.ndarray],
+           values: np.ndarray,
+           coords: str = "0:3") -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the magnitude squared of a vector field.
 
   Args:
@@ -24,4 +25,3 @@ def mag_sq(grid: list[np.ndarray], values: np.ndarray,
   comps = values[..., slice(int(lo), int(hi))]
   out = np.sum(comps * comps, axis=-1)[..., np.newaxis]
   return list(grid), out
-# end

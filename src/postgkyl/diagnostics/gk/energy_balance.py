@@ -63,7 +63,6 @@ class EnergyBalanceTraces:
   apar_dot: np.ndarray | None
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
-# end
 
 
 def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
@@ -71,11 +70,13 @@ def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
   use so the caller's array is never mutated in place."""
   addend = np.asarray(addend)
   return addend.copy() if target is None else target + addend
-# end
 
 
-def energy_balance_error(fdot: np.ndarray, src: np.ndarray, bflux_tot: np.ndarray,
-    field_dot: np.ndarray, apar_dot: np.ndarray | None = None) -> np.ndarray:
+def energy_balance_error(fdot: np.ndarray,
+                         src: np.ndarray,
+                         bflux_tot: np.ndarray,
+                         field_dot: np.ndarray,
+                         apar_dot: np.ndarray | None = None) -> np.ndarray:
   """The energy-balance residual: ``S - bflux - (df/dt - dfield/dt [- dapar/dt])``.
 
   Pure array arithmetic -- the one formula every energy-balance trace
@@ -85,30 +86,27 @@ def energy_balance_error(fdot: np.ndarray, src: np.ndarray, bflux_tot: np.ndarra
   fdot_terms = fdot - field_dot
   if apar_dot is not None:
     fdot_terms = fdot_terms - apar_dot
-  # end
   return src - bflux_tot - fdot_terms
-# end
 
 
 def _block_prefix(file_prefix: str, block_idx: int) -> str:
   return file_prefix.replace("*", str(block_idx))
-# end
 
 
-def _resolve(path: str, override: str | None, default: str,
-    block_idx: int, species: str | None = None) -> str:
+def _resolve(path: str,
+             override: str | None,
+             default: str,
+             block_idx: int,
+             species: str | None = None) -> str:
   """Resolve a file-family member's path: ``override`` (with ``*``
   substituted for the block index, then the species) if given, else the
   naming-convention ``default``."""
   if override is None:
     return default
-  # end
   resolved = (path + override).replace("*", str(block_idx), 1)
   if species is not None:
     resolved = resolved.replace("*", species)
-  # end
   return resolved
-# end
 
 
 def energy_balance(
@@ -207,71 +205,63 @@ def energy_balance(
     block_prefix = _block_prefix(file_prefix, block_idx)
 
     fd_name = _resolve(path, field_dot_file,
-        block_prefix + "field_energy_dot.gkyl", block_idx)
+                       block_prefix + "field_energy_dot.gkyl", block_idx)
     found, t, v, _ = utils.read_time_trace_if_present(fd_name)
     if not found:
       raise FileNotFoundError(f"Required file not found: {fd_name}")
-    # end
     time_field_dot, field_dot_pb = t, v
 
     ad_name = _resolve(path, apar_dot_file,
-        block_prefix + "apar_energy_dot.gkyl", block_idx)
+                       block_prefix + "apar_energy_dot.gkyl", block_idx)
     has_apar_dot, t, v, _ = utils.read_time_trace_if_present(ad_name)
     if has_apar_dot:
       time_apar_dot, apar_dot_pb = t, v
-    # end
 
     fdot_pb = src_pb = bflux_tot_pb = None
     for sp in species:
       fdot_name = _resolve(path, fdot_file,
-          block_prefix + sp + "_fdot_integrated_moms.gkyl", block_idx, sp)
+                           block_prefix + sp + "_fdot_integrated_moms.gkyl",
+                           block_idx, sp)
       found, t, v, _ = utils.read_time_trace_if_present(fdot_name)
       if not found:
         raise FileNotFoundError(f"Required file not found: {fdot_name}")
-      # end
       time_fdot = t
       fdot_sp = v[:, _ENERGY_MOMENT]
 
       src_name = _resolve(path, source_file,
-          block_prefix + sp + "_source_integrated_moms.gkyl", block_idx, sp)
+                          block_prefix + sp + "_source_integrated_moms.gkyl",
+                          block_idx, sp)
       has_src, t, v, _ = utils.read_time_trace_if_present(src_name)
       if has_src:
         src_sp = v[:, _ENERGY_MOMENT]
-      # end
       else:
         src_sp = 0.0 * fdot_sp
-      # end
 
       bflux_terms = []
       for d in _DIRS:
         for e in _EDGES:
           key = d + e
-          bf_name = _resolve(path, bflux_files.get(key),
-              block_prefix + sp + f"_bflux_{d}{e}_integrated_HamiltonianMoments.gkyl",
-              block_idx, sp)
+          bf_name = _resolve(
+              path, bflux_files.get(key), block_prefix + sp +
+              f"_bflux_{d}{e}_integrated_HamiltonianMoments.gkyl", block_idx,
+              sp)
           found_b, t, v, _ = utils.read_time_trace_if_present(bf_name)
           if found_b:
             has_bflux = True
             time_bflux_tot = t
             bflux_terms.append(v[:, _ENERGY_MOMENT])
-          # end
-        # end
-      # end
       bflux_sp = sum(bflux_terms) if bflux_terms else 0.0 * fdot_sp
 
       fdot_pb = _accumulate(fdot_pb, fdot_sp)
       src_pb = _accumulate(src_pb, src_sp)
       bflux_tot_pb = _accumulate(bflux_tot_pb, bflux_sp)
-    # end
 
     field_dot = _accumulate(field_dot, field_dot_pb)
     if has_apar_dot:
       apar_dot = _accumulate(apar_dot, apar_dot_pb)
-    # end
     fdot = _accumulate(fdot, fdot_pb)
     src = _accumulate(src, src_pb)
     bflux_tot = _accumulate(bflux_tot, bflux_tot_pb)
-  # end
 
   legend_handles = []
   legend_strings = []
@@ -281,28 +271,35 @@ def energy_balance(
     src[0] = 0.0  # No fdot/bflux contribution at t=0.
 
     mom_err = energy_balance_error(fdot, src, bflux_tot, field_dot,
-        apar_dot if has_apar_dot else None)
+                                   apar_dot if has_apar_dot else None)
 
     if has_src:
       h, = ax.plot(time_fdot, absy_func(src), linestyle=_LINE_STYLES[2])
       legend_handles.append(h)
       legend_strings.append(r"$\mathcal{S}$")
-    # end
     if has_bflux:
-      h, = ax.plot(time_bflux_tot, absy_func(-bflux_tot), linestyle=_LINE_STYLES[1])
+      h, = ax.plot(time_bflux_tot,
+                   absy_func(-bflux_tot),
+                   linestyle=_LINE_STYLES[1])
       legend_handles.append(h)
-      legend_strings.append(r"$-\int_{\partial \Omega}\mathrm{d}\mathbf{S}\cdot\mathbf{\dot{R}}f$")
-    # end
-    h, = ax.plot(time_field_dot, absy_func(-field_dot), linestyle=":",
-        marker="+", markevery=8)
+      legend_strings.append(
+          r"$-\int_{\partial \Omega}\mathrm{d}\mathbf{S}\cdot\mathbf{\dot{R}}f$"
+      )
+    h, = ax.plot(time_field_dot,
+                 absy_func(-field_dot),
+                 linestyle=":",
+                 marker="+",
+                 markevery=8)
     legend_handles.append(h)
     legend_strings.append(r"$-\dot{\phi}$")
     if has_apar_dot:
-      h, = ax.plot(time_apar_dot, absy_func(-apar_dot), linestyle=":",
-          marker="+", markevery=8)
+      h, = ax.plot(time_apar_dot,
+                   absy_func(-apar_dot),
+                   linestyle=":",
+                   marker="+",
+                   markevery=8)
       legend_handles.append(h)
       legend_strings.append(r"$-\dot{A}_{\parallel}$")
-    # end
     h, = ax.plot(time_fdot, absy_func(-fdot), linestyle=_LINE_STYLES[0])
     legend_handles.append(h)
     legend_strings.append(r"$-\dot{f}$")
@@ -310,51 +307,53 @@ def energy_balance(
     legend_handles.append(h)
     legend_strings.append(r"$E_{\dot{\mathcal{E}}}=$" + "".join(legend_strings))
 
-    ax.legend(legend_handles, legend_strings, fontsize=_LEGEND_FONT_SIZE, frameon=False)
+    ax.legend(legend_handles,
+              legend_strings,
+              fontsize=_LEGEND_FONT_SIZE,
+              frameon=False)
 
     ylabel_string = ylabel or ""
     title_string = title or r"Energy balance"
     mom_err_norm = None
-  # end
   else:
-    dt_name = _resolve(path, dt_file, file_prefix.replace("_b*", "") + "dt.gkyl", 0)
+    dt_name = _resolve(path, dt_file,
+                       file_prefix.replace("_b*", "") + "dt.gkyl", 0)
     _, time_dt, dt, _ = utils.read_time_trace_if_present(dt_name)
 
     field = apar = distf = None
     for block_idx in blocks:
       block_prefix = _block_prefix(file_prefix, block_idx)
 
-      fld_name = _resolve(path, field_file, block_prefix + "field_energy.gkyl", block_idx)
+      fld_name = _resolve(path, field_file, block_prefix + "field_energy.gkyl",
+                          block_idx)
       has_field, t, v, _ = utils.read_time_trace_if_present(fld_name)
       field_pb = v if has_field else None
 
-      ap_name = _resolve(path, apar_file, block_prefix + "apar_energy.gkyl", block_idx)
+      ap_name = _resolve(path, apar_file, block_prefix + "apar_energy.gkyl",
+                         block_idx)
       has_apar, t, v, _ = utils.read_time_trace_if_present(ap_name)
       apar_pb = v if has_apar else None
 
       distf_pb = None
       for sp in species:
-        f_name = _resolve(path, f_file, block_prefix + sp + "_integrated_moms.gkyl",
-            block_idx, sp)
+        f_name = _resolve(path, f_file,
+                          block_prefix + sp + "_integrated_moms.gkyl",
+                          block_idx, sp)
         _, t, v, _ = utils.read_time_trace_if_present(f_name)
         distf_pb = _accumulate(distf_pb, v[:, _ENERGY_MOMENT])
-      # end
 
       field = _accumulate(field, field_pb)
       if has_apar:
         apar = _accumulate(apar, apar_pb)
-      # end
       distf = _accumulate(distf, distf_pb)
-    # end
 
     field, field_dot = field[1:], field_dot[1:]
     if has_apar:
       apar, apar_dot = apar[1:], apar_dot[1:]
-    # end
     fdot, src, bflux_tot, distf = fdot[1:], src[1:], bflux_tot[1:], distf[1:]
 
     mom_err = energy_balance_error(fdot, src, bflux_tot, field_dot,
-        apar_dot if has_apar else None)
+                                   apar_dot if has_apar else None)
     denom = (distf - field - apar) if has_apar else (distf - field)
     mom_err_norm = mom_err * dt / denom
 
@@ -363,14 +362,11 @@ def energy_balance(
     ylabel_string = ylabel or r"$E_{\dot{\mathcal{E}}}~\Delta t/\mathcal{E}$"
     title_string = title or r"Relative error in energy conservation"
     mom_err = None
-  # end
 
   if logy:
     ax.set_yscale("log")
-  # end
   if absy and ylabel_string:
     ylabel_string = r"|" + ylabel_string + r"|"
-  # end
 
   ax.set_xlabel(xlabel, fontsize=_XY_LABEL_FONT_SIZE)
   ax.set_ylabel(ylabel_string, fontsize=_XY_LABEL_FONT_SIZE)
@@ -380,15 +376,15 @@ def energy_balance(
 
   if saveas:
     fig.savefig(saveas)
-  # end
   if show:
     plt.show()
-  # end
 
-  traces = EnergyBalanceTraces(
-      time=time_fdot, fdot=fdot, src=src if has_src else None,
-      bflux_tot=bflux_tot if has_bflux else None, field_dot=field_dot,
-      apar_dot=apar_dot if has_apar_dot else None,
-      mom_err=mom_err, mom_err_norm=mom_err_norm)
+  traces = EnergyBalanceTraces(time=time_fdot,
+                               fdot=fdot,
+                               src=src if has_src else None,
+                               bflux_tot=bflux_tot if has_bflux else None,
+                               field_dot=field_dot,
+                               apar_dot=apar_dot if has_apar_dot else None,
+                               mom_err=mom_err,
+                               mom_err_norm=mom_err_norm)
   return fig, traces
-# end

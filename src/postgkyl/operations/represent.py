@@ -14,7 +14,6 @@ from postgkyl import dg
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 VALUE_FORMS = ("modal", "nodal", "quad")
 
@@ -26,18 +25,20 @@ def _native_basis(data: "GDataState"):
         "value_form changes act on native (gkyl-backed) DG data; "
         "this dataset is NumPy-backed (already interpolated, or loaded "
         "without the Gkeyll library).")
-  # end
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError("dataset has no basis_type/poly_order metadata")
-  # end
   return str(basis_type), data.num_dims, int(poly_order)
-# end
 
 
-def represent(data: "GDataState", *, to: str, num_quad: int | None = None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def represent(data: "GDataState",
+              *,
+              to: str,
+              num_quad: int | None = None,
+              inplace: bool = False,
+              tag: str | None = None,
+              label: str | None = None):
   """Convert a native dataset to the ``to`` value_form (explicitly).
 
   ``modal`` <-> ``nodal`` is exact; ``modal`` -> ``quad`` evaluates at
@@ -56,7 +57,6 @@ def represent(data: "GDataState", *, to: str, num_quad: int | None = None,
   if to not in VALUE_FORMS:
     raise ValueError(f"unknown value_form '{to}'; "
                      f"choices: {VALUE_FORMS}")
-  # end
   basis_type, ndim, poly_order = _native_basis(data)
   cur = data.ctx.get("value_form", "modal")
   arr = data.native
@@ -64,36 +64,37 @@ def represent(data: "GDataState", *, to: str, num_quad: int | None = None,
   if cur != to:
     if cur == "nodal":  # leave nodal (exact)
       arr = dg.rep.nodal_to_modal(basis_type, ndim, poly_order, arr)
-    # end
     elif cur == "quad":  # leave quad (projection, with the data's own rule)
       nq = data.ctx.get("num_quad")
       if nq is None:
         raise ValueError("quad-represented dataset lost its 'num_quad' ctx")
-      # end
       arr = dg.rep.quad_to_modal(basis_type, ndim, poly_order, arr, int(nq))
-    # end
     # arr is now modal
     if to == "nodal":
       arr = dg.rep.modal_to_nodal(basis_type, ndim, poly_order, arr)
-    # end
     elif to == "quad":
       nq = int(num_quad) if num_quad else poly_order + 1
       arr = dg.rep.modal_to_quad(basis_type, ndim, poly_order, arr, nq)
-    # end
-  # end
   else:
     arr = arr.clone()
-  # end
 
-  return data._result(data.grid, arr, inplace=inplace, tag=tag, label=label,
-      value_form=to,
-      num_quad=(int(num_quad) if num_quad else poly_order + 1)
-               if to == "quad" else None)
-# end
+  return data._result(data.grid,
+                      arr,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      value_form=to,
+                      num_quad=(int(num_quad) if num_quad else poly_order +
+                                1) if to == "quad" else None)
 
 
-def apply(data: "GDataState", fn, *, num_quad: int | None = None,
-    inplace: bool = False, tag: str | None = None, label: str | None = None):
+def apply(data: "GDataState",
+          fn,
+          *,
+          num_quad: int | None = None,
+          inplace: bool = False,
+          tag: str | None = None,
+          label: str | None = None):
   """Apply ``fn`` pointwise via quadrature: modal -> quad -> fn -> modal.
 
   The explicit spelling of nonlinear pointwise operations on DG data (e.g.
@@ -119,10 +120,13 @@ def apply(data: "GDataState", fn, *, num_quad: int | None = None,
   basis_type, ndim, poly_order = _native_basis(data)
   if data.ctx.get("value_form", "modal") != "modal":
     raise ValueError("apply() expects modal data; call .to_modal() first.")
-  # end
   nq = int(num_quad) if num_quad else poly_order + 1
-  out = dg.rep.apply_pointwise(basis_type, ndim, poly_order, data.native,
-      fn, nq)
-  return data._result(data.grid, out, inplace=inplace, tag=tag, label=label,
-      applied=getattr(fn, "__name__", str(fn)), applied_num_quad=nq)
-# end
+  out = dg.rep.apply_pointwise(basis_type, ndim, poly_order, data.native, fn,
+                               nq)
+  return data._result(data.grid,
+                      out,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      applied=getattr(fn, "__name__", str(fn)),
+                      applied_num_quad=nq)

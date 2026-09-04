@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from postgkyl import operations
 
-
 # Exact aliases: implementation, signature, annotations, docstring, and command
 # metadata remain on the canonical callable (``render`` owns ``plot``,
 # ``animate``, and ``plotly_animate``).

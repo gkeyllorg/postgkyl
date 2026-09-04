@@ -22,6 +22,7 @@ Run directly:
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")  # headless-safe; drop this line to see the plot windows
 
 import postgkyl as pg

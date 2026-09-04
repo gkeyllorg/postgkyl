@@ -5,16 +5,17 @@ DATA = TEST_DATA / "generated"
 OUTPUT_DIR = prepare_output_dir()
 figure_path = OUTPUT_DIR / "mirror_comparison.pdf"
 
-high_alpha = pg.load(DATA / "mirror_comparison_2em4_1d_ms_p1.gkyl").interpolate()
+high_alpha = pg.load(DATA /
+                     "mirror_comparison_2em4_1d_ms_p1.gkyl").interpolate()
 reference = pg.load(DATA / "mirror_comparison_2em5_1d_ms_p1.gkyl").interpolate()
 
 for data in (high_alpha, reference):
-    data[..., 2:4] *= 1.1
+  data[..., 2:4] *= 1.1
 
 pg.plot(
     high_alpha,
     reference,
-    figure = 0,
+    figure=0,
     color=["#D55E00", "#0072B2"],
     legend_labels=["2e-4", "2e-5"],
     linestyle=["-", "--"],
@@ -43,12 +44,10 @@ pg.plot(
         (1e-1, 20.0),
         (1e-1, 50.0),
     ],
-    subplot_ylabels=(
-        r"Density [$\mathrm{m}^{-3}$],"
-        r"$U_\parallel$ [m/s],"
-        r"$T_\parallel$ [keV],"
-        r"$T_\perp$ [keV]"
-    ),
+    subplot_ylabels=(r"Density [$\mathrm{m}^{-3}$],"
+                     r"$U_\parallel$ [m/s],"
+                     r"$T_\parallel$ [keV],"
+                     r"$T_\perp$ [keV]"),
     saveas=figure_path,
     show=False,
 )

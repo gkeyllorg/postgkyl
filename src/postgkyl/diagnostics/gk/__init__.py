@@ -47,34 +47,66 @@ from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surfac
 from typing import Annotated
 
 from postgkyl.cli_spec import (
-    CommandSpec, Execution, KeyValue, ResultPolicy, Section, command,
+    CommandSpec,
+    Execution,
+    KeyValue,
+    ResultPolicy,
+    Section,
+    command,
 )
 
 _LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD)
-_REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD,
-    result=ResultPolicy.VALUE)
+_REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS,
+                           Execution.LOAD,
+                           result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_distf)
 command(_LOAD_SPEC)(load_quantity)
-energy_balance.__annotations__["bflux_files"] = Annotated[
-    dict[str, str] | None, KeyValue()]
-particle_balance.__annotations__["bflux_files"] = Annotated[
-    dict[str, str] | None, KeyValue()]
+energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
+                                                          KeyValue()]
+particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
+                                                            | None,
+                                                            KeyValue()]
 for _function in (energy_balance, particle_balance, nodes):
   command(_REPORT_SPEC)(_function)
-# end
 
 __all__ = [
-    "load_distf", "resolve_frames",
-    "available_quantities", "load_quantity", "gk_quant_registry",
-    "fetch_beta_from_bmag_press", "fetch_diamag_vel", "fetch_ExB_vel",
-    "fetch_gradB_vel", "fetch_M1_from_H", "fetch_press_from_BiMax",
-    "fetch_press_from_Max", "fetch_press_p", "fetch_Tpar_from_BiMax",
-    "fetch_Tpar_from_M0_M1_M2par", "fetch_temp_from_Max",
-    "fetch_temp_from_Tpar_Tperp", "fetch_Tperp_from_BiMax",
+    "load_distf",
+    "resolve_frames",
+    "available_quantities",
+    "load_quantity",
+    "gk_quant_registry",
+    "fetch_beta_from_bmag_press",
+    "fetch_diamag_vel",
+    "fetch_ExB_vel",
+    "fetch_gradB_vel",
+    "fetch_M1_from_H",
+    "fetch_press_from_BiMax",
+    "fetch_press_from_Max",
+    "fetch_press_p",
+    "fetch_Tpar_from_BiMax",
+    "fetch_Tpar_from_M0_M1_M2par",
+    "fetch_temp_from_Max",
+    "fetch_temp_from_Tpar_Tperp",
+    "fetch_Tperp_from_BiMax",
     "fetch_Tperp_from_M0_M2perp",
-    "EnergyBalanceTraces", "energy_balance_error", "energy_balance",
-    "ParticleBalanceTraces", "particle_balance", "particle_balance_error",
-    "GKYL_GEOMETRY_ID", "nodes", "is_geo_mapc2p", "multib_tag", "nodes_to_RZ",
-    "Geometry", "RzProjection", "gk_rz", "map_to_rz", "resolve_geometry", "resolve_rz_projection",
-    "FluxSurfaceGrid", "extract_flux_surface", "resolve_flux_surface_grid",
+    "EnergyBalanceTraces",
+    "energy_balance_error",
+    "energy_balance",
+    "ParticleBalanceTraces",
+    "particle_balance",
+    "particle_balance_error",
+    "GKYL_GEOMETRY_ID",
+    "nodes",
+    "is_geo_mapc2p",
+    "multib_tag",
+    "nodes_to_RZ",
+    "Geometry",
+    "RzProjection",
+    "gk_rz",
+    "map_to_rz",
+    "resolve_geometry",
+    "resolve_rz_projection",
+    "FluxSurfaceGrid",
+    "extract_flux_surface",
+    "resolve_flux_surface_grid",
 ]

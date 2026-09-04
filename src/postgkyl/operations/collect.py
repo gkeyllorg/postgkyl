@@ -8,8 +8,9 @@ from postgkyl.gdatastate import flatten_datasets
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
-def _collect_group(states: list, start: int, *, sumdata: bool, period: float | None,
-    offset: float, tag: str | None, label: str | None) -> GDataState:
+def _collect_group(states: list, start: int, *, sumdata: bool,
+                   period: float | None, offset: float, tag: str | None,
+                   label: str | None) -> GDataState:
   """Collect one group of frames into a single dataset (``collect``'s body,
   factored out so ``chunk`` can call it once per chunk). ``start`` is the
   group's offset into the full input sequence, so the positional-fallback
@@ -23,43 +24,41 @@ def _collect_group(states: list, start: int, *, sumdata: bool, period: float | N
           f"collect operates on interpolated (NumPy) values; call .interpolate() "
           f"first on dataset {i} -- stacking raw DG coefficients would mix "
           f"basis functions.")
-    # end
     stamp = dat.ctx.get("time", dat.ctx.get("frame", i))
     time.append(stamp)
 
     val = dat.values
     if sumdata:
       values.append(np.nansum(val, axis=tuple(range(dat.num_dims))))
-    # end
     else:
       values.append(val)
-    # end
     if grid is None:
       grid = list(dat.grid)
-    # end
-  # end
 
   time = np.array(time)
   values = np.array(values)
 
   if period:
     time = (time - offset) % period
-  # end
 
   sort_idx = np.argsort(time)
   time = time[sort_idx]
   values = values[sort_idx]
 
   out_grid = [time] if sumdata else [np.array(time)] + grid
-  return states[0]._result(out_grid, values, tag=(tag or "default"),
-      label=(label if label is not None else "collect"))
-# end
+  return states[0]._result(out_grid,
+                           values,
+                           tag=(tag or "default"),
+                           label=(label if label is not None else "collect"))
 
 
-def collect(*datasets: GDataState, sumdata: bool = False,
-    period: float | None = None,
-    offset: float = 0.0, chunk: int | None = None, tag: str | None = None,
-    label: str | None = None) -> GDataState | list[GDataState]:
+def collect(*datasets: GDataState,
+            sumdata: bool = False,
+            period: float | None = None,
+            offset: float = 0.0,
+            chunk: int | None = None,
+            tag: str | None = None,
+            label: str | None = None) -> GDataState | list[GDataState]:
   """Collect many single-frame datasets into one with a new leading time axis.
 
   Accepts ``collect(a, b)`` or ``collect([a, b])`` (flattened via
@@ -100,14 +99,23 @@ def collect(*datasets: GDataState, sumdata: bool = False,
   states = flatten_datasets(datasets)
   if not states:
     raise ValueError("collect: no datasets to collect.")
-  # end
 
   if chunk:
     groups = [(states[i:i + chunk], i) for i in range(0, len(states), chunk)]
-    return [_collect_group(group, start, sumdata=sumdata, period=period,
-        offset=offset, tag=tag, label=label) for group, start in groups]
-  # end
+    return [
+        _collect_group(group,
+                       start,
+                       sumdata=sumdata,
+                       period=period,
+                       offset=offset,
+                       tag=tag,
+                       label=label) for group, start in groups
+    ]
 
-  return _collect_group(states, 0, sumdata=sumdata, period=period, offset=offset,
-      tag=tag, label=label)
-# end
+  return _collect_group(states,
+                        0,
+                        sumdata=sumdata,
+                        period=period,
+                        offset=offset,
+                        tag=tag,
+                        label=label)

@@ -27,7 +27,8 @@ _TICK_FONT_SIZE = 14
 _COLORBAR_LABEL_FONT_SIZE = 14
 
 
-def nodes_to_RZ(nodes: np.ndarray, is_mapc2p: bool) -> tuple[np.ndarray, np.ndarray]:
+def nodes_to_RZ(nodes: np.ndarray,
+                is_mapc2p: bool) -> tuple[np.ndarray, np.ndarray]:
   """Compute the major-radius/vertical-location (R, Z) variables from a
   grid-nodes array.
 
@@ -49,14 +50,13 @@ def nodes_to_RZ(nodes: np.ndarray, is_mapc2p: bool) -> tuple[np.ndarray, np.ndar
   cart_dim = 3
 
   lo_idx = [[0 for _ in range(cdim)] + [cd] for cd in range(cart_dim)]
-  up_idx = [[nx_nod[d] for d in range(cdim)] + [cd + 1] for cd in range(cart_dim)]
+  up_idx = [[nx_nod[d] for d in range(cdim)] + [cd + 1]
+            for cd in range(cart_dim)]
 
   if cdim == 3:
     for cd in range(cart_dim):
       lo_idx[cd][1] = yidx
       up_idx[cd][1] = yidx + 1
-    # end
-  # end
 
   slices = [[slice(lo_idx[cd][d], up_idx[cd][d]) for d in range(cdim + 1)]
             for cd in range(cart_dim)]
@@ -65,33 +65,26 @@ def nodes_to_RZ(nodes: np.ndarray, is_mapc2p: bool) -> tuple[np.ndarray, np.ndar
     cart_x = [np.squeeze(nodes[tuple(slices[d])]) for d in range(cart_dim)]
     major_r = np.sqrt(np.power(cart_x[0], 2) + np.power(cart_x[1], 2))
     vert_z = cart_x[2]
-  # end
   else:
     major_r = np.squeeze(nodes[tuple(slices[0])])
     vert_z = np.squeeze(nodes[tuple(slices[1])])
-  # end
 
   return major_r, vert_z
-# end
 
 
 def multib_tag(base: str, block_idx: int, num_blocks: int) -> str:
   """Tag a per-block artifact, adding a ``_b<idx>`` suffix only when there
   is more than one block."""
   return f"{base}_b{block_idx}" if num_blocks > 1 else base
-# end
 
 
 def _parse_levels(clevels: str | None, cnlevels: int) -> np.ndarray | int:
   if clevels is None:
     return cnlevels
-  # end
   if ":" in clevels:
     s = clevels.split(":")
     return np.linspace(float(s[0]), float(s[1]), int(s[2]))
-  # end
   return np.array([float(v) for v in clevels.split(",") if v])
-# end
 
 
 def nodes(
@@ -159,11 +152,10 @@ def nodes(
   file_prefix = f"{path}{name}-" if multib == "-10" else f"{path}{name}_b*-"
 
   if nodes_file:
-    resolved_nodes_file = nodes_file if nodes_file[0] == "/" else path + nodes_file
-  # end
+    resolved_nodes_file = nodes_file if nodes_file[
+        0] == "/" else path + nodes_file
   else:
     resolved_nodes_file = file_prefix + "nodes.gkyl"
-  # end
 
   blocks = utils.get_block_indices(multib, resolved_nodes_file)
 
@@ -171,20 +163,29 @@ def nodes(
   vert_z_ex = [1e9, -1e9]
   block_nodes = {}
   for block_idx in blocks:
-    grid, nodes, gdat = utils.read_gfile(resolved_nodes_file.replace("*", str(block_idx)))
+    grid, nodes, gdat = utils.read_gfile(
+        resolved_nodes_file.replace("*", str(block_idx)))
     mapc2p = is_geo_mapc2p(gdat.ctx)
     major_r, vert_z = nodes_to_RZ(nodes, mapc2p)
     block_nodes[block_idx] = (major_r, vert_z, gdat)
-    major_r_ex = [min(major_r_ex[0], np.amin(major_r)), max(major_r_ex[1], np.amax(major_r))]
-    vert_z_ex = [min(vert_z_ex[0], np.amin(vert_z)), max(vert_z_ex[1], np.amax(vert_z))]
-  # end
+    major_r_ex = [
+        min(major_r_ex[0], np.amin(major_r)),
+        max(major_r_ex[1], np.amax(major_r))
+    ]
+    vert_z_ex = [
+        min(vert_z_ex[0], np.amin(vert_z)),
+        max(vert_z_ex[1], np.amax(vert_z))
+    ]
 
   length_r = major_r_ex[1] - major_r_ex[0]
   length_z = vert_z_ex[1] - vert_z_ex[0]
   aspect_ratio = length_r / length_z
 
-  ax_pos = [0.82 - (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + indent_left, 0.08,
-            (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + add_width, 0.88]
+  ax_pos = [
+      0.82 - (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + indent_left,
+      0.08, (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + add_width,
+      0.88
+  ]
   cax_pos = [ax_pos[0] + ax_pos[2] + 0.01, ax_pos[1], 0.02, ax_pos[3]]
   fig = plt.figure(figsize=(8.36 * aspect_ratio + 2.5, 8.36 + 1.14))
   ax = fig.add_axes(ax_pos)
@@ -199,65 +200,61 @@ def nodes(
     cell_color = next(block_colors)
     if major_r.ndim <= 1:
       ax.plot(major_r, vert_z, color=cell_color, linestyle="-")
-    # end
     else:
       segs_constx = np.stack((major_r, vert_z), axis=2)
       segs_consty = segs_constx.transpose(1, 0, 2)
       ax.add_collection(LineCollection(segs_constx, color=cell_color))
       ax.add_collection(LineCollection(segs_consty, color=cell_color))
-    # end
-  # end
 
   colorbar = True
   if psi_file:
     resolved_psi = psi_file if psi_file[0] == "/" else path + psi_file
-    psi_grid, psi_values, _ = utils.read_interpolated_gfile(resolved_psi, poly_order=2,
-        basis_type="tensor")
-    psi_grid_cc = [0.5 * (psi_grid[d][:-1] + psi_grid[d][1:]) for d in range(len(psi_grid))]
+    psi_grid, psi_values, _ = utils.read_interpolated_gfile(resolved_psi,
+                                                            poly_order=2,
+                                                            basis_type="tensor")
+    psi_grid_cc = [
+        0.5 * (psi_grid[d][:-1] + psi_grid[d][1:]) for d in range(len(psi_grid))
+    ]
 
     levels = _parse_levels(clevels, cnlevels)
     if isinstance(levels, np.ndarray) and levels.size == 1:
       colorbar = False
-    # end
 
     if contour:
-      im = ax.contour(psi_grid_cc[0], psi_grid_cc[1], psi_values.transpose(), levels)
-    # end
+      im = ax.contour(psi_grid_cc[0], psi_grid_cc[1], psi_values.transpose(),
+                      levels)
     else:
-      im = ax.pcolormesh(psi_grid[0], psi_grid[1], psi_values.transpose(), cmap="inferno")
-    # end
+      im = ax.pcolormesh(psi_grid[0],
+                         psi_grid[1],
+                         psi_values.transpose(),
+                         cmap="inferno")
 
     if colorbar:
       cbar_ax = fig.add_axes(cax_pos)
       cbar = fig.colorbar(im, ax=ax, cax=cbar_ax)
       cbar.ax.tick_params(labelsize=_TICK_FONT_SIZE)
-      cbar.set_label(zlabel, rotation=90, labelpad=0, fontsize=_COLORBAR_LABEL_FONT_SIZE)
-    # end
-  # end
+      cbar.set_label(zlabel,
+                     rotation=90,
+                     labelpad=0,
+                     fontsize=_COLORBAR_LABEL_FONT_SIZE)
 
   if wall_file:
     resolved_wall = wall_file if wall_file[0] == "/" else path + wall_file
     wall_data = np.loadtxt(resolved_wall, delimiter=",")
     ax.plot(wall_data[:, 0], wall_data[:, 1], color="grey")
-  # end
 
   ax.set_xlabel(xlabel, fontsize=_XY_LABEL_FONT_SIZE)
   ax.set_ylabel(ylabel, fontsize=_XY_LABEL_FONT_SIZE)
   ax.set_title(title, fontsize=_TITLE_FONT_SIZE)
   if xlim:
     ax.set_xlim(xlim[0], xlim[1])
-  # end
   if ylim:
     ax.set_ylim(ylim[0], ylim[1])
-  # end
   utils.set_tick_font_size(ax, _TICK_FONT_SIZE)
 
   if saveas:
     fig.savefig(saveas)
-  # end
   if show:
     plt.show()
-  # end
 
   return fig
-# end

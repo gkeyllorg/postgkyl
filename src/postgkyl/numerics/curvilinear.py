@@ -35,12 +35,12 @@ def cell_center(nodal: np.ndarray) -> np.ndarray:
   """
   out = nodal
   for ax in range(out.ndim):
-    lo = tuple(slice(0, -1) if k == ax else slice(None) for k in range(out.ndim))
-    hi = tuple(slice(1, None) if k == ax else slice(None) for k in range(out.ndim))
+    lo = tuple(
+        slice(0, -1) if k == ax else slice(None) for k in range(out.ndim))
+    hi = tuple(
+        slice(1, None) if k == ax else slice(None) for k in range(out.ndim))
     out = 0.5 * (out[lo] + out[hi])
-  # end
   return out
-# end
 
 
 def jacobian(block_coords: list) -> np.ndarray:
@@ -64,10 +64,7 @@ def jacobian(block_coords: list) -> np.ndarray:
   for i in range(m):
     for j in range(m):
       J[..., i, j] = np.gradient(centers[i], axis=j, edge_order=2)
-    # end
-  # end
   return J
-# end
 
 
 def cell_volume(block_coords: list) -> np.ndarray:
@@ -90,11 +87,10 @@ def cell_volume(block_coords: list) -> np.ndarray:
   Shape: the block's ``cells_shape`` (one entry per mapped dimension).
   """
   return np.abs(np.linalg.det(jacobian(block_coords)))
-# end
 
 
 def physical_gradient(block_coords: list, values: np.ndarray,
-    block_axes: tuple) -> np.ndarray:
+                      block_axes: tuple) -> np.ndarray:
   """The physical-space gradient of ``values`` along a curvilinear block's
   directions, via the chain rule ``grad_x f = (J^-1)^T grad_xi f``.
 
@@ -115,14 +111,13 @@ def physical_gradient(block_coords: list, values: np.ndarray,
   jinv = np.linalg.inv(jacobian(block_coords))  # cells_shape + (m, m)
 
   moved = np.moveaxis(values, block_axes, range(m))
-  dfdxi = np.stack(
-      [np.gradient(moved, axis=j, edge_order=2) for j in range(m)], axis=-1)
+  dfdxi = np.stack([np.gradient(moved, axis=j, edge_order=2) for j in range(m)],
+                   axis=-1)
 
   # jinv only varies over the block's own m axes; insert size-1 axes for
   # every other axis of `moved` (now trailing, after the moveaxis above) so
   # it broadcasts against dfdxi positionally.
   n_between = moved.ndim - m
-  jinv = jinv.reshape(jinv.shape[:m] + (1,) * n_between + (m, m))
+  jinv = jinv.reshape(jinv.shape[:m] + (1, ) * n_between + (m, m))
   out_moved = np.einsum("...ji,...j->...i", jinv, dfdxi)
   return np.moveaxis(out_moved, range(m), block_axes)
-# end

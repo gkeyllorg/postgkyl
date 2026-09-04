@@ -7,5 +7,7 @@ from .load import load
 from .gdatagroup import GDataGroup
 from .verbs import animate, collect, evaluate, plot, plotly_animate, relchange, sort
 
-__all__ = ["GData", "load", "GDataGroup", "collect", "evaluate", "relchange",
-    "plot", "animate", "plotly_animate", "sort"]
+__all__ = [
+    "GData", "load", "GDataGroup", "collect", "evaluate", "relchange", "plot",
+    "animate", "plotly_animate", "sort"
+]

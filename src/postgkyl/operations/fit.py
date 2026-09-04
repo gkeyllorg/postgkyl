@@ -23,12 +23,17 @@ from postgkyl import numerics
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
-# end
 
 
-def fit(data: "GDataState", fit_type: str, *, guess=None, window: bool = False,
-    min_n: int | None = None, inplace: bool = False, tag: str | None = None,
-    label: str | None = None):
+def fit(data: "GDataState",
+        fit_type: str,
+        *,
+        guess=None,
+        window: bool = False,
+        min_n: int | None = None,
+        inplace: bool = False,
+        tag: str | None = None,
+        label: str | None = None):
   """Fit a model to data and return the fitted curve.
 
   Fits the model named (or expressed) by ``fit_type`` to each component of
@@ -71,74 +76,73 @@ def fit(data: "GDataState", fit_type: str, *, guess=None, window: bool = False,
     raise ValueError(
         "fit operates on interpolated (NumPy) values; call .interpolate() first "
         "-- fitting raw DG coefficients would mix basis functions.")
-  # end
   grid = data.grid
   values = data.values
   spatial_shape = values.shape[:-1]
 
   if any(grid[d].shape[0] == spatial_shape[d] + 1 for d in range(len(grid))):
     cc_grid = numerics.nodal_to_cell_centered_grid(grid, spatial_shape)
-  # end
   else:
     cc_grid = list(grid)
-  # end
 
   # Drop dimensions collapsed to a single cell (e.g. after integrate/select).
   active = [d for d in range(len(cc_grid)) if cc_grid[d].shape[0] > 1]
   if len(active) < len(cc_grid):
-    idx = tuple(slice(None) if d in active else 0
-        for d in range(len(spatial_shape))) + (slice(None),)
+    idx = tuple(
+        slice(None) if d in active else 0
+        for d in range(len(spatial_shape))) + (slice(None), )
     cc_grid = [cc_grid[d] for d in active]
     values = values[idx]
-  # end
 
   ndim_fit = numerics.FIT_NDIM.get(fit_type, numerics.rpn_ndim(fit_type))
   if len(cc_grid) != ndim_fit:
     raise ValueError(
         f"fit '{fit_type}' requires {ndim_fit:d} spatial dimension(s), but "
-        f"data has {len(cc_grid):d}. Reduce it first (e.g. select or integrate).")
-  # end
+        f"data has {len(cc_grid):d}. Reduce it first (e.g. select or integrate)."
+    )
   if window and len(cc_grid) != 1:
     raise ValueError(
         "fit: window=True is only supported for 1D (time-series-like) data, "
         f"but data has {len(cc_grid):d} active dimension(s).")
-  # end
 
   if len(cc_grid) == 1:
     xdata = cc_grid[0]
-  # end
   else:
     mesh = np.meshgrid(cc_grid[0], cc_grid[1], indexing="ij")
     xdata = np.array([mesh[0].flatten(), mesh[1].flatten()])
-  # end
 
   guess_list = None
   if guess is not None:
-    guess_list = ([float(v) for v in guess.split(",")] if isinstance(guess, str)
-                  else list(guess))
-  # end
+    guess_list = ([float(v) for v in guess.split(",")] if isinstance(
+        guess, str) else list(guess))
 
   active_shape = tuple(cg.shape[0] for cg in cc_grid)
   fit_values_list, all_params, all_std, all_r2 = [], [], [], []
   for comp in range(values.shape[-1]):
     ydata = values[..., comp].flatten()
     if window:
-      params, cov, r2, _n = numerics.fit_best_window(xdata, ydata, fit_type,
-          min_n=min_n, p0=guess_list)
-    # end
+      params, cov, r2, _n = numerics.fit_best_window(xdata,
+                                                     ydata,
+                                                     fit_type,
+                                                     min_n=min_n,
+                                                     p0=guess_list)
     else:
-      p0 = guess_list if guess_list is not None else numerics.auto_guess(fit_type, xdata, ydata)
+      p0 = guess_list if guess_list is not None else numerics.auto_guess(
+          fit_type, xdata, ydata)
       params, cov, r2 = numerics.fit(xdata, ydata, fit_type, p0=p0)
-    # end
     y_fit = numerics.fit_evaluate(xdata, fit_type, params)
-    fit_values_list.append(y_fit.reshape(active_shape + (1,)))
+    fit_values_list.append(y_fit.reshape(active_shape + (1, )))
     all_params.append(params)
     all_std.append(np.sqrt(np.diag(cov)))
     all_r2.append(r2)
-  # end
 
   fit_values = np.concatenate(fit_values_list, axis=-1)
   fit_grid = [grid[d] for d in active]
-  return data._result(fit_grid, fit_values, inplace=inplace, tag=tag, label=label,
-      fit_params=all_params, fit_std=all_std, fit_R2=all_r2)
-# end
+  return data._result(fit_grid,
+                      fit_values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      fit_params=all_params,
+                      fit_std=all_std,
+                      fit_R2=all_r2)

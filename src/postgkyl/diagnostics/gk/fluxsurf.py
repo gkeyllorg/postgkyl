@@ -14,6 +14,10 @@ from postgkyl.operations.gyrokinetics.fluxsurf import (
 )
 
 __all__ = [
-    "Geometry", "FluxSurfaceGrid", "extract_flux_surface",
-    "flux_surface_grids", "grid_for", "resolve_flux_surface_grid",
+    "Geometry",
+    "FluxSurfaceGrid",
+    "extract_flux_surface",
+    "flux_surface_grids",
+    "grid_for",
+    "resolve_flux_surface_grid",
 ]

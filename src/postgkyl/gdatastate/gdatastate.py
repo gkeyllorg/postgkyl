@@ -25,23 +25,28 @@ from typing import Tuple
 
 import numpy as np
 
-from postgkyl import io   # leaf layer (below); top-level import -- never a cycle
+from postgkyl import io  # leaf layer (below); top-level import -- never a cycle
 from postgkyl import gpython  # foreign floor (below): GkylArray backend type
 
 
 class GDataState:
   """Storage + metadata for one dataset. No verbs; no upward imports."""
 
-  def __init__(self, file_name: str = "", *, ctx: dict | None = None,
-      tag: str = "default", label: str = "", value_form: str | None = None,
-      basis_type: str | None = None, poly_order: int | None = None,
-      **read_kwargs):
+  def __init__(self,
+               file_name: str = "",
+               *,
+               ctx: dict | None = None,
+               tag: str = "default",
+               label: str = "",
+               value_form: str | None = None,
+               basis_type: str | None = None,
+               poly_order: int | None = None,
+               **read_kwargs):
     self._grid: list | None = None
     self._values: np.ndarray | gpython.GkylArray | None = None
     self.ctx: dict = {}
     if ctx:
       self.ctx.update(ctx)
-    # end
     self._tag = tag
     self._label = ""
     self._custom_label = label
@@ -49,9 +54,12 @@ class GDataState:
     self.color = None
 
     if self._file_name:
-      self._grid, self._values = io.read(self._file_name, self.ctx,
-          value_form=value_form, basis_type=basis_type,
-          poly_order=poly_order, **read_kwargs)
+      self._grid, self._values = io.read(self._file_name,
+                                         self.ctx,
+                                         value_form=value_form,
+                                         basis_type=basis_type,
+                                         poly_order=poly_order,
+                                         **read_kwargs)
       self._stamp_output_name()
       # A dynvector/diagnostic file (no "cells" in ctx: no reader ever stamps
       # one without a spatial grid, e.g. a dynvector time series) has no DG
@@ -62,15 +70,12 @@ class GDataState:
         if self.ctx.get("basis_type") is None:
           self.ctx["basis_type"] = "serendipity"
           defaulted.append("basis_type")
-        # end
         if self.ctx.get("poly_order") is None:
           self.ctx["poly_order"] = 0
           defaulted.append("poly_order")
-        # end
         if "value_form" not in self.ctx:
           self.ctx["value_form"] = "nodal"
           defaulted.append("value_form")
-        # end
         if defaulted:
           warnings.warn(
               f"{self._file_name}:\n"
@@ -79,11 +84,8 @@ class GDataState:
               "basis_type='serendipity', poly_order=0, value_form='nodal' "
               "(p0 -- one point per cell, at the cell center). Pass "
               "basis_type=/poly_order=/value_form=... explicitly if this "
-              "is wrong.", stacklevel=2)
-        # end
-      # end
-  # end
-    # end
+              "is wrong.",
+              stacklevel=2)
 
   # -------------------------------------------------------------- identity
   def _stamp_output_name(self) -> None:
@@ -100,46 +102,37 @@ class GDataState:
     name = io.parse_output_name(self._file_name)
     if name is None:
       return
-    # end
     self.ctx.setdefault("sim", name.sim)
     self.ctx.setdefault("block", name.block)
     self.ctx.setdefault("quantity", name.quantity)
     if name.frame is not None:
       self.ctx.setdefault("frame", name.frame)
-    # end
-  # end
 
   @property
   def output_name(self):
     """This dataset's parsed source-file identity (:class:`postgkyl.io.OutputName`),
     or ``None`` when it was never read from disk."""
     return io.parse_output_name(self._file_name)
-  # end
 
   # ------------------------------------------------------------------ tags
   def get_tag(self) -> str:
     """Return the short identifier used to select this dataset."""
     return self._tag
-  # end
 
   def set_tag(self, tag: str = "") -> None:
     """Replace the dataset tag when ``tag`` is nonempty."""
     if tag:
       self._tag = tag
-  # end
-    # end
 
   tag = property(get_tag, set_tag)
 
   def get_label(self) -> str:
     """Return the custom label, falling back to the generated label."""
     return self._custom_label or self._label
-  # end
 
   def set_label(self, label: str) -> None:
     """Set the generated display label."""
     self._label = label
-  # end
 
   label = property(get_label, set_label)
 
@@ -148,19 +141,15 @@ class GDataState:
     """Source file path this dataset was loaded from ("" if it was never
     read from disk, e.g. a verb's freshly-computed result)."""
     return self._file_name
-  # end
 
   # ------------------------------------------------------------- shape info
   def get_num_cells(self) -> np.ndarray:
     """Return the cell count in each spatial dimension."""
     if self.ctx.get("cells") is not None:
       return np.asarray(self.ctx["cells"])
-    # end
     if isinstance(self._values, np.ndarray):
       return np.array(self._values.shape[:-1], dtype=np.int64)
-    # end
     return np.array([], dtype=np.int64)
-  # end
 
   num_cells = property(get_num_cells)
 
@@ -168,15 +157,11 @@ class GDataState:
     """Return the number of physical components per cell."""
     if self.ctx.get("num_comps"):
       return int(self.ctx["num_comps"])
-    # end
     if isinstance(self._values, gpython.GkylArray):
       return self._values.ncomp
-    # end
     if self._values is not None:
       return int(self._values.shape[-1])
-    # end
     return 0
-  # end
 
   num_comps = property(get_num_comps)
 
@@ -184,12 +169,9 @@ class GDataState:
     """Return the number of spatial dimensions."""
     if self.ctx.get("cells") is not None:
       return len(self.ctx["cells"])
-    # end
     if isinstance(self._values, np.ndarray):
       return int(self._values.ndim - 1)
-    # end
     return 0
-  # end
 
   num_dims = property(get_num_dims)
 
@@ -197,28 +179,23 @@ class GDataState:
     """Return arrays containing the lower and upper spatial bounds."""
     if "lower" in self.ctx and "upper" in self.ctx:
       return np.asarray(self.ctx["lower"]), np.asarray(self.ctx["upper"])
-    # end
     if self._grid is not None:
       num_dims = self.get_num_dims()
       lo = np.array([self._grid[d].min() for d in range(num_dims)])
       up = np.array([self._grid[d].max() for d in range(num_dims)])
       return lo, up
-    # end
     return None, None
-  # end
 
   bounds = property(get_bounds)
 
   def get_grid_type(self) -> str:
     """Return the grid classification, defaulting to ``"uniform"``."""
     return self.ctx.get("grid_type", "uniform")
-  # end
 
   # --------------------------------------------------------- grid / values
   def get_grid(self) -> list:
     """Return the coordinate array for each spatial dimension."""
     return self._grid
-  # end
 
   def set_grid(self, grid: list) -> None:
     """Replace the coordinate arrays and update their stored bounds."""
@@ -231,7 +208,6 @@ class GDataState:
     num_dims = len(grid)
     self.ctx["lower"] = np.array([grid[d].min() for d in range(num_dims)])
     self.ctx["upper"] = np.array([grid[d].max() for d in range(num_dims)])
-  # end
 
   grid = property(get_grid, set_grid)
 
@@ -239,14 +215,12 @@ class GDataState:
   def backend(self) -> str:
     """``"gkyl"`` (native modal storage) or ``"numpy"`` (field domain)."""
     return "gkyl" if isinstance(self._values, gpython.GkylArray) else "numpy"
-  # end
 
   @property
   def native(self) -> gpython.GkylArray | None:
     """The native ``GkylArray`` when gkyl-backed; None otherwise. This is the
     handle the modal verbs pass to the Gkeyll kernels."""
     return self._values if isinstance(self._values, gpython.GkylArray) else None
-  # end
 
   def get_values(self) -> np.ndarray:
     """Values for *reading*: gkyl-backed data yields a read-only NumPy view of
@@ -254,9 +228,7 @@ class GDataState:
     the array itself. Mutation of modal data must go through the kernels."""
     if isinstance(self._values, gpython.GkylArray):
       return self._values.view(self.ctx.get("cells"))
-    # end
     return self._values
-  # end
 
   def set_values(self, values) -> None:
     """Replace stored values and update cell/component metadata."""
@@ -265,12 +237,9 @@ class GDataState:
       # Cell layout is not derivable from the flat native array; it comes from
       # ctx (set by the reader, and carried through copy(data=False)).
       self.ctx["num_comps"] = values.ncomp
-    # end
     else:
       self.ctx["cells"] = np.array(values.shape[:-1], dtype=np.int64)
       self.ctx["num_comps"] = int(values.shape[-1])
-    # end
-  # end
 
   values = property(get_values, set_values)
 
@@ -284,9 +253,7 @@ class GDataState:
     """
     if self._values is None:
       raise ValueError("GData values are not loaded; cannot subscript.")
-    # end
     return self.get_values()[index]
-  # end
 
   def __setitem__(self, index, value) -> None:
     """Assign through NumPy-style indexing on NumPy-backed data.
@@ -295,22 +262,19 @@ class GDataState:
     appropriate operation/kernel, or interpolate first, before mutating it.
     """
     if self._values is None:
-      raise ValueError("GData values are not loaded; cannot assign by subscript.")
-    # end
+      raise ValueError(
+          "GData values are not loaded; cannot assign by subscript.")
     if isinstance(self._values, gpython.GkylArray):
       raise ValueError(
           "Cannot assign through indexing to native Gkeyll storage; call "
           ".interpolate() first to obtain mutable NumPy-backed values.")
-    # end
     self._values[index] = value
-  # end
 
   def push(self, grid, values):
     """Set values (updating cell/comp ctx) then the grid (updating bounds)."""
     self.set_values(values)
     self.set_grid(grid)
     return self
-  # end
 
   # ------------------------------------------------------------- duplication
   def clone(self, data: bool = True) -> "GDataState":
@@ -324,12 +288,16 @@ class GDataState:
       dup = (self._values.clone() if isinstance(self._values, gpython.GkylArray)
              else np.array(self._values, copy=True))
       new.push([np.array(g, copy=True) for g in self._grid], dup)
-    # end
     return new
-  # end
 
-  def _result(self, grid, values, *, inplace: bool = False,
-      tag: str | None = None, label: str | None = None, **ctx_updates):
+  def _result(self,
+              grid,
+              values,
+              *,
+              inplace: bool = False,
+              tag: str | None = None,
+              label: str | None = None,
+              **ctx_updates):
     """The single 'mutate self vs. emit a new dataset' decision point.
 
     Every verb funnels its computed ``(grid, values)`` through here. Because
@@ -341,15 +309,11 @@ class GDataState:
     target.push(grid, values)
     if tag is not None:
       target.set_tag(tag)
-    # end
     if label is not None:
       target._custom_label = label
-    # end
     if ctx_updates:
       target.ctx.update(ctx_updates)
-    # end
     return target
-  # end
 
   # ---------------------------------------------------------- operability
   @property
@@ -361,10 +325,8 @@ class GDataState:
     (``ctx['interpolated']``)."""
     if not self.ctx.get("basis_type"):
       return True
-    # end
     return (self.ctx.get("value_form", "modal") != "modal"
-        or self.ctx.get("interpolated", False))
-  # end
+            or self.ctx.get("interpolated", False))
 
   def _require_operable(self) -> None:
     """Pointwise math is allowed exactly where the data are point values:
@@ -374,15 +336,12 @@ class GDataState:
     one fact for "what do these values mean", set once at load time."""
     if self._values is None:
       raise ValueError("GData has no values to operate on.")
-    # end
     if not self.is_interpolated:
       raise ValueError(
           "Cannot do NumPy math on modal DG coefficients. Convert explicitly: "
           ".to_nodal()/.to_quad() (pointwise, stays native), .apply(fn) "
           "(pointwise via quadrature, projects back to modal), or .interpolate() "
           "(leave for the NumPy field domain).")
-    # end
-  # end
 
   # ----------------------------------------------------- numpy interop (read)
   _HANDLED_TYPES = (numbers.Number, np.ndarray, np.generic)
@@ -398,13 +357,11 @@ class GDataState:
     if isinstance(self._values, gpython.GkylArray):
       if self.ctx.get("value_form", "modal") != "modal":
         return np.asarray(self.get_values(), dtype=dtype)
-      # end
       raise ValueError(
           "This dataset holds modal DG coefficients in native Gkeyll storage; "
-          ".to_nodal()/.to_quad() for point values, or .interpolate() for NumPy.")
-    # end
+          ".to_nodal()/.to_quad() for point values, or .interpolate() for NumPy."
+      )
     return np.asarray(self._values, dtype=dtype)
-  # end
 
   # -------------------------------------------------------------- reporting
   def info(self, index: int = 0, header: bool = True) -> str:
@@ -416,16 +373,12 @@ class GDataState:
     if header:
       lbl = self.get_label()
       out += f"{lbl}{' ' if lbl else ''}({self.get_tag()}#{index})\n"
-    # end
     if "time" in self.ctx:
       out += f"├─ Time: {self.ctx['time']:e}\n"
-    # end
     if "frame" in self.ctx:
       out += f"├─ Frame: {self.ctx['frame']:d}\n"
-    # end
     if self.ctx.get("block") is not None:
       out += f"├─ Block: {self.ctx['block']:d} (sim '{self.ctx.get('sim', '')}')\n"
-    # end
     out += f"├─ Number of components: {num_comps:d}\n"
     out += f"├─ Number of dimensions: {num_dims:d}\n"
     if lo is not None:
@@ -434,8 +387,6 @@ class GDataState:
         branch = "└" if d == num_dims - 1 else "├"
         out += (f"│  {branch}─ Dim {d}: Num. cells: {int(num_cells[d]):d}; "
                 f"Lower: {lo[d]:e}; Upper: {up[d]:e}\n")
-    # end
-      # end
     if values is not None:
       vmax = np.nanmax(values)
       vmin = np.nanmin(values)
@@ -447,114 +398,102 @@ class GDataState:
       out += f" component {int(max_idx[-1]):d}\n" if num_comps > 1 else "\n"
       out += f"├─ Minimum: {vmin:e} at {min_pos}"
       out += f" component {int(min_idx[-1]):d}\n" if num_comps > 1 else "\n"
-    # end
     if self.ctx.get("basis_type"):
       form = self.ctx.get("value_form", "modal")
       if self.ctx.get("interpolated"):
         form = "interpolated"
-      # end
       elif form == "quad" and self.ctx.get("num_quad"):
         form = f"quad, num_quad={self.ctx['num_quad']}"
-      # end
       out += f"├─ DG: {self.ctx['basis_type']} p{self.ctx.get('poly_order', '?')} ({form})\n"
-    # end
     if "changeset" in self.ctx or "builddate" in self.ctx:
       out += "├─ Created with Gkeyll:\n"
       if "changeset" in self.ctx:
         out += f"│  ├─ Changeset: {self.ctx['changeset']}\n"
-      # end
       if "builddate" in self.ctx:
         out += f"│  └─ Build Date: {self.ctx['builddate']}\n"
-      # end
-    # end
     if "geometry_type" in self.ctx or "geqdsk_sign_convention" in self.ctx:
       out += "├─ Geometry info:\n"
       if "geometry_type" in self.ctx:
         out += f"│  ├─ Type: {self.ctx['geometry_type']}\n"
-      # end
       if "geqdsk_sign_convention" in self.ctx:
         out += f"│  ├─ GEQDSK sign convention: {self.ctx['geqdsk_sign_convention']:d}\n"
-      # end
-    # end
     if any(k in self.ctx for k in ("mass", "charge", "gas_gamma", "vdim")):
       out += "├─ Species properties:\n"
       if "mass" in self.ctx:
         out += f"│  ├─ Mass: {self.ctx['mass']:e}\n"
-      # end
       if "charge" in self.ctx:
         out += f"│  ├─ Charge: {self.ctx['charge']:e}\n"
-      # end
       if "gas_gamma" in self.ctx:
         out += f"│  ├─ Adiabatic index: {self.ctx['gas_gamma']:e}\n"
-      # end
       if "vdim" in self.ctx:
         out += f"│  ├─ Velocity dimensions: {self.ctx['vdim']:d}\n"
-      # end
-    # end
     for key, val in self.ctx.items():
       if key not in self._INFO_HANDLED_CTX_KEYS:
         out += f"├─ {key}: {val}\n"
-      # end
-    # end
     out += "└─ File: " + (self._file_name or "<no file>") + "\n"
     print(out)
     return out
-  # end
 
   # Keys already rendered by a dedicated branch above; anything else in ctx
   # is file/reader-native metadata (e.g. a .gkyl file's msgpack meta) that
   # still deserves to surface, so it falls through to the generic dump.
   _INFO_HANDLED_CTX_KEYS = frozenset({
-      "time", "frame", "sim", "block", "quantity",
-      "lower", "upper", "cells", "grid_type",
-      "poly_order", "basis_type", "num_comps",
-      "value_form", "num_quad", "interpolated",
-      "changeset", "builddate", "geometry_type", "geqdsk_sign_convention",
-      "mass", "charge", "gas_gamma", "vdim",
+      "time",
+      "frame",
+      "sim",
+      "block",
+      "quantity",
+      "lower",
+      "upper",
+      "cells",
+      "grid_type",
+      "poly_order",
+      "basis_type",
+      "num_comps",
+      "value_form",
+      "num_quad",
+      "interpolated",
+      "changeset",
+      "builddate",
+      "geometry_type",
+      "geqdsk_sign_convention",
+      "mass",
+      "charge",
+      "gas_gamma",
+      "vdim",
   })
 
   # --------------------------------------------------------------- summary
   def _summary(self) -> str:
     if self._values is None:
       return f"<{type(self).__name__} empty | tag '{self._tag}'>"
-    # end
     cells = tuple(int(c) for c in self.get_num_cells())
     parts = [f"<{type(self).__name__} {cells}", f"{self.num_comps:d} comp"]
     lo, up = self.bounds
     if lo is not None:
-      parts.append(" ".join(f"[{lo[d]:g},{up[d]:g}]" for d in range(self.num_dims)))
-    # end
+      parts.append(" ".join(f"[{lo[d]:g},{up[d]:g}]"
+                            for d in range(self.num_dims)))
     value_form = self.ctx.get("value_form", "modal")
     if self.ctx.get("basis_type"):
       dg = str(self.ctx["basis_type"])
       if self.ctx.get("poly_order") is not None:
         dg += f" p{self.ctx['poly_order']}"
-      # end
       if self.ctx.get("interpolated"):
         dg += " interpolate"
-      # end
       elif value_form == "modal":
         dg += " modal"
-      # end
       parts.append(dg)
-    # end
     if self.backend == "gkyl":
-      parts.append("gkyl-native" if value_form == "modal"
-          else f"gkyl-native ({value_form})")
-    # end
+      parts.append("gkyl-native" if value_form ==
+                   "modal" else f"gkyl-native ({value_form})")
     parts.append(f"tag '{self._tag}'")
     return " | ".join(parts) + ">"
-  # end
 
   def __repr__(self) -> str:
     return self._summary()
-  # end
 
   def __str__(self) -> str:
     if self._values is None:
       return self._summary()
-    # end
     return (f"{self._summary()}\n"
             f"{np.array2string(self.get_values(), threshold=20, edgeitems=2)}")
-  # end
-# end

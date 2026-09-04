@@ -19,7 +19,7 @@ import numpy as np
 
 
 def adjust_for_ghost_cells(lower: np.ndarray, upper: np.ndarray,
-    cells: np.ndarray, data_shape: tuple) -> tuple:
+                           cells: np.ndarray, data_shape: tuple) -> tuple:
   """Shrink the cell count / extend the bounds to account for ghost cells.
 
   When the stored data has fewer cells along a dimension than ``cells``
@@ -36,18 +36,15 @@ def adjust_for_ghost_cells(lower: np.ndarray, upper: np.ndarray,
       cells[d] = data_shape[d]
       lower[d] = lower[d] - ngl * dz[d]
       upper[d] = upper[d] + ngu * dz[d]
-    # end
-  # end
   return lower, upper, cells
-# end
 
 
 def uniform_grid(lower: np.ndarray, upper: np.ndarray,
-    cells: np.ndarray) -> list:
+                 cells: np.ndarray) -> list:
   """A uniform nodal grid: ``cells[d] + 1`` edges per dimension."""
-  return [np.linspace(lower[d], upper[d], cells[d] + 1)
-      for d in range(len(cells))]
-# end
+  return [
+      np.linspace(lower[d], upper[d], cells[d] + 1) for d in range(len(cells))
+  ]
 
 
 def c2p_grid(nodes: np.ndarray, num_dims: int) -> list:
@@ -58,6 +55,7 @@ def c2p_grid(nodes: np.ndarray, num_dims: int) -> list:
   """
   num_comps = nodes.shape[-1]
   num_coeff = num_comps / num_dims
-  return [nodes[..., int(d * num_coeff):int((d + 1) * num_coeff)]
-      for d in range(num_dims)]
-# end
+  return [
+      nodes[..., int(d * num_coeff):int((d + 1) * num_coeff)]
+      for d in range(num_dims)
+  ]

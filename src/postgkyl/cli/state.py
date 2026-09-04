@@ -16,5 +16,3 @@ class DataSpace:
 
   def __iter__(self):
     return iter(self.datasets)
-  # end
-# end

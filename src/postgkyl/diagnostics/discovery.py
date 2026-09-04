@@ -41,12 +41,8 @@ def find_output_stems(extensions: str = "gkyl", path: str = ".") -> dict:
       stem = io.parse_output_name(os.path.basename(fn)).stem
       if stem not in unique:
         unique.append(stem)
-      # end
-    # end
     result[ext] = sorted(unique)
-  # end
   return result
-# end
 
 
 def available_frames(stem: str, *, frames: list[int] | None = None) -> set[int]:
@@ -65,16 +61,11 @@ def available_frames(stem: str, *, frames: list[int] | None = None) -> set[int]:
   found: set[int] = set()
   if frames:
     candidates = (f"{stem}{f}.gkyl" for f in frames
-        if os.path.isfile(f"{stem}{f}.gkyl"))
-  # end
+                  if os.path.isfile(f"{stem}{f}.gkyl"))
   else:
     candidates = glob.glob(f"{glob.escape(stem)}*.gkyl")
-  # end
   for f in candidates:
     suffix = f[len(stem):-5]
     if suffix.isdigit():
       found.add(int(suffix))
-    # end
-  # end
   return found
-# end

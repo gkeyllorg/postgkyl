@@ -6,7 +6,7 @@ import numpy as np
 
 
 def downsample(*arrays: np.ndarray,
-    maximum_points_per_axis: int = 0) -> tuple[np.ndarray, ...]:
+               maximum_points_per_axis: int = 0) -> tuple[np.ndarray, ...]:
   """Downsample same-shape arrays so no axis exceeds ``maximum_points_per_axis``.
 
   Dimension-agnostic: works for any array dimensionality. If the arrays'
@@ -30,20 +30,16 @@ def downsample(*arrays: np.ndarray,
   """
   if not arrays:
     return ()
-  # end
 
   reference = arrays[0]
   if maximum_points_per_axis is None or maximum_points_per_axis <= 0:
     return arrays
-  # end
 
   if reference.ndim == 0:
     return arrays
-  # end
 
   if any(arr.shape != reference.shape for arr in arrays):
     return arrays
-  # end
 
   steps = [
       max(1, int(np.ceil(size / maximum_points_per_axis)))
@@ -51,28 +47,21 @@ def downsample(*arrays: np.ndarray,
   ]
   if max(steps) == 1:
     return arrays
-  # end
 
   def _axis_indices(size: int, step: int) -> np.ndarray:
     idx = np.arange(0, size, step, dtype=int)
     if idx[-1] != size - 1:
       idx = np.append(idx, size - 1)
-    # end
     return idx
-  # end
 
   axis_indices = [
-      _axis_indices(size, step)
-      for size, step in zip(reference.shape, steps)
+      _axis_indices(size, step) for size, step in zip(reference.shape, steps)
   ]
 
   def _take_indices(arr: np.ndarray) -> np.ndarray:
     out = arr
     for axis, idx in enumerate(axis_indices):
       out = np.take(out, idx, axis=axis)
-    # end
     return out
-  # end
 
   return tuple(_take_indices(arr) for arr in arrays)
-# end

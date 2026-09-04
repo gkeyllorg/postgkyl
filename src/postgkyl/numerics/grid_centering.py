@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 
-def nodal_to_cell_centered_grid(grid: list[np.ndarray], cells: np.ndarray,
-    meshgrid: bool = False) -> list[np.ndarray]:
+def nodal_to_cell_centered_grid(grid: list[np.ndarray],
+                                cells: np.ndarray,
+                                meshgrid: bool = False) -> list[np.ndarray]:
   """Return the cell-centered grid corresponding to a nodal (edge) grid.
 
   Args:
@@ -26,40 +27,26 @@ def nodal_to_cell_centered_grid(grid: list[np.ndarray], cells: np.ndarray,
   grid_out = []
   if num_dims != len(cells):
     raise ValueError("Number dimensions for 'grid' and 'values' doesn't match")
-  # end
   for d in range(num_dims):
     if len(grid[d].shape) == 1:
       if grid[d].shape[0] == cells[d]:
         grid_out.append(grid[d])
-      # end
       elif grid[d].shape[0] == cells[d] + 1:
         grid_out.append(0.5 * (grid[d][:-1] + grid[d][1:]))
-      # end
       else:
         raise ValueError("Something is terribly wrong...")
-    # end
-      # end
     else:
       if grid[d].shape[d] == cells[d]:
         grid_out.append(grid[d])
-      # end
       elif grid[d].shape[d] == cells[d] + 1:
         if num_dims == 1:
           grid_out.append(0.5 * (grid[d][:-1] + grid[d][1:]))
-        # end
         else:
           grid_out.append(0.5 * (grid[d][:-1, :-1] + grid[d][1:, 1:]))
-      # end
-        # end
       else:
         raise ValueError("Something is terribly wrong...")
-      # end
-    # end
-  # end
 
   if meshgrid and num_dims > 1 and all(axis.ndim == 1 for axis in grid_out):
     return list(np.meshgrid(*grid_out, indexing="ij"))
-  # end
 
   return grid_out
-# end

@@ -44,20 +44,16 @@ class GDataStateGroup:
     for member in members:
       if not isinstance(member, GDataState):
         raise TypeError(
-            f"Expected a GDataState (or iterable of them), got {type(member)!r}.")
-      # end
-    # end
+            f"Expected a GDataState (or iterable of them), got {type(member)!r}."
+        )
     self._datasets: list = members
-  # end
 
   # ------------------------------------------------------------ sequence
   def __iter__(self):
     return iter(self._datasets)
-  # end
 
   def __len__(self) -> int:
     return len(self._datasets)
-  # end
 
   def __getitem__(self, index):
     """Index or slice the group.
@@ -74,7 +70,6 @@ class GDataStateGroup:
     """
     result = self._datasets[index]
     return GDataStateGroup(result) if isinstance(index, slice) else result
-  # end
 
   @property
   def datasets(self) -> list:
@@ -87,7 +82,6 @@ class GDataStateGroup:
       list: A new ``list`` of the members, in order.
     """
     return list(self._datasets)
-  # end
 
   # ------------------------------------------------------------ combining
   def with_(self, *others) -> "GDataStateGroup":
@@ -107,12 +101,9 @@ class GDataStateGroup:
       by the flattened ``others``.
     """
     return GDataStateGroup(self._datasets + list(others))
-  # end
 
   __and__ = with_
 
   # ---------------------------------------------------------------- repr
   def __repr__(self) -> str:
     return f"<{type(self).__name__} [{len(self._datasets):d} datasets]>"
-  # end
-# end

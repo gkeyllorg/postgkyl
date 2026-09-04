@@ -21,7 +21,6 @@ FIELD_FILE_TYPES = (1, 3)  # single-range and multi-range field data
 def file_type(file_name: str) -> int:
   """The gkyl file type (1..5), or -1 if not a gkyl file."""
   return int(_lib.require().file_type(file_name))
-# end
 
 
 def read_header(file_name: str):
@@ -32,18 +31,19 @@ def read_header(file_name: str):
   """
   grid, ftype, meta, esznc, tot_cells = _lib.require().read_header(file_name)
   return _grid_dict(grid), ftype, meta, esznc, tot_cells
-# end
 
 
 def read_field(file_name: str):
   """Full field read inside Gkeyll: ``(grid_dict, GkylArray)``."""
   grid, cap = _lib.require().read_field(file_name)
   return _grid_dict(grid), GkylArray(cap)
-# end
 
 
-def write_field(file_name: str, grid: dict, arr: GkylArray, *,
-    meta: bytes = b"") -> None:
+def write_field(file_name: str,
+                grid: dict,
+                arr: GkylArray,
+                *,
+                meta: bytes = b"") -> None:
   """Write ``arr`` on a uniform ``grid`` through ``gkyl_grid_sub_array_write``.
 
   The same C write path Gkeyll itself uses, so a round trip through this
@@ -68,10 +68,8 @@ def write_field(file_name: str, grid: dict, arr: GkylArray, *,
   if int(np.prod(cells)) != arr.size:
     raise ValueError(f"grid cells {tuple(cells)} do not cover the array "
                      f"({int(np.prod(cells))} vs {arr.size} cells)")
-  # end
   _lib.require().write_field(file_name, lower, upper, cells,
-      meta if meta else None, arr._cap)
-# end
+                             meta if meta else None, arr._cap)
 
 
 def read_dynvec(file_name: str):
@@ -91,7 +89,6 @@ def read_dynvec(file_name: str):
   tm = GkylArray(tm_cap).to_numpy()[:, 0]
   data = GkylArray(data_cap).to_numpy()
   return tm, data
-# end
 
 
 def write_dynvec(file_name: str, time: np.ndarray, data: np.ndarray) -> None:
@@ -110,13 +107,10 @@ def write_dynvec(file_name: str, time: np.ndarray, data: np.ndarray) -> None:
   data = np.asarray(data, dtype=np.float64)
   if data.ndim == 1:
     data = data[:, None]
-  # end
   if data.shape[0] != time.shape[0]:
     raise ValueError(f"time has {time.shape[0]} samples but data has "
                      f"{data.shape[0]}")
-  # end
   _lib.require().dynvec_write(file_name, time, np.ascontiguousarray(data))
-# end
 
 
 def _grid_dict(grid: tuple) -> dict:
@@ -127,4 +121,3 @@ def _grid_dict(grid: tuple) -> dict:
       "upper": np.asarray(upper),
       "cells": np.asarray(cells, dtype=np.int64),
   }
-# end

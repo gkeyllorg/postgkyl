@@ -7,22 +7,36 @@ from typing import Annotated, Literal
 
 from postgkyl import operations
 from postgkyl.cli_spec import (
-    CommandSpec, Execution, KeyValue, Section, command,
+    CommandSpec,
+    Execution,
+    KeyValue,
+    Section,
+    command,
 )
 from postgkyl.gdata.gdata import GData
 from postgkyl.gdata.gdatagroup import GDataGroup
 
 
 @command(CommandSpec(Section.UTILITY, Execution.LOAD))
-def load(file_name: str, *, tag: str = "default", label: str = "",
+def load(
+    file_name: str,
+    *,
+    tag: str = "default",
+    label: str = "",
     ctx: Annotated[dict[str, str] | None, KeyValue()] = None,
     value_form: Literal["modal", "nodal", "quad"] | None = None,
-    basis_type: str | None = None, poly_order: int | None = None,
-    z0: str | None = None, z1: str | None = None, z2: str | None = None,
-    z3: str | None = None, z4: str | None = None, z5: str | None = None,
+    basis_type: str | None = None,
+    poly_order: int | None = None,
+    z0: str | None = None,
+    z1: str | None = None,
+    z2: str | None = None,
+    z3: str | None = None,
+    z4: str | None = None,
+    z5: str | None = None,
     component: str | None = None,
-    read_options: Annotated[dict[str, str] | None, KeyValue()] = None,
-    ) -> GData | GDataGroup:
+    read_options: Annotated[dict[str, str] | None,
+                            KeyValue()] = None,
+) -> GData | GDataGroup:
   """Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
   ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -82,22 +96,29 @@ def load(file_name: str, *, tag: str = "default", label: str = "",
   axes = (z0, z1, z2, z3, z4, z5)
   if any(value is not None for value in axes):
     read_kwargs["axes"] = axes
-  # end
   if component is not None:
     read_kwargs["comp"] = component
-  # end
   if has_magic(file_name):
     matches = glob(file_name)
     if not matches:
       raise FileNotFoundError(f"No files match pattern: '{file_name}'")
-    # end
-    datasets = [GData(match, tag=tag, label=label, ctx=ctx,
-        value_form=value_form, basis_type=basis_type,
-        poly_order=poly_order, **read_kwargs) for match in matches]
+    datasets = [
+        GData(match,
+              tag=tag,
+              label=label,
+              ctx=ctx,
+              value_form=value_form,
+              basis_type=basis_type,
+              poly_order=poly_order,
+              **read_kwargs) for match in matches
+    ]
     return GDataGroup(operations.sort(datasets))
-  # end
 
-  return GData(file_name, tag=tag, label=label, ctx=ctx,
-      value_form=value_form, basis_type=basis_type,
-      poly_order=poly_order, **read_kwargs)
-# end
+  return GData(file_name,
+               tag=tag,
+               label=label,
+               ctx=ctx,
+               value_form=value_form,
+               basis_type=basis_type,
+               poly_order=poly_order,
+               **read_kwargs)

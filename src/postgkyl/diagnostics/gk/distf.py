@@ -34,13 +34,16 @@ from postgkyl.gdata import GData, GDataGroup, load
 
 from .. import discovery
 
-
 FrameSpec = int | str | list[int] | tuple[int, ...]
 
 
 def resolve_frames(
     frame: FrameSpec,
-    *, name: str, species: str, suffix: str = "", block_idx: int | None = None,
+    *,
+    name: str,
+    species: str,
+    suffix: str = "",
+    block_idx: int | None = None,
 ) -> list[int]:
   """Expand a frame specification into a concrete sorted list of frame indices.
 
@@ -59,18 +62,14 @@ def resolve_frames(
   """
   if isinstance(frame, int):
     return [frame]
-  # end
   if isinstance(frame, (list, tuple)):
     return [int(f) for f in frame]
-  # end
 
   frame_spec = str(frame).strip()
   if "," in frame_spec:
     return [int(f.strip()) for f in frame_spec.split(",")]
-  # end
   if ":" not in frame_spec:
     return [int(frame_spec)]
-  # end
 
   prefix = f"{name}_b{block_idx}" if block_idx is not None else name
   frame_infix = f"{suffix}_" if suffix else ""
@@ -79,35 +78,36 @@ def resolve_frames(
   if not available:
     raise ValueError(
         f"No distribution frames found matching '{stem}<frame>.gkyl'.")
-  # end
   parts = frame_spec.split(":")
   if len(parts) > 3:
     raise ValueError(
         f"Invalid frame range {frame_spec!r}; expected start:stop[:step].")
-  # end
   lower = int(parts[0]) if parts[0] else available[0]
   upper = int(parts[1]) if parts[1] else available[-1] + 1
   step = int(parts[2]) if len(parts) == 3 and parts[2] else 1
   if step <= 0:
     raise ValueError("Frame range step must be a positive integer.")
-  # end
   resolved = [
-      f for f in available
-      if lower <= f < upper and (f - lower) % step == 0
+      f for f in available if lower <= f < upper and (f - lower) % step == 0
   ]
   if not resolved:
     raise ValueError(
-        f"Frame range {frame_spec!r} matches no files for '{stem}<frame>.gkyl'.")
-  # end
+        f"Frame range {frame_spec!r} matches no files for '{stem}<frame>.gkyl'."
+    )
   return resolved
-# end
 
 
 def load_distf(
-    name: str, species: str,
-    frame: Annotated[FrameSpec, CliType(str)], *,
-    tag: str = "f", suffix: str = "", use_c2p_vel: bool = False,
-    use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None,
+    name: str,
+    species: str,
+    frame: Annotated[FrameSpec, CliType(str)],
+    *,
+    tag: str = "f",
+    suffix: str = "",
+    use_c2p_vel: bool = False,
+    use_mc2nu: bool = False,
+    use_mapc2p: bool = False,
+    block_idx: int | None = None,
     num_interp: int | None = None,
     jf_file: str | None = None,
     mapc2p_vel_file: str | None = None,
@@ -150,36 +150,52 @@ def load_distf(
     One interpolated distribution function for a scalar frame, or a fluent
     group holding one distribution function per requested frame.
   """
-  frames = resolve_frames(frame, name=name, species=species,
-      suffix=suffix, block_idx=block_idx)
+  frames = resolve_frames(frame,
+                          name=name,
+                          species=species,
+                          suffix=suffix,
+                          block_idx=block_idx)
   datasets = [
-      _load_distf_frame(
-          name=name, species=species, frame=resolved_frame, tag=tag,
-          suffix=suffix, use_c2p_vel=use_c2p_vel, use_mc2nu=use_mc2nu,
-          use_mapc2p=use_mapc2p, block_idx=block_idx,
-          num_interp=num_interp, jf_file=jf_file,
-          mapc2p_vel_file=mapc2p_vel_file, jacobvel_file=jacobvel_file,
-          mc2nu_file=mc2nu_file, mapc2p_file=mapc2p_file,
-          jacobtot_inv_file=jacobtot_inv_file)
+      _load_distf_frame(name=name,
+                        species=species,
+                        frame=resolved_frame,
+                        tag=tag,
+                        suffix=suffix,
+                        use_c2p_vel=use_c2p_vel,
+                        use_mc2nu=use_mc2nu,
+                        use_mapc2p=use_mapc2p,
+                        block_idx=block_idx,
+                        num_interp=num_interp,
+                        jf_file=jf_file,
+                        mapc2p_vel_file=mapc2p_vel_file,
+                        jacobvel_file=jacobvel_file,
+                        mc2nu_file=mc2nu_file,
+                        mapc2p_file=mapc2p_file,
+                        jacobtot_inv_file=jacobtot_inv_file)
       for resolved_frame in frames
   ]
 
-  is_series = isinstance(frame, (list, tuple)) or (
-      isinstance(frame, str) and ("," in frame or ":" in frame))
+  is_series = isinstance(frame,
+                         (list, tuple)) or (isinstance(frame, str) and
+                                            ("," in frame or ":" in frame))
   if not is_series:
     return datasets[0]
-  # end
   for dataset, resolved_frame in zip(datasets, frames):
     dataset.set_label(str(resolved_frame))
-  # end
   return GDataGroup(datasets)
-# end
 
 
 def _load_distf_frame(
-    name: str, species: str, frame: int, *,
-    tag: str = "f", suffix: str = "", use_c2p_vel: bool = False,
-    use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None,
+    name: str,
+    species: str,
+    frame: int,
+    *,
+    tag: str = "f",
+    suffix: str = "",
+    use_c2p_vel: bool = False,
+    use_mc2nu: bool = False,
+    use_mapc2p: bool = False,
+    block_idx: int | None = None,
     num_interp: int | None = None,
     jf_file: str | None = None,
     mapc2p_vel_file: str | None = None,
@@ -194,22 +210,16 @@ def _load_distf_frame(
 
   if jf_file is None:
     jf_file = f"{prefix}-{species}_{frame_infix}{frame}.gkyl"
-  # end
   if mapc2p_vel_file is None:
     mapc2p_vel_file = f"{prefix}-{species}_mapc2p_vel.gkyl"
-  # end
   if jacobvel_file is None:
     jacobvel_file = f"{prefix}-{species}_jacobvel.gkyl"
-  # end
   if mc2nu_file is None:
     mc2nu_file = f"{prefix}-geo_corn_mc2nu_pos_deflated.gkyl"
-  # end
   if mapc2p_file is None:
     mapc2p_file = f"{prefix}-geo_corn_mapc2p_deflated.gkyl"
-  # end
   if jacobtot_inv_file is None:
     jacobtot_inv_file = f"{prefix}-geo_int_jacobtot_inv.gkyl"
-  # end
 
   jf_data = load(jf_file)
   # jacobvel is stored piecewise-constant per cell (see module docstring): one
@@ -240,17 +250,12 @@ def _load_distf_frame(
     mc2p_vel = load(mapc2p_vel_file, poly_order=1, basis_type="serendipity")
     out = operations.map(out, mc2p_vel, space="vel")
     grid_type.append("c2p_vel")
-  # end
   if use_mc2nu:
     out = operations.map(out, mc2nu_file, space="conf")
     grid_type.append("mc2nu")
-  # end
   elif use_mapc2p:
     out = operations.map(out, mapc2p_file, space="conf")
     grid_type.append("mapc2p")
-  # end
   if grid_type:
     out.ctx["grid_type"] = " + ".join(grid_type)
-  # end
   return out
-# end

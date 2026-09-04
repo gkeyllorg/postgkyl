@@ -57,7 +57,6 @@ def is_geo_mapc2p(ctx: dict) -> bool:
   Files without ``geometry_type`` retain the historical MAPC2P default.
   """
   return ctx.get("geometry_type", _MAPC2P_IDX) == _MAPC2P_IDX
-# end
 
 
 def geometry_prefix(file_name: str | None) -> str | None:
@@ -68,16 +67,13 @@ def geometry_prefix(file_name: str | None) -> str | None:
   """
   name = parse_output_name(file_name)
   return name.prefix if name is not None else None
-# end
 
 
 def per_block_path(path: str | None, block: int | None) -> str | None:
   """Substitute a multiblock index for ``'*'`` in a geometry override."""
   if path is None or block is None or "*" not in path:
     return path
-  # end
   return path.replace("*", str(block))
-# end
 
 
 def _gauss_nodes(edges: np.ndarray) -> np.ndarray:
@@ -85,35 +81,33 @@ def _gauss_nodes(edges: np.ndarray) -> np.ndarray:
   centers = 0.5 * (edges[:-1] + edges[1:])
   offsets = np.diff(edges) / (2.0 * np.sqrt(3.0))
   return np.ravel(np.column_stack([centers - offsets, centers + offsets]))
-# end
 
 
-def _pointwise_file(path: str) -> tuple[list[np.ndarray], np.ndarray, GDataState]:
+def _pointwise_file(
+    path: str) -> tuple[list[np.ndarray], np.ndarray, GDataState]:
   """Read a point-value geometry file and squeeze singleton dimensions."""
   data = GDataState(path)
   grid = [np.squeeze(axis) for axis in data.grid]
   return grid, np.squeeze(data.values), data
-# end
 
 
-def _geometry_components(values: np.ndarray, data: GDataState, path: str
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+def _geometry_components(
+    values: np.ndarray, data: GDataState,
+    path: str) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
   """Interpret one geometry value array as ``R``, ``Z``, and optional phi."""
   required = 3 if is_geo_mapc2p(data.ctx) else 2
   if values.ndim < 2 or values.shape[-1] < required:
     kind = "Cartesian X/Y/Z" if required == 3 else "R/Z"
     raise ValueError(
-        f"Geometry file '{path}' must contain at least {required} {kind} components.")
-  # end
+        f"Geometry file '{path}' must contain at least {required} {kind} components."
+    )
 
   if is_geo_mapc2p(data.ctx):
     x, y, z = values[..., 0], values[..., 1], values[..., 2]
     return np.sqrt(x**2 + y**2), z, np.arctan2(y, x)
-  # end
   r, z = values[..., 0], values[..., 1]
   phi = values[..., 2] if r.ndim == 3 and values.shape[-1] >= 3 else None
   return r, z, phi
-# end
 
 
 def _read_mapc2p_geometry(path: str):
@@ -124,7 +118,6 @@ def _read_mapc2p_geometry(path: str):
   coords = nodal_to_cell_centered_grid(field.grid, cells)
   major_r, vert_z, phi = _geometry_components(field.values, field, path)
   return coords, major_r, vert_z, phi
-# end
 
 
 def _read_nodes_geometry(path: str):
@@ -135,22 +128,20 @@ def _read_nodes_geometry(path: str):
     if axis.ndim != 1 or axis.shape[0] != values.shape[dim] + 1 \
         or values.shape[dim] % 2:
       raise ValueError(f"Unrecognized nodal geometry layout in '{path}'.")
-    # end
     coords.append(_gauss_nodes(axis[::2]))
-  # end
   major_r, vert_z, phi = _geometry_components(values, data, path)
   return coords, major_r, vert_z, phi
-# end
 
 
 def _read_corner_rz(path: str):
   """Read R and Z from a pointwise ``'-geo_corn_nodes.gkyl'`` file."""
   grid, values, data = _pointwise_file(path)
-  coords = [np.linspace(axis[0], axis[-1], n)
-      for axis, n in zip(grid, values.shape[:-1])]
+  coords = [
+      np.linspace(axis[0], axis[-1], n)
+      for axis, n in zip(grid, values.shape[:-1])
+  ]
   major_r, vert_z, _ = _geometry_components(values, data, path)
   return coords, major_r, vert_z
-# end
 
 
 def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
@@ -159,44 +150,44 @@ def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
     raise ValueError(
         f"Geometry has {len(geometry.coords)} dimensions but the data is "
         f"{num_dims}-D.")
-  # end
-  if any(np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
+  if any(
+      np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
       for axis in geometry.coords):
-    raise ValueError("Geometry coordinates must be one-dimensional arrays with at least two points.")
-  # end
+    raise ValueError(
+        "Geometry coordinates must be one-dimensional arrays with at least two points."
+    )
   if any(not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))
-      for axis in geometry.coords):
+         for axis in geometry.coords):
     raise ValueError("Geometry coordinate arrays must be strictly monotonic.")
-  # end
   shape = tuple(np.asarray(axis).size for axis in geometry.coords)
   if geometry.major_r.shape != shape or geometry.vert_z.shape != shape:
     raise ValueError(
         "Geometry coordinate and R/Z array shapes are incompatible: "
-        f"expected {shape}, got R{geometry.major_r.shape} and Z{geometry.vert_z.shape}.")
-  # end
+        f"expected {shape}, got R{geometry.major_r.shape} and Z{geometry.vert_z.shape}."
+    )
   if geometry.phi is not None and geometry.phi.shape != shape:
     raise ValueError(
-        f"Geometry toroidal-angle shape {geometry.phi.shape} does not match {shape}.")
-  # end
+        f"Geometry toroidal-angle shape {geometry.phi.shape} does not match {shape}."
+    )
   if geometry.corner is not None:
     corner_coords, corner_r, corner_z = geometry.corner
     if len(corner_coords) != num_dims:
       raise ValueError(
-          f"Corner geometry has {len(corner_coords)} dimensions; expected {num_dims}.")
-    # end
+          f"Corner geometry has {len(corner_coords)} dimensions; expected {num_dims}."
+      )
     corner_shape = tuple(np.asarray(axis).size for axis in corner_coords)
-    if (any(np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
-        for axis in corner_coords)
-        or corner_r.shape != corner_shape or corner_z.shape != corner_shape):
+    if (any(
+        np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
+        for axis in corner_coords) or corner_r.shape != corner_shape
+        or corner_z.shape != corner_shape):
       raise ValueError(
           "Corner geometry coordinate and R/Z array shapes are incompatible.")
-    # end
-  # end
-# end
 
 
-def resolve_geometry(file_name: str | None, *, mapc2p: str | None = None,
-    nodes_file: str | None = None) -> Geometry:
+def resolve_geometry(file_name: str | None,
+                     *,
+                     mapc2p: str | None = None,
+                     nodes_file: str | None = None) -> Geometry:
   """Resolve and load the geometry belonging to ``file_name``.
 
   The exact pointwise ``'<prefix>-geo_int_nodes.gkyl'`` representation is
@@ -210,7 +201,6 @@ def resolve_geometry(file_name: str | None, *, mapc2p: str | None = None,
   """
   if mapc2p is not None and nodes_file is not None:
     raise ValueError("Pass either mapc2p= or nodes_file=, not both.")
-  # end
 
   parsed = parse_output_name(file_name)
   prefix = geometry_prefix(file_name)
@@ -226,141 +216,140 @@ def resolve_geometry(file_name: str | None, *, mapc2p: str | None = None,
     path, kind = f"{prefix}-geo_int_nodes.gkyl", "nodes"
     if not os.path.exists(path):
       path, kind = f"{prefix}-geo_int_mapc2p.gkyl", "mapc2p"
-    # end
   else:
     path, kind = None, None
-  # end
 
   if path is None or not os.path.exists(path):
     raise ValueError(
-        "Could not find a geometry file; pass nodes_file= or mapc2p= explicitly.")
-  # end
+        "Could not find a geometry file; pass nodes_file= or mapc2p= explicitly."
+    )
 
-  coords, major_r, vert_z, phi = (
-      _read_nodes_geometry(path) if kind == "nodes" else _read_mapc2p_geometry(path))
+  coords, major_r, vert_z, phi = (_read_nodes_geometry(path) if kind == "nodes"
+                                  else _read_mapc2p_geometry(path))
 
   corner = None
   if prefix is not None:
     corner_path = f"{prefix}-geo_corn_nodes.gkyl"
     if os.path.exists(corner_path):
       corner = _read_corner_rz(corner_path)
-    # end
-  # end
 
-  geometry = Geometry(coords=coords, major_r=major_r, vert_z=vert_z,
-      phi=phi, corner=corner)
+  geometry = Geometry(coords=coords,
+                      major_r=major_r,
+                      vert_z=vert_z,
+                      phi=phi,
+                      corner=corner)
   _validate_geometry(geometry, len(coords))
   return geometry
-# end
 
 
 def _validate_positive_int(value: int, name: str) -> int:
-  if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value <= 0:
+  if isinstance(value, bool) or not isinstance(value,
+                                               (int, np.integer)) or value <= 0:
     raise ValueError(f"{name} must be a positive integer.")
-  # end
   return int(value)
-# end
 
 
 def _validate_modal_data(data: GDataState, operation: str,
-    dimensions: tuple[int, ...]) -> None:
+                         dimensions: tuple[int, ...]) -> None:
   """Enforce the shared raw-DG input contract for GK projections."""
   if data.num_dims not in dimensions:
     expected = " or ".join(f"{dim}-D" for dim in dimensions)
-    raise ValueError(f"{operation} requires {expected} data; got {data.num_dims}-D.")
-  # end
+    raise ValueError(
+        f"{operation} requires {expected} data; got {data.num_dims}-D.")
   if data.values is None:
     raise ValueError(f"{operation} requires a loaded dataset.")
-  # end
-  if data.ctx.get("interpolated") or data.ctx.get("value_form", "modal") != "modal":
+  if data.ctx.get("interpolated") or data.ctx.get("value_form",
+                                                  "modal") != "modal":
     raise ValueError(f"{operation} expects un-interpolated modal DG data.")
-  # end
   if not data.ctx.get("basis_type"):
-    raise ValueError(f"{operation} requires 'basis_type' metadata on the input data.")
-  # end
+    raise ValueError(
+        f"{operation} requires 'basis_type' metadata on the input data.")
   poly_order = data.ctx.get("poly_order")
   if isinstance(poly_order, bool) or not isinstance(poly_order, (int, np.integer)) \
       or poly_order < 0:
-    raise ValueError(f"{operation} requires a nonnegative integer 'poly_order'.")
-  # end
-  if len(data.grid) != data.num_dims or any(np.asarray(axis).ndim != 1
-      or np.asarray(axis).size < 2 for axis in data.grid):
-    raise ValueError(f"{operation} requires one one-dimensional edge grid per data dimension.")
-  # end
-  if any(not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))
+    raise ValueError(
+        f"{operation} requires a nonnegative integer 'poly_order'.")
+  if len(data.grid) != data.num_dims or any(
+      np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
       for axis in data.grid):
-    raise ValueError(f"{operation} requires strictly monotonic data edge grids.")
-  # end
-# end
+    raise ValueError(
+        f"{operation} requires one one-dimensional edge grid per data dimension."
+    )
+  if any(not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))
+         for axis in data.grid):
+    raise ValueError(
+        f"{operation} requires strictly monotonic data edge grids.")
 
 
 def _num_fields(data: GDataState) -> int:
   """Return the number of physical fields stored in raw modal data."""
   basis_count = num_basis(data.num_dims, int(data.ctx["poly_order"]),
-      data.ctx["basis_type"])
+                          data.ctx["basis_type"])
   stored = data.values.shape[-1]
   if stored % basis_count:
     raise ValueError(
         f"Data stores {stored} coefficients per cell, which is incompatible "
         f"with a {basis_count}-coefficient basis.")
-  # end
   return stored // basis_count
-# end
 
 
 def _validate_component(data: GDataState, comp: int) -> int:
   if isinstance(comp, bool) or not isinstance(comp, (int, np.integer)):
     raise ValueError("comp must be an integer component index.")
-  # end
   comp = int(comp)
   num_fields = _num_fields(data)
   if not 0 <= comp < num_fields:
     raise ValueError(
-        f"comp {comp} is out of bounds for data with {num_fields} component(s).")
-  # end
+        f"comp {comp} is out of bounds for data with {num_fields} component(s)."
+    )
   return comp
-# end
 
 
-def _interpolation_grid(data: GDataState) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def _interpolation_grid(
+    data: GDataState) -> tuple[list[np.ndarray], list[np.ndarray]]:
   """Return interpolation edges/centers without evaluating field values."""
   num_interp = int(data.ctx["poly_order"]) + 1
-  edges = [np.linspace(axis[0], axis[-1], num_interp * (axis.size - 1) + 1)
-      for axis in data.grid]
+  edges = [
+      np.linspace(axis[0], axis[-1],
+                  num_interp * (axis.size - 1) + 1) for axis in data.grid
+  ]
   centers = nodal_to_cell_centered_grid(
       edges, np.array([axis.size - 1 for axis in edges]))
   return edges, centers
-# end
 
 
-def _interpolate_component(data: GDataState,
+def _interpolate_component(
+    data: GDataState,
     comp: int) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
   """Interpolate and return a component already checked by the public API."""
   field = interpolate(data)
   cells = field.values.shape[:-1]
   centers = nodal_to_cell_centered_grid(field.grid, cells)
   return field.grid, centers, field.values[..., comp]
-# end
 
 
 def _resample_grid(values: np.ndarray, src_coords: list[np.ndarray],
-    dst_coords: list[np.ndarray]) -> np.ndarray:
+                   dst_coords: list[np.ndarray]) -> np.ndarray:
   """Linearly resample ``values`` between tensor-product coordinate grids."""
   mesh = np.meshgrid(*dst_coords, indexing="ij")
-  return RegularGridInterpolator(tuple(src_coords), values, bounds_error=False,
-      fill_value=None)(tuple(mesh))
-# end
+  return RegularGridInterpolator(tuple(src_coords),
+                                 values,
+                                 bounds_error=False,
+                                 fill_value=None)(tuple(mesh))
 
 
 def _same_grid(left: tuple[np.ndarray, ...] | list[np.ndarray],
-    right: tuple[np.ndarray, ...] | list[np.ndarray]) -> bool:
+               right: tuple[np.ndarray, ...] | list[np.ndarray]) -> bool:
   return len(left) == len(right) and all(
       a.shape == b.shape and np.allclose(a, b, rtol=1e-12, atol=1e-14)
       for a, b in zip(left, right))
-# end
 
 
 __all__ = [
-    "GKYL_GEOMETRY_ID", "Geometry", "geometry_prefix", "is_geo_mapc2p",
-    "per_block_path", "resolve_geometry",
+    "GKYL_GEOMETRY_ID",
+    "Geometry",
+    "geometry_prefix",
+    "is_geo_mapc2p",
+    "per_block_path",
+    "resolve_geometry",
 ]

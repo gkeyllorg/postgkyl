@@ -12,7 +12,6 @@ from postgkyl.cli_spec import command_spec, hidden_spec
 
 class SurfaceClassificationError(ValueError):
   """A public CLI candidate is neither exposed nor explicitly hidden."""
-# end
 
 
 @dataclass(frozen=True)
@@ -20,7 +19,6 @@ class DiscoveredCallable:
   name: str
   callable: object
   public_path: str
-# end
 
 
 def _classify(obj, path: str) -> bool:
@@ -29,24 +27,18 @@ def _classify(obj, path: str) -> bool:
   if exposed == excluded:
     state = "both exposed and hidden" if exposed else "unclassified"
     raise SurfaceClassificationError(f"{path}: public callable is {state}")
-  # end
   return exposed
-# end
 
 
 def _functions(module: ModuleType):
   public = getattr(module, "__all__", None)
   names = public if public is not None else sorted(
-      name for name, value in vars(module).items()
-      if not name.startswith("_") and inspect.isfunction(value)
-      and value.__module__ == module.__name__)
+      name for name, value in vars(module).items() if not name.startswith("_")
+      and inspect.isfunction(value) and value.__module__ == module.__name__)
   for name in names:
     value = getattr(module, name)
     if inspect.isfunction(value):
       yield name, value
-    # end
-  # end
-# end
 
 
 def _diagnostic_modules(root: ModuleType):
@@ -55,19 +47,16 @@ def _diagnostic_modules(root: ModuleType):
   def visit(module):
     if id(module) in seen:
       return
-    # end
     seen.add(id(module))
     yield module
     for name in getattr(module, "__all__", ()):
       value = getattr(module, name)
-      if isinstance(value, ModuleType) and value.__name__.startswith(
-          "postgkyl.diagnostics"):
+      if isinstance(
+          value,
+          ModuleType) and value.__name__.startswith("postgkyl.diagnostics"):
         yield from visit(value)
-      # end
-    # end
-  # end
+
   yield from visit(root)
-# end
 
 
 def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
@@ -79,12 +68,9 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
     key = (id(obj), name)
     if key in classified:
       return
-    # end
     classified.add(key)
     if _classify(obj, path):
       found.append(DiscoveredCallable(name, obj, path))
-    # end
-  # end
 
   # Fluent methods are the authoritative inventory of per-dataset commands.
   for cls_name in ("GData", "GDataGroup"):
@@ -92,11 +78,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
     for name, value in sorted(cls.__dict__.items()):
       if name.startswith("_") or not callable(value):
         continue
-      # end
-      consider(value, f"{cls.__module__}.{cls.__qualname__}.{name}",
-          name)
-    # end
-  # end
+      consider(value, f"{cls.__module__}.{cls.__qualname__}.{name}", name)
 
   # Public facade functions not already reached through their fluent view.
   for name in facade.__all__:
@@ -105,18 +87,13 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
       path = f"postgkyl.{name}"
       if value.__module__.startswith("postgkyl.diagnostics"):
         _classify(value, path)
-      # end
       else:
         consider(value, path, name)
-      # end
-    # end
-  # end
 
   diagnostics = facade.diagnostics
   for module in _diagnostic_modules(diagnostics):
     if module is diagnostics:
       continue
-    # end
     relative = module.__name__.removeprefix("postgkyl.diagnostics.")
     # Model-family packages group related diagnostic modules without erasing
     # each module's public command vocabulary. For example,
@@ -131,10 +108,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
         # a second command or move it into the wrong help section.
         _classify(value, f"{module.__name__}.{name}")
         continue
-      # end
-      consider(value, f"{module.__name__}.{name}",
-          f"{namespace}_{name}")
-    # end
+      consider(value, f"{module.__name__}.{name}", f"{namespace}_{name}")
 
     # Registry values are public vocabulary roots too. Identity de-duplication
     # means aliases do not invent additional command names.
@@ -143,11 +117,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
       for value in variables.values():
         if inspect.isfunction(value):
           consider(value, f"{module.__name__}.VARIABLES[{value.__name__!r}]",
-              f"{namespace}_{value.__name__}")
-        # end
-      # end
-    # end
-  # end
+                   f"{namespace}_{value.__name__}")
 
   # A fluent view and facade function may be aliases of the same operation.
   # Keep one deterministic view.
@@ -155,9 +125,11 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
   for item in found:
     key = (item.name, id(item.callable))
     unique.setdefault(key, item)
-  # end
-  return tuple(sorted(unique.values(), key=lambda item: (item.name, item.public_path)))
-# end
+  return tuple(
+      sorted(unique.values(), key=lambda item: (item.name, item.public_path)))
 
 
-__all__ = ["DiscoveredCallable", "SurfaceClassificationError", "discover_public_surface"]
+__all__ = [
+    "DiscoveredCallable", "SurfaceClassificationError",
+    "discover_public_surface"
+]

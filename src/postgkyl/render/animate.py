@@ -20,11 +20,19 @@ from typing import Annotated, TYPE_CHECKING
 import numpy as np
 
 from postgkyl.cli_spec import (
-    CliType, CommandSpec, Execution, PipelineInput, ResultPolicy, Section,
+    CliType,
+    CommandSpec,
+    Execution,
+    PipelineInput,
+    ResultPolicy,
+    Section,
     command,
 )
 from postgkyl.gdatastate import (
-    GDataState, group_blocks, group_frames, materialize_point_values,
+    GDataState,
+    group_blocks,
+    group_frames,
+    materialize_point_values,
 )
 
 from . import matplotlib as backend
@@ -32,30 +40,31 @@ from ._ffmpeg import require_ffmpeg
 
 if TYPE_CHECKING:
   from matplotlib.figure import Figure
-# end
 
 # Formats written through ffmpeg; PIL handles the rest (gif/webp/apng).
 _VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv")
 
 
-def _normalize_frames(data, *, multiblock: bool = False) -> list[list["GDataState"]]:
+def _normalize_frames(data,
+                      *,
+                      multiblock: bool = False) -> list[list["GDataState"]]:
   """Group a flat input when requested and materialize every frame dataset."""
   items = list(data)
   if items and all(isinstance(item, GDataState) for item in items):
     items = group_frames(items) if multiblock else group_blocks(items)
-  # end
   frames = [([materialize_point_values(item)] if isinstance(item, GDataState)
-      else [materialize_point_values(dat) for dat in item]) for item in items]
+             else [materialize_point_values(dat) for dat in item])
+            for item in items]
   if not frames:
     raise ValueError("animate: no datasets to animate.")
-  # end
   return frames
-# end
 
 
 def _frame_value_range(frames: list[list["GDataState"]],
-    cutoff: float | None = None, *, yscale: float = 1.0,
-    zscale: float = 1.0) -> tuple[float, float]:
+                       cutoff: float | None = None,
+                       *,
+                       yscale: float = 1.0,
+                       zscale: float = 1.0) -> tuple[float, float]:
   """Value range spanning every dataset in every frame.
 
   Each dataset is scaled by ``yscale`` (1-D) or ``zscale`` (2-D) before its
@@ -74,17 +83,13 @@ def _frame_value_range(frames: list[list["GDataState"]],
       scaled = dat.values * (yscale if dat.num_dims == 1 else zscale)
       extrema.append(np.nanmin(scaled))
       extrema.append(np.nanmax(scaled))
-    # end
-  # end
   extrema = np.array(extrema)
   vmin, vmax = float(extrema.min()), float(extrema.max())
   if cutoff:
     boundary = 100.0 * (1.0 - cutoff) / 2.0
     vmax = float(np.percentile(extrema, 100.0 - boundary))
     vmin = float(np.percentile(extrema, boundary))
-  # end
   return vmin, vmax
-# end
 
 
 def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
@@ -102,21 +107,16 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
     parts = []
     if dat0.ctx.get("frame") is not None:
       parts.append(f"frame: {dat0.ctx['frame']:d}")
-    # end
     if dat0.ctx.get("time") is not None:
       parts.append(f"time: {dat0.ctx['time']:.4e}")
-    # end
     kwargs["title"] = " ".join(parts)
-  # end
   return backend.plot(*frame, figure=fig, clear=True, show=False, **kwargs)
-# end
 
 
-def _render_frame(index: int, frames: list[list["GDataState"]],
-    fig: "Figure", plot_kwargs: dict):
+def _render_frame(index: int, frames: list[list["GDataState"]], fig: "Figure",
+                  plot_kwargs: dict):
   """``FuncAnimation``'s per-frame callback: draw ``frames[index]``."""
   return _draw_frame(frames[index], fig, plot_kwargs)
-# end
 
 
 def _save_frame_worker(args) -> str:
@@ -135,14 +135,16 @@ def _save_frame_worker(args) -> str:
     fig.savefig(path, dpi=dpi)
   finally:
     plt.close(fig)
-  # end
   return path
-# end
 
 
-def _save_frames(frames: list[list["GDataState"]], prefix: str, *,
-    dpi: int | None = None, figsize=None, plot_kwargs: dict | None = None,
-    nproc: int = 1) -> list[str]:
+def _save_frames(frames: list[list["GDataState"]],
+                 prefix: str,
+                 *,
+                 dpi: int | None = None,
+                 figsize=None,
+                 plot_kwargs: dict | None = None,
+                 nproc: int = 1) -> list[str]:
   """Write ``<prefix>_<i>.png`` for every frame.
 
   Sequentially (``nproc == 1``), one figure is reused across every frame.
@@ -157,8 +159,6 @@ def _save_frames(frames: list[list["GDataState"]], prefix: str, *,
                  for i in range(len(frames))]
     with Pool(nproc) as pool:
       return pool.map(_save_frame_worker, args_list)
-    # end
-  # end
 
   import matplotlib.pyplot as plt
 
@@ -170,17 +170,16 @@ def _save_frames(frames: list[list["GDataState"]], prefix: str, *,
       path = f"{prefix}_{i}.png"
       fig.savefig(path, dpi=dpi)
       paths.append(path)
-  # end
-    # end
   finally:
     plt.close(fig)
-  # end
   return paths
-# end
 
 
-def _compile_movie(frame_files: list[str], output_file: str, *,
-    fps: int | None = None, duration: float = 100.0) -> None:
+def _compile_movie(frame_files: list[str],
+                   output_file: str,
+                   *,
+                   fps: int | None = None,
+                   duration: float = 100.0) -> None:
   """Compile PNG frames into an animation: PIL for gif/webp/apng, the
   Matplotlib ffmpeg writer for video containers. ``duration`` is the
   per-frame time in milliseconds, used when ``fps`` is not given."""
@@ -189,10 +188,13 @@ def _compile_movie(frame_files: list[str], output_file: str, *,
   ext = os.path.splitext(output_file)[1].lower()
   if ext in (".gif", ".webp", ".apng"):
     images = [Image.open(f) for f in frame_files]
-    images[0].save(output_file, save_all=True, append_images=images[1:],
-        duration=duration, loop=0, optimize=False)
+    images[0].save(output_file,
+                   save_all=True,
+                   append_images=images[1:],
+                   duration=duration,
+                   loop=0,
+                   optimize=False)
     return
-  # end
   if ext in _VIDEO_EXTS:
     import matplotlib as mpl
     import matplotlib.pyplot as plt
@@ -213,31 +215,35 @@ def _compile_movie(frame_files: list[str], output_file: str, *,
           ax.axis("off")
           ax.imshow(Image.open(frame_file))
           writer.grab_frame()
-    # end
-        # end
-      # end
     finally:
       plt.close(fig)
-    # end
     return
-  # end
   raise ValueError(f"animate: unsupported output format {ext!r}")
-# end
 
 
-@command(CommandSpec(Section.RENDER, Execution.TERMINAL_ALL,
-    result=ResultPolicy.SILENT))
-def animate(data: Annotated[
-        Iterable[GDataState | Iterable[GDataState]], PipelineInput()], *,
-    multiblock: bool = False, grouptags: bool = False,
-    interval: int = 100, fixed_range: bool = True,
-    cutoffglobalrange: float | None = None, notitle: bool = False,
-    show: bool = True, save: bool = False, saveas: str | None = None,
-    fps: int | None = None, dpi: int | None = None,
-    saveframes: str | None = None,
-    figsize: Annotated[tuple[float, float] | str | None,
-        CliType(tuple[float, float] | None)] = None,
-    nproc: int = 1, tmpdir: str | None = None):
+@command(
+    CommandSpec(Section.RENDER,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))
+def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
+                            PipelineInput()],
+            *,
+            multiblock: bool = False,
+            grouptags: bool = False,
+            interval: int = 100,
+            fixed_range: bool = True,
+            cutoffglobalrange: float | None = None,
+            notitle: bool = False,
+            show: bool = True,
+            save: bool = False,
+            saveas: str | None = None,
+            fps: int | None = None,
+            dpi: int | None = None,
+            saveframes: str | None = None,
+            figsize: Annotated[tuple[float, float] | str | None,
+                               CliType(tuple[float, float] | None)] = None,
+            nproc: int = 1,
+            tmpdir: str | None = None):
   """Animate a sequence of frames, one frame per dataset (or dataset group).
 
   Args:
@@ -281,58 +287,68 @@ def animate(data: Annotated[
     RuntimeError: saving to a video container without ffmpeg on ``PATH``.
   """
   items = list(data)
-  if items and grouptags and all(isinstance(item, GDataState) for item in items):
+  if items and grouptags and all(
+      isinstance(item, GDataState) for item in items):
     tags: dict[str, list[GDataState]] = {}
     for item in items:
       tags.setdefault(item.tag, []).append(item)
-    # end
 
     def suffixed(path, tag):
       if path is None:
         return None
-      # end
       stem, extension = os.path.splitext(path)
       return f"{stem}_{tag}{extension}"
-    # end
 
-    return [animate(tagged, multiblock=multiblock, interval=interval,
-        fixed_range=fixed_range, cutoffglobalrange=cutoffglobalrange,
-        notitle=notitle, show=show, save=save,
-        saveas=suffixed(saveas, tag), fps=fps, dpi=dpi,
-        saveframes=suffixed(saveframes, tag), figsize=figsize, nproc=nproc,
-        tmpdir=tmpdir) for tag, tagged in tags.items()]
-  # end
+    return [
+        animate(tagged,
+                multiblock=multiblock,
+                interval=interval,
+                fixed_range=fixed_range,
+                cutoffglobalrange=cutoffglobalrange,
+                notitle=notitle,
+                show=show,
+                save=save,
+                saveas=suffixed(saveas, tag),
+                fps=fps,
+                dpi=dpi,
+                saveframes=suffixed(saveframes, tag),
+                figsize=figsize,
+                nproc=nproc,
+                tmpdir=tmpdir) for tag, tagged in tags.items()
+    ]
 
   frames = _normalize_frames(items, multiblock=multiblock)
   plot_kwargs = {}
   plot_kwargs["notitle"] = notitle
 
   if fixed_range:
-    vmin, vmax = _frame_value_range(frames, cutoffglobalrange,
-        yscale=plot_kwargs.get("yscale", 1.0), zscale=plot_kwargs.get("zscale", 1.0))
+    vmin, vmax = _frame_value_range(frames,
+                                    cutoffglobalrange,
+                                    yscale=plot_kwargs.get("yscale", 1.0),
+                                    zscale=plot_kwargs.get("zscale", 1.0))
     # Applied as both the 1-D y-limits (ymin/ymax) and the 2-D color range
     # (zmin/zmax) -- whichever the frame's dimensionality actually uses.
     plot_kwargs.setdefault("ymin", vmin)
     plot_kwargs.setdefault("ymax", vmax)
     plot_kwargs.setdefault("zmin", vmin)
     plot_kwargs.setdefault("zmax", vmax)
-  # end
 
   num_frames = len(frames)
   duration = 1.0e3 / fps if fps else float(interval)
   out_file = saveas or "anim.gif"
   if not os.path.splitext(out_file)[1]:
     out_file += ".gif"
-  # end
 
   if saveframes:
-    frame_files = _save_frames(frames, saveframes, dpi=dpi, figsize=figsize,
-        plot_kwargs=plot_kwargs, nproc=nproc)
+    frame_files = _save_frames(frames,
+                               saveframes,
+                               dpi=dpi,
+                               figsize=figsize,
+                               plot_kwargs=plot_kwargs,
+                               nproc=nproc)
     if save or saveas:
       _compile_movie(frame_files, out_file, fps=fps, duration=duration)
-    # end
     return frame_files
-  # end
 
   if nproc > 1:
     # No standing PNGs requested -- render into a scratch directory, compile,
@@ -343,27 +359,30 @@ def animate(data: Annotated[
 
     with tempfile.TemporaryDirectory(dir=tmpdir) as tmp:
       tmp_prefix = f"{tmp}/frame"
-      frame_files = _save_frames(frames, tmp_prefix, dpi=dpi, figsize=figsize,
-          plot_kwargs=plot_kwargs, nproc=nproc)
+      frame_files = _save_frames(frames,
+                                 tmp_prefix,
+                                 dpi=dpi,
+                                 figsize=figsize,
+                                 plot_kwargs=plot_kwargs,
+                                 nproc=nproc)
       _compile_movie(frame_files, out_file, fps=fps, duration=duration)
-    # end
     return out_file
-  # end
 
   import matplotlib.pyplot as plt
   from matplotlib.animation import FuncAnimation
 
   fig = plt.figure(figsize=figsize)
-  anim = FuncAnimation(fig, _render_frame, num_frames,
-      fargs=(frames, fig, plot_kwargs), interval=interval, blit=False)
+  anim = FuncAnimation(fig,
+                       _render_frame,
+                       num_frames,
+                       fargs=(frames, fig, plot_kwargs),
+                       interval=interval,
+                       blit=False)
   if save or saveas:
     import matplotlib as mpl
 
     mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
     anim.save(out_file, writer="ffmpeg", fps=fps, dpi=dpi)
-  # end
   if show:
     plt.show()
-  # end
   return anim
-# end

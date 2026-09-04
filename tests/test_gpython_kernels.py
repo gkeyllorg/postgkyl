@@ -17,8 +17,8 @@ from postgkyl import gpython  # noqa: E402
 from postgkyl.gpython import kernels as k  # noqa: E402
 from postgkyl.gpython.array import GkylArray  # noqa: E402
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 pytestmark = needs_gkeyll
 
@@ -31,7 +31,6 @@ def _smooth_field(basis_type, ndim, p, cells, rng, shift=0.0):
   coeffs = rng.normal(scale=0.05, size=(cells, nb))
   coeffs[:, 0] += shift
   return GkylArray.from_numpy(coeffs)
-# end
 
 
 # --------------------------------------------------------------- weak algebra
@@ -45,7 +44,6 @@ def test_weak_mul_div_are_inverses_on_smooth_fields(ndim, p):
   ab = k.weak_mul(basis_type, ndim, p, a, b)
   back = k.weak_div(basis_type, ndim, p, ab, b)
   np.testing.assert_allclose(back.view(), a.view(), atol=1e-10)
-# end
 
 
 def test_weak_inv_matches_weak_div_by_one():
@@ -62,7 +60,6 @@ def test_weak_inv_matches_weak_div_by_one():
   expect = np.zeros_like(back.view())
   expect[:, 0] = np.sqrt(2.0)
   np.testing.assert_allclose(back.view(), expect, atol=1e-10)
-# end
 
 
 def test_weak_mul_rejects_ncomp_not_a_multiple_of_num_basis():
@@ -71,8 +68,6 @@ def test_weak_mul_rejects_ncomp_not_a_multiple_of_num_basis():
   b = GkylArray.alloc(3, 4)
   with pytest.raises(ValueError, match="not a multiple"):
     k.weak_mul(basis_type, ndim, p, a, b)
-  # end
-# end
 
 
 def test_weak_mul_rejects_shape_mismatch():
@@ -81,8 +76,6 @@ def test_weak_mul_rejects_shape_mismatch():
   b = GkylArray.alloc(2, 5)  # different size
   with pytest.raises(ValueError, match="shape mismatch"):
     k.weak_mul(basis_type, ndim, p, a, b)
-  # end
-# end
 
 
 def test_weak_ops_reject_unknown_basis_type():
@@ -90,8 +83,6 @@ def test_weak_ops_reject_unknown_basis_type():
   b = GkylArray.alloc(2, 4)
   with pytest.raises(NotImplementedError, match="serendipity"):
     k.weak_mul("bogus", 1, 1, a, b)
-  # end
-# end
 
 
 @pytest.mark.parametrize("ndim", [4, 5, 6])
@@ -103,11 +94,8 @@ def test_weak_mul_div_refuse_ndim_above_3(ndim):
   b = GkylArray.alloc(basis.num_basis, 3)
   with pytest.raises(NotImplementedError, match="ndim 1..3"):
     k.weak_mul("serendipity", ndim, 1, a, b)
-  # end
   with pytest.raises(NotImplementedError, match="ndim 1..3"):
     k.weak_div("serendipity", ndim, 1, a, b)
-  # end
-# end
 
 
 def test_weak_mul_div_refuse_tensor_poly_order_above_table():
@@ -116,16 +104,12 @@ def test_weak_mul_div_refuse_tensor_poly_order_above_table():
   b = GkylArray.alloc(16, 3)
   with pytest.raises(NotImplementedError, match="poly_order 0..2"):
     k.weak_mul("tensor", 2, 3, a, b)
-  # end
-# end
 
 
 def test_weak_inv_rejects_non_p1():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(NotImplementedError, match="p=1 only"):
     k.weak_inv("serendipity", 1, 2, a)
-  # end
-# end
 
 
 @pytest.mark.parametrize("ndim", [4, 5, 6])
@@ -136,8 +120,6 @@ def test_weak_inv_refuses_ndim_above_3(ndim):
   a = GkylArray.alloc(basis.num_basis, 3)
   with pytest.raises(NotImplementedError, match="ndim"):
     k.weak_inv("serendipity", ndim, 1, a)
-  # end
-# end
 
 
 # --------------------------------------------------- conf-space x phase-space
@@ -156,9 +138,8 @@ def test_mul_conf_phase_by_a_unit_constant_conf_field_is_identity_hybrid():
   pop_coeffs = rng.normal(size=(12, pbasis.num_basis))
   pop = GkylArray.from_numpy(pop_coeffs)
   out = k.weak_mul_conf_phase("serendipity", 1, "hybrid", 2, 1, conf_cells,
-      phase_cells, cop, pop)
+                              phase_cells, cop, pop)
   np.testing.assert_allclose(out.view(), pop_coeffs, atol=1e-10)
-# end
 
 
 def test_mul_conf_phase_by_a_unit_constant_conf_field_is_identity_gkhybrid():
@@ -174,9 +155,8 @@ def test_mul_conf_phase_by_a_unit_constant_conf_field_is_identity_gkhybrid():
   pop_coeffs = rng.normal(size=(24, pbasis.num_basis))
   pop = GkylArray.from_numpy(pop_coeffs)
   out = k.weak_mul_conf_phase("serendipity", 1, "gkhybrid", 3, 1, conf_cells,
-      phase_cells, cop, pop)
+                              phase_cells, cop, pop)
   np.testing.assert_allclose(out.view(), pop_coeffs, atol=1e-10)
-# end
 
 
 def test_mul_conf_phase_by_a_unit_constant_conf_field_is_identity_serendipity():
@@ -192,20 +172,17 @@ def test_mul_conf_phase_by_a_unit_constant_conf_field_is_identity_serendipity():
   rng = np.random.default_rng(9)
   pop_coeffs = rng.normal(size=(15, pbasis.num_basis))
   pop = GkylArray.from_numpy(pop_coeffs)
-  out = k.weak_mul_conf_phase("serendipity", 1, "serendipity", 2, 2,
-      conf_cells, phase_cells, cop, pop)
+  out = k.weak_mul_conf_phase("serendipity", 1, "serendipity", 2, 2, conf_cells,
+                              phase_cells, cop, pop)
   np.testing.assert_allclose(out.view(), pop_coeffs, atol=1e-10)
-# end
 
 
 def test_mul_conf_phase_rejects_ncomp_mismatch():
   cop = GkylArray.alloc(3, 3)  # hybrid conf num_basis is 2, not 3
   pop = GkylArray.alloc(6, 12)
   with pytest.raises(ValueError, match="single-field only"):
-    k.weak_mul_conf_phase("serendipity", 1, "hybrid", 2, 1, [3], [3, 4],
-        cop, pop)
-  # end
-# end
+    k.weak_mul_conf_phase("serendipity", 1, "hybrid", 2, 1, [3], [3, 4], cop,
+                          pop)
 
 
 def test_mul_conf_phase_rejects_non_serendipity_conf_for_hybrid():
@@ -213,18 +190,14 @@ def test_mul_conf_phase_rejects_non_serendipity_conf_for_hybrid():
   pop = GkylArray.alloc(6, 12)
   with pytest.raises(NotImplementedError, match="serendipity conf basis"):
     k.weak_mul_conf_phase("tensor", 1, "hybrid", 2, 1, [3], [3, 4], cop, pop)
-  # end
-# end
 
 
 def test_mul_conf_phase_rejects_mismatched_ser_ten_families():
   cop = GkylArray.alloc(2, 3)
   pop = GkylArray.alloc(4, 15)
   with pytest.raises(NotImplementedError, match="phase basis type alone"):
-    k.weak_mul_conf_phase("tensor", 1, "serendipity", 2, 1, [3], [3, 5],
-        cop, pop)
-  # end
-# end
+    k.weak_mul_conf_phase("tensor", 1, "serendipity", 2, 1, [3], [3, 5], cop,
+                          pop)
 
 
 def test_mul_conf_phase_rejects_kernel_table_gap():
@@ -234,10 +207,8 @@ def test_mul_conf_phase_rejects_kernel_table_gap():
   cop = GkylArray.alloc(2, 2)
   pop = GkylArray.alloc(32, 32)
   with pytest.raises(NotImplementedError, match="no serendipity conf\\*phase"):
-    k.weak_mul_conf_phase("serendipity", 1, "serendipity", 5, 1,
-        [2], [2, 2, 2, 2, 2], cop, pop)
-  # end
-# end
+    k.weak_mul_conf_phase("serendipity", 1, "serendipity", 5, 1, [2],
+                          [2, 2, 2, 2, 2], cop, pop)
 
 
 def test_mul_conf_phase_rejects_cells_array_size_mismatch():
@@ -245,19 +216,15 @@ def test_mul_conf_phase_rejects_cells_array_size_mismatch():
   pop = GkylArray.alloc(4, 20)  # cells [3, 5] imply size 15, not 20
   with pytest.raises(ValueError, match="incompatible"):
     k.weak_mul_conf_phase("serendipity", 1, "serendipity", 2, 1, [3], [3, 5],
-        cop, pop)
-  # end
-# end
+                          cop, pop)
 
 
 def test_mul_conf_phase_rejects_phase_ndim_not_exceeding_conf_ndim():
   cop = GkylArray.alloc(4, 4)
   pop = GkylArray.alloc(4, 4)
   with pytest.raises(ValueError, match="must exceed"):
-    k.weak_mul_conf_phase("serendipity", 2, "serendipity", 2, 1, [2, 2],
-        [2, 2], cop, pop)
-  # end
-# end
+    k.weak_mul_conf_phase("serendipity", 2, "serendipity", 2, 1, [2, 2], [2, 2],
+                          cop, pop)
 
 
 # ---------------------------------------------------------- coefficient ops
@@ -267,7 +234,6 @@ def test_lincomb_matches_numpy():
   b = GkylArray.from_numpy(rng.normal(size=(5, 3)))
   out = k.lincomb(2.0, a, -1.5, b)
   np.testing.assert_allclose(out.view(), 2.0 * a.view() - 1.5 * b.view())
-# end
 
 
 def test_lincomb_rejects_shape_mismatch():
@@ -275,8 +241,6 @@ def test_lincomb_rejects_shape_mismatch():
   b = GkylArray.alloc(3, 4)
   with pytest.raises(ValueError, match="shape mismatch"):
     k.lincomb(1.0, a, 1.0, b)
-  # end
-# end
 
 
 def test_scale_matches_numpy_and_does_not_mutate_input():
@@ -285,7 +249,6 @@ def test_scale_matches_numpy_and_does_not_mutate_input():
   out = k.scale(a, -2.0)
   np.testing.assert_allclose(out.view(), -2.0 * original)
   np.testing.assert_allclose(a.view(), original)
-# end
 
 
 def test_shiftc_matches_numpy_and_does_not_mutate_input():
@@ -295,7 +258,6 @@ def test_shiftc_matches_numpy_and_does_not_mutate_input():
   expect[:, 1] = 7.0
   np.testing.assert_allclose(out.view(), expect)
   np.testing.assert_allclose(a.view(), np.zeros((3, 2)))
-# end
 
 
 # ---------------------------------------------------------------- reductions
@@ -304,7 +266,6 @@ def test_reduce_of_constant_coefficients():
   np.testing.assert_allclose(k.reduce(a, k.GKYL_SUM), [12.0, 12.0])
   np.testing.assert_allclose(k.reduce(a, k.GKYL_MIN), [3.0, 3.0])
   np.testing.assert_allclose(k.reduce(a, k.GKYL_MAX), [3.0, 3.0])
-# end
 
 
 def test_dg_reduce_of_constant_field_min_max_match_the_constant():
@@ -317,7 +278,6 @@ def test_dg_reduce_of_constant_field_min_max_match_the_constant():
   a = GkylArray.from_numpy(coeffs)
   assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "min"), 3.0)
   assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "max"), 3.0)
-# end
 
 
 def test_dg_reduce_sum_scales_with_cell_count():
@@ -332,13 +292,11 @@ def test_dg_reduce_sum_scales_with_cell_count():
     coeffs = np.zeros((ncells, nb))
     coeffs[:, 0] = value * np.sqrt(2.0)
     return GkylArray.from_numpy(coeffs)
-  # end
 
   small = k.dg_reduce(basis_type, ndim, p, const_field(3, 3.0), 0, "sum")
   big = k.dg_reduce(basis_type, ndim, p, const_field(6, 3.0), 0, "sum")
   assert small > 0
   assert np.isclose(big, 2.0 * small)
-# end
 
 
 def test_dg_reduce_min_max_at_the_gauss_legendre_nodes_for_a_linear_field():
@@ -353,20 +311,18 @@ def test_dg_reduce_min_max_at_the_gauss_legendre_nodes_for_a_linear_field():
   c1 = 2.0 / np.sqrt(1.5)
   a = GkylArray.from_numpy(np.array([[c0, c1]]))
   node = 1.0 / np.sqrt(3.0)
-  assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "min"), 3.0 - 2.0 * node)
-  assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "max"), 3.0 + 2.0 * node)
-# end
+  assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "min"),
+                    3.0 - 2.0 * node)
+  assert np.isclose(k.dg_reduce(basis_type, ndim, p, a, 0, "max"),
+                    3.0 + 2.0 * node)
 
 
 def test_dg_reduce_rejects_bad_op_and_bad_comp():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(ValueError, match="op"):
     k.dg_reduce("serendipity", 1, 1, a, 0, "bogus")
-  # end
   with pytest.raises(ValueError, match="comp"):
     k.dg_reduce("serendipity", 1, 1, a, 5, "sum")
-  # end
-# end
 
 
 # ----------------------------------------------------------------- integrate
@@ -377,11 +333,14 @@ def test_integrate_constant_field_equals_constant_times_volume():
   coeffs = np.zeros((cells, nb))
   coeffs[:, 0] = 2.0 * np.sqrt(2.0)  # constant field value 2.0
   a = GkylArray.from_numpy(coeffs)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([2.0]),
-          "cells": np.array([cells])}
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([2.0]),
+      "cells": np.array([cells])
+  }
   result = k.integrate(grid, basis_type, p, a)
   np.testing.assert_allclose(result, [2.0 * 2.0])  # value * volume
-# end
 
 
 def test_integrate_abs_and_sq_ops():
@@ -390,15 +349,18 @@ def test_integrate_abs_and_sq_ops():
   coeffs = np.zeros((3, nb))
   coeffs[:, 0] = -2.0 * np.sqrt(2.0)  # constant field value -2.0
   a = GkylArray.from_numpy(coeffs)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([3.0]),
-          "cells": np.array([3])}
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([3.0]),
+      "cells": np.array([3])
+  }
   none = k.integrate(grid, basis_type, p, a, op="none")
   absr = k.integrate(grid, basis_type, p, a, op="abs")
   sq = k.integrate(grid, basis_type, p, a, op="sq")
   np.testing.assert_allclose(none, [-6.0])
   np.testing.assert_allclose(absr, [6.0])
   np.testing.assert_allclose(sq, [12.0])  # (-2)^2 * volume(3) = 12
-# end
 
 
 def test_integrate_factor_scales_the_result():
@@ -407,11 +369,14 @@ def test_integrate_factor_scales_the_result():
   coeffs = np.zeros((2, nb))
   coeffs[:, 0] = np.sqrt(2.0)
   a = GkylArray.from_numpy(coeffs)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([2.0]),
-          "cells": np.array([2])}
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([2.0]),
+      "cells": np.array([2])
+  }
   result = k.integrate(grid, basis_type, p, a, factor=10.0)
   np.testing.assert_allclose(result, [20.0])
-# end
 
 
 def test_integrate_rejects_bad_op():
@@ -419,8 +384,6 @@ def test_integrate_rejects_bad_op():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [2]}
   with pytest.raises(ValueError, match="op"):
     k.integrate(grid, "serendipity", 1, a, op="bogus")
-  # end
-# end
 
 
 def test_integrate_rejects_unsupported_basis_or_poly_order():
@@ -428,43 +391,43 @@ def test_integrate_rejects_unsupported_basis_or_poly_order():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [2]}
   with pytest.raises(NotImplementedError):
     k.integrate(grid, "tensor", 1, a)
-  # end
   with pytest.raises(NotImplementedError):
     k.integrate(grid, "serendipity", 3, a)  # p3 unsupported by the kernel set
-  # end
-# end
 
 
 def test_integrate_rejects_ndim_above_3():
   basis = gpython.basis.get_basis("serendipity", 4, 1)
   a = GkylArray.alloc(basis.num_basis, 6)
-  grid = {"ndim": 4, "lower": np.zeros(4), "upper": np.ones(4),
-          "cells": np.array([1, 1, 1, 6])}
+  grid = {
+      "ndim": 4,
+      "lower": np.zeros(4),
+      "upper": np.ones(4),
+      "cells": np.array([1, 1, 1, 6])
+  }
   with pytest.raises(NotImplementedError, match="ndim 1-3"):
     k.integrate(grid, "serendipity", 1, a)
-  # end
-# end
 
 
 def test_integrate_rejects_grid_array_mismatch():
   basis_type, ndim, p = "serendipity", 1, 1
   a = GkylArray.alloc(gpython.basis.num_basis(basis_type, ndim, p), 4)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([1.0]),
-          "cells": np.array([5])}  # 5 != a.size (4)
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([1.0]),
+      "cells": np.array([5])
+  }  # 5 != a.size (4)
   with pytest.raises(ValueError, match="do not cover"):
     k.integrate(grid, basis_type, p, a)
-  # end
-# end
 
 
 # ------------------------------------------------------------------ average
 def _const_field(basis_type, ndim, p, cells, value):
   nb = gpython.basis.num_basis(basis_type, ndim, p)
-  b0 = 2.0 ** (-ndim / 2.0)
+  b0 = 2.0**(-ndim / 2.0)
   coeffs = np.zeros((int(np.prod(cells)), nb))
   coeffs[:, 0] = value / b0
   return GkylArray.from_numpy(coeffs)
-# end
 
 
 def test_array_average_partial_reduction_of_constant_field_is_exact():
@@ -475,14 +438,22 @@ def test_array_average_partial_reduction_of_constant_field_is_exact():
   basis_type, p = "serendipity", 1
   cells = [4, 3]
   a = _const_field(basis_type, 2, p, cells, 3.0)
-  grid = {"ndim": 2, "lower": np.array([0.0, 0.0]), "upper": np.array([2.0, 1.0]),
-          "cells": np.array(cells)}
-  out = k.array_average(grid, basis_type, p, ndim_avg=1, cells_avg=[cells[0]],
-      avg_dim=[0, 1], a=a)
+  grid = {
+      "ndim": 2,
+      "lower": np.array([0.0, 0.0]),
+      "upper": np.array([2.0, 1.0]),
+      "cells": np.array(cells)
+  }
+  out = k.array_average(grid,
+                        basis_type,
+                        p,
+                        ndim_avg=1,
+                        cells_avg=[cells[0]],
+                        avg_dim=[0, 1],
+                        a=a)
   expect = np.zeros((cells[0], gpython.basis.num_basis(basis_type, 1, p)))
-  expect[:, 0] = 3.0 / (2.0 ** (-1 / 2.0))
+  expect[:, 0] = 3.0 / (2.0**(-1 / 2.0))
   np.testing.assert_allclose(out.view(), expect, atol=1e-10)
-# end
 
 
 def test_array_average_full_reduction_unweighted_writes_a_raw_value():
@@ -495,16 +466,25 @@ def test_array_average_full_reduction_unweighted_writes_a_raw_value():
   basis_type, p = "serendipity", 1
   cells = [4]
   a = _const_field(basis_type, 1, p, cells, 3.0)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([2.0]),
-          "cells": np.array(cells)}
-  out = k.array_average(grid, basis_type, p, ndim_avg=1, cells_avg=[1],
-      avg_dim=[1], a=a)
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([2.0]),
+      "cells": np.array(cells)
+  }
+  out = k.array_average(grid,
+                        basis_type,
+                        p,
+                        ndim_avg=1,
+                        cells_avg=[1],
+                        avg_dim=[1],
+                        a=a)
   np.testing.assert_allclose(out.view()[0, 0], 3.0, atol=1e-10)
   np.testing.assert_allclose(out.view()[0, 1:], 0.0, atol=1e-10)
-# end
 
 
-def test_array_average_full_reduction_weighted_by_a_uniform_weight_matches_integrate():
+def test_array_average_full_reduction_weighted_by_a_uniform_weight_matches_integrate(
+):
   """With ANY weight (even spatially uniform), the kernel performs a real
   weak division, so the output IS a properly b0-normalized coefficient --
   matching gkyl_array_integrate / volume for a uniform-weight average."""
@@ -513,13 +493,22 @@ def test_array_average_full_reduction_weighted_by_a_uniform_weight_matches_integ
   value = 3.0
   a = _const_field(basis_type, 1, p, cells, value)
   w = _const_field(basis_type, 1, p, cells, 2.0)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([2.0]),
-          "cells": np.array(cells)}
-  out = k.array_average(grid, basis_type, p, ndim_avg=1, cells_avg=[1],
-      avg_dim=[1], a=a, weight=w)
-  b0 = 2.0 ** (-1 / 2.0)
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([2.0]),
+      "cells": np.array(cells)
+  }
+  out = k.array_average(grid,
+                        basis_type,
+                        p,
+                        ndim_avg=1,
+                        cells_avg=[1],
+                        avg_dim=[1],
+                        a=a,
+                        weight=w)
+  b0 = 2.0**(-1 / 2.0)
   np.testing.assert_allclose(out.view()[0, 0] * b0, value, atol=1e-10)
-# end
 
 
 def test_array_average_rejects_unsupported_basis_or_poly_order():
@@ -527,32 +516,30 @@ def test_array_average_rejects_unsupported_basis_or_poly_order():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [4]}
   with pytest.raises(NotImplementedError, match="serendipity p1-p2"):
     k.array_average(grid, "tensor", 1, 1, [1], [1], a)
-  # end
   with pytest.raises(NotImplementedError, match="serendipity p1-p2"):
     k.array_average(grid, "serendipity", 3, 1, [1], [1], a)
-  # end
-# end
 
 
 def test_array_average_rejects_ndim_above_3():
   basis = gpython.basis.get_basis("serendipity", 4, 1)
   a = GkylArray.alloc(basis.num_basis, 6)
-  grid = {"ndim": 4, "lower": np.zeros(4), "upper": np.ones(4),
-          "cells": np.array([1, 1, 1, 6])}
+  grid = {
+      "ndim": 4,
+      "lower": np.zeros(4),
+      "upper": np.ones(4),
+      "cells": np.array([1, 1, 1, 6])
+  }
   with pytest.raises(NotImplementedError, match="ndim 1-3"):
     k.array_average(grid, "serendipity", 1, 1, [1, 1, 1, 6], [1, 0, 0, 0], a)
-  # end
-# end
 
 
 def test_array_average_rejects_ncomp_not_single_field():
   basis_type, p = "serendipity", 1
-  a = GkylArray.alloc(4, 4)  # 4 comps: 2 fields of num_basis=2, not single-field
+  a = GkylArray.alloc(4,
+                      4)  # 4 comps: 2 fields of num_basis=2, not single-field
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [4]}
   with pytest.raises(ValueError, match="single-field only"):
     k.array_average(grid, basis_type, p, 1, [1], [1], a)
-  # end
-# end
 
 
 def test_array_average_rejects_weight_shape_mismatch():
@@ -563,19 +550,19 @@ def test_array_average_rejects_weight_shape_mismatch():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": np.array(cells)}
   with pytest.raises(ValueError, match="weight"):
     k.array_average(grid, basis_type, p, 1, [1], [1], a, weight=w)
-  # end
-# end
 
 
 def test_array_average_rejects_grid_array_mismatch():
   basis_type, p = "serendipity", 1
   a = GkylArray.alloc(gpython.basis.num_basis(basis_type, 1, p), 4)
-  grid = {"ndim": 1, "lower": np.array([0.0]), "upper": np.array([1.0]),
-          "cells": np.array([5])}  # 5 != a.size (4)
+  grid = {
+      "ndim": 1,
+      "lower": np.array([0.0]),
+      "upper": np.array([1.0]),
+      "cells": np.array([5])
+  }  # 5 != a.size (4)
   with pytest.raises(ValueError, match="do not cover"):
     k.array_average(grid, basis_type, p, 1, [1], [1], a)
-  # end
-# end
 
 
 # -------------------------------------------------------------- differentiate
@@ -583,35 +570,31 @@ def test_weak_differentiate_rejects_poly_order_above_table():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(NotImplementedError, match="poly_order 1..2"):
     k.weak_differentiate("serendipity", 1, 3, dir=0, diff_order=1, dx=1.0, a=a)
-  # end
-# end
 
 
 def test_weak_differentiate_rejects_dir_out_of_range():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(ValueError, match="out of range"):
     k.weak_differentiate("serendipity", 1, 1, dir=5, diff_order=1, dx=1.0, a=a)
-  # end
-# end
 
 
 def test_weak_differentiate_rejects_bad_diff_order():
   a = GkylArray.alloc(2, 3)
   with pytest.raises(ValueError, match="order must be 1 or 2"):
     k.weak_differentiate("serendipity", 1, 1, dir=0, diff_order=3, dx=1.0, a=a)
-  # end
-# end
 
 
 # ----------------------------------------------------------- eval_at_coord_proj
 def test_eval_at_coord_proj_rejects_gkhybrid_poly_order_above_1():
   a = GkylArray.alloc(2, 2)
-  grid = {"ndim": 3, "lower": [0.0, 0.0, 0.0], "upper": [1.0, 1.0, 1.0],
-          "cells": [1, 1, 1]}
+  grid = {
+      "ndim": 3,
+      "lower": [0.0, 0.0, 0.0],
+      "upper": [1.0, 1.0, 1.0],
+      "cells": [1, 1, 1]
+  }
   with pytest.raises(NotImplementedError, match="poly_order 1 only"):
     k.eval_at_coord_proj("gkhybrid", 3, 2, 1, grid, [0], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_unknown_basis_type():
@@ -619,8 +602,6 @@ def test_eval_at_coord_proj_rejects_unknown_basis_type():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [1]}
   with pytest.raises(NotImplementedError, match="serendipity/tensor/gkhybrid"):
     k.eval_at_coord_proj("hybrid", 1, 1, 1, grid, [0], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_tensor_ndim_above_table():
@@ -628,8 +609,6 @@ def test_eval_at_coord_proj_rejects_tensor_ndim_above_table():
   grid = {"ndim": 4, "lower": [0.0] * 4, "upper": [1.0] * 4, "cells": [1] * 4}
   with pytest.raises(NotImplementedError, match="ndim"):
     k.eval_at_coord_proj("tensor", 4, 1, 4, grid, [0], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_poly_order_above_table():
@@ -637,8 +616,6 @@ def test_eval_at_coord_proj_rejects_poly_order_above_table():
   grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [1]}
   with pytest.raises(NotImplementedError, match="poly_order 1..2"):
     k.eval_at_coord_proj("serendipity", 1, 3, 1, grid, [0], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_eval_dirs_out_of_range():
@@ -646,8 +623,6 @@ def test_eval_at_coord_proj_rejects_eval_dirs_out_of_range():
   grid = {"ndim": 2, "lower": [0.0, 0.0], "upper": [1.0, 1.0], "cells": [1, 1]}
   with pytest.raises(ValueError, match="out of range"):
     k.eval_at_coord_proj("serendipity", 2, 1, 2, grid, [5], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_grid_array_mismatch():
@@ -657,8 +632,6 @@ def test_eval_at_coord_proj_rejects_grid_array_mismatch():
   grid = {"ndim": ndim, "lower": [0.0], "upper": [1.0], "cells": [5]}
   with pytest.raises(ValueError, match="do not cover"):
     k.eval_at_coord_proj(basis_type, ndim, p, ndim, grid, [0], [0.0], 1, [1], a)
-  # end
-# end
 
 
 def test_eval_at_coord_proj_rejects_eval_dirs_coords_length_mismatch():
@@ -668,22 +641,19 @@ def test_eval_at_coord_proj_rejects_eval_dirs_coords_length_mismatch():
   grid = {"ndim": ndim, "lower": [0.0], "upper": [1.0], "cells": [4]}
   with pytest.raises(ValueError, match="same length"):
     k.eval_at_coord_proj(basis_type, ndim, p, ndim, grid, [0], [0.1, 0.2], 1,
-        [1], a)
-  # end
-# end
+                         [1], a)
 
 
 # ------------------------------------------------------------------ powsqrt
 def test_powsqrt_of_a_constant_field_is_exact():
   basis_type, ndim, p, cells = "serendipity", 1, 1, 4
   nb = gpython.basis.num_basis(basis_type, ndim, p)
-  b0 = 2.0 ** (-ndim / 2.0)
+  b0 = 2.0**(-ndim / 2.0)
   coeffs = np.zeros((cells, nb))
   coeffs[:, 0] = 4.0 / b0  # constant field value 4.0
   a = GkylArray.from_numpy(coeffs)
   out = k.powsqrt(basis_type, ndim, p, [cells], a, 1.0)
   np.testing.assert_allclose(out.view()[:, 0] * b0, 2.0, atol=1e-12)
-# end
 
 
 @pytest.mark.parametrize("exponent", [1.0, -1.0, 3.0])
@@ -705,11 +675,11 @@ def test_powsqrt_matches_the_apply_pointwise_quadrature_path(exponent):
   num_quad = p + 1
 
   out = k.powsqrt(basis_type, ndim, p, [cells], a, exponent, num_quad=num_quad)
-  expect = dg.rep.apply_pointwise(basis_type, ndim, p, a,
+  expect = dg.rep.apply_pointwise(
+      basis_type, ndim, p, a,
       lambda v: np.power(np.sqrt(np.where(v < 0, 1e-40, v)), exponent),
       num_quad)
   np.testing.assert_allclose(out.view(), expect.view(), atol=1e-10)
-# end
 
 
 def test_powsqrt_rejects_multi_component_input():
@@ -721,8 +691,6 @@ def test_powsqrt_rejects_multi_component_input():
   a = GkylArray.alloc(3 * nb, cells)  # 3 physical components
   with pytest.raises(ValueError, match="single-field only"):
     k.powsqrt(basis_type, ndim, p, [cells], a, 1.0)
-  # end
-# end
 
 
 def test_powsqrt_rejects_num_quad_below_one():
@@ -731,8 +699,6 @@ def test_powsqrt_rejects_num_quad_below_one():
   a = GkylArray.alloc(nb, cells)
   with pytest.raises(ValueError, match="num_quad"):
     k.powsqrt(basis_type, ndim, p, [cells], a, 1.0, num_quad=0)
-  # end
-# end
 
 
 def test_powsqrt_rejects_cells_not_covering_the_array():
@@ -741,5 +707,3 @@ def test_powsqrt_rejects_cells_not_covering_the_array():
   a = GkylArray.alloc(nb, 4)
   with pytest.raises(ValueError, match="do not cover"):
     k.powsqrt(basis_type, ndim, p, [5], a, 1.0)
-  # end
-# end

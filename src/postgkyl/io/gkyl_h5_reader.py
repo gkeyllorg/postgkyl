@@ -32,26 +32,20 @@ class GkylH5Reader:
     self.is_diagnostic = False
 
     self.ctx = ctx if ctx is not None else {}
-  # end
 
   def is_compatible(self) -> bool:
     """Checks if the file can be read with the legacy Gkeyll HDF5 reader."""
     try:
       fh = tables.open_file(self._file_name, "r")
-    # end
     except (tables.exceptions.HDF5ExtError, OSError):
       return False
-    # end
 
     if "/DataStruct/data" in fh:
       self.is_diagnostic = True
-    # end
     if "/StructGridField" in fh:
       self.is_frame = True
-    # end
     fh.close()
     return self.is_frame or self.is_diagnostic
-  # end
 
   def _read_frame(self) -> tuple:
     fh = tables.open_file(self._file_name, "r")
@@ -62,13 +56,11 @@ class GkylH5Reader:
     cells = np.atleast_1d(fh.root.StructGrid._v_attrs.vsNumCells)
     if "/timeData" in fh:
       self.ctx["time"] = fh.root.timeData._v_attrs.vsTime
-    # end
 
     data = fh.root.StructGridField.read()
 
     fh.close()
     return cells, lower, upper, data
-  # end
 
   def _read_diagnostic(self) -> tuple:
     fh = tables.open_file(self._file_name, "r")
@@ -78,12 +70,10 @@ class GkylH5Reader:
 
     fh.close()
     return [np.squeeze(grid)], [grid[0]], [grid[-1]], data
-  # end
 
   # ---- Exposed functions -----
   def preload(self) -> None:
     """Loads metadata. Nothing to precompute for this format."""
-  # end
 
   def load(self) -> Tuple[list, np.ndarray]:
     """Loads data.
@@ -96,11 +86,9 @@ class GkylH5Reader:
     """
     if self.is_frame:
       cells, lower, upper, data = self._read_frame()
-    # end
     else:
       grid, lower, upper, data = self._read_diagnostic()
       cells = grid[0].shape
-    # end
 
     self.ctx["cells"] = cells
     self.ctx["lower"] = lower
@@ -108,12 +96,10 @@ class GkylH5Reader:
     self.ctx["num_comps"] = 1
     if len(data.shape) > len(cells):
       self.ctx["num_comps"] = data.shape[-1]
-    # end
 
     grid = mapping.uniform_grid(np.asarray(lower, dtype=float),
-        np.asarray(upper, dtype=float), np.asarray(cells))
+                                np.asarray(upper, dtype=float),
+                                np.asarray(cells))
     self.ctx["grid_type"] = "uniform"
 
     return grid, data
-  # end
-# end

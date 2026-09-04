@@ -13,5 +13,7 @@ from .matplotlib import plot
 from .plotly import open_preview, plotly, plotly_animate, save_rotating_plotly_figure
 from .pyvista import pyvista
 
-__all__ = ["plot", "animate", "labels", "style", "plotly", "plotly_animate",
-    "save_rotating_plotly_figure", "open_preview", "pyvista"]
+__all__ = [
+    "plot", "animate", "labels", "style", "plotly", "plotly_animate",
+    "save_rotating_plotly_figure", "open_preview", "pyvista"
+]

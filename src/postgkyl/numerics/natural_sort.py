@@ -12,4 +12,3 @@ def natural_sort_key(s: str) -> tuple:
   compare numerically instead of character-by-character (``'field_2'`` sorts
   before ``'field_10'``, unlike a plain lexicographic string sort)."""
   return tuple(int(c) if c.isdigit() else c for c in _CHUNK_RE.split(s))
-# end

@@ -11,15 +11,17 @@ from ...gdatastate.guards import require_field_domain as _require_field_domain
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _REASON = "shifting the grid of raw DG coefficients has no basis-space meaning"
 
 
 # --------------------------------------------------------- array-level math
-def _transform_frame(f_grid: list[np.ndarray], f_values: np.ndarray,
-    u_values: np.ndarray, c_dim: int,
-    ) -> tuple[list[np.ndarray], np.ndarray]:
+def _transform_frame(
+    f_grid: list[np.ndarray],
+    f_values: np.ndarray,
+    u_values: np.ndarray,
+    c_dim: int,
+) -> tuple[list[np.ndarray], np.ndarray]:
   """Shift a distribution function to a different frame of reference.
 
   Shifts the velocity-space grid of a distribution function by a supplied
@@ -53,9 +55,6 @@ def _transform_frame(f_grid: list[np.ndarray], f_values: np.ndarray,
 
       for i in range(nx):
         out_grid[c_dim + v_idx][i, ...] += ext_u[i]
-      # end
-    # end
-  # end
 
   elif c_dim == 2:
     for v_idx in range(v_dim):
@@ -70,10 +69,6 @@ def _transform_frame(f_grid: list[np.ndarray], f_values: np.ndarray,
       for i in range(nx):
         for j in range(ny):
           out_grid[c_dim + v_idx][i, j, ...] += ext_u[i, j]
-        # end
-      # end
-    # end
-  # end
 
   else:
     for v_idx in range(v_dim):
@@ -90,20 +85,18 @@ def _transform_frame(f_grid: list[np.ndarray], f_values: np.ndarray,
         for j in range(ny):
           for k in range(nz):
             out_grid[c_dim + v_idx][i, j, k, ...] += ext_u[i, j, k]
-          # end
-        # end
-      # end
-    # end
-  # end
 
   return out_grid, f_values
-# end
 
 
 # ---------------------------------------------------------------- GData verb
-def transform_frame(distribution: "GDataState", bulk: "GDataState", *,
-    cdim: int, inplace: bool = False, tag: str | None = None,
-    label: str | None = None) -> "GDataState":
+def transform_frame(distribution: "GDataState",
+                    bulk: "GDataState",
+                    *,
+                    cdim: int,
+                    inplace: bool = False,
+                    tag: str | None = None,
+                    label: str | None = None) -> "GDataState":
   """Shift a distribution function to a moving frame of reference.
 
   Shifts the velocity-space grid of ``distribution`` by the local ``bulk``
@@ -131,7 +124,9 @@ def transform_frame(distribution: "GDataState", bulk: "GDataState", *,
   _require_field_domain(distribution, "transform_frame", _REASON)
   _require_field_domain(bulk, "transform_frame", _REASON)
   grid, values = _transform_frame(distribution.grid, distribution.values,
-      bulk.values, cdim)
-  return distribution._result(grid, values, inplace=inplace, tag=tag,
-      label=label)
-# end
+                                  bulk.values, cdim)
+  return distribution._result(grid,
+                              values,
+                              inplace=inplace,
+                              tag=tag,
+                              label=label)

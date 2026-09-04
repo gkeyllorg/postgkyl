@@ -26,26 +26,24 @@ from matplotlib.animation import FuncAnimation
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
-# end
 
 _COLORS = ("C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9")
 
 
-def _masked(coord: np.ndarray, lo: float | None, hi: float | None) -> np.ndarray:
+def _masked(coord: np.ndarray, lo: float | None,
+            hi: float | None) -> np.ndarray:
   """Replace out-of-``[lo, hi]`` entries of ``coord`` with NaN, so they are
   simply not drawn (masking, not clipping -- matches ``src_bak``)."""
   out = coord
   if lo is not None:
     out = np.where(out > lo, out, np.nan)
-  # end
   if hi is not None:
     out = np.where(out < hi, out, np.nan)
-  # end
   return out
-# end
 
 
-def _update(i, ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin, zmax):
+def _update(i, ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin,
+            zmax):
   """``FuncAnimation`` frame callback: redraw every dataset's trajectory up
   to (and current position at) frame ``i``."""
   ax.cla()
@@ -67,28 +65,23 @@ def _update(i, ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin, zmax)
     if velocity and dataset.num_comps == 6:
       if t_idx + leap >= len(time):
         dt = time[-1] - time[t_idx]
-      # end
       else:
         dt = time[int(t_idx + leap)] - time[t_idx]
-      # end
       dx = coords[t_idx, 3] * dt
       dy = coords[t_idx, 4] * dt
       dz = coords[t_idx, 5] * dt
       ax.plot([x[t_idx], x[t_idx] + dx], [y[t_idx], y[t_idx] + dy],
-          [z[t_idx], z[t_idx] + dz], color=color)
-    # end
-  # end
+              [z[t_idx], z[t_idx] + dz],
+              color=color)
 
   if time is not None:
     ax.set_title(f"T: {time[t_idx]:.4e}")
-  # end
   ax.set_xlabel("$z_0$")
   ax.set_ylabel("$z_1$")
   ax.set_zlabel("$z_2$")
   ax.set_xlim3d(xmin, xmax)
   ax.set_ylim3d(ymin, ymax)
   ax.set_zlim3d(zmin, zmax)
-# end
 
 
 def trajectory(
@@ -137,7 +130,6 @@ def trajectory(
   """
   if not datasets:
     raise ValueError("trajectory() requires at least one dataset.")
-  # end
 
   fig = plt.figure()
   ax = fig.add_subplot(111, projection="3d")
@@ -147,11 +139,13 @@ def trajectory(
   if numframes:
     leap = int(math.floor(num_pos / numframes))
     num_pos = int(numframes)
-  # end
 
-  anim = FuncAnimation(fig, _update, num_pos,
-      fargs=(ax, datasets, leap, velocity, xmin, xmax, ymin, ymax, zmin, zmax),
-      interval=interval)
+  anim = FuncAnimation(fig,
+                       _update,
+                       num_pos,
+                       fargs=(ax, datasets, leap, velocity, xmin, xmax, ymin,
+                              ymax, zmin, zmax),
+                       interval=interval)
 
   ax.view_init(elev=elevation, azim=azimuth)
   if fixaspect:
@@ -159,7 +153,5 @@ def trajectory(
     # ratio (`set_box_aspect`), not the numeric `aspect=` src_bak passed to
     # `plt.setp` (that spelling only ever worked for 2-D axes).
     ax.set_box_aspect((1.0, 1.0, 1.0))
-  # end
 
   return anim
-# end

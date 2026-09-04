@@ -37,8 +37,8 @@ import postgkyl as pg
 from postgkyl import gpython, operations
 from postgkyl.gdatastate.gdatastate import GDataState
 
-needs_gkeyll = pytest.mark.skipif(not gpython.available(),
-    reason="no compiled Gkeyll (libg0core.so) found")
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 pytestmark = needs_gkeyll
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,7 +58,6 @@ def _project_1d(fn, lower, upper, cells, basis_type, poly_order):
   centers = lower + (np.arange(cells) + 0.5) * dz
   nodal_z = centers[:, None] + 0.5 * dz * node_eta[None, :]
   return fn(nodal_z) @ n2m.T
-# end
 
 
 def _project_2d(fn, lower, upper, cells, basis_type, poly_order):
@@ -69,27 +68,36 @@ def _project_2d(fn, lower, upper, cells, basis_type, poly_order):
   c0 = lower[0] + (np.arange(cells[0]) + 0.5) * dz[0]
   c1 = lower[1] + (np.arange(cells[1]) + 0.5) * dz[1]
   centers = np.stack(np.meshgrid(c0, c1, indexing="ij"), axis=-1)
-  node_phys = (centers[:, :, None, :]
-      + 0.5 * np.array(dz)[None, None, None, :] * node_eta[None, None, :, :])
+  node_phys = (
+      centers[:, :, None, :] +
+      0.5 * np.array(dz)[None, None, None, :] * node_eta[None, None, :, :])
   nodal_vals = fn(node_phys[..., 0], node_phys[..., 1])
   return np.einsum("ij,...j->...i", n2m, nodal_vals)
-# end
 
 
-def _synthetic_map(coeffs, lower, upper, cells, *, basis_type="serendipity",
-    poly_order=1, value_form="modal"):
+def _synthetic_map(coeffs,
+                   lower,
+                   upper,
+                   cells,
+                   *,
+                   basis_type="serendipity",
+                   poly_order=1,
+                   value_form="modal"):
   """A gkyl-backed mapping dataset holding ``coeffs`` directly -- no mapc2p
   file needed, per the layer instructions. ``cells`` must be set in ``ctx``
   before ``push`` (``GDataState.set_grid`` needs it to know ``num_dims``,
   and a flat ``GkylArray`` carries no cell layout of its own)."""
   d = GDataState()
-  d.ctx.update(basis_type=basis_type, poly_order=poly_order,
-      value_form=value_form, cells=np.asarray(cells, dtype=np.int64))
-  grid = [np.linspace(lower[i], upper[i], int(cells[i]) + 1)
-      for i in range(len(cells))]
+  d.ctx.update(basis_type=basis_type,
+               poly_order=poly_order,
+               value_form=value_form,
+               cells=np.asarray(cells, dtype=np.int64))
+  grid = [
+      np.linspace(lower[i], upper[i],
+                  int(cells[i]) + 1) for i in range(len(cells))
+  ]
   d.push(grid, gpython.GkylArray.from_numpy(coeffs))
   return d
-# end
 
 
 def _numpy_target(grid, values):
@@ -97,11 +105,11 @@ def _numpy_target(grid, values):
   d = GDataState()
   d.push(list(grid), values)
   return d
-# end
 
 
 # ----------------------------------------------------------------- identity
 class TestIdentityMap:
+
   def test_1d_conf_identity_leaves_grid_unchanged(self):
     lower, upper, cells = 0.0, 4.0, 4
     modal = _project_1d(lambda z: z, lower, upper, cells, "serendipity", 1)
@@ -113,7 +121,6 @@ class TestIdentityMap:
 
     np.testing.assert_allclose(out.grid[0], target_axis, atol=1e-12)
     assert out.ctx["grid_type"] == "mapped"
-  # end
 
   def test_values_are_untouched(self):
     lower, upper, cells = 0.0, 2.0, 2
@@ -123,7 +130,6 @@ class TestIdentityMap:
     target = _numpy_target([np.linspace(lower, upper, 5)], values)
     out = operations.map(target, mapping, space="conf")
     np.testing.assert_array_equal(out.values, values)
-  # end
 
   def test_new_dataset_by_default_source_grid_untouched(self):
     lower, upper, cells = 0.0, 2.0, 2
@@ -133,7 +139,6 @@ class TestIdentityMap:
     out = operations.map(target, mapping, space="conf")
     assert out is not target
     assert "grid_type" not in target.ctx
-  # end
 
   def test_inplace_mutates(self):
     lower, upper, cells = 0.0, 2.0, 2
@@ -142,8 +147,6 @@ class TestIdentityMap:
     target = _numpy_target([np.linspace(lower, upper, 5)], np.zeros((4, 1)))
     out = operations.map(target, mapping, space="conf", inplace=True)
     assert out is target
-  # end
-# end
 
 
 # ------------------------------------------------------------ conf, 2-D real
@@ -156,7 +159,6 @@ class TestConfMapRealFixture:
     # scope; see the report).
     data = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
     return operations.map(data, os.path.join(GEN, mapfile), space="conf")
-  # end
 
   def test_grid_becomes_curvilinear_with_shape_of_the_axes_it_replaces(self):
     before = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
@@ -165,43 +167,39 @@ class TestConfMapRealFixture:
     assert mapped.grid[0].shape == expected_shape
     assert mapped.grid[1].shape == expected_shape
     assert mapped.grid[0].ndim == 2  # curvilinear: full N-D nodal array
-  # end
 
   def test_values_untouched_by_stretch_map(self):
     before = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
     mapped = self._mapped("2d_c2p_stretch_ms_p1.gkyl")
     np.testing.assert_array_equal(mapped.values, before.values)
-  # end
 
   def test_rotation_is_non_separable(self):
     """A rotation map produces coordinates that vary along both axes."""
     mapped = self._mapped("2d_c2p_rot45_ms_p1.gkyl")
     assert np.std(mapped.grid[0], axis=1).max() > 1e-6
-  # end
-# end
 
 
 # --------------------------------------------------------------------- vel
 class TestVelMap:
+
   def test_1d_vel_deforms_only_the_trailing_axis(self):
     """m=1: offset = num_dims - m puts the map on the last axis."""
     lower, upper, cells = -1.0, 1.0, 4
     scale = 2.0
-    modal = _project_1d(lambda v: scale * v, lower, upper, cells,
-        "serendipity", 1)
+    modal = _project_1d(lambda v: scale * v, lower, upper, cells, "serendipity",
+                        1)
     mapping = _synthetic_map(modal, [lower], [upper], [cells])
 
     x_edges = np.linspace(0.0, 1.0, 5)
     v0_edges = np.linspace(0.0, 1.0, 5)
     v1_edges = np.linspace(lower, upper, 9)
-    target = _numpy_target([x_edges, v0_edges, v1_edges],
-        np.zeros((4, 4, 8, 1)))
+    target = _numpy_target([x_edges, v0_edges, v1_edges], np.zeros(
+        (4, 4, 8, 1)))
     out = operations.map(target, mapping, space="vel")
 
-    np.testing.assert_allclose(out.grid[0], x_edges)   # untouched
+    np.testing.assert_allclose(out.grid[0], x_edges)  # untouched
     np.testing.assert_allclose(out.grid[1], v0_edges)  # untouched
     np.testing.assert_allclose(out.grid[2], scale * v1_edges, atol=1e-12)
-  # end
 
   def test_2d_vel_is_separable_per_dimension(self):
     """Gkeyll's real ``mapc2p_vel`` files (see the module docstring) store
@@ -211,21 +209,23 @@ class TestVelMap:
     though m == 2, and the resulting grid arrays stay 1-D."""
     lower, upper, cells = [-1.0, -1.0], [1.0, 1.0], [4, 3]
     m0 = _project_1d(lambda v: 2.0 * v, lower[0], upper[0], cells[0],
-        "serendipity", 1)
+                     "serendipity", 1)
     m1 = _project_1d(lambda v: 3.0 * v + 1.0, lower[1], upper[1], cells[1],
-        "serendipity", 1)
+                     "serendipity", 1)
     # Broadcast each 1-D map's coefficients across the other axis' cells,
     # matching Gkeyll's on-disk mapc2p_vel layout.
-    coeffs0 = np.broadcast_to(m0[:, None, :], (cells[0], cells[1], m0.shape[-1]))
-    coeffs1 = np.broadcast_to(m1[None, :, :], (cells[0], cells[1], m1.shape[-1]))
-    mapping = _synthetic_map(np.concatenate([coeffs0, coeffs1], axis=-1),
-        lower, upper, cells)
+    coeffs0 = np.broadcast_to(m0[:, None, :],
+                              (cells[0], cells[1], m0.shape[-1]))
+    coeffs1 = np.broadcast_to(m1[None, :, :],
+                              (cells[0], cells[1], m1.shape[-1]))
+    mapping = _synthetic_map(np.concatenate([coeffs0, coeffs1], axis=-1), lower,
+                             upper, cells)
 
     x_edges = np.linspace(0.0, 1.0, 3)
     v0_edges = np.linspace(lower[0], upper[0], 9)
     v1_edges = np.linspace(lower[1], upper[1], 7)
-    target = _numpy_target([x_edges, v0_edges, v1_edges],
-        np.zeros((2, 8, 6, 1)))
+    target = _numpy_target([x_edges, v0_edges, v1_edges], np.zeros(
+        (2, 8, 6, 1)))
     out = operations.map(target, mapping, space="vel")
 
     assert out.grid[1].ndim == 1  # separable: stays 1-D unlike a conf map
@@ -233,35 +233,30 @@ class TestVelMap:
     np.testing.assert_allclose(out.grid[1], 2.0 * v0_edges, atol=1e-12)
     np.testing.assert_allclose(out.grid[2], 3.0 * v1_edges + 1.0, atol=1e-12)
     np.testing.assert_allclose(out.grid[0], x_edges)  # conf axis untouched
-  # end
-# end
 
 
 # --------------------------------------------------------------------- errors
 class TestMapErrors:
+
   def test_rejects_modal_target(self):
     target = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl"))  # not interpolated
     mapping_path = os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl")
     with pytest.raises(ValueError, match=r"\.interpolate\(\)"):
       operations.map(target, mapping_path, space="conf")
-    # end
-  # end
 
   def test_bad_space_raises(self):
     target = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
     with pytest.raises(ValueError, match="'space'"):
-      operations.map(target, os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl"),
-          space="bogus")
-    # end
-  # end
+      operations.map(target,
+                     os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl"),
+                     space="bogus")
 
   def test_map_too_large_for_dataset(self):
     target = pg.load(os.path.join(GEN, "1d_ms_p1.gkyl")).interpolate()  # 1-D
     with pytest.raises(ValueError, match="does not fit"):
-      operations.map(target, os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl"),
-          space="conf")  # a 2-D map does not fit 1-D data
-    # end
-  # end
+      operations.map(target,
+                     os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl"),
+                     space="conf")  # a 2-D map does not fit 1-D data
 
   def test_num_comps_validation_error(self):
     lower, upper, cells = 0.0, 1.0, 2
@@ -270,18 +265,15 @@ class TestMapErrors:
     target = _numpy_target([np.linspace(lower, upper, 5)], np.zeros((4, 1)))
     with pytest.raises(ValueError, match="component"):
       operations.map(target, mapping, space="conf")
-    # end
-  # end
 
   def test_missing_basis_metadata_raises(self):
     d = GDataState()
     d.ctx.update(cells=np.array([2]))
-    d.push([np.linspace(0.0, 1.0, 3)], gpython.GkylArray.from_numpy(np.zeros((2, 2))))
+    d.push([np.linspace(0.0, 1.0, 3)],
+           gpython.GkylArray.from_numpy(np.zeros((2, 2))))
     target = _numpy_target([np.linspace(0.0, 1.0, 5)], np.zeros((4, 1)))
     with pytest.raises(ValueError, match="basis_type"):
       operations.map(target, d, space="conf")
-    # end
-  # end
 
   def test_vel_map_real_fixture_fits_the_separable_algorithm(self):
     """See the module docstring: this real fixture carries no basis
@@ -301,17 +293,16 @@ class TestMapErrors:
     assert out.grid[-1].ndim == 1 and out.grid[-2].ndim == 1
     assert np.all(np.isfinite(out.grid[-1]))
     assert np.all(np.isfinite(out.grid[-2]))
-  # end
-# end
 
 
 # --------------------------------------- select on curvilinear (conf) grids
 class TestSelectCurvilinearGuard:
+
   def _mapped(self):
     data = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
-    return operations.map(data, os.path.join(GEN, "2d_c2p_rot45_ms_p1.gkyl"),
-        space="conf")
-  # end
+    return operations.map(data,
+                          os.path.join(GEN, "2d_c2p_rot45_ms_p1.gkyl"),
+                          space="conf")
 
   def test_coordinate_selector_on_non_separable_axis_refuses(self):
     """A rotation map genuinely couples both axes -- a bare coordinate
@@ -319,15 +310,11 @@ class TestSelectCurvilinearGuard:
     mapped = self._mapped()
     with pytest.raises(ValueError, match="varies along another axis"):
       mapped.select(z0=0.0)
-    # end
-  # end
 
   def test_slice_selector_on_non_separable_axis_refuses(self):
     mapped = self._mapped()
     with pytest.raises(ValueError, match="varies along another axis"):
       mapped.select(z0="1:3")
-    # end
-  # end
 
   def test_coordinate_selector_works_once_the_other_axis_is_pinned(self):
     """Selecting z1 by index first narrows its *values* to one cell (even
@@ -341,7 +328,6 @@ class TestSelectCurvilinearGuard:
     assert pinned.grid[0].shape[1] == 2  # edges: 2 bound that one cell
     out = operations.select(pinned, z0=pinned.grid[0][3, 0])
     assert out.values.shape[0] == 1
-  # end
 
   def test_integer_index_selector_still_works(self):
     mapped = self._mapped()
@@ -349,7 +335,6 @@ class TestSelectCurvilinearGuard:
     assert out.values.shape[0] == 1
     # grid holds edges (2 bound one cell) even along a curvilinear axis
     assert out.grid[0].shape[0] == 2
-  # end
 
   def test_coordinate_selector_works_on_a_separable_joint_map(self):
     """A conf-space map stored jointly (m*num_basis components) but whose
@@ -358,14 +343,15 @@ class TestSelectCurvilinearGuard:
     coordinate value exactly, with no need to pin the other axis first."""
     lower, upper, cells = [0.0, 0.0], [1.0, 1.0], [2, 2]
     m0 = _project_2d(lambda z0, z1: 2.0 * z0, lower, upper, cells,
-        "serendipity", 1)
+                     "serendipity", 1)
     m1 = _project_2d(lambda z0, z1: 3.0 * z1 + 1.0, lower, upper, cells,
-        "serendipity", 1)
-    mapping = _synthetic_map(np.concatenate([m0, m1], axis=-1),
-        lower, upper, cells)
-    target = _numpy_target(
-        [np.linspace(lower[0], upper[0], 5), np.linspace(lower[1], upper[1], 5)],
-        np.zeros((4, 4, 1)))
+                     "serendipity", 1)
+    mapping = _synthetic_map(np.concatenate([m0, m1], axis=-1), lower, upper,
+                             cells)
+    target = _numpy_target([
+        np.linspace(lower[0], upper[0], 5),
+        np.linspace(lower[1], upper[1], 5)
+    ], np.zeros((4, 4, 1)))
     mapped = operations.map(target, mapping, space="conf")
     assert mapped.grid[0].ndim == 2  # stored jointly, curvilinear shape
 
@@ -373,14 +359,12 @@ class TestSelectCurvilinearGuard:
     assert out.values.shape[0] == 1
     assert out.grid[0].shape == (2, 5)  # only z0's own axis narrowed
     assert out.grid[1].shape == (2, 5)  # sibling kept in sync
-  # end
 
   def test_selecting_one_axis_narrows_the_sibling_grid_too(self):
     mapped = self._mapped()
     out = operations.select(mapped, z0=1)
     assert out.grid[0].shape[0] == 2  # z0's own axis: sliced 5 -> 2 (edges)
     assert out.grid[1].shape[0] == 2  # z1's array shares the block shape
-  # end
 
   def test_separable_1d_mapped_axis_keeps_coordinate_selection(self):
     """A vel (m=1) mapped axis stays 1-D, so the ordinary coordinate-lookup
@@ -388,13 +372,13 @@ class TestSelectCurvilinearGuard:
     lower, upper, cells = -1.0, 1.0, 4
     modal = _project_1d(lambda v: v, lower, upper, cells, "serendipity", 1)
     mapping = _synthetic_map(modal, [lower], [upper], [cells])
-    target = _numpy_target([np.linspace(0.0, 1.0, 5), np.linspace(lower, upper, 9)],
-        np.zeros((4, 8, 1)))
+    target = _numpy_target(
+        [np.linspace(0.0, 1.0, 5),
+         np.linspace(lower, upper, 9)], np.zeros((4, 8, 1)))
     mapped = operations.map(target, mapping, space="vel")
     assert mapped.grid[1].ndim == 1
     out = operations.select(mapped, z1=0.0)
     assert out.values.shape[1] == 1
-  # end
 
   def test_2d_vel_map_keeps_ordinary_selection_behind_a_nonzero_offset(self):
     """An m > 1 ``space="vel"`` map sits behind a nonzero ``offset``
@@ -404,30 +388,31 @@ class TestSelectCurvilinearGuard:
     ``select``, with no ``mapped_axes`` offset translation needed."""
     lower, upper, cells = [-1.0, -1.0], [1.0, 1.0], [4, 3]
     m0 = _project_1d(lambda v: 2.0 * v, lower[0], upper[0], cells[0],
-        "serendipity", 1)
-    m1 = _project_1d(lambda v: v, lower[1], upper[1], cells[1],
-        "serendipity", 1)
-    coeffs0 = np.broadcast_to(m0[:, None, :], (cells[0], cells[1], m0.shape[-1]))
-    coeffs1 = np.broadcast_to(m1[None, :, :], (cells[0], cells[1], m1.shape[-1]))
-    mapping = _synthetic_map(np.concatenate([coeffs0, coeffs1], axis=-1),
-        lower, upper, cells)
+                     "serendipity", 1)
+    m1 = _project_1d(lambda v: v, lower[1], upper[1], cells[1], "serendipity",
+                     1)
+    coeffs0 = np.broadcast_to(m0[:, None, :],
+                              (cells[0], cells[1], m0.shape[-1]))
+    coeffs1 = np.broadcast_to(m1[None, :, :],
+                              (cells[0], cells[1], m1.shape[-1]))
+    mapping = _synthetic_map(np.concatenate([coeffs0, coeffs1], axis=-1), lower,
+                             upper, cells)
 
     x_edges = np.linspace(0.0, 1.0, 3)
     v0_edges = np.linspace(lower[0], upper[0], 6)  # non-square vs. v1
     v1_edges = np.linspace(lower[1], upper[1], 4)
     target = _numpy_target([x_edges, v0_edges, v1_edges],
-        np.arange(2 * 5 * 3).reshape(2, 5, 3, 1).astype(float))
+                           np.arange(2 * 5 * 3).reshape(2, 5, 3,
+                                                        1).astype(float))
     out = operations.map(target, mapping, space="vel")  # offset = 3 - 2 = 1
     assert out.grid[1].ndim == 1 and out.grid[2].ndim == 1
 
     sel2 = operations.select(out, z2=v1_edges[2])
     assert sel2.values.shape == (2, 5, 1, 1)
-    assert sel2.grid[2].shape == (2,)  # v1's own axis sliced 4 -> 2
-    assert sel2.grid[1].shape == (6,)  # untouched by this call
+    assert sel2.grid[2].shape == (2, )  # v1's own axis sliced 4 -> 2
+    assert sel2.grid[1].shape == (6, )  # untouched by this call
 
     sel1 = operations.select(out, z1=v0_edges[1])
     assert sel1.values.shape == (2, 1, 3, 1)
-    assert sel1.grid[1].shape == (2,)  # v0's own axis sliced 6 -> 2
-    assert sel1.grid[2].shape == (4,)  # untouched by this call
-  # end
-# end
+    assert sel1.grid[1].shape == (2, )  # v0's own axis sliced 6 -> 2
+    assert sel1.grid[2].shape == (4, )  # untouched by this call

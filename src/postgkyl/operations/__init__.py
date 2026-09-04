@@ -57,8 +57,15 @@ from .map import map
 from typing import Annotated, Literal
 
 from postgkyl.cli_spec import (
-    CliArgument, CliType, CommandSpec, DatasetRef, Execution, ResultPolicy,
-    Section, command, hidden,
+    CliArgument,
+    CliType,
+    CommandSpec,
+    DatasetRef,
+    Execution,
+    ResultPolicy,
+    Section,
+    command,
+    hidden,
 )
 from postgkyl.gdatastate.gdatastate import GDataState
 
@@ -68,62 +75,90 @@ def _resolve_receiver_annotations(*functions) -> None:
   for function in functions:
     function.__globals__.setdefault("GDataState", GDataState)
     function.__globals__.setdefault("_GDataState", GDataState)
-  # end
-# end
 
 
 _MAP = CommandSpec(Section.VERBS, Execution.MAP_REPLACE)
 _APPEND = CommandSpec(Section.VERBS, Execution.MAP_APPEND, consumes_inputs=True)
 _COMBINE = CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True)
-_TERM_EACH = CommandSpec(Section.UTILITY, Execution.TERMINAL_EACH,
-    result=ResultPolicy.VALUE)
-_TERM_ALL = CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
-    result=ResultPolicy.VALUE)
+_TERM_EACH = CommandSpec(Section.UTILITY,
+                         Execution.TERMINAL_EACH,
+                         result=ResultPolicy.VALUE)
+_TERM_ALL = CommandSpec(Section.UTILITY,
+                        Execution.TERMINAL_ALL,
+                        result=ResultPolicy.VALUE)
 
 for _function in (
-    interpolate, local_poly, select, integrate, average,
-    eval_at_coord_proj, fft, magsq, relchange, mask, collect, sort, grid,
-    val2coord, extract_input, fit, differentiate, evaluate, map, represent,
+    interpolate,
+    local_poly,
+    select,
+    integrate,
+    average,
+    eval_at_coord_proj,
+    fft,
+    magsq,
+    relchange,
+    mask,
+    collect,
+    sort,
+    grid,
+    val2coord,
+    extract_input,
+    fit,
+    differentiate,
+    evaluate,
+    map,
+    represent,
     growth,
 ):
   _resolve_receiver_annotations(_function)
-# end
 
-select.__annotations__.update(comp=str | None, z0=str | None, z1=str | None,
-    z2=str | None, z3=str | None, z4=str | None, z5=str | None)
+select.__annotations__.update(comp=str | None,
+                              z0=str | None,
+                              z1=str | None,
+                              z2=str | None,
+                              z3=str | None,
+                              z4=str | None,
+                              z5=str | None)
 integrate.__annotations__["op"] = Literal["none", "abs", "sq"]
-integrate.__annotations__["axis"] = Annotated[
-    int | tuple | str | None, CliType(str | None), CliArgument()]
+integrate.__annotations__["axis"] = Annotated[int | tuple | str | None,
+                                              CliType(str | None),
+                                              CliArgument()]
 evaluate.__annotations__["chain"] = Annotated[str, CliArgument()]
 average.__annotations__["dims"] = list[int]
 average.__annotations__["weight"] = Annotated[GDataState | None, DatasetRef()]
-eval_at_coord_proj.__annotations__.update(
-    eval_dirs=list[int], eval_coords=list[float])
-relchange.__annotations__.update(
-    data0=Annotated[GDataState, DatasetRef()],
-    data=Annotated[GDataState, DatasetRef()], comp=str | None)
+eval_at_coord_proj.__annotations__.update(eval_dirs=list[int],
+                                          eval_coords=list[float])
+relchange.__annotations__.update(data0=Annotated[GDataState,
+                                                 DatasetRef()],
+                                 data=Annotated[GDataState,
+                                                DatasetRef()],
+                                 comp=str | None)
 mask.__annotations__["mask_data"] = Annotated[GDataState | None, DatasetRef()]
 fit.__annotations__["guess"] = str | None
 map.__annotations__["data"] = GDataState
 map.__annotations__["mapping"] = str
 represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 
-for _function in (interpolate, local_poly, select, average,
-    eval_at_coord_proj, fft, magsq, grid, differentiate, map):
+for _function in (interpolate, local_poly, select, average, eval_at_coord_proj,
+                  fft, magsq, grid, differentiate, map):
   command(_MAP)(_function)
-# end
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
 command(_COMBINE)(collect)
-command(CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True))(sort)
+command(CommandSpec(Section.VERBS, Execution.COMBINE,
+                    consumes_inputs=True))(sort)
 command(_COMBINE)(evaluate)
 command(_MAP)(mask)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(growth)
-command(CommandSpec(Section.UTILITY, Execution.TERMINAL_ALL,
-    result=ResultPolicy.SILENT))(info)
-command(CommandSpec(Section.VERBS, Execution.MAP_OR_TERMINAL_EACH,
-    result=ResultPolicy.VALUE))(integrate)
+command(
+    CommandSpec(Section.UTILITY,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))(info)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_OR_TERMINAL_EACH,
+                result=ResultPolicy.VALUE))(integrate)
 command(_TERM_EACH)(extract_input)
 command(_MAP)(represent)
 
@@ -131,10 +166,11 @@ hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
-__all__ = ["interpolate", "local_poly", "select", "info", "integrate", "average",
-    "eval_at_coord_proj",
-    "plot", "animate", "plotly", "plotly_animate", "pyvista",
-    "arithmetic", "represent", "apply",
-    "fft", "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
-    "extract_input", "fit", "differentiate", "evaluate", "available_evaluate_operators",
-    "map", "growth", "gyrokinetics"]
+__all__ = [
+    "interpolate", "local_poly", "select", "info", "integrate", "average",
+    "eval_at_coord_proj", "plot", "animate", "plotly", "plotly_animate",
+    "pyvista", "arithmetic", "represent", "apply", "fft", "magsq", "relchange",
+    "mask", "collect", "sort", "grid", "val2coord", "extract_input", "fit",
+    "differentiate", "evaluate", "available_evaluate_operators", "map",
+    "growth", "gyrokinetics"
+]

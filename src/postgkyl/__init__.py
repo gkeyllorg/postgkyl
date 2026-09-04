@@ -53,10 +53,26 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
 
 from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, relchange, sort
 from postgkyl.operations import (
-    apply, available_evaluate_operators, average, differentiate,
-    eval_at_coord_proj, extract_input, fft, fit, grid, growth, info, integrate,
-    interpolate, local_poly, magsq, map, mask, represent,
-    select, val2coord,
+    apply,
+    available_evaluate_operators,
+    average,
+    differentiate,
+    eval_at_coord_proj,
+    extract_input,
+    fft,
+    fit,
+    grid,
+    growth,
+    info,
+    integrate,
+    interpolate,
+    local_poly,
+    magsq,
+    map,
+    mask,
+    represent,
+    select,
+    val2coord,
 )
 from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
@@ -68,13 +84,15 @@ from postgkyl._version import version_report
 
 __version__ = "2.0.0"
 
-hidden("collection helper is a Python API, not a pipeline command")(group_blocks)
+hidden("collection helper is a Python API, not a pipeline command")(
+    group_blocks)
 
-__all__ = ["GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integrate",
-    "interpolate", "local_poly", "select", "average",
-    "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
-    "extract_input", "fit", "growth", "differentiate", "map",
-    "represent", "apply", "gk_rz", "gk_fluxsurf", "save",
-    "collect", "evaluate", "relchange", "animate", "plotly_animate", "sort",
-    "available_evaluate_operators", "plotly", "pyvista", "gk",
-    "__version__", "version_report"]
+__all__ = [
+    "GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integrate",
+    "interpolate", "local_poly", "select", "average", "eval_at_coord_proj",
+    "fft", "magsq", "mask", "grid", "val2coord", "extract_input", "fit",
+    "growth", "differentiate", "map", "represent", "apply", "gk_rz",
+    "gk_fluxsurf", "save", "collect", "evaluate", "relchange", "animate",
+    "plotly_animate", "sort", "available_evaluate_operators", "plotly",
+    "pyvista", "gk", "__version__", "version_report"
+]

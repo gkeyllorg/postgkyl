@@ -12,14 +12,13 @@ def _named(file_name):
   d = GDataState()
   d._file_name = file_name
   return d
-# end
 
 
 def test_natural_sort_key_orders_embedded_numbers_numerically():
   names = ["field_10.gkyl", "field_1.gkyl", "field_2.gkyl", "field_20.gkyl"]
   assert sorted(names, key=numerics.natural_sort_key) == [
-      "field_1.gkyl", "field_2.gkyl", "field_10.gkyl", "field_20.gkyl"]
-# end
+      "field_1.gkyl", "field_2.gkyl", "field_10.gkyl", "field_20.gkyl"
+  ]
 
 
 def test_natural_sort_key_beats_plain_lexicographic_sort():
@@ -27,8 +26,8 @@ def test_natural_sort_key_beats_plain_lexicographic_sort():
   names = ["field_0.gkyl", "field_1.gkyl", "field_10.gkyl", "field_2.gkyl"]
   assert sorted(names) != sorted(names, key=numerics.natural_sort_key)
   assert sorted(names, key=numerics.natural_sort_key) == [
-      "field_0.gkyl", "field_1.gkyl", "field_2.gkyl", "field_10.gkyl"]
-# end
+      "field_0.gkyl", "field_1.gkyl", "field_2.gkyl", "field_10.gkyl"
+  ]
 
 
 def test_sort_reorders_datasets_by_filename():
@@ -36,14 +35,17 @@ def test_sort_reorders_datasets_by_filename():
   b = _named("field_2.gkyl")
   out = operations.sort(a, b)
   assert [d.file_name for d in out] == ["field_2.gkyl", "field_10.gkyl"]
-# end
 
 
 def test_sort_accepts_a_list_argument():
-  frames = [_named("field_10.gkyl"), _named("field_2.gkyl"), _named("field_1.gkyl")]
+  frames = [
+      _named("field_10.gkyl"),
+      _named("field_2.gkyl"),
+      _named("field_1.gkyl")
+  ]
   out = operations.sort(frames)
-  assert [d.file_name for d in out] == ["field_1.gkyl", "field_2.gkyl", "field_10.gkyl"]
-# end
+  assert [d.file_name
+          for d in out] == ["field_1.gkyl", "field_2.gkyl", "field_10.gkyl"]
 
 
 def test_sort_reverse():
@@ -51,7 +53,6 @@ def test_sort_reverse():
   b = _named("field_2.gkyl")
   out = operations.sort(a, b, reverse=True)
   assert [d.file_name for d in out] == ["field_2.gkyl", "field_1.gkyl"]
-# end
 
 
 def test_sort_does_not_mutate_or_copy_datasets():
@@ -60,9 +61,7 @@ def test_sort_does_not_mutate_or_copy_datasets():
   out = operations.sort(a, b)
   assert out == [b, a]
   assert out[0] is b and out[1] is a
-# end
 
 
 def test_sort_empty_returns_empty():
   assert operations.sort() == []
-# end

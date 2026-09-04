@@ -21,6 +21,7 @@ Run directly:
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import numpy as np
@@ -43,11 +44,11 @@ x = grid[0]
 rho = np.where(x < 0.5, 1.0, 0.125)
 p = np.where(x < 0.5, 1.0, 0.1)
 vx = vy = vz = np.zeros_like(x)
-energy = p / (GAS_GAMMA - 1) + 0.5 * rho * (vx ** 2 + vy ** 2 + vz ** 2)
+energy = p / (GAS_GAMMA - 1) + 0.5 * rho * (vx**2 + vy**2 + vz**2)
 moments = np.stack([rho, rho * vx, rho * vy, rho * vz, energy], axis=-1)
 
 d = pg.GData()
-d.push(grid, moments)               # diagnostics require field-domain data
+d.push(grid, moments)  # diagnostics require field-domain data
 
 # Diagnostics are free functions of a GData(State), returning a new one --
 # the same ``inplace``/``tag``/``label`` contract as every ``operations`` verb.
@@ -55,8 +56,10 @@ density = fm.density(d)
 pressure = fm.pressure(d, gas_gamma=GAS_GAMMA)
 mach = fm.mach(d, gas_gamma=GAS_GAMMA)
 
-print("density matches the input rho profile:", np.allclose(density.values.ravel(), rho))
-print("pressure matches the input p profile: ", np.allclose(pressure.values.ravel(), p))
+print("density matches the input rho profile:",
+      np.allclose(density.values.ravel(), rho))
+print("pressure matches the input p profile: ",
+      np.allclose(pressure.values.ravel(), p))
 print("Mach number at rest:                  ", mach.values.ravel()[0])
 
 # Raw modal DG coefficients have no "density"/"pressure" until interpolated
