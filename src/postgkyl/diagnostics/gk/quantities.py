@@ -435,7 +435,7 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
 def fetch_c_s(gdatas, **kwargs):
   """Sound speed (m/s), combining the electrons and every ion species.
   ``gdatas`` has one ``[M0, temp]`` source list per species, in the order
-  requested, e.g. ``pgkyl gk-load-quantity --quantity c_s
+  requested, e.g. ``pgkyl gk_load_quantity --quantity c_s
   --species elc,ion1,ion2 ...``.
   Electrons and ions are told apart by the sign of each species' charge
   attribute, so the species may be named anything.

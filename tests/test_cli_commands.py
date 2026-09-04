@@ -44,15 +44,15 @@ def test_help_groups_the_generated_inventory():
     assert f"{section}:" in result.output
     assert names
   # end
-  assert "rotations-bparrotate" in result.output
-  assert "local-poly" in result.output
+  assert "rotations_bparrotate" in result.output
+  assert "local_poly" in result.output
 # end
 
 
 def test_removed_manual_commands_and_legacy_spellings_are_rejected():
   for spelling in (
       "bparrotate", "euler", "tenmoment", "status", "print", "dg_local_poly",
-      "gk_load_quantity", "extractinput", "plotly_animate",
+      "gk-load-quantity", "extractinput", "plotly-animate",
   ):
     assert _run(spelling).exit_code != 0
   # end
@@ -68,12 +68,12 @@ def test_aliases_only_add_spellings():
 
 def test_bare_filename_is_a_spelling_for_canonical_load():
   bare = _ok(FIELD, "info")
-  explicit = _ok("load", "--file-name", FIELD, "info")
+  explicit = _ok("load", "--file_name", FIELD, "info")
   assert bare.output == explicit.output
 # end
 
 
-def test_fluent_chain_uses_dashed_command_and_option_names():
+def test_fluent_chain_uses_api_command_and_option_names():
   result = _ok(FIELD, "interpolate", "select", "--z0", "0", "--comp", "0",
       "info")
   assert "Number of components: 1" in result.output
@@ -101,10 +101,10 @@ def test_select_gets_only_conflict_free_short_options():
 # end
 
 
-def test_api_underscores_are_not_cli_spellings():
-  assert _run(DISTF, "local_poly").exit_code != 0
-  assert _run(DISTF, "local-poly", "--num_points", "3").exit_code != 0
-  _ok(DISTF, "local-poly", "--npoints", "3", "info")
+def test_api_underscores_are_the_only_cli_spellings():
+  assert _run(DISTF, "local-poly").exit_code != 0
+  assert _run("load", "--file-name", FIELD, "info").exit_code != 0
+  _ok(DISTF, "local_poly", "--npoints", "3", "info")
 # end
 
 
@@ -120,13 +120,14 @@ def test_declared_cli_arguments_are_positional():
 
   _ok(FIELD_3D, "integrate", "2", "info")
   assert _run(FIELD_3D, "integrate", "--axis", "2").exit_code != 0
-  assert _run(FIELD_3D, "integrate-axis", "2").exit_code != 0
+  assert _run(FIELD_3D, "integrate_axis", "2").exit_code != 0
 # end
 
 
 def test_generated_save_options_match_python_parameter_names(tmp_path):
   output = tmp_path / "field"
-  _ok(DISTF, "save", "--out-name", output, "--extension", "npy")
+  _ok(DISTF, "save", "--out_name", output, "--extension", "npy")
+  assert _run(DISTF, "save", "--out-name", output).exit_code != 0
   assert output.with_suffix(".npy").is_file()
   assert _run(DISTF, "save", "--out", output).exit_code != 0
 # end
@@ -135,13 +136,13 @@ def test_generated_save_options_match_python_parameter_names(tmp_path):
 def test_plot_uses_generated_render_options(tmp_path):
   output = tmp_path / "field.png"
   _ok(FIELD, "interpolate", "select", "--comp", "0", "plot", "--show",
-      "False", "--grid-indices", "True", "--saveas", output)
+      "False", "--grid_indices", "True", "--saveas", output)
   assert output.is_file()
 # end
 
 
 def test_manual_session_render_options_are_not_registered():
-  assert _run("--batch-mode", FIELD, "info").exit_code != 0
+  assert _run("--batch_mode", FIELD, "info").exit_code != 0
   assert _run("--saveframes-prefix", "frame", FIELD, "info").exit_code != 0
 # end
 

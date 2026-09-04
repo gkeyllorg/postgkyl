@@ -94,7 +94,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
         continue
       # end
       consider(value, f"{cls.__module__}.{cls.__qualname__}.{name}",
-          name.replace("_", "-"))
+          name)
     # end
   # end
 
@@ -107,7 +107,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
         _classify(value, path)
       # end
       else:
-        consider(value, path, name.replace("_", "-"))
+        consider(value, path, name)
       # end
     # end
   # end
@@ -120,20 +120,20 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
     relative = module.__name__.removeprefix("postgkyl.diagnostics.")
     # Model-family packages group related diagnostic modules without erasing
     # each module's public command vocabulary. For example,
-    # diagnostics.mom.five_moment.pressure remains
-    # ``five-moment-pressure`` and cannot collide with ten_moment.pressure.
-    namespace = relative.rsplit(".", 1)[-1].replace("_", "-")
+    # diagnostics.mom.five_moment.pressure becomes ``five_moment_pressure``
+    # and cannot collide with ten_moment.pressure.
+    namespace = relative.rsplit(".", 1)[-1]
     for name, value in _functions(module):
       if not value.__module__.startswith("postgkyl.diagnostics"):
         # Compatibility re-exports owned by a lower layer keep that owner's
         # canonical command (for example operations.gyrokinetics.gk_rz ->
-        # ``gk-rz``); the diagnostic alias is classified but does not invent
+        # ``gk_rz``); the diagnostic alias is classified but does not invent
         # a second command or move it into the wrong help section.
         _classify(value, f"{module.__name__}.{name}")
         continue
       # end
       consider(value, f"{module.__name__}.{name}",
-          f"{namespace}-{name.replace('_', '-')}")
+          f"{namespace}_{name}")
     # end
 
     # Registry values are public vocabulary roots too. Identity de-duplication
@@ -143,7 +143,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
       for value in variables.values():
         if inspect.isfunction(value):
           consider(value, f"{module.__name__}.VARIABLES[{value.__name__!r}]",
-              f"{namespace}-{value.__name__.replace('_', '-')}")
+              f"{namespace}_{value.__name__}")
         # end
       # end
     # end

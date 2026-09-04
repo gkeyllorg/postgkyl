@@ -93,7 +93,7 @@ pgkyl file.gkyl info
 
 # A diagnostics chain (equation-specific physics; see diagnostics/)
 # (diagnostics take NumPy-backed data, so interpolate always runs first)
-pgkyl euler_5m_0.gkyl interpolate five-moment-pressure --num-moms 5 plot
+pgkyl euler_5m_0.gkyl interpolate five_moment_pressure --num_moms 5 plot
 
 # An RPN chain over the working set (see operations/evaluate.py)
 pgkyl a.gkyl b.gkyl evaluate "f0 f1 +" interpolate plot
@@ -514,13 +514,13 @@ no ordering dependency on the `__version__` assignment below it.
 callback-before-dispatch are **native to Click**. At import time it discovers the
 public script API, compiles its `CommandSpec` records, and lowers every record through
 the one generic compiler. There is no `cli/commands/` package and no hand-authored
-subcommand. Python underscores are mechanically rendered as CLI dashes in command and
-option names (`local_poly` → `local-poly`, `num_moms` → `--num-moms`). The custom
-compiler also adds a one-letter option (`--num-moms` → `-n`) when that initial is
+subcommand. Command and option names preserve the public Python API's underscores
+exactly (`local_poly` and `num_moms` → `--num_moms`). The custom compiler also adds
+a one-letter option (`--num_moms` → `-n`) when that initial is
 unique within the command; conflicting initials receive no short option and `-h` is
 reserved for help. The custom group code handles spelling-only aliases/unambiguous
 abbreviations and expands a bare
-filename to `load --file-name`; aliases never change a generated command's parameters
+filename to `load --file_name`; aliases never change a generated command's parameters
 or execution. `format_commands` groups `pgkyl --help` under Verbs / Diagnostics /
 Render / Utility; presentation does not change the flat, chainable inventory.
 `--version` is a custom eager `click.option` (not `click.version_option`, since
@@ -536,6 +536,6 @@ gpython-bridge availability, and interpreter/platform/dependency versions.
 object is `postgkyl.cli.app:cli`.
 
 `load` (or its bare-filename shorthand) exposes the script parameters
-`--basis-type`, `--poly-order`, and `--value-form` — `basis_type`/`poly_order`/
+`--basis_type`, `--poly_order`, and `--value_form` — `basis_type`/`poly_order`/
 `value_form` are properties of the data fixed once here at load time, so no
-other verb command (`interpolate`, `local-poly`, …) repeats them.
+other verb command (`interpolate`, `local_poly`, …) repeats them.

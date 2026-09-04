@@ -43,9 +43,9 @@ pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_
     interp sel --comp 0 info
 ```
 
-## 3. Discontinuity-preserving plots with `local-poly`
+## 3. Discontinuity-preserving plots with `local_poly`
 
-`interpolate` produces a continuous refined mesh; `local-poly` instead
+`interpolate` produces a continuous refined mesh; `local_poly` instead
 evaluates the DG polynomial cell-by-cell and splices a NaN at every
 inter-cell interface, so a plot shows genuine discontinuities instead of
 smoothing over them -- useful for shocks or anything with jumps at cell
@@ -53,7 +53,7 @@ boundaries.
 
 ```bash
 pgkyl tests/test_data/generated/distf_p2_0.gkyl \
-    local-poly select --z1 0.0 --z2 0.0 plot --show False --saveas out.png
+    local_poly select --z1 0.0 --z2 0.0 plot --show False --saveas out.png
 ```
 
 ## 4. DynVector inspection and `fit`
@@ -64,7 +64,7 @@ a straight line to the series vs. time -- the growth-rate use case).
 
 ```bash
 pgkyl tests/test_data/generated/energy_dynvec.gkyl info
-pgkyl tests/test_data/generated/energy_dynvec.gkyl fit --fit-type linear
+pgkyl tests/test_data/generated/energy_dynvec.gkyl fit --fit_type linear
 ```
 
 ## 5. Combining datasets: `evaluate`
@@ -84,31 +84,31 @@ pgkyl tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_
 
 ## 6. Gyrokinetics: pre-named quantities and distribution functions
 
-`gk-load-quantity` loads one of a registry of named gyrokinetic
+`gk_load_quantity` loads one of a registry of named gyrokinetic
 quantities (listed in its generated `--quantity` choices) straight from a simulation's naming convention --
 no manual file paths. `--name` is the simulation's *name prefix* (not a path);
 `--path` is the directory to look in.
 
 ```bash
-pgkyl gk-load-quantity --help
-pgkyl gk-load-quantity --quantity geo_int_jacobtot_inv --species "" \
+pgkyl gk_load_quantity --help
+pgkyl gk_load_quantity --quantity geo_int_jacobtot_inv --species "" \
     --name rt_gk_tcv_iwl_1x2v_p1 --path tests/test_data info
 ```
 
-`gk-load-distf` reconstructs a full distribution function from the saved
+`gk_load_distf` reconstructs a full distribution function from the saved
 `Jf`-times-Jacobian(s) files (here `--name` *does* include the directory, since
 the simulation name itself includes the directory):
 
 ```bash
-pgkyl gk-load-distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
+pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
     --species elc --frame 250 \
-    --jacobtot-inv-file tests/test_data/rt_gk_tcv_iwl_1x2v_p1-geo_int_jacobtot_inv.gkyl \
+    --jacobtot_inv_file tests/test_data/rt_gk_tcv_iwl_1x2v_p1-geo_int_jacobtot_inv.gkyl \
     info
 ```
 
 ## 7. Map a gyrokinetic field to R-Z
 
-`gk-rz` is a data transformation: it interpolates one raw DG component and
+`gk_rz` is a data transformation: it interpolates one raw DG component and
 maps it onto the physical poloidal plane. Geometry is inferred from the
 field's filename, preferring nodal geometry and falling back to modal
 `mapc2p` geometry. The CLI and Python calls below use the same operation and
@@ -116,7 +116,7 @@ defaults:
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl \
-    gk-rz --nz-interp 2 info
+    gk_rz --nz_interp 2 info
 ```
 
 ```python
@@ -132,14 +132,14 @@ mapped = pg.load(
 `save` writes the current dataset(s) out as `gkyl`/`txt`/`npy`/`vtk`.
 
 ```bash
-pgkyl tests/test_data/generated/distf_p2_0.gkyl save --out-name distf --extension npy
+pgkyl tests/test_data/generated/distf_p2_0.gkyl save --out_name distf --extension npy
 ```
 
 ## 9. One API-derived command inventory
 
 Every loaded file becomes a dataset in the current chain. The command list is
 compiled from the script API, so `--help` is the authoritative inventory and
-every Python underscore appears as a CLI dash.
+every Python underscore remains an underscore in the CLI.
 
 ```bash
 pgkyl --help
@@ -150,6 +150,6 @@ pgkyl --help
 - `pgkyl --help` lists every registered command, grouped by section
   (Verbs / Diagnostics / Render / Utility).
 - `pgkyl <command> --help` documents that command's options -- most carry a
-  worked example in their docstring, e.g. `pgkyl local-poly --help`.
+  worked example in their docstring, e.g. `pgkyl local_poly --help`.
 - `examples/scripts/` is the Python-script equivalent of this tutorial (the
   fluent `GData` API instead of the chained CLI).

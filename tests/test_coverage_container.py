@@ -283,9 +283,9 @@ def test_cli_has_no_manual_batch_mode(tmp_path, monkeypatch):
 
   monkeypatch.chdir(tmp_path)
   runner = CliRunner()
-  result = runner.invoke(cli, ["--batch-mode", F1, "info"])
+  result = runner.invoke(cli, ["--batch_mode", F1, "info"])
   assert result.exit_code != 0
-  assert "No such option '--batch-mode'" in result.output
+  assert "No such option '--batch_mode'" in result.output
 # end
 
 
@@ -316,7 +316,7 @@ def test_cli_save_command(tmp_path):
 
   out = tmp_path / "written.txt"
   result = CliRunner().invoke(cli, [
-      F1, "interp", "sel", "--comp", "0", "save", "--out-name", str(out),
+      F1, "interp", "sel", "--comp", "0", "save", "--out_name", str(out),
       "--extension", "txt"])
   assert result.exit_code == 0, result.output
   assert out.exists()

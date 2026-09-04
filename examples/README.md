@@ -42,8 +42,8 @@ the repo).
 
 See [`cli_tutorial.md`](cli_tutorial.md) -- inspecting a file, the
 `interpolate`/`select`/`plot` chain, discontinuity-preserving plots with
-`local-poly`, DynVector `info`/`fit`, the gyrokinetic loaders
-(`gk-load-quantity`, `gk-load-distf`), the `gk-rz`
+`local_poly`, DynVector `info`/`fit`, the gyrokinetic loaders
+(`gk_load_quantity`, `gk_load_distf`), the `gk_rz`
 transformation, `save`, and the generated command inventory.
 
 ## Running the tests

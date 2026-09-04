@@ -80,16 +80,16 @@ def test_gyrokinetic_diagnostics_use_concise_python_names():
 
 
 def test_only_canonical_diagnostic_names_are_registered():
-  assert "rotations-bparrotate" in COMMAND_BY_NAME
-  assert "five-moment-pressure" in COMMAND_BY_NAME
-  assert "ten-moment-agyro" in COMMAND_BY_NAME
-  assert "multispecies-energetics" in COMMAND_BY_NAME
-  assert "kinetic-transform-frame" in COMMAND_BY_NAME
-  assert "pkpm-laguerre-compose" in COMMAND_BY_NAME
+  assert "rotations_bparrotate" in COMMAND_BY_NAME
+  assert "five_moment_pressure" in COMMAND_BY_NAME
+  assert "ten_moment_agyro" in COMMAND_BY_NAME
+  assert "multispecies_energetics" in COMMAND_BY_NAME
+  assert "kinetic_transform_frame" in COMMAND_BY_NAME
+  assert "pkpm_laguerre_compose" in COMMAND_BY_NAME
   for name in (
-      "gk-energy-balance", "gk-nodes",
-      "gk-particle-balance", "gk-load-distf",
-      "gk-load-quantity",
+      "gk_energy_balance", "gk_nodes",
+      "gk_particle_balance", "gk_load_distf",
+      "gk_load_quantity",
   ):
     assert name in COMMAND_BY_NAME
   # end
@@ -110,7 +110,7 @@ def test_only_canonical_diagnostic_names_are_registered():
 
 def test_load_distf_frame_is_text_and_cli_accepts_all_frames(tmp_path,
     monkeypatch):
-  command = COMMAND_BY_NAME["gk-load-distf"]
+  command = COMMAND_BY_NAME["gk_load_distf"]
   frame_option = next(option for option in command.params
       if option.name == "frame")
   assert isinstance(frame_option.type, click.types.StringParamType)
@@ -131,7 +131,7 @@ def test_load_distf_frame_is_text_and_cli_accepts_all_frames(tmp_path,
   monkeypatch.chdir(tmp_path)
 
   result = CliRunner().invoke(cli, [
-      "gk-load-distf", "--name", "sim", "--species", "ion",
+      "gk_load_distf", "--name", "sim", "--species", "ion",
       "--frame", ":", "--suffix", "fdot",
   ])
   assert result.exit_code == 0, result.output
@@ -143,7 +143,7 @@ def test_bparrotate_is_compiled_directly_from_the_script_callable():
   array = _make([[1.0, 0.0, 0.0]], tag="array")
   field = _make([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]], tag="field")
 
-  space = _invoke("rotations-bparrotate", [array, field],
+  space = _invoke("rotations_bparrotate", [array, field],
       array="array", field="field", inplace=False, tag="parallel", label=None)
 
   assert len(space.datasets) == 1
@@ -152,8 +152,8 @@ def test_bparrotate_is_compiled_directly_from_the_script_callable():
 # end
 
 
-def test_dataset_parameters_are_tag_options_with_exact_dashed_names():
-  command = COMMAND_BY_NAME["rotations-bparrotate"]
+def test_dataset_parameters_are_tag_options_with_exact_api_names():
+  command = COMMAND_BY_NAME["rotations_bparrotate"]
   assert {option.opts[0] for option in command.params} == {
       "--array", "--field", "--inplace", "--tag", "--label",
   }
@@ -166,7 +166,7 @@ def test_generated_map_diagnostic_uses_the_callable_signature():
   energy = pressure / (gamma - 1.0) + 0.5 * rho * velocity**2
   moments = _make([[rho, rho * velocity, 0.0, 0.0, energy]])
 
-  space = _invoke("five-moment-pressure", [moments], gas_gamma=gamma,
+  space = _invoke("five_moment_pressure", [moments], gas_gamma=gamma,
       num_moms=None, inplace=False, tag="pressure", label=None)
 
   assert len(space.datasets) == 1
@@ -178,7 +178,7 @@ def test_generated_map_diagnostic_uses_the_callable_signature():
 def test_missing_dataset_tag_fails_closed():
   array = _make([[1.0, 0.0, 0.0]], tag="array")
   with pytest.raises(click.UsageError, match="field"):
-    _invoke("rotations-bparrotate", [array], array="array", field="field",
+    _invoke("rotations_bparrotate", [array], array="array", field="field",
         inplace=False, tag=None, label=None)
   # end
 # end

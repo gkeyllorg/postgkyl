@@ -63,13 +63,13 @@ class PgkylGroup(click.Group):
   # end
 
   def resolve_command(self, ctx, args):
-    """Expand a bare file pattern to the canonical ``load --file-name`` form."""
+    """Expand a bare file pattern to the canonical ``load --file_name`` form."""
     if args:
       token = args[0]
       exact = click.Group.get_command(self, ctx, token)
       alias = COMMAND_ALIASES.get(token)
       if exact is None and alias is None and glob(token):
-        args[:1] = ["load", "--file-name", token]
+        args[:1] = ["load", "--file_name", token]
       # end
     # end
     return super().resolve_command(ctx, args)

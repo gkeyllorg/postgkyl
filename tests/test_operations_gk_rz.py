@@ -13,7 +13,7 @@ import postgkyl as pg
 from postgkyl import gpython
 from postgkyl.cli.app import COMMANDS
 
-gk_rz_command = next(command for command in COMMANDS if command.name == "gk-rz")
+gk_rz_command = next(command for command in COMMANDS if command.name == "gk_rz")
 from postgkyl.cli.state import DataSpace
 from postgkyl.operations import gyrokinetics as gk_ops
 
@@ -199,5 +199,5 @@ def test_group_compatibility_cli_and_help_section():
   help_text = CliRunner().invoke(cli, ["--help"]).output
   verbs = help_text.split("Diagnostics:", 1)[0]
   diagnostics = help_text.split("Diagnostics:", 1)[1].split("Render:", 1)[0]
-  assert "gk-rz" in verbs and "gk-rz" not in diagnostics
+  assert "gk_rz" in verbs and "gk_rz" not in diagnostics
 # end

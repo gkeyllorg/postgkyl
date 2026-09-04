@@ -15,7 +15,7 @@ name and the loader resolves which files it needs:
   ``.select()``/``.plot()`` like anything else.
 * ``pg.gk.load_distf(name=..., species=..., frame=..., ...)`` reconstructs a
   full distribution function from the saved ``Jf``-times-Jacobian(s) files
-  (what the CLI's ``gk-load-distf`` command wraps).
+  (what the CLI's ``gk_load_distf`` command wraps).
 
 This uses the ``rt_gk_tcv_iwl*`` fixtures staged in ``tests/test_data`` --
 two related simulations: ``rt_gk_tcv_iwl_adapt_source_1x2v_p1`` wrote ion

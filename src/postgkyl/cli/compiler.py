@@ -141,16 +141,10 @@ _SCALARS = {
 _RESERVED_SHORT_OPTIONS = frozenset({"h"})
 
 
-def kebab_case(name: str) -> str:
-  """Apply the sole canonical Python-to-CLI name transformation."""
-  return name.replace("_", "-")
-# end
-
-
 def _short_option_names(parameters: tuple[ParameterModel, ...]) -> dict[str, str]:
   """Return unambiguous one-letter option names for exposed parameters."""
   candidates = {
-      parameter.name: kebab_case(parameter.name)[0]
+      parameter.name: parameter.name[0]
       for parameter in parameters
       if not parameter.injected and not parameter.argument
   }
@@ -431,7 +425,7 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
         argument=is_argument))
   # end
 
-  command_name = name or kebab_case(getattr(canonical, "__name__", ""))
+  command_name = name or getattr(canonical, "__name__", "")
   if not command_name or command_name.startswith("-"):
     raise CommandCompilationError(f"{canonical!r}: invalid command name {command_name!r}")
   # end
@@ -534,11 +528,11 @@ def _resolve_tag(ctx, parameter: str, tag: str):
   matches = [dataset for dataset in ctx.obj.datasets if dataset.tag == tag]
   if not matches:
     raise click.UsageError(
-        f"--{kebab_case(parameter)}: no dataset tagged {tag!r}")
+        f"--{parameter}: no dataset tagged {tag!r}")
   # end
   if len(matches) != 1:
     raise click.UsageError(
-        f"--{kebab_case(parameter)}: tag {tag!r} matches {len(matches)} datasets")
+        f"--{parameter}: tag {tag!r} matches {len(matches)} datasets")
   # end
   return matches[0]
 # end
@@ -772,7 +766,7 @@ def build_click_command(model: CommandModel, *,
       # end
       attrs["default"] = default
     # end
-    declarations = [f"--{kebab_case(parameter.name)}"]
+    declarations = [f"--{parameter.name}"]
     if parameter.name in short_options:
       declarations.append(short_options[parameter.name])
     # end
@@ -802,5 +796,5 @@ def group_by_section(models: tuple[CommandModel, ...]) -> dict[str, list[str]]:
 __all__ = [
     "CodecKind", "CommandCompilationError", "CommandModel", "ParameterModel",
     "TypeCodec", "build_click_command", "compile_callable",
-    "compile_public_surface", "execute_model", "group_by_section", "kebab_case",
+    "compile_public_surface", "execute_model", "group_by_section",
 ]

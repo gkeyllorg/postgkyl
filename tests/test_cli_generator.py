@@ -62,6 +62,7 @@ def codec_demo(required: int, *, optional: str | None = None,
 
 def test_codec_models_and_round_trip(tmp_path):
   model = compile_callable(codec_demo)
+  assert model.name == "codec_demo"
   by_name = {parameter.name: parameter for parameter in model.parameters}
   assert by_name["required"].required
   assert by_name["enabled"].codec.kind is CodecKind.BOOLEAN
@@ -125,7 +126,7 @@ def test_short_options_require_a_unique_initial_and_reserve_help():
   assert options == {
       "alpha": ["--alpha"],
       "another": ["--another"],
-      "beta_value": ["--beta-value", "-b"],
+      "beta_value": ["--beta_value", "-b"],
       "hidden": ["--hidden"],
   }
 # end
@@ -261,7 +262,7 @@ def test_public_inventory_is_total_unique_and_deterministic():
   assert first == second
   assert len({model.name for model in MODELS}) == len(MODELS)
   assert {command_obj.name for command_obj in COMMANDS} >= {
-      "interpolate", "five-moment-pressure", "plot", "load",
+      "interpolate", "five_moment_pressure", "plot", "load",
   }
   assert {command_obj.name for command_obj in COMMANDS} == {
       model.name for model in MODELS}
@@ -322,11 +323,11 @@ def test_no_scientific_click_decorators_remain():
 # end
 
 
-def test_every_generated_name_is_the_dashed_api_name():
+def test_every_generated_name_preserves_api_underscores():
   discovered = discover_public_surface()
   assert {item.name for item in discovered} == {model.name for model in MODELS}
   for item in discovered:
-    assert "_" not in item.name
+    assert "-" not in item.name
   # end
   for model, command_obj in zip(MODELS, COMMANDS):
     assert command_obj.name == model.name
@@ -344,7 +345,7 @@ def test_every_generated_name_is_the_dashed_api_name():
         # end
         else:
           assert isinstance(options[parameter.name], click.Option)
-          expected_opts = ["--" + parameter.name.replace("_", "-")]
+          expected_opts = ["--" + parameter.name]
           if initials.count(parameter.name[0]) == 1 and parameter.name[0] != "h":
             expected_opts.append("-" + parameter.name[0])
           # end

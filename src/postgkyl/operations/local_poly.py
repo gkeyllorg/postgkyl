@@ -44,7 +44,7 @@ def local_poly(data: "GDataState", *, npoints: int = 2, inplace: bool = False,
   if poly_order is None:
     raise ValueError(
         "dataset has no 'poly_order' metadata; set it at load time "
-        "(pg.load(..., poly_order=...) or the CLI's -p/--poly-order).")
+        "(pg.load(..., poly_order=...) or the CLI's -p/--poly_order).")
   # end
 
   value_form = data.ctx.get("value_form", "modal")

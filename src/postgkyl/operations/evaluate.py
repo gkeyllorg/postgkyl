@@ -30,7 +30,7 @@ value_form -- see ``_native_kernel``:
   back to plain NumPy math on the raw coefficient view, rather than
   hard-blocking: value_form/basis metadata is sometimes simply wrong (a
   diagnostic file mistagged "modal" by its writer; see the load-time
-  ``--value-form`` override), and the raw view is exact whenever
+  ``--value_form`` override), and the raw view is exact whenever
   coefficient 0 already *is* the point value (e.g. p0 data).
 - **nodal/quad** (point values): every operator in ``_POINTWISE_TOKENS``
   (``+ - * / pow sq sqrt sin cos tan abs log log10 exp max2 min2
@@ -234,7 +234,7 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
         f"evaluate: '{token}' on native modal (raw DG coefficient) data: {err}; "
         "falling back to plain math on the raw coefficient view -- exact only "
         "if coefficient 0 already IS the point value (e.g. p0 data, or a file "
-        "whose 'modal' tag is wrong; see --value-form).", stacklevel=3)
+        "whose 'modal' tag is wrong; see --value_form).", stacklevel=3)
     return None
   # end
 # end
