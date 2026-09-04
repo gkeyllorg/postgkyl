@@ -13,25 +13,14 @@ Full documentation of the Gkeyll project is available at
 
 ## Dependencies and Installation
 
-Postgkyl requires the following packages:
+Postgkyl requires the packages listed in pyproject.toml
 
-* [click](https://pypi.org/project/click/)
-* [matplotlib](https://pypi.org/project/matplotlib/)
-* [msgpack](https://pypi.org/project/msgpack/)
-* [numpy](https://pypi.org/project/numpy/)
-* [scipy](https://pypi.org/project/scipy/)
-* [sympy](https://pypi.org/project/sympy/)
-* [tables](https://pypi.org/project/tables/)
+Postgkyl requires NumPy >= 2.2.6. In addition, there is one optional
+dependency:
 
-Note that Posgkyl currently does not work with NumPy >= 2.0; the update is in
-the works. In addition, there are two optional dependencies:
-
-* [adios2](https://pypi.org/project/adios2/)
 * [pytest](https://pypi.org/project/pytest/)
 
-ADIOS 2 is required for reading Gkeyll 2 `bp` output files and it is not needed
-when working only with `gkylzero`. [pytest](https://docs.pytest.org/en/stable/)
-is required only for developers.
+[pytest](https://docs.pytest.org/en/stable/) is required only for developers.
 
 ### Setting up virtual environment (recommended)
 
@@ -77,8 +66,9 @@ and deactivate with:
 mamba deactivate
 ```
 
-Note that with `mamba`, one can also use the provided `environment.yml` file,
-which also includes dependency specifications:
+With `mamba`, the provided `environment.yml` creates the Python build
+environment. Runtime and test dependencies remain authoritative in
+`pyproject.toml` and are installed by the `pip install` step below:
 
 ```bash
 mamba env create -f environment.yml
@@ -86,34 +76,111 @@ mamba env create -f environment.yml
 
 ### Installing Postgkyl
 
-The Postgkyl itself is installed with `pip`.[^1] Developers and uses who want to
+Postgkyl itself is installed with `pip`.[^1] Developers and users who want to
 have the most up-to-date version should install Postgkyl from the source code:
 
 ```bash
 git clone https://github.com/ammarhakim/postgkyl.git
 cd postgkyl
-pip install -e .[adios,test]
+pip install --upgrade numpy setuptools wheel
+pip install -e '.[test]' --no-build-isolation
 ```
 
 Alternatively, Postgkyl can be installed directly from [PyPI](https://pypi.org/project/postgkyl/):
 
 ```bash
-pip install -e postgkyl[adios,test]
+pip install --upgrade numpy setuptools wheel
+pip install 'postgkyl[test]' --no-build-isolation
 ```
 
-Note that ADIOS2 is not available on PyPI for Mac OSX; therefore, Mac users who
-want to use it need to install the dependency from elsewhere, for example, using
-the above-mentioned `mamba` and then do *not* use the `adios` tag with `pip`.
+#### The Gkeyll bridge (native `.gkyl` reading, `interpolate`, weak algebra)
 
-#### Optional path to Gkeyll
+Postgkyl talks to Gkeyll through a small compiled bridge (`gpython`), not a path you configure. **This is
+built automatically** as part of `pip install`/`pip install -e .`. `setup.py` runs
+`scripts/build_gkeyll.sh`, which:
 
-Some features require telling postgkyl the location of the `core` library
-of [Gkeyll](https://github.com/ammarhakim/gkeyll). After installing postgkyl you
-can optionally write a postgkyl `config` file storing the location of Gkeyll's
-`gkylsoft/` installation library by invoking the postgkyl config command, e.g.
+1. fetches the exact [Gkeyll](https://github.com/ammarhakim/gkeyll) commit in
+   `scripts/gkeyll-revision` into `./gkeyll/` (a sparse, blobless clone of just
+   the `core/` app — a few tens of MB, not a submodule),
+2. `./configure`s and `make core`s it into `gkeyll/build/core/libg0core.so`
+   with no external dependencies (`--use-lapack-lite=yes`, so no
+   MPI/CUDA/SuperLU/Lua/system LAPACK are required), then
+3. bundles `libg0core.so` beside and compiles postgkyl's `_gpython` CPython
+   extension (`src/postgkyl/gpython/csrc/_gpythonmodule.c`) against a relative
+   loader path, so a built wheel does not depend on the source checkout.
+
+This step needs **network access** (to clone Gkeyll) and **a C compiler**.
+It defaults to `cc`; if your system doesn't have `cc`, set `CC=gcc` (or any compiler you have) before
+installing:
+```bash
+CC=gcc pip install -e '.[test]' --no-build-isolation
 ```
-pgkyl config -g <path_to_gkylsoft>/gkylsoft/ -c ~/.postgkyl/gkylsoft_path
+
+**Always install with `--no-build-isolation`** (as above). Without it, `pip`
+builds the extension in a throwaway environment that resolves `numpy`
+independently of the one that ends up installed for running Postgkyl. The
+extension targets NumPy's `>=2.2` ABI explicitly (matching the `numpy>=2.2.6`
+floor above) so that a same-major mismatch fails loudly at import with a clear
+`numpy.dtype size changed` error rather than silently — but this is a
+best-effort backstop, not a guarantee: a build/runtime NumPy skew has been
+observed to crash the native bridge outright (segfault or memory corruption
+inside Gkeyll's own C code, surfacing anywhere from the next file read to an
+unrelated `matplotlib` call much later) instead of raising cleanly. Building
+against the exact NumPy already installed is the only reliable fix, which is
+what `--no-build-isolation` gives you.
+
+If this step fails or is skipped, Postgkyl still imports and works — reading
+files falls back to a pure-Python reader, and anything that needs the
+compiled bridge (`.interpolate()`, weak `* /` on modal data, native `.gkyl`
+reading, `.integrate()`, …) raises a `RuntimeError` naming the missing piece
+instead of the pipeline silently doing the wrong thing. Check whether the
+bridge is active with:
+```bash
+python -c "from postgkyl import gpython; print(gpython.available())"
 ```
+
+To rebuild by hand (e.g. after pulling a Postgkyl or Gkeyll update, or after
+fixing a compiler issue), re-run either script from the repo root — both are
+safe to re-run:
+```bash
+scripts/build_gkeyll.sh   # full: re-clone/build libg0core.so, then the extension
+scripts/build_gpython.sh  # just the extension, if libg0core.so is already built
+```
+
+Pure-Python compatibility testing can explicitly omit the native build with
+`POSTGKYL_SKIP_GKEYLL_BUILD=1`. This switch is intended for test lanes that
+select the `compatibility` marker; normal installs continue to build the
+bridge.
+
+To verify a release artifact independently of the checkout, build it and run
+the clean-environment smoke test:
+
+```bash
+python -m build --no-isolation
+scripts/smoke_wheel.sh dist/*.whl
+```
+
+If `gpython.available()` is `False`, the printed error explains which of the
+two prerequisites (compiler, or the clone) is missing, or whether the built
+extension is stale relative to the shim header — the fix in that last case
+is always `scripts/build_gpython.sh`.
+
+## Formatting
+
+Install the repository's Git hook and run both formatters over all tracked
+Python and C sources with:
+
+```bash
+python -m pip install --no-build-isolation -e ".[test]"
+pre-commit install
+pre-commit run --all-files
+```
+
+The test extra pins the supported pre-commit runner; pre-commit installs the
+pinned YAPF, clang-format, Ruff, and repository-sanity hooks in isolated
+environments. YAPF reads `.style.yapf`; clang-format reads `.clang-format`;
+Ruff reads `pyproject.toml`. CI checks the exact pull-request commit and fails
+with a formatter diff when that commit is not clean.
 
 ## Testing
 
@@ -122,6 +189,41 @@ be called manually from the root Postgkyl directory simply by using:
 
 ```bash
 pytest [-v]
+```
+
+The default suite treats unexpected warnings as errors and uses strict marker
+and configuration validation. Useful CI-equivalent subsets are:
+
+```bash
+POSTGKYL_SKIP_GKEYLL_BUILD=1 pytest -m compatibility
+POSTGKYL_REQUIRE_GKEYLL=1 pytest -m native
+pytest -m "render and not external_tool"
+pytest -m external_tool  # invokes Chrome and/or ffmpeg
+pytest -m "not external_tool" --cov=postgkyl --cov-branch --cov-fail-under=93
+```
+
+The external-tool lane has explicit timeouts in CI. Native lanes set
+`POSTGKYL_REQUIRE_GKEYLL=1`, turning a missing bridge into a session failure
+instead of allowing the native test inventory to skip silently.
+
+## API and CLI documentation
+
+Public command documentation lives on the Python function that implements the
+operation. The equivalent `GData` spelling is a class-body alias to that same
+function, so editor hover help, `help(pg.interpolate)`,
+`help(data.interpolate)`, and `pgkyl interpolate --help` cannot maintain
+separate descriptions.
+The installed distribution includes a `py.typed` marker so language servers
+consume these inline signatures and aliases from a virtual environment too.
+
+Command docstrings use `Args:` entries in Google style. Every CLI-visible
+parameter needs one entry; command compilation rejects missing, duplicate, or
+unknown parameter documentation. `tests/test_documentation.py` additionally
+checks the public Python surface, static fluent aliases, source/runtime
+docstring identity, and deterministic CLI lowering. Run it directly with:
+
+```bash
+pytest tests/test_documentation.py
 ```
 
 ## Authors

@@ -1,0 +1,202 @@
+"""Generated CLI coverage for equation-specific diagnostics."""
+
+from __future__ import annotations
+
+import click
+from click.testing import CliRunner
+import numpy as np
+import pytest
+
+import postgkyl as pg
+from postgkyl.cli.app import cli, COMMANDS
+from postgkyl.cli.state import DataSpace
+from postgkyl import diagnostics
+from postgkyl.diagnostics.gk import distf
+from postgkyl.gdata.gdata import GData
+
+GRID1D = [np.array([0.0, 1.0])]
+COMMAND_BY_NAME = {command.name: command for command in COMMANDS}
+
+
+def _make(values, tag="default"):
+  data = GData(tag=tag)
+  data.push(GRID1D, np.asarray(values))
+  return data
+
+
+def _invoke(name, datasets, **kwargs):
+  command = COMMAND_BY_NAME[name]
+  space = DataSpace(datasets=list(datasets))
+  with click.Context(command, obj=space) as context:
+    context.invoke(command, **kwargs)
+  return space
+
+
+def test_diagnostics_follow_gkeyll_model_families():
+  assert diagnostics.__all__ == ["gk", "vm", "mom", "pkpm", "discovery"]
+  assert diagnostics.mom.five_moment.__name__.endswith(".mom.five_moment")
+  assert diagnostics.mom.enstrophy.__name__.endswith(".mom.enstrophy")
+  assert diagnostics.vm.kinetic.__name__.endswith(".vm.kinetic")
+  assert diagnostics.vm.trajectory.__name__.endswith(".vm.trajectory")
+  for old_name in ("gyrokinetics", "vlasov", "moments"):
+    assert not hasattr(diagnostics, old_name)
+
+
+def test_gyrokinetic_diagnostics_use_concise_python_names():
+  functions = (
+      diagnostics.gk.energy_balance,
+      diagnostics.gk.nodes,
+      diagnostics.gk.particle_balance,
+      diagnostics.gk.load_distf,
+      diagnostics.gk.load_quantity,
+  )
+  assert tuple(function.__name__ for function in functions) == (
+      "energy_balance",
+      "nodes",
+      "particle_balance",
+      "load_distf",
+      "load_quantity",
+  )
+  assert pg.gk is diagnostics.gk
+  assert pg.gk.available_quantities() == (diagnostics.gk.available_quantities())
+  for bare_name in ("load_distf", "load_quantity", "available_gk_quantities"):
+    assert not hasattr(pg, bare_name)
+  for old_name in (
+      "gk_energy_balance",
+      "gk_nodes",
+      "gk_particle_balance",
+      "load_gk_distf",
+      "load_gk_quantity",
+  ):
+    assert not hasattr(diagnostics.gk, old_name)
+    assert not hasattr(pg, old_name)
+
+
+def test_only_canonical_diagnostic_names_are_registered():
+  assert "rotations_bparrotate" in COMMAND_BY_NAME
+  assert "five_moment_pressure" in COMMAND_BY_NAME
+  assert "ten_moment_agyro" in COMMAND_BY_NAME
+  assert "multispecies_energetics" in COMMAND_BY_NAME
+  assert "kinetic_transform_frame" in COMMAND_BY_NAME
+  assert "pkpm_laguerre_compose" in COMMAND_BY_NAME
+  for name in (
+      "gk_energy_balance",
+      "gk_nodes",
+      "gk_particle_balance",
+      "gk_load_distf",
+      "gk_load_quantity",
+  ):
+    assert name in COMMAND_BY_NAME
+  for old_name in (
+      "bparrotate",
+      "agyro",
+      "energetics",
+      "euler",
+      "tenmoment",
+      "mhd",
+      "transform_frame",
+      "laguerre_compose",
+      "gyrokinetics-energy-balance",
+      "gyrokinetics-nodes",
+      "gyrokinetics-particle-balance",
+      "gyrokinetics-load-distf",
+      "gyrokinetics-load-quantity",
+      "gk-gk-energy-balance",
+      "gk-gk-nodes",
+      "gk-gk-particle-balance",
+      "gk-load-gk-distf",
+      "gk-load-gk-quantity",
+  ):
+    assert old_name not in COMMAND_BY_NAME
+
+
+def test_load_distf_frame_is_text_and_cli_accepts_all_frames(
+    tmp_path, monkeypatch):
+  command = COMMAND_BY_NAME["gk_load_distf"]
+  frame_option = next(option for option in command.params
+                      if option.name == "frame")
+  assert isinstance(frame_option.type, click.types.StringParamType)
+
+  calls = []
+
+  def fake_load_distf_frame(*, frame, tag, **kwargs):
+    calls.append(frame)
+    data = GData(tag=tag, ctx={"frame": frame})
+    data.push([np.array([0.0, 1.0])], np.array([[float(frame)]]))
+    return data
+
+  monkeypatch.setattr(distf, "_load_distf_frame", fake_load_distf_frame)
+  for frame in (0, 2):
+    (tmp_path / f"sim-ion_fdot_{frame}.gkyl").touch()
+  monkeypatch.chdir(tmp_path)
+
+  result = CliRunner().invoke(cli, [
+      "gk_load_distf",
+      "--name",
+      "sim",
+      "--species",
+      "ion",
+      "--frame",
+      ":",
+      "--suffix",
+      "fdot",
+  ])
+  assert result.exit_code == 0, result.output
+  assert calls == [0, 2]
+
+
+def test_bparrotate_is_compiled_directly_from_the_script_callable():
+  array = _make([[1.0, 0.0, 0.0]], tag="array")
+  field = _make([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]], tag="field")
+
+  space = _invoke("rotations_bparrotate", [array, field],
+                  array="array",
+                  field="field",
+                  inplace=False,
+                  tag="parallel",
+                  label=None)
+
+  assert len(space.datasets) == 1
+  assert space.datasets[0].tag == "parallel"
+  np.testing.assert_allclose(space.datasets[0].values, [[1.0, 0.0, 0.0]])
+
+
+def test_dataset_parameters_are_tag_options_with_exact_api_names():
+  command = COMMAND_BY_NAME["rotations_bparrotate"]
+  assert {option.opts[0]
+          for option in command.params} == {
+              "--array",
+              "--field",
+              "--inplace",
+              "--tag",
+              "--label",
+          }
+
+
+def test_generated_map_diagnostic_uses_the_callable_signature():
+  gamma = 5.0 / 3.0
+  rho, velocity, pressure = 2.0, 0.5, 0.8
+  energy = pressure / (gamma - 1.0) + 0.5 * rho * velocity**2
+  moments = _make([[rho, rho * velocity, 0.0, 0.0, energy]])
+
+  space = _invoke("five_moment_pressure", [moments],
+                  gas_gamma=gamma,
+                  num_moms=None,
+                  inplace=False,
+                  tag="pressure",
+                  label=None)
+
+  assert len(space.datasets) == 1
+  assert space.datasets[0].tag == "pressure"
+  np.testing.assert_allclose(space.datasets[0].values, [[pressure]])
+
+
+def test_missing_dataset_tag_fails_closed():
+  array = _make([[1.0, 0.0, 0.0]], tag="array")
+  with pytest.raises(click.UsageError, match="field"):
+    _invoke("rotations_bparrotate", [array],
+            array="array",
+            field="field",
+            inplace=False,
+            tag=None,
+            label=None)

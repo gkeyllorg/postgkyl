@@ -1,0 +1,135 @@
+"""Deterministic discovery of command metadata from public API roots."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import inspect
+from types import ModuleType
+
+import postgkyl
+from postgkyl.cli_spec import command_spec, hidden_spec
+
+
+class SurfaceClassificationError(ValueError):
+  """A public CLI candidate is neither exposed nor explicitly hidden."""
+
+
+@dataclass(frozen=True)
+class DiscoveredCallable:
+  name: str
+  callable: object
+  public_path: str
+
+
+def _classify(obj, path: str) -> bool:
+  exposed = command_spec(obj) is not None
+  excluded = hidden_spec(obj) is not None
+  if exposed == excluded:
+    state = "both exposed and hidden" if exposed else "unclassified"
+    raise SurfaceClassificationError(f"{path}: public callable is {state}")
+  return exposed
+
+
+def _functions(module: ModuleType):
+  public = getattr(module, "__all__", None)
+  names = public if public is not None else sorted(
+      name for name, value in vars(module).items() if not name.startswith("_")
+      and inspect.isfunction(value) and value.__module__ == module.__name__)
+  for name in names:
+    value = getattr(module, name)
+    if inspect.isfunction(value):
+      yield name, value
+
+
+def _diagnostic_modules(root: ModuleType):
+  seen: set[int] = set()
+
+  def visit(module):
+    if id(module) in seen:
+      return
+    seen.add(id(module))
+    yield module
+    for name in getattr(module, "__all__", ()):
+      value = getattr(module, name)
+      if isinstance(
+          value,
+          ModuleType) and value.__name__.startswith("postgkyl.diagnostics"):
+        yield from visit(value)
+
+  yield from visit(root)
+
+
+def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
+  """Walk the declared public roots and return all exposed callables."""
+  found: list[DiscoveredCallable] = []
+  classified: set[tuple[int, str]] = set()
+
+  def consider(obj, path: str, name: str) -> None:
+    key = (id(obj), name)
+    if key in classified:
+      return
+    classified.add(key)
+    if _classify(obj, path):
+      found.append(DiscoveredCallable(name, obj, path))
+
+  # Fluent methods are the authoritative inventory of per-dataset commands.
+  for cls_name in ("GData", "GDataGroup"):
+    cls = getattr(facade, cls_name)
+    for name, value in sorted(cls.__dict__.items()):
+      if name.startswith("_") or not callable(value):
+        continue
+      consider(value, f"{cls.__module__}.{cls.__qualname__}.{name}", name)
+
+  # Public facade functions not already reached through their fluent view.
+  for name in facade.__all__:
+    value = getattr(facade, name)
+    if inspect.isfunction(value):
+      path = f"postgkyl.{name}"
+      if value.__module__.startswith("postgkyl.diagnostics"):
+        _classify(value, path)
+      else:
+        consider(value, path, name)
+
+  diagnostics = facade.diagnostics
+  for module in _diagnostic_modules(diagnostics):
+    if module is diagnostics:
+      continue
+    relative = module.__name__.removeprefix("postgkyl.diagnostics.")
+    # Model-family packages group related diagnostic modules without erasing
+    # each module's public command vocabulary. For example,
+    # diagnostics.mom.five_moment.pressure becomes ``five_moment_pressure``
+    # and cannot collide with ten_moment.pressure.
+    namespace = relative.rsplit(".", 1)[-1]
+    for name, value in _functions(module):
+      if not value.__module__.startswith("postgkyl.diagnostics"):
+        # Compatibility re-exports owned by a lower layer keep that owner's
+        # canonical command (for example operations.gyrokinetics.gk_rz ->
+        # ``gk_rz``); the diagnostic alias is classified but does not invent
+        # a second command or move it into the wrong help section.
+        _classify(value, f"{module.__name__}.{name}")
+        continue
+      consider(value, f"{module.__name__}.{name}", f"{namespace}_{name}")
+
+    # Registry values are public vocabulary roots too. Identity de-duplication
+    # means aliases do not invent additional command names.
+    variables = getattr(module, "VARIABLES", None)
+    if isinstance(variables, dict):
+      for value in variables.values():
+        if inspect.isfunction(value):
+          consider(value, f"{module.__name__}.VARIABLES[{value.__name__!r}]",
+                   f"{namespace}_{value.__name__}")
+
+  # A fluent view and facade function may be aliases of the same operation.
+  # Keep one deterministic view.
+  unique: dict[tuple[str, int], DiscoveredCallable] = {}
+  for item in found:
+    key = (item.name, id(item.callable))
+    unique.setdefault(key, item)
+  return tuple(
+      sorted(unique.values(), key=lambda item: (item.name, item.public_path)))
+
+
+__all__ = [
+    "DiscoveredCallable", "SurfaceClassificationError",
+    "discover_public_surface"
+]

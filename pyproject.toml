@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "numpy>=2.2.6"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -12,12 +12,15 @@ authors = [
 description = "Python library and command-line tool for postprocessing (not only) Gkeyll data"
 dependencies = [
   "click>=8.1.7",
-  "matplotlib>=3.7.0",
-  "msgpack>=1.0.3",
-  "numpy>=1.24.4,<2",
-  "scipy>=1.10.1",
-  "sympy>=1.12",
-  "tables>=3.8.0",
+  "matplotlib>=3.10.9",
+  "msgpack>=1.1.2",
+  "numpy>=2.2.6",
+  "scipy>=1.15.3",
+  "tables>=3.10.1",
+  "plotly>=6.7.0",
+  "kaleido>=1.3.0",
+  "pyvista>=0.48.4",
+  "imageio-ffmpeg>=0.6.0",
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -38,14 +41,29 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
 ]
 
 [project.optional-dependencies]
-adios = ["adios2>=2.9.0,<2.10.0"]
-test = ["pytest>=7.4.0"]
+test = [
+    "pre-commit==4.3.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.0.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.12.11",
+    "build>=1.3.0",
+    "twine>=6.2.0",
+    # macOS CI only: isolates each test in its own forked process (see
+    # .github/workflows/test.yml's --forked flag) so a native-library abort
+    # deep in a compiled dependency (matplotlib/FreeType, VTK, ...) fails
+    # just that one test instead of taking down the whole session.
+    "pytest-forked>=1.6.0; sys_platform == 'darwin'",
+]
 
 [project.urls]
 Documentation = "https://gkeyll.readthedocs.io/"
@@ -53,10 +71,66 @@ Repository = "https://github.com/ammarhakim/postgkyl"
 "Bug Tracker" = "https://github.com/ammarhakim/postgkyl/issues"
 
 [project.scripts]
-pgkyl = "postgkyl.pgkyl:cli"
+pgkyl = "postgkyl.cli.app:cli"
 
 [tool.setuptools.dynamic]
 version = {attr = "postgkyl.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src/"]
+
+[tool.setuptools.package-data]
+"postgkyl" = ["py.typed"]
+"postgkyl.render" = ["*.mplstyle", "*.js"]
+# the compiled bridge (scripts/build_gpython.sh) + the extension source; the
+# gpython shim itself lives in the gkeyll repo (GKEYLL_C_SHIM.md)
+"postgkyl.gpython" = ["_gpython.so", "csrc/*.c"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]
+xfail_strict = true
+markers = [
+    "compatibility: pure-Python contract run across every supported interpreter",
+    "native: requires the compiled Gkeyll bridge and native kernels",
+    "render: exercises a graphical or animation rendering backend",
+    "external_tool: invokes an external executable such as Chrome or ffmpeg",
+    "slow: integration test intentionally unsuitable for the fast test lane",
+]
+filterwarnings = [
+    "error",
+    "ignore:Animation was deleted without rendering anything:UserWarning",
+    "ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning",
+    "ignore:invalid value encountered in divide:RuntimeWarning",
+    # ev_ops' sqrt fallback path (see test_operations_evaluate.py) deliberately
+    # runs sqrt on raw modal coefficients, some of which are negative.
+    "ignore:invalid value encountered in sqrt:RuntimeWarning",
+    "ignore::scipy.optimize.OptimizeWarning",
+    # vtkmodules' own numpy_support helper, not our code; fires on every
+    # pyvista array upload under NumPy >= 2.5.
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
+    # plotly's kaleido wrapper, not our code; fires on every static image
+    # export against kaleido's server-based renderer.
+    "ignore:The kopts argument is ignored if using a server\\.:UserWarning",
+    # CPython's own fork() safety check, not our code; pytest's capture
+    # machinery keeps background threads alive, so any test that forks a
+    # worker process (animate's --nproc) trips it regardless of correctness.
+    "ignore:This process \\(pid=\\d+\\) is multi-threaded, use of fork\\(\\) may lead to deadlocks in the child\\.:DeprecationWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["postgkyl"]
+
+[tool.coverage.report]
+fail_under = 99
+precision = 2
+show_missing = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 80
+extend-exclude = ["gkeyll"]
+
+[tool.ruff.lint]
+select = ["F"]

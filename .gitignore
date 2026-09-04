@@ -4,3 +4,30 @@ dist/
 postgkyl.egg-info/
 src/postgkyl/version.py
 .DS_Store
+tests/test_data/generated/
+
+# vendored Gkeyll checkout, cloned at pip install time (scripts/build_gkeyll.sh)
+/gkeyll/
+
+# scratch files at the repo root only (unanchored patterns would silently
+# ignore package sources under src/ and fixtures under tests/)
+/*.gkyl
+/*.md
+!/AGENTS.md
+/*.py
+!/setup.py
+/*.json
+# built gpython/_gpython extension (scripts/build_gpython.sh)
+src/postgkyl/gpython/_gpython.so
+# bundled native library copied beside the extension
+src/postgkyl/gpython/libg0core.so
+# generated Gkeyll commit/build-date metadata (scripts/build_gpython.sh)
+src/postgkyl/gpython/_build_info.py
+
+# scratch output from running examples/scripts/*.py directly
+examples/scripts/output/
+.vscode/settings.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

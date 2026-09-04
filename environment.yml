@@ -1,15 +1,10 @@
-name: pgkylSrcH5
+name: pgkyl
 channels:
   - defaults
   - conda-forge
 dependencies:
-  - click>=8.1.7
-  - matplotlib>=3.7.0
-  - msgpack-python>=1.0.3
-  - numpy>=1.24.4,<2
-  - pytables>=3.8.0
-  - pytest>=7.4.0
-  - python>=3.11
-  - scipy>=1.10.1
-  - sympy>=1.12
-  - h5py
+  - python>=3.10
+  # Runtime and test dependency versions have one authoritative home in
+  # pyproject.toml. Install the project after activating this environment.
+  - pip
+  - setuptools>=61.0

@@ -1,9 +1,0 @@
-click>=8.1.7
-conda-forge::adios2==2.9.2
-matplotlib>=3.7.0
-msgpack-python>=1.0.3
-numpy>=1.24.4
-pytables>=3.8.0
-pytest>=7.4.0
-scipy>=1.10.1
-sympy>=1.12
