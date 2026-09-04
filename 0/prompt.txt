@@ -1,0 +1,1 @@
+Change the build to install ffmpeg inside the environment.yml rather than system wide. The CI test.yml installs ffmpeg using sudo apt, but we don't have access to this on clusters
