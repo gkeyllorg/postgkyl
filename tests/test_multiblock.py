@@ -298,16 +298,12 @@ class TestMultiblockCli:
 
   def test_single_block_data_still_gets_a_figure_per_dataset(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([
-        os.path.join(GEN, "distf_p2_*.gkyl"), "interp", "plot", "--no_show"
-    ])
+    _ok([os.path.join(GEN, "distf_p2_*.gkyl"), "interp", "plot", "--no_show"])
     assert len(calls) == 2
 
   def test_multiblock_flag_forces_everything_onto_one_figure(self, monkeypatch):
     calls = self._plot_calls(monkeypatch)
-    _ok([
-        MB_GLOB_ALL_FRAMES, "interp", "plot", "--multiblock", "--no_show"
-    ])
+    _ok([MB_GLOB_ALL_FRAMES, "interp", "plot", "--multiblock", "--no_show"])
     assert len(calls) == 1
     assert len(calls[0].axes[0].collections) == 6
 

@@ -322,7 +322,10 @@ class TestContour:
     assert fig is not None
 
   def test_clevels_colon_syntax_is_linspace(self):
-    fig = backend.plot(_field_2d(), no_show=True, contour=True, clevels="0:60:5")
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=True,
+                       clevels="0:60:5")
     assert fig is not None
 
   def test_clevels_single_value_disables_colorbar(self):

@@ -123,7 +123,10 @@ class TestColorbar:
     assert len(fig.axes) == 1
 
   def test_clabel_reaches_the_colorbar(self):
-    fig = backend.plot(_field_2d(), no_show=True, no_colorbar=False, clabel="density")
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       no_colorbar=False,
+                       clabel="density")
     cbar_ax = fig.axes[1]
     assert cbar_ax.get_ylabel() == "density"
 
@@ -687,7 +690,11 @@ class TestLineColors:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
 
-    fig = backend.plot(a, b, multiblock=True, no_show=True, color=["red", "blue"])
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       color=["red", "blue"])
 
     assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
     assert [line.get_color() for line in fig.axes[1].lines] == ["red", "blue"]
@@ -769,7 +776,11 @@ class TestLineStyles:
     a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
     b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
 
-    fig = backend.plot(a, b, multiblock=True, no_show=True, linestyle=["-", "--"])
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=["-", "--"])
 
     assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
     assert [line.get_linestyle() for line in fig.axes[1].lines] == ["-", "--"]

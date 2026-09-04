@@ -269,10 +269,7 @@ class TestBeta:
     # missing sqrt(2) factor squared in v_th**2, so both conventions give
     # the same beta.
     beta_default = pp.beta(_species(), _field(), mu_0=1.0)
-    beta_no_sqrt2 = pp.beta(_species(),
-                            _field(),
-                            mu_0=1.0,
-                            no_sqrt2=True)
+    beta_no_sqrt2 = pp.beta(_species(), _field(), mu_0=1.0, no_sqrt2=True)
     np.testing.assert_allclose(beta_no_sqrt2.values.flat[0],
                                beta_default.values.flat[0],
                                rtol=1e-10)

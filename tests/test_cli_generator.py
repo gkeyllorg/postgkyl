@@ -116,9 +116,7 @@ def test_boolean_options_are_optional_value_flags_with_false_defaults():
   calls = []
 
   @command(
-      CommandSpec(Section.UTILITY,
-                  Execution.LOAD,
-                  result=ResultPolicy.SILENT))
+      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
   def booleans(*, enabled: bool = False):
     """Exercise an optional-value boolean option.
 
