@@ -1,0 +1,73 @@
+(pgkylSrcV2) mfrancis-lt1:postgkyl mfrancis$ pytest
+================================================== test session starts ==================================================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+collected 1646 items
+tests/test_cli_commands.py .......F..FF.FFFFFFF.FFFFFFFFFFF.F.FFFFFF.F.FFFF.F..FF.FF.FF......F........F.FFFFFFFFFatal Python error: Aborted
+Current thread 0x00000001ed1ce180 (most recent call first):
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 189 in _draw_text_glyphs_and_boxes
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 245 in draw_text
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/text.py", line 909 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 71 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/axis.py", line 294 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 71 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/axis.py", line 1481 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 71 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/image.py", line 133 in _draw_list_compositing_images
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/axes/_base.py", line 3350 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 71 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/image.py", line 133 in _draw_list_compositing_images
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/figure.py", line 3282 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 71 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/artist.py", line 94 in draw_wrapper
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 438 in draw
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 485 in _print_pil
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 537 in print_png
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2138 in <lambda>
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2281 in print_figure
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/figure.py", line 3515 in savefig
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/matplotlib/pyplot.py", line 1346 in savefig
+  File "/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/src/postgkyl/cli/commands/plot.py", line 315 in command
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/decorators.py", line 34 in new_func
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/core.py", line 877 in invoke
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/core.py", line 1308 in invoke
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/core.py", line 1943 in invoke
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/core.py", line 1445 in main
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/click/testing.py", line 651 in invoke
+  File "/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_cli_commands.py", line 78 in _run
+  File "/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_cli_commands.py", line 83 in _ok
+  File "/Users/mfrancis/Documents/gkeyll/code/postgkyl_v2/postgkyl/tests/test_cli_commands.py", line 766 in test_plot_grows_log_and_colorbar_options
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/python.py", line 166 in pytest_pyfunc_call
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/python.py", line 1720 in runtest
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 179 in pytest_runtest_call
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 245 in <lambda>
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 353 in from_call
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 244 in call_and_report
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 137 in runtestprotocol
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/main.py", line 396 in pytest_runtestloop
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/main.py", line 372 in _main
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/main.py", line 318 in wrap_session
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/main.py", line 365 in pytest_cmdline_main
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/config/__init__.py", line 199 in main
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/lib/python3.12/site-packages/_pytest/config/__init__.py", line 223 in console_main
+  File "/Users/mfrancis/anaconda3/envs/pgkylSrcV2/bin/pytest", line 11 in <module>
+Extension modules: numpy._core._multiarray_umath, numpy.linalg._umath_linalg, _cyutility, scipy._cyutility, scipy._lib._ccallback_c, scipy.linalg._fblas, scipy.linalg._flapack, scipy.linalg.cython_lapack, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._pcg64, numpy.random._generator, numpy.random._mt19937, numpy.random._philox, numpy.random._sfc64, numpy.random.mtrand, charset_normalizer.md, charset_normalizer.cd, scipy.linalg._cythonized_array_utils, scipy.linalg._solve_toeplitz, scipy.linalg._batched_linalg, scipy.linalg._decomp_lu_cython, scipy.linalg._matfuncs_schur_sqrtm, scipy.linalg._matfuncs_expm, scipy.linalg._linalg_pythran, scipy.linalg.cython_blas, scipy.linalg._decomp_update, scipy.sparse._sparsetools, _csparsetools, scipy.sparse._csparsetools, scipy.sparse.linalg._dsolve._superlu, scipy.sparse.linalg._eigen.arpack._arpacklib, scipy.sparse.linalg._propack, scipy.optimize._group_columns, scipy._lib.messagestream, scipy.optimize._trlib._trlib, scipy.optimize._lbfgsb, _moduleTNC, scipy.optimize._moduleTNC, scipy.optimize._slsqplib, scipy.optimize._minpack, scipy.optimize._lsq.givens_elimination, scipy.optimize._zeros, scipy._lib._uarray._uarray, scipy.special._ufuncs_cxx, scipy.special._ellip_harm_2, scipy.special._special_ufuncs, scipy.special._gufuncs, scipy.special._ufuncs, scipy.special._specfun, scipy.special._comb, scipy.linalg._decomp_interpolative, scipy.optimize._bglu_dense, scipy.optimize._lsap, scipy.spatial._ckdtree, scipy.spatial._qhull, scipy.spatial._voronoi, scipy.spatial._hausdorff, scipy.spatial._distance_wrap, scipy.spatial.transform._rotation_cy, scipy.spatial.transform._rigid_transform_cy, scipy.optimize._direct, PIL._imaging, kiwisolver._cext, msgpack._cmsgpack, postgkyl.gpython._gpython, scipy.signal._sigtools, scipy.signal._max_len_seq_inner, scipy.signal._upfirdn_apply, scipy.signal._spline, scipy.interpolate._fitpack, scipy.interpolate._dfitpack, scipy.interpolate._dierckx, scipy.interpolate._ppoly, scipy.interpolate._interpnd, scipy.interpolate._rbfinterp_pythran, scipy.interpolate._rgi_cython, scipy.ndimage._nd_image, scipy.ndimage._rank_filter_1d, _ni_label, scipy.ndimage._ni_label, scipy.signal._sosfilt, scipy.integrate._odepack, scipy.integrate._quadpack, scipy.integrate._vode, scipy.integrate._dop, scipy.special.cython_special, scipy.stats._stats, scipy.stats._biasedurn, scipy.stats._stats_pythran, scipy.stats._levy_stable.levyst, scipy.stats._ansari_swilk_statistics, scipy.sparse.csgraph._tools, scipy.sparse.csgraph._shortest_path, scipy.sparse.csgraph._traversal, scipy.sparse.csgraph._min_spanning_tree, scipy.sparse.csgraph._flow, scipy.sparse.csgraph._matching, scipy.sparse.csgraph._reordering, scipy.stats._sobol, scipy.stats._qmc_cy, scipy.stats._rcont.rcont, scipy.stats._qmvnt_cy, scipy.signal._peak_finding_utils, tables._comp_lzo, tables._comp_bzip2, tables.utilsextension, numexpr.interpreter, tables.hdf5extension, tables.linkextension, tables.lrucacheextension, tables.tableextension, tables.indexesextension, vtkmodules.vtkCommonCore, vtkmodules.vtkCommonMath, vtkmodules.vtkCommonTransforms, vtkmodules.vtkCommonSystem, vtkmodules.vtkParallelCore, vtkmodules.vtkCommonDataModel, vtkmodules.vtkCommonExecutionModel, vtkmodules.vtkFiltersSources, vtkmodules.vtkImagingSources, vtkmodules.vtkCommonMisc, vtkmodules.vtkFiltersCore, vtkmodules.vtkRenderingCore, vtkmodules.vtkRenderingFreeType, vtkmodules.vtkRenderingMatplotlib, vtkmodules.vtkCommonColor, vtkmodules.vtkRenderingContext2D, vtkmodules.vtkFiltersGeneral, vtkmodules.vtkChartsCore, vtkmodules.vtkPythonContext2D, vtkmodules.vtkFiltersPython, vtkmodules.vtkRenderingVolume, vtkmodules.vtkImagingCore, vtkmodules.vtkImagingMath, vtkmodules.vtkIOCore, vtkmodules.vtkIOImage, vtkmodules.vtkRenderingHyperTreeGrid, vtkmodules.vtkRenderingUI, vtkmodules.vtkRenderingOpenGL2, vtkmodules.vtkRenderingVolumeOpenGL2, vtkmodules.vtkRenderingAnnotation, vtkmodules.vtkInteractionStyle, vtkmodules.vtkInteractionWidgets, vtkmodules.vtkViewsCore, vtkmodules.vtkViewsContext2D, simplejson._speedups, PIL._imagingmath (total: 150)
+Abort trap: 6
