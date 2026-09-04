@@ -1,0 +1,221 @@
+CI is failing. Fix the failures. Run pre-commit validate-config
+[INFO] Initializing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Initializing environment for https://github.com/astral-sh/ruff-pre-commit.
+[INFO] Initializing environment for https://github.com/google/yapf.
+[INFO] Initializing environment for https://github.com/pre-commit/mirrors-clang-format.
+[INFO] Installing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/astral-sh/ruff-pre-commit.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/google/yapf.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/pre-commit/mirrors-clang-format.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+check for merge conflicts................................................Passed
+check toml...............................................................Passed
+check yaml...............................................................Passed
+fix end of files.........................................................Failed
+- hook id: end-of-file-fixer
+- exit code: 1
+- files were modified by this hook
+
+Fixing src/postgkyl/render/postgkyl.mplstyle
+Fixing proto/dash-install.sh
+Fixing src/postgkyl/py.typed
+Fixing gkeyll-data/.gitignore
+
+trim trailing whitespace.................................................Failed
+- hook id: trailing-whitespace
+- exit code: 1
+- files were modified by this hook
+
+Fixing AUTHORS.md
+Fixing notebooks/README.md
+
+ruff check...............................................................Passed
+yapf.....................................................................Passed
+clang-format.............................................................Passed
+pre-commit hook(s) made changes.
+If you are seeing this message in CI, reproduce locally with: `pre-commit run --all-files`.
+To run `pre-commit` as part of git workflow, use `pre-commit install`.
+All changes made by hooks:
+diff --git a/AUTHORS.md b/AUTHORS.md
+index 3526703..fc2760a 100644
+--- a/AUTHORS.md
++++ b/AUTHORS.md
+@@ -3,7 +3,7 @@
+ ## Design and main code development
+ 
+ - Ammar Hakim (PPPL) <ahakim@pppl.gov>
+-- Maxwell Rosen (PPPL) (2.0 main contributions) 
++- Maxwell Rosen (PPPL) (2.0 main contributions)
+ - Petr Cagas (HZDR/CASUS) <p.cagas@hzdr.de>
+ 
+ ## Contributors (ultra-alphabetically)
+diff --git a/gkeyll-data/.gitignore b/gkeyll-data/.gitignore
+index f501302..4b5a10a 100644
+--- a/gkeyll-data/.gitignore
++++ b/gkeyll-data/.gitignore
+@@ -1 +1 @@
+-*.gkyl
+\ No newline at end of file
++*.gkyl
+diff --git a/notebooks/README.md b/notebooks/README.md
+index 07adab1..2187a22 100644
+--- a/notebooks/README.md
++++ b/notebooks/README.md
+@@ -1,7 +1,7 @@
+-postgkyl notebooks 
++postgkyl notebooks
+ ==================
+ 
+-Notebooks using Marimo or Jupyter are useful collections of operations to pre- or post-process Gkeyll simulations, or better understand their algorithms. This folder contains some such notebooks. 
++Notebooks using Marimo or Jupyter are useful collections of operations to pre- or post-process Gkeyll simulations, or better understand their algorithms. This folder contains some such notebooks.
+ File convention: We use the `*.mo.py` extension for Marimo notebooks, which are Python scripts that can be executed in a notebook-like environment.
+ 
+ - twist_shift.mo.py: Analyze the impact of twist-shift boundary conditions on mode shearing and aliasing, and test possible filtering strategies to mitigate these effects.
+diff --git a/proto/dash-install.sh b/proto/dash-install.sh
+index 15ecd45..1b40567 100755
+--- a/proto/dash-install.sh
++++ b/proto/dash-install.sh
+@@ -1,4 +1,4 @@
+ pip install dash==0.34.0  # The core dash backend
+ pip install dash-html-components==0.13.4  # HTML components
+ pip install dash-core-components==0.41.0  # Supercharged components
+-pip install dash-table==3.1.11  # Interactive DataTable component (new!)
+\ No newline at end of file
++pip install dash-table==3.1.11  # Interactive DataTable component (new!)
+diff --git a/src/postgkyl/py.typed b/src/postgkyl/py.typed
+index 8b13789..e69de29 100644
+--- a/src/postgkyl/py.typed
++++ b/src/postgkyl/py.typed
+@@ -1 +0,0 @@
+-
+diff --git a/src/postgkyl/render/postgkyl.mplstyle b/src/postgkyl/render/postgkyl.mplstyle
+index 69b58c4..ad7d784 100644
+--- a/src/postgkyl/render/postgkyl.mplstyle
++++ b/src/postgkyl/render/postgkyl.mplstyle
+@@ -9,4 +9,4 @@ image.cmap : inferno
+ image.origin : lower
+ grid.linewidth : 0.5
+ grid.linestyle : :
+-axes.prop_cycle : cycler('color', [(0, 0.4470, 0.7410), (0.8500, 0.3250, 0.0980), (0.9290, 0.6940, 0.1250), (0.4940, 0.1840, 0.5560), (0.4660, 0.6740, 0.1880), (0.3010, 0.7450, 0.9330), (0.6350, 0.0780, 0.1840)])
+\ No newline at end of file
++axes.prop_cycle : cycler('color', [(0, 0.4470, 0.7410), (0.8500, 0.3250, 0.0980), (0.9290, 0.6940, 0.1250), (0.4940, 0.1840, 0.5560), (0.4660, 0.6740, 0.1880), (0.3010, 0.7450, 0.9330), (0.6350, 0.0780, 0.1840)])
+Error: Process completed with exit code 1.
+
+---
+
+CI is failing. Fix the failures. Run pre-commit validate-config
+[INFO] Initializing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Initializing environment for https://github.com/astral-sh/ruff-pre-commit.
+[INFO] Initializing environment for https://github.com/google/yapf.
+[INFO] Initializing environment for https://github.com/pre-commit/mirrors-clang-format.
+[INFO] Installing environment for https://github.com/pre-commit/pre-commit-hooks.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/astral-sh/ruff-pre-commit.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/google/yapf.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+[INFO] Installing environment for https://github.com/pre-commit/mirrors-clang-format.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
+check for merge conflicts................................................Passed
+check toml...............................................................Passed
+check yaml...............................................................Passed
+fix end of files.........................................................Failed
+- hook id: end-of-file-fixer
+- exit code: 1
+- files were modified by this hook
+
+Fixing src/postgkyl/render/postgkyl.mplstyle
+Fixing proto/dash-install.sh
+Fixing src/postgkyl/py.typed
+Fixing gkeyll-data/.gitignore
+
+trim trailing whitespace.................................................Failed
+- hook id: trailing-whitespace
+- exit code: 1
+- files were modified by this hook
+
+Fixing AUTHORS.md
+Fixing notebooks/README.md
+
+ruff check...............................................................Passed
+yapf.....................................................................Passed
+clang-format.............................................................Passed
+pre-commit hook(s) made changes.
+If you are seeing this message in CI, reproduce locally with: `pre-commit run --all-files`.
+To run `pre-commit` as part of git workflow, use `pre-commit install`.
+All changes made by hooks:
+diff --git a/AUTHORS.md b/AUTHORS.md
+index 3526703..fc2760a 100644
+--- a/AUTHORS.md
++++ b/AUTHORS.md
+@@ -3,7 +3,7 @@
+ ## Design and main code development
+ 
+ - Ammar Hakim (PPPL) <ahakim@pppl.gov>
+-- Maxwell Rosen (PPPL) (2.0 main contributions) 
++- Maxwell Rosen (PPPL) (2.0 main contributions)
+ - Petr Cagas (HZDR/CASUS) <p.cagas@hzdr.de>
+ 
+ ## Contributors (ultra-alphabetically)
+diff --git a/gkeyll-data/.gitignore b/gkeyll-data/.gitignore
+index f501302..4b5a10a 100644
+--- a/gkeyll-data/.gitignore
++++ b/gkeyll-data/.gitignore
+@@ -1 +1 @@
+-*.gkyl
+\ No newline at end of file
++*.gkyl
+diff --git a/notebooks/README.md b/notebooks/README.md
+index 07adab1..2187a22 100644
+--- a/notebooks/README.md
++++ b/notebooks/README.md
+@@ -1,7 +1,7 @@
+-postgkyl notebooks 
++postgkyl notebooks
+ ==================
+ 
+-Notebooks using Marimo or Jupyter are useful collections of operations to pre- or post-process Gkeyll simulations, or better understand their algorithms. This folder contains some such notebooks. 
++Notebooks using Marimo or Jupyter are useful collections of operations to pre- or post-process Gkeyll simulations, or better understand their algorithms. This folder contains some such notebooks.
+ File convention: We use the `*.mo.py` extension for Marimo notebooks, which are Python scripts that can be executed in a notebook-like environment.
+ 
+ - twist_shift.mo.py: Analyze the impact of twist-shift boundary conditions on mode shearing and aliasing, and test possible filtering strategies to mitigate these effects.
+diff --git a/proto/dash-install.sh b/proto/dash-install.sh
+index 15ecd45..1b40567 100755
+--- a/proto/dash-install.sh
++++ b/proto/dash-install.sh
+@@ -1,4 +1,4 @@
+ pip install dash==0.34.0  # The core dash backend
+ pip install dash-html-components==0.13.4  # HTML components
+ pip install dash-core-components==0.41.0  # Supercharged components
+-pip install dash-table==3.1.11  # Interactive DataTable component (new!)
+\ No newline at end of file
++pip install dash-table==3.1.11  # Interactive DataTable component (new!)
+diff --git a/src/postgkyl/py.typed b/src/postgkyl/py.typed
+index 8b13789..e69de29 100644
+--- a/src/postgkyl/py.typed
++++ b/src/postgkyl/py.typed
+@@ -1 +0,0 @@
+-
+diff --git a/src/postgkyl/render/postgkyl.mplstyle b/src/postgkyl/render/postgkyl.mplstyle
+index 69b58c4..ad7d784 100644
+--- a/src/postgkyl/render/postgkyl.mplstyle
++++ b/src/postgkyl/render/postgkyl.mplstyle
+@@ -9,4 +9,4 @@ image.cmap : inferno
+ image.origin : lower
+ grid.linewidth : 0.5
+ grid.linestyle : :
+-axes.prop_cycle : cycler('color', [(0, 0.4470, 0.7410), (0.8500, 0.3250, 0.0980), (0.9290, 0.6940, 0.1250), (0.4940, 0.1840, 0.5560), (0.4660, 0.6740, 0.1880), (0.3010, 0.7450, 0.9330), (0.6350, 0.0780, 0.1840)])
+\ No newline at end of file
++axes.prop_cycle : cycler('color', [(0, 0.4470, 0.7410), (0.8500, 0.3250, 0.0980), (0.9290, 0.6940, 0.1250), (0.4940, 0.1840, 0.5560), (0.4660, 0.6740, 0.1880), (0.3010, 0.7450, 0.9330), (0.6350, 0.0780, 0.1840)])
+Error: Process completed with exit code 1.
