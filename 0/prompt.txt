@@ -1,0 +1,165 @@
+The macos native bridge CI test is failing. Please diagnose and fix.
+
+line 67, in collect_unraisable
+    |     warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+    | pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stderr' mode='wb' closefd=True>
+    | Enable tracemalloc to get traceback where the object was allocated.
+    | See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    +---------------- 2 ----------------
+    | Traceback (most recent call last):
+    |   File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/_pytest/capture.py", line 425, in resume
+    |     setattr(sys, self.name, self.tmpfile)
+    | ResourceWarning: unclosed file <_io.TextIOWrapper name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stdout' mode='w' encoding='UTF-8'>
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 67, in collect_unraisable
+    |     warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+    | pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stdout' mode='wb' closefd=True>
+    | Enable tracemalloc to get traceback where the object was allocated.
+    | See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    +------------------------------------
+==================== 1421 deselected, 516 errors in 11.54s =====================
+Error: Process completed with exit code 1.
+
+Run python -m pytest -m native --strict-config --strict-markers --timeout=120 --forked
+============================= test session starts ==============================
+platform darwin -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, timeout-2.4.0, forked-1.7.5, anyio-4.15.0
+timeout: 120.0s
+timeout method: signal
+timeout func_only: False
+collected 1937 items / 1421 deselected / 516 selected
+
+tests/test_coverage_container.py EEEEEEE                                 [  1%]
+tests/test_coverage_io.py EEEEEEE                                        [  2%]
+tests/test_coverage_leaf.py EEEEEEEEEEEEEEEEEEEEEEE                      [  7%]
+tests/test_coverage_operations.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE     [ 13%]
+tests/test_dg_differentiate_and_eval_at_coord_proj.py EEEEEEEEEEE        [ 15%]
+tests/test_dg_map.py EEEEEEEEE                                           [ 17%]
+tests/test_dg_rep.py EEEEEEE                                             [ 18%]
+tests/test_diagnostics_five_moment.py EEEEEEEE                           [ 20%]
+tests/test_diagnostics_gk_load.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 27%]
+EEEEEEEEEEEEEEEEE                                                        [ 31%]
+tests/test_diagnostics_kinetic.py E                                      [ 31%]
+tests/test_diagnostics_mhd.py EE                                         [ 31%]
+tests/test_diagnostics_multispecies.py EE                                [ 32%]
+tests/test_diagnostics_pkpm.py EEEEE                                     [ 33%]
+tests/test_diagnostics_plasma.py EEEEEEEEE                               [ 34%]
+tests/test_diagnostics_rotations.py EE                                   [ 35%]
+tests/test_diagnostics_ten_moment.py EEEEEEEEEE                          [ 37%]
+tests/test_examples.py EEEEEEEEEEEEEEEEEEE                               [ 40%]
+tests/test_gdata_fluent.py EEEEEE                                        [ 42%]
+tests/test_gpython_array.py EEEEEEEEEEEEEEEEE                            [ 45%]
+tests/test_gpython_basis.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 53%]
+EEEEEEEEEE                                                               [ 55%]
+tests/test_gpython_kernels.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 63%]
+EEEEEEEEEEEEEEEEEEEEEEEE                                                 [ 68%]
+tests/test_gpython_lib.py EEEEEE                                         [ 69%]
+tests/test_gpython_rio.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE   [ 78%]
+tests/test_invariants.py EEEEEEEEEEE                                     [ 80%]
+tests/test_operations_animate.py EEEEE                                   [ 81%]
+tests/test_operations_collect.py E                                       [ 81%]
+tests/test_operations_curvilinear_diff_integrate.py EEEEEE               [ 82%]
+tests/test_operations_differentiate.py E                                 [ 82%]
+tests/test_operations_evaluate.py EEEEEEEEEEE                            [ 85%]
+tests/test_operations_field.py EEEEEE                                    [ 86%]
+tests/test_operations_fit.py EE                                          [ 86%]
+tests/test_operations_gk_fluxsurf.py EEEEEEEE                            [ 88%]
+tests/test_operations_gk_geometry.py E                                   [ 88%]
+tests/test_operations_gk_rz.py EEEEEEEEEE                                [ 90%]
+tests/test_operations_local_poly.py EEEEEEEEE                            [ 92%]
+tests/test_operations_map.py EEEEEEEEEEEEEEEEEEEEEEE                     [ 96%]
+tests/test_postgkyl.py EEEEEEEEEEEEEEEE                                  [ 99%]
+tests/test_render_matplotlib.py EE                                       [100%]
+
+==================================== ERRORS ====================================
+_______ ERROR at setup of test_mul_div_explicit_aliases_match_operators ________
+
+---
+
+The macos native bridge CI test is failing. Please diagnose and fix.
+
+line 67, in collect_unraisable
+    |     warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+    | pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stderr' mode='wb' closefd=True>
+    | Enable tracemalloc to get traceback where the object was allocated.
+    | See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    +---------------- 2 ----------------
+    | Traceback (most recent call last):
+    |   File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/_pytest/capture.py", line 425, in resume
+    |     setattr(sys, self.name, self.tmpfile)
+    | ResourceWarning: unclosed file <_io.TextIOWrapper name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stdout' mode='w' encoding='UTF-8'>
+    | 
+    | The above exception was the direct cause of the following exception:
+    | 
+    | Traceback (most recent call last):
+    |   File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 67, in collect_unraisable
+    |     warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+    | pytest.PytestUnraisableExceptionWarning: Exception ignored in: <_io.FileIO name='/var/folders/d8/hvxvltxn0fl4rmnd52sncbth0000gn/T/tmpffp_vdep/stdout' mode='wb' closefd=True>
+    | Enable tracemalloc to get traceback where the object was allocated.
+    | See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    +------------------------------------
+==================== 1421 deselected, 516 errors in 11.54s =====================
+Error: Process completed with exit code 1.
+
+Run python -m pytest -m native --strict-config --strict-markers --timeout=120 --forked
+============================= test session starts ==============================
+platform darwin -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, timeout-2.4.0, forked-1.7.5, anyio-4.15.0
+timeout: 120.0s
+timeout method: signal
+timeout func_only: False
+collected 1937 items / 1421 deselected / 516 selected
+
+tests/test_coverage_container.py EEEEEEE                                 [  1%]
+tests/test_coverage_io.py EEEEEEE                                        [  2%]
+tests/test_coverage_leaf.py EEEEEEEEEEEEEEEEEEEEEEE                      [  7%]
+tests/test_coverage_operations.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE     [ 13%]
+tests/test_dg_differentiate_and_eval_at_coord_proj.py EEEEEEEEEEE        [ 15%]
+tests/test_dg_map.py EEEEEEEEE                                           [ 17%]
+tests/test_dg_rep.py EEEEEEE                                             [ 18%]
+tests/test_diagnostics_five_moment.py EEEEEEEE                           [ 20%]
+tests/test_diagnostics_gk_load.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 27%]
+EEEEEEEEEEEEEEEEE                                                        [ 31%]
+tests/test_diagnostics_kinetic.py E                                      [ 31%]
+tests/test_diagnostics_mhd.py EE                                         [ 31%]
+tests/test_diagnostics_multispecies.py EE                                [ 32%]
+tests/test_diagnostics_pkpm.py EEEEE                                     [ 33%]
+tests/test_diagnostics_plasma.py EEEEEEEEE                               [ 34%]
+tests/test_diagnostics_rotations.py EE                                   [ 35%]
+tests/test_diagnostics_ten_moment.py EEEEEEEEEE                          [ 37%]
+tests/test_examples.py EEEEEEEEEEEEEEEEEEE                               [ 40%]
+tests/test_gdata_fluent.py EEEEEE                                        [ 42%]
+tests/test_gpython_array.py EEEEEEEEEEEEEEEEE                            [ 45%]
+tests/test_gpython_basis.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 53%]
+EEEEEEEEEE                                                               [ 55%]
+tests/test_gpython_kernels.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE [ 63%]
+EEEEEEEEEEEEEEEEEEEEEEEE                                                 [ 68%]
+tests/test_gpython_lib.py EEEEEE                                         [ 69%]
+tests/test_gpython_rio.py EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE   [ 78%]
+tests/test_invariants.py EEEEEEEEEEE                                     [ 80%]
+tests/test_operations_animate.py EEEEE                                   [ 81%]
+tests/test_operations_collect.py E                                       [ 81%]
+tests/test_operations_curvilinear_diff_integrate.py EEEEEE               [ 82%]
+tests/test_operations_differentiate.py E                                 [ 82%]
+tests/test_operations_evaluate.py EEEEEEEEEEE                            [ 85%]
+tests/test_operations_field.py EEEEEE                                    [ 86%]
+tests/test_operations_fit.py EE                                          [ 86%]
+tests/test_operations_gk_fluxsurf.py EEEEEEEE                            [ 88%]
+tests/test_operations_gk_geometry.py E                                   [ 88%]
+tests/test_operations_gk_rz.py EEEEEEEEEE                                [ 90%]
+tests/test_operations_local_poly.py EEEEEEEEE                            [ 92%]
+tests/test_operations_map.py EEEEEEEEEEEEEEEEEEEEEEE                     [ 96%]
+tests/test_postgkyl.py EEEEEEEEEEEEEEEE                                  [ 99%]
+tests/test_render_matplotlib.py EE                                       [100%]
+
+==================================== ERRORS ====================================
+_______ ERROR at setup of test_mul_div_explicit_aliases_match_operators ________
