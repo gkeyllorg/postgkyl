@@ -1,0 +1,1 @@
+So would you do fig = plt.plot(GData.grid,GData)?
