@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from postgkyl import gpython
-from postgkyl.gdata import GData
+from postgkyl.gdata import GData, GDataGroup
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.diagnostics.gyrokinetics import distf, quantities as ff, quantity as qmod, utils
 from postgkyl.diagnostics.gyrokinetics.load_quantity import (
@@ -81,6 +81,74 @@ class TestResolveFrames:
 
   def test_numeric_string(self):
     assert distf.resolve_frames("7", name="n", species="ion") == [7]
+  # end
+
+  def test_range_without_matching_files_has_a_clear_error(self, tmp_path,
+      monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="No distribution frames found"):
+      distf.resolve_frames(":", name="sim", species="ion")
+    # end
+  # end
+
+  def test_range_requires_a_positive_step(self, tmp_path, monkeypatch):
+    (tmp_path / "sim-ion_0.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="positive integer"):
+      distf.resolve_frames("::0", name="sim", species="ion")
+    # end
+  # end
+# end
+
+
+class TestLoadGkDistfFrames:
+  """The public loader resolves frame syntax around the per-frame core."""
+
+  def _stub(self, monkeypatch):
+    calls = []
+
+    def fake_load_distf_frame(*, frame, tag, **kwargs):
+      calls.append(frame)
+      data = GData(tag=tag, ctx={"frame": frame})
+      data.push([np.array([0.0, 1.0])], np.array([[float(frame)]]))
+      return data
+    # end
+
+    monkeypatch.setattr(distf, "_load_distf_frame", fake_load_distf_frame)
+    return calls
+  # end
+
+  def test_integer_frame_returns_one_dataset(self, monkeypatch):
+    calls = self._stub(monkeypatch)
+    out = distf.load_distf("sim", "ion", 3)
+    assert isinstance(out, GData)
+    assert calls == [3]
+  # end
+
+  def test_csv_frames_return_a_labelled_fluent_group(self, monkeypatch):
+    calls = self._stub(monkeypatch)
+    out = distf.load_distf("sim", "ion", "0,2,4")
+    assert isinstance(out, GDataGroup)
+    assert calls == [0, 2, 4]
+    assert [data.label for data in out] == ["0", "2", "4"]
+  # end
+
+  def test_single_element_list_still_returns_a_group(self, monkeypatch):
+    self._stub(monkeypatch)
+    out = distf.load_distf("sim", "ion", [7])
+    assert isinstance(out, GDataGroup)
+    assert len(out) == 1
+  # end
+
+  def test_range_loads_only_discovered_frames(self, tmp_path, monkeypatch):
+    calls = self._stub(monkeypatch)
+    for frame in (0, 2, 5):
+      (tmp_path / f"sim-ion_fdot_{frame}.gkyl").touch()
+    # end
+    monkeypatch.chdir(tmp_path)
+    out = distf.load_distf("sim", "ion", "0:5", suffix="fdot")
+    assert isinstance(out, GDataGroup)
+    assert calls == [0, 2]
   # end
 # end
 

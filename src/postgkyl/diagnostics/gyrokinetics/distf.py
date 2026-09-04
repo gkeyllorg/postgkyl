@@ -26,16 +26,22 @@ coefficients), so the two can happen in either order.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from postgkyl import operations
-from postgkyl.gdata import load
+from postgkyl.cli_spec import CliType
+from postgkyl.gdata import GData, GDataGroup, load
 
 from .. import discovery
 
 
+FrameSpec = int | str | list[int] | tuple[int, ...]
+
+
 def resolve_frames(
-    frame: "int | str | list | tuple",
+    frame: FrameSpec,
     *, name: str, species: str, suffix: str = "", block_idx: int | None = None,
-) -> list:
+) -> list[int]:
   """Expand a frame specification into a concrete sorted list of frame indices.
 
   Args:
@@ -70,16 +76,36 @@ def resolve_frames(
   frame_infix = f"{suffix}_" if suffix else ""
   stem = f"{prefix}-{species}_{frame_infix}"
   available = sorted(discovery.available_frames(stem))
+  if not available:
+    raise ValueError(
+        f"No distribution frames found matching '{stem}<frame>.gkyl'.")
+  # end
   parts = frame_spec.split(":")
+  if len(parts) > 3:
+    raise ValueError(
+        f"Invalid frame range {frame_spec!r}; expected start:stop[:step].")
+  # end
   lower = int(parts[0]) if parts[0] else available[0]
   upper = int(parts[1]) if parts[1] else available[-1] + 1
   step = int(parts[2]) if len(parts) == 3 and parts[2] else 1
-  return [f for f in available if lower <= f < upper and (f - lower) % step == 0]
+  if step <= 0:
+    raise ValueError("Frame range step must be a positive integer.")
+  # end
+  resolved = [
+      f for f in available
+      if lower <= f < upper and (f - lower) % step == 0
+  ]
+  if not resolved:
+    raise ValueError(
+        f"Frame range {frame_spec!r} matches no files for '{stem}<frame>.gkyl'.")
+  # end
+  return resolved
 # end
 
 
 def load_distf(
-    name: str, species: str, frame: int, *,
+    name: str, species: str,
+    frame: Annotated[FrameSpec, CliType(str)], *,
     tag: str = "f", suffix: str = "", use_c2p_vel: bool = False,
     use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None,
     num_interp: int | None = None,
@@ -89,13 +115,19 @@ def load_distf(
     mc2nu_file: str | None = None,
     mapc2p_file: str | None = None,
     jacobtot_inv_file: str | None = None,
-) -> "GData":
-  """Build a real distribution function from saved ``Jf`` data.
+) -> GData | GDataGroup:
+  """Build real distribution functions from saved ``Jf`` data.
+
+  A scalar frame returns one :class:`~postgkyl.gdata.gdata.GData`. A list,
+  tuple, comma-separated string, or range returns a
+  :class:`~postgkyl.gdata.gdatagroup.GDataGroup`, whose fluent operations
+  broadcast over the loaded frames.
 
   Args:
     name: Simulation name prefix.
     species: Species name.
-    frame: Frame index.
+    frame: Frame index, comma-separated indices, or a
+      ``start:stop[:step]`` range; ``:`` selects every available frame.
     tag: Tag for the resulting dataset.
     suffix: Use ``<name>-<species>_<suffix>_<frame>.gkyl`` as the input.
     use_c2p_vel: Convert velocity-space computational coordinates to
@@ -115,9 +147,48 @@ def load_distf(
     jacobtot_inv_file: Explicit inverse total-Jacobian filename override.
 
   Returns:
-    A :class:`~postgkyl.gdata.gdata.GData` holding the interpolated
-    distribution function.
+    One interpolated distribution function for a scalar frame, or a fluent
+    group holding one distribution function per requested frame.
   """
+  frames = resolve_frames(frame, name=name, species=species,
+      suffix=suffix, block_idx=block_idx)
+  datasets = [
+      _load_distf_frame(
+          name=name, species=species, frame=resolved_frame, tag=tag,
+          suffix=suffix, use_c2p_vel=use_c2p_vel, use_mc2nu=use_mc2nu,
+          use_mapc2p=use_mapc2p, block_idx=block_idx,
+          num_interp=num_interp, jf_file=jf_file,
+          mapc2p_vel_file=mapc2p_vel_file, jacobvel_file=jacobvel_file,
+          mc2nu_file=mc2nu_file, mapc2p_file=mapc2p_file,
+          jacobtot_inv_file=jacobtot_inv_file)
+      for resolved_frame in frames
+  ]
+
+  is_series = isinstance(frame, (list, tuple)) or (
+      isinstance(frame, str) and ("," in frame or ":" in frame))
+  if not is_series:
+    return datasets[0]
+  # end
+  for dataset, resolved_frame in zip(datasets, frames):
+    dataset.set_label(str(resolved_frame))
+  # end
+  return GDataGroup(datasets)
+# end
+
+
+def _load_distf_frame(
+    name: str, species: str, frame: int, *,
+    tag: str = "f", suffix: str = "", use_c2p_vel: bool = False,
+    use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None,
+    num_interp: int | None = None,
+    jf_file: str | None = None,
+    mapc2p_vel_file: str | None = None,
+    jacobvel_file: str | None = None,
+    mc2nu_file: str | None = None,
+    mapc2p_file: str | None = None,
+    jacobtot_inv_file: str | None = None,
+) -> GData:
+  """Load and transform one resolved distribution-function frame."""
   prefix = f"{name}_b{block_idx}" if block_idx is not None else name
   frame_infix = f"{suffix}_" if suffix else ""
 

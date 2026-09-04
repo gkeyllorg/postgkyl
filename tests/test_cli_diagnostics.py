@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import click
+from click.testing import CliRunner
 import numpy as np
 import pytest
 
 import postgkyl as pg
-from postgkyl.cli.app import COMMANDS
+from postgkyl.cli.app import cli, COMMANDS
 from postgkyl.cli.state import DataSpace
 from postgkyl import diagnostics
+from postgkyl.diagnostics.gyrokinetics import distf
 from postgkyl.gdata.gdata import GData
 
 
@@ -97,6 +99,37 @@ def test_only_canonical_diagnostic_names_are_registered():
   ):
     assert old_name not in COMMAND_BY_NAME
   # end
+# end
+
+
+def test_load_distf_frame_is_text_and_cli_accepts_all_frames(tmp_path,
+    monkeypatch):
+  command = COMMAND_BY_NAME["gyrokinetics-load-distf"]
+  frame_option = next(option for option in command.params
+      if option.name == "frame")
+  assert isinstance(frame_option.type, click.types.StringParamType)
+
+  calls = []
+
+  def fake_load_distf_frame(*, frame, tag, **kwargs):
+    calls.append(frame)
+    data = GData(tag=tag, ctx={"frame": frame})
+    data.push([np.array([0.0, 1.0])], np.array([[float(frame)]]))
+    return data
+  # end
+
+  monkeypatch.setattr(distf, "_load_distf_frame", fake_load_distf_frame)
+  for frame in (0, 2):
+    (tmp_path / f"sim-ion_fdot_{frame}.gkyl").touch()
+  # end
+  monkeypatch.chdir(tmp_path)
+
+  result = CliRunner().invoke(cli, [
+      "gyrokinetics-load-distf", "--name", "sim", "--species", "ion",
+      "--frame", ":", "--suffix", "fdot",
+  ])
+  assert result.exit_code == 0, result.output
+  assert calls == [0, 2]
 # end
 
 
