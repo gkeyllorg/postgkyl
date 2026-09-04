@@ -3,7 +3,7 @@
 ## Design and main code development
 
 - Ammar Hakim (PPPL) <ahakim@pppl.gov>
-- Maxwell Rosen (PPPL) (2.0 main contributions) 
+- Maxwell Rosen (PPPL) (2.0 main contributions)
 - Petr Cagas (HZDR/CASUS) <p.cagas@hzdr.de>
 
 ## Contributors (ultra-alphabetically)
