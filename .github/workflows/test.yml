@@ -199,11 +199,16 @@ jobs:
       - name: Run native tests in isolated processes
         # Native-library aborts on macOS should fail one test, not terminate
         # the entire session and hide which test caused the failure.
+        # pytest-forked already captures each child's stdout/stderr.  A second
+        # capture layer makes pytest replace those streams during setup; on
+        # macOS they can then be finalized unclosed, and warnings-as-errors
+        # turns the resulting ResourceWarning into an error for every test.
         run: >-
           python -m pytest
           -m native
           --strict-config --strict-markers
           --timeout=120
+          --capture=no
           --forked
 
   renderers:
