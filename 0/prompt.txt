@@ -1,0 +1,35 @@
+It is pointing to the right place, but it's an outdated version of python(base) (.venv) [mr1884@stellar-vis2 postgkyl]$ deactivate 2>/dev/null
+[mr1884@stellar-vis2 postgkyl]$ module load anaconda3/2024.10       # do this BEFORE creating/activating .venv
+[mr1884@stellar-vis2 postgkyl]$ rm -rf .venv
+[mr1884@stellar-vis2 postgkyl]$ python3 -m venv .venv
+[mr1884@stellar-vis2 postgkyl]$ source .venv/bin/activate
+(.venv) [mr1884@stellar-vis2 postgkyl]$ which python3                        # sanity check: must point into .venv/bin
+~/Documents/postgkyl/.venv/bin/python3
+(.venv) [mr1884@stellar-vis2 postgkyl]$ pip install -e .[test]
+Obtaining file:///home/mr1884/Documents/postgkyl
+    Complete output from command python setup.py egg_info:
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+      File "/home/mr1884/Documents/postgkyl/setup.py", line 7, in <module>
+        from setuptools.command.editable_wheel import editable_wheel
+    ModuleNotFoundError: No module named 'setuptools.command.editable_wheel'
+    
+    ----------------------------------------
+Command "python setup.py egg_info" failed with error code 1 in /home/mr1884/Documents/postgkyl/
+You are using pip version 9.0.3, however version 26.2 is available.
+You should consider upgrading via the 'pip install --upgrade pip' command.
+(.venv) [mr1884@stellar-vis2 postgkyl]$ pip install -e .[test]
+Obtaining file:///home/mr1884/Documents/postgkyl
+    Complete output from command python setup.py egg_info:
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+      File "/home/mr1884/Documents/postgkyl/setup.py", line 7, in <module>
+        from setuptools.command.editable_wheel import editable_wheel
+    ModuleNotFoundError: No module named 'setuptools.command.editable_wheel'
+    
+    ----------------------------------------
+Command "python setup.py egg_info" failed with error code 1 in /home/mr1884/Documents/postgkyl/
+You are using pip version 9.0.3, however version 26.2 is available.
+You should consider upgrading via the 'pip install --upgrade pip' command.
+(.venv) [mr1884@stellar-vis2 postgkyl]$ python3 --version
+Python 3.6.8
