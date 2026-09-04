@@ -1,0 +1,5 @@
+In the CLI shorthand options (e.g. -c, -d, -g), previously I had given instructions to resolve any conflicts between arguments which share the same first letter by not putting a shorthand. Instead, if there are for instance two parameters which share the same first letter (e.g. options log and linear), resolve this conflict by putting the shorthand notation on the argument which comes first in the functional call. This ensures that there is a shorthand for every first letter while placing priority to the arguments which appear first in the function definition.
+
+---
+
+In the CLI shorthand options (e.g. -c, -d, -g), previously I had given instructions to resolve any conflicts between arguments which share the same first letter by not putting a shorthand. Instead, if there are for instance two parameters which share the same first letter (e.g. options log and linear), resolve this conflict by putting the shorthand notation on the argument which comes first in the functional call. This ensures that there is a shorthand for every first letter while placing priority to the arguments which appear first in the function definition.
