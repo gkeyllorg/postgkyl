@@ -1,0 +1,13 @@
+How can we improve CI and testing for this repository? We made some progress with unit tests and formatting. How do we improve this?
+
+---
+
+How can we improve CI and testing for this repository? We made some progress with unit tests and formatting. How do we improve this?
+
+---
+
+Implement and enhance. You may spawn sub-agents and implement this over a long session
+
+---
+
+Implement and enhance. You may spawn sub-agents and implement this over a long session
