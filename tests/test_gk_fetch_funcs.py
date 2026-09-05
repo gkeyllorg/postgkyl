@@ -22,6 +22,8 @@ The DG fields here are constant within each cell, which makes every weak DG
 operation (multiply, invert) exact, so the expected values are matched to
 near-machine precision rather than to a loose tolerance.
 """
+import os
+
 import numpy as np
 import pytest
 
@@ -569,3 +571,499 @@ class TestPowSqrt:
     field = _const_gdata([1.0, 2.0, 3.0])  # Three physical components.
     with pytest.raises(ValueError, match="single-component"):
       GkeyllDGops().powsqrt(field, field, 1.0)
+
+
+
+
+
+# --- Perpendicular magnetic fluctuations -------------------------------------
+#
+# The parallel vector potential perturbs the field by dB = curl(Apar*b), taken
+# directly as pygkyl's dataparam.py does,
+#   dB^i = ( d(Apar*b_k)/dx^j - d(Apar*b_j)/dx^k ) / J,  (j,k) = (i+1,i+2) mod 3,
+# and then lowered with the metric, dB_i = g_ij dB^j. A curl is degenerate below
+# three dimensions, so these tests use 3D p1 fields (num_basis = 8) rather than
+# the 1D ones above. The geometry is uniform except where a test needs it not to
+# be, which keeps the weak DG products exact.
+_NUM_BASIS_3D = 8
+_NUM_CELLS_3D = (2, 3, 4)
+_LENGTHS_3D = (0.7, 1.3, 2.1)  # Unequal, so a swapped dx shows up.
+_PSI0_3D = 2.0**-1.5
+
+# Component of g_ij holding the (k,l) entry, stated here rather than imported so
+# that the tests pin the ordering instead of inheriting it.
+_G_IJ_COMP = {(0,0): 0, (0,1): 1, (0,2): 2, (1,1): 3, (1,2): 4, (2,2): 5}
+
+# Cartesian and orthonormal: covariant and contravariant components coincide.
+_EUCLIDEAN_METRIC = (1.0, 0.0, 0.0, 1.0, 0.0, 1.0)
+# A skewed but positive-definite metric, for the checks that must hold whatever
+# the coordinates are.
+_SKEW_METRIC = (2.0, 0.3, -0.5, 3.0, 0.7, 1.5)
+
+
+def _grid_3d() -> list:
+  return [np.linspace(0.0, length, cells + 1)
+          for length, cells in zip(_LENGTHS_3D, _NUM_CELLS_3D)]
+
+def _gdata_3d(values) -> GData:
+  gdata = GData(ctx={"poly_order": _POLY_ORDER, "basis_type": _BASIS_TYPE,
+                     "mass": _MASS, "charge": 1.0})
+  gdata.push(_grid_3d(), values)
+  return gdata
+
+def _const_gdata_3d(comp_avgs) -> GData:
+  """A 3D field constant in space, with the given cell averages."""
+  avgs = np.atleast_1d(np.asarray(comp_avgs, dtype=float))
+  values = np.zeros((*_NUM_CELLS_3D, _NUM_BASIS_3D*avgs.size))
+  for comp, avg in enumerate(avgs):
+    values[..., comp*_NUM_BASIS_3D] = avg/_PSI0_3D
+  return _gdata_3d(values)
+
+def _cell_avg_3d(gdata: GData, comp: int = 0) -> np.ndarray:
+  return gdata.get_values()[..., comp*_NUM_BASIS_3D]*_PSI0_3D
+
+def _metric_matrix(metric) -> np.ndarray:
+  return np.array([[metric[_G_IJ_COMP[(min(i,j), max(i,j))]] for j in range(3)]
+                   for i in range(3)])
+
+def _b_hat_for(metric) -> tuple:
+  """b_i = g_i3/sqrt(g_33), which is how gkeyll builds it: b is along e_3."""
+  return tuple(_metric_matrix(metric)[i, 2]/np.sqrt(metric[_G_IJ_COMP[(2,2)]])
+               for i in range(3))
+
+def _linear_gdata_3d(comps) -> GData:
+  """A field whose comp-th component is offset + sum_d slope_d*x_d, given as
+  (offset, slopes) pairs. The p1 basis represents such a field exactly.
+
+  The 3D basis is the tensor product of the 1D pair (1/sqrt(2), sqrt(3/2)*xi),
+  ordered 1,x,y,z,xy,xz,yz,xyz, so the mode linear in direction d is
+  sqrt(3)*psi0*xi_d and carries the whole slope. The cell-average mode is set
+  per cell, so the field is globally linear and not just linear in each cell.
+  """
+  centers = np.meshgrid(*[0.5*(n[:-1] + n[1:]) for n in _grid_3d()], indexing="ij")
+
+  values = np.zeros((*_NUM_CELLS_3D, _NUM_BASIS_3D*len(comps)))
+  for comp, (offset, slopes) in enumerate(comps):
+    base = comp*_NUM_BASIS_3D
+    values[..., base] = (offset + sum(s*c for s, c in zip(slopes, centers)))/_PSI0_3D
+    for direction, slope in enumerate(slopes):
+      dx = _LENGTHS_3D[direction]/_NUM_CELLS_3D[direction]
+      values[..., base + 1 + direction] = slope*dx/(2.0*np.sqrt(3.0)*_PSI0_3D)
+  return _gdata_3d(values)
+
+def _linear_apar(slopes) -> GData:
+  """Apar = sum_d slope_d*x_d."""
+  return _linear_gdata_3d([(0.0, slopes)])
+
+def _arbitrary_apar() -> GData:
+  """An Apar with every mode populated and no symmetry to exploit."""
+  return _gdata_3d(np.random.default_rng(20260904).standard_normal(
+    (*_NUM_CELLS_3D, _NUM_BASIS_3D)))
+
+def _sources_3d(apar, metric=_EUCLIDEAN_METRIC, b_hat=None, jacob=1.0) -> list:
+  """The [Apar, 1/J, b_i, g_ij] sources, the geometry uniform in space.
+
+  b defaults to the unit vector along e_3 that the metric implies.
+  """
+  return [apar, _const_gdata_3d(1.0/jacob),
+          _const_gdata_3d(_b_hat_for(metric) if b_hat is None else b_hat),
+          _const_gdata_3d(metric)]
+
+def _B_sources_3d(apar, bmag, metric=_EUCLIDEAN_METRIC, jacob=1.0) -> list:
+  """The [Apar, B, 1/J, b_i, g_ij] sources of B_tot over the geometry of _sources_3d."""
+  _, jacobgeo_inv, b_i, g_ij = _sources_3d(apar, metric=metric, jacob=jacob)
+  return [apar, _const_gdata_3d(bmag), jacobgeo_inv, b_i, g_ij]
+
+def _equilibrium_srcs(b_srcs) -> list:
+  """The [B, b_i] sources of B_equilibrium, out of a _B_sources_3d list."""
+  return [b_srcs[1], b_srcs[3]]
+
+def _dual_equilibrium_srcs(b_srcs) -> list:
+  """The [B, g_ij] sources of B_dual_equilibrium, out of a _B_sources_3d list."""
+  return [b_srcs[1], b_srcs[4]]
+
+def _grad_apar(apar: GData) -> list:
+  """d(Apar)/dx^d in every cell, as DG fields."""
+  dgops = GkeyllDGops()
+  lower, upper = apar.get_bounds()
+  cells = apar.get_num_cells()
+
+  grad = []
+  for direction in range(3):
+    deriv = ff._empty_gdata_from_gdata(apar)
+    dgops.differentiate(direction, 1, (upper[direction] - lower[direction])/cells[direction],
+                        0, deriv, 0, apar)
+    grad.append(deriv)
+  return grad
+
+
+@_needs_dgops
+class TestPerpMagneticFluctuations:
+  """The covariant components of dB = curl(Apar*b)."""
+
+  def test_linear_apar_has_the_slopes_it_claims(self):
+    """Pin the basis ordering the closed-form tests below rely on."""
+    slopes = (2.5, -1.75, 0.5)
+    for deriv, slope in zip(_grad_apar(_linear_apar(slopes)), slopes):
+      assert np.allclose(_cell_avg_3d(deriv), slope, rtol=1e-12)
+      assert np.allclose(deriv.get_values()[..., 1:], 0.0, atol=1e-12)
+
+  def test_dB_for_a_uniform_field_along_z(self):
+    """In Cartesian coordinates with b = z and J = 1, Apar = a*x + c*y gives
+    dB = (c, -a, 0).
+
+    Pins the sign, the cyclic wiring and which coordinate each component
+    belongs to, all at once. The metric being the identity, the lowering is a
+    no-op here and the covariant components are the physical ones.
+    """
+    a, c = 2.5, -1.75
+    srcs = _sources_3d(_linear_apar((a, c, 0.0)))
+
+    for comp, expected in enumerate((c, -a, 0.0)):
+      dB = ff.fetch_dB_perp(srcs, dir=comp)
+      assert np.allclose(_cell_avg_3d(dB), expected, atol=1e-12*max(abs(a), abs(c)))
+
+  def test_the_gradient_along_b_does_not_contribute(self):
+    """What makes dB perpendicular: with b = z, tilting Apar in z changes nothing."""
+    flat = _sources_3d(_linear_apar((2.5, -1.75, 0.0)))
+    tilted = _sources_3d(_linear_apar((2.5, -1.75, 9.0)))
+
+    for comp in range(3):
+      assert np.allclose(_cell_avg_3d(ff.fetch_dB_perp(flat, dir=comp)),
+                         _cell_avg_3d(ff.fetch_dB_perp(tilted, dir=comp)), atol=1e-12)
+
+  def test_the_third_covariant_component_vanishes_for_a_uniform_b(self):
+    """Where b is uniform, dB = (grad(Apar) x b)/J is perpendicular to b, and in
+    covariant components that reads dB_3 = 0.
+
+    b is along e_3, so dB.bhat = dB_3/sqrt(g_33): the whole parallel part sits
+    in the third covariant component and nowhere else. This is what makes the
+    covariant components the readable ones - the contravariant dB^3 is instead
+    the *largest* of the three, e_3 being the shortest basis vector. It holds
+    for any Apar and any coordinates, so it also pins the cyclic index wiring
+    and the metric lowering together.
+    """
+    srcs = _sources_3d(_arbitrary_apar(), metric=_SKEW_METRIC, jacob=1.7)
+
+    dB = [ff.fetch_dB_perp(srcs, dir=comp).get_values() for comp in range(3)]
+    scale = max(np.abs(dB_i).max() for dB_i in dB)
+
+    assert np.all(np.abs(dB[2]) < 1e-12*scale)
+    assert np.abs(dB[0]).max() > 0.01*scale, "the perpendicular part must not vanish too"
+
+  def test_dB_perp_dual_gives_the_contravariant_components(self):
+    """dB_perp_dual is the bare curl, before any lowering: (c, -a, 0) here."""
+    a, c = 2.5, -1.75
+    srcs = _sources_3d(_linear_apar((a, c, 0.0)))[:3]
+
+    for comp, expected in enumerate((c, -a, 0.0)):
+      dB = ff.fetch_dB_perp_dual(srcs, dir=comp)
+      assert np.allclose(_cell_avg_3d(dB), expected, atol=1e-12*max(abs(a), abs(c)))
+
+  def test_the_metric_lowers_the_index(self):
+    """dB_i = g_ij dB^j, with g_ij read as g_11,g_12,g_13,g_22,g_23,g_33.
+
+    b = z-hat and J = 1 hold the contravariant components at (c, -a, 0) while
+    the metric is skewed, so only the lowering can produce the answer.
+    """
+    a, c = 2.5, -1.75
+    srcs = _sources_3d(_linear_apar((a, c, 0.0)), metric=_SKEW_METRIC,
+                       b_hat=(0.0, 0.0, 1.0))
+
+    expected = _metric_matrix(_SKEW_METRIC) @ np.array([c, -a, 0.0])
+    for comp in range(3):
+      assert np.allclose(_cell_avg_3d(ff.fetch_dB_perp(srcs, dir=comp)),
+                         expected[comp], rtol=1e-12)
+
+  def test_dB_perp_is_dB_perp_dual_lowered(self):
+    """The two registered quantities must be the same field, index up or down.
+
+    Checked on the real skewed geometry of the other tests rather than on a
+    hand-written expectation, so it holds whatever the curl turns out to be.
+    """
+    srcs = _sources_3d(_arbitrary_apar(), metric=_SKEW_METRIC, jacob=1.7)
+    dB_up = [_cell_avg_3d(ff.fetch_dB_perp_dual(srcs[:3], dir=j)) for j in range(3)]
+
+    g_kl = _metric_matrix(_SKEW_METRIC)
+    for comp in range(3):
+      expected = sum(g_kl[comp, j]*dB_up[j] for j in range(3))
+      assert np.allclose(_cell_avg_3d(ff.fetch_dB_perp(srcs, dir=comp)), expected,
+                         rtol=1e-11, atol=1e-13*max(np.abs(u).max() for u in dB_up))
+
+  def test_a_twisting_b_contributes_even_for_a_uniform_apar(self):
+    """dB is the full curl, so with grad(Apar) = 0 what is left is Apar*curl(b).
+
+    Taking b_1 = slope*y with the other components uniform leaves the whole
+    perturbation in dB_3 = -Apar*slope/J.
+    """
+    apar_val, slope, jacob = 0.35, 1.9, 1.7
+    b_i = _linear_gdata_3d([(0.0, (0.0, slope, 0.0)), (0.0, (0.0,)*3), (1.0, (0.0,)*3)])
+    srcs = [_const_gdata_3d(apar_val), _const_gdata_3d(1.0/jacob), b_i,
+            _const_gdata_3d(_EUCLIDEAN_METRIC)]
+
+    expected = -apar_val*slope/jacob
+    for comp, want in enumerate((0.0, 0.0, expected)):
+      assert np.allclose(_cell_avg_3d(ff.fetch_dB_perp(srcs, dir=comp)), want,
+                         atol=1e-12*abs(expected))
+
+  def test_a_vanishing_apar_gives_no_perturbation(self):
+    """Guard against the checks above passing for a function that returns junk."""
+    srcs = _sources_3d(_const_gdata_3d(0.0), metric=_SKEW_METRIC, jacob=1.7)
+    for comp in range(3):
+      assert np.all(ff.fetch_dB_perp(srcs, dir=comp).get_values() == 0.0)
+
+  def test_dB_scales_as_one_over_J(self):
+    apar = _linear_apar((2.5, -1.75, 0.0))
+    unit = ff.fetch_dB_perp(_sources_3d(apar, jacob=1.0), dir=0)
+    scaled = ff.fetch_dB_perp(_sources_3d(apar, jacob=4.0), dir=0)
+    assert np.allclose(_cell_avg_3d(scaled), 0.25*_cell_avg_3d(unit), rtol=1e-12)
+
+  def test_a_direction_must_be_requested(self):
+    with pytest.raises(KeyError, match="dir="):
+      ff.fetch_dB_perp(_sources_3d(_linear_apar((1.0, 1.0, 0.0))))
+
+
+@_needs_dgops
+class TestPerpMagneticFluctuationMagnitude:
+  """|dB| = sqrt(g_kl*dB^k*dB^l), contracting the contravariant components,
+  which pins the g_ij component order as much as the contraction itself."""
+
+  # With b = z-hat and J = 1 these slopes give dB^k = (slope_y, -slope_x, 0).
+  _SLOPE_X, _SLOPE_Y = 2.5, -1.75
+
+  def _mag(self, metric):
+    srcs = _sources_3d(_linear_apar((self._SLOPE_X, self._SLOPE_Y, 0.0)),
+                       metric=metric, b_hat=(0.0, 0.0, 1.0))
+    return _cell_avg_3d(ff.fetch_dB_perp_mag(srcs))
+
+  def test_euclidean_metric_gives_the_perpendicular_gradient(self):
+    """With b = z and g_ij = delta_ij, |dB| = |grad_perp(Apar)|."""
+    assert np.allclose(self._mag(_EUCLIDEAN_METRIC),
+                       np.hypot(self._SLOPE_X, self._SLOPE_Y), rtol=1e-12)
+
+  def test_the_diagonal_entries_are_read_in_order(self):
+    """g_11, g_22 and g_33 sit at components 0, 3 and 5, not 0, 1 and 2."""
+    g_11, g_22, g_33 = 4.0, 9.0, 16.0
+    expected = np.sqrt(g_11*self._SLOPE_Y**2 + g_22*self._SLOPE_X**2)  # g_33 must not enter.
+    assert np.allclose(self._mag((g_11, 0.0, 0.0, g_22, 0.0, g_33)), expected, rtol=1e-12)
+
+  def test_the_off_diagonal_entries_are_counted_twice(self):
+    """g_12 sits at component 1, and the (1,2) and (2,1) pair gives 2*g_12."""
+    g_12 = 0.3
+    expected = np.sqrt(self._SLOPE_Y**2 + self._SLOPE_X**2
+                       - 2.0*g_12*self._SLOPE_Y*self._SLOPE_X)
+    assert np.allclose(self._mag((1.0, g_12, 0.0, 1.0, 0.0, 1.0)), expected, rtol=1e-12)
+
+  def test_a_general_metric_with_all_three_components(self):
+    """g_13 and g_23 too: a skewed uniform b gives dB^k = (grad(Apar) x b)/J."""
+    slopes = (2.5, -1.75, 0.9)
+    b_hat, jacob = _b_hat_for(_SKEW_METRIC), 1.7
+    srcs = _sources_3d(_linear_apar(slopes), metric=_SKEW_METRIC, jacob=jacob)
+
+    dB = np.cross(slopes, b_hat)/jacob
+    expected = np.sqrt(dB @ _metric_matrix(_SKEW_METRIC) @ dB)
+
+    assert np.allclose(_cell_avg_3d(ff.fetch_dB_perp_mag(srcs)), expected, rtol=1e-12)
+
+  def test_a_vanishing_apar_gives_no_perturbation(self):
+    srcs = _sources_3d(_const_gdata_3d(0.0), metric=_SKEW_METRIC, jacob=1.7)
+    assert np.all(ff.fetch_dB_perp_mag(srcs).get_values() == 0.0)
+
+
+@_needs_dgops
+class TestTotalMagneticField:
+  """B = B0*b + dB, covariant (B_tot) and contravariant (B_tot_dual)."""
+
+  _BMAG = 1.9
+  _JACOB = 1.7
+
+  def _srcs(self, apar, metric=_SKEW_METRIC):
+    return _B_sources_3d(apar, self._BMAG, metric=metric, jacob=self._JACOB)
+
+  def test_the_equilibrium_covariant_components_are_B_times_b(self):
+    srcs = self._srcs(_const_gdata_3d(0.0))
+
+    for comp, b in enumerate(_b_hat_for(_SKEW_METRIC)):
+      assert np.allclose(_cell_avg_3d(ff.fetch_B_equilibrium(_equilibrium_srcs(srcs), dir=comp)),
+                         self._BMAG*b, rtol=1e-12)
+
+  def test_the_equilibrium_contravariant_components_lie_along_e3(self):
+    """b^i = delta^i_3/sqrt(g_33), so the first two components are exactly zero."""
+    up = _dual_equilibrium_srcs(self._srcs(_const_gdata_3d(0.0)))
+
+    for comp in (0, 1):
+      assert np.all(ff.fetch_B_dual_equilibrium(up, dir=comp).get_values() == 0.0)
+
+    expected = self._BMAG/np.sqrt(_SKEW_METRIC[_G_IJ_COMP[(2,2)]])
+    assert np.allclose(_cell_avg_3d(ff.fetch_B_dual_equilibrium(up, dir=2)),
+                       expected, rtol=1e-12)
+
+  def test_the_two_equilibrium_representations_describe_the_same_field(self):
+    """B_i B^i must come back as B^2 exactly.
+
+    The covariant side is built from b_i and the contravariant side from
+    1/sqrt(g_33), by two routes that share nothing, so this is the check that
+    b^i and b_i are the same unit vector and that g_33 is read from the right
+    component of g_ij.
+    """
+    srcs = self._srcs(_const_gdata_3d(0.0))
+
+    mag_sq = sum(_cell_avg_3d(ff.fetch_B_equilibrium(_equilibrium_srcs(srcs), dir=comp))
+                 *_cell_avg_3d(ff.fetch_B_dual_equilibrium(_dual_equilibrium_srcs(srcs), dir=comp))
+                 for comp in range(3))
+
+    assert np.allclose(np.sqrt(mag_sq), self._BMAG, rtol=1e-12)
+
+  def test_the_perturbation_is_added_to_the_equilibrium(self):
+    """B_i = B*b_i + dB_i and B^i = B*b^i + dB^i, both term by term."""
+    apar = _linear_apar((2.5, -1.75, 0.9))
+    dB_srcs = _sources_3d(apar, metric=_SKEW_METRIC, jacob=self._JACOB)
+    srcs = self._srcs(apar)
+
+    for comp in range(3):
+      expected = (_cell_avg_3d(ff.fetch_B_equilibrium(_equilibrium_srcs(srcs), dir=comp))
+                  + _cell_avg_3d(ff.fetch_dB_perp(dB_srcs, dir=comp)))
+      assert np.allclose(_cell_avg_3d(ff.fetch_B_tot(srcs, dir=comp)), expected, rtol=1e-12)
+
+      expected = (_cell_avg_3d(ff.fetch_B_dual_equilibrium(_dual_equilibrium_srcs(srcs), dir=comp))
+                  + _cell_avg_3d(ff.fetch_dB_perp_dual(dB_srcs[:3], dir=comp)))
+      assert np.allclose(_cell_avg_3d(ff.fetch_B_tot_dual(srcs, dir=comp)), expected, rtol=1e-12)
+
+  def test_a_vanishing_apar_leaves_the_equilibrium_field(self):
+    """With no perturbation the total field must be the equilibrium one exactly.
+
+    This is also what the no-Apar source combination is expected to return.
+    """
+    srcs = self._srcs(_const_gdata_3d(0.0))
+
+    for comp in range(3):
+      assert np.allclose(
+        _cell_avg_3d(ff.fetch_B_tot(srcs, dir=comp)),
+        _cell_avg_3d(ff.fetch_B_equilibrium(_equilibrium_srcs(srcs), dir=comp)), rtol=1e-12)
+      assert np.allclose(
+        _cell_avg_3d(ff.fetch_B_tot_dual(srcs, dir=comp)),
+        _cell_avg_3d(ff.fetch_B_dual_equilibrium(_dual_equilibrium_srcs(srcs), dir=comp)),
+        rtol=1e-12)
+
+  def test_a_direction_must_be_requested(self):
+    srcs = self._srcs(_linear_apar((1.0, 1.0, 0.0)))
+    for fetch, fetch_srcs in ((ff.fetch_B_tot, srcs),
+                              (ff.fetch_B_equilibrium, _equilibrium_srcs(srcs)),
+                              (ff.fetch_B_tot_dual, srcs),
+                              (ff.fetch_B_dual_equilibrium, _dual_equilibrium_srcs(srcs))):
+      with pytest.raises(KeyError, match="dir="):
+        fetch(fetch_srcs)
+
+
+# --- The same, over real electromagnetic output ------------------------------
+#
+# The cases above are uniform in space, which is what makes them exact. These
+# run the same code over a real 3x2v electromagnetic TCV run, so that the actual
+# geometry files and their component layouts are exercised too. That output is
+# ~76 MB and is not tracked by git, so it is skipped when absent.
+_TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
+_APAR_DATA_DIR = os.path.join(_TEST_DATA_DIR, "apar_data.ignore")
+_APAR_DATA_PREFIX = "rt_gk_tcv_nt_iwl_adapt_src_3x2v_p1"
+_APAR_DATA_FRAME = 10
+
+_needs_apar_data = pytest.mark.skipif(
+  not os.path.isdir(_APAR_DATA_DIR),
+  reason="requires the untracked electromagnetic TCV output in apar_data.ignore")
+
+
+def _apar_data(stem: str) -> GData:
+  return GData(os.path.join(_APAR_DATA_DIR, f"{_APAR_DATA_PREFIX}-{stem}.gkyl"))
+
+def _flattened(gdata: GData) -> GData:
+  """Keep only the cell-average mode, which makes a weak product by it exact."""
+  out = ff._empty_gdata_from_gdata(gdata)
+  out.get_values()[..., ::_NUM_BASIS_3D] = gdata.get_values()[..., ::_NUM_BASIS_3D]
+  return out
+
+
+@_needs_dgops
+@_needs_apar_data
+class TestPerpMagneticFluctuationsOnRealData:
+  """dB from a real electromagnetic TCV run."""
+
+  def _sources(self, flatten: bool = True) -> list:
+    prepare = _flattened if flatten else (lambda gdata: gdata)
+    return [_apar_data(f"apar_{_APAR_DATA_FRAME}"),
+            prepare(_apar_data("geo_int_jacobgeo_inv")),
+            prepare(_apar_data("geo_int_b_i")),
+            prepare(_apar_data("geo_int_g_ij"))]
+
+  def test_the_components_match_an_independent_evaluation(self):
+    """dB_i against a from-scratch numpy evaluation on the real geometry.
+
+    The geometry is flattened to its cell averages, which both makes the weak
+    products exact and reduces the curl to (b_k dA/dx^j - b_j dA/dx^k)/J, so the
+    two paths must agree to round-off. Apar keeps all eight of its coefficients,
+    so the derivatives, the index wiring and the lowering still see varying 3D
+    data.
+    """
+    srcs = self._sources()
+    apar, jacobgeo_inv, b_i, g_ij = srcs
+    grad_apar = [deriv.get_values() for deriv in _grad_apar(apar)]
+
+    # Piecewise-constant weights; keep a trailing axis to broadcast over the modes.
+    def weight(gdata, comp=0):
+      return gdata.get_values()[..., comp*_NUM_BASIS_3D, None]*_PSI0_3D
+
+    inv_J = weight(jacobgeo_inv)
+    b = [weight(b_i, k) for k in range(3)]
+    dB_up = [inv_J*(b[(i+2) % 3]*grad_apar[(i+1) % 3] - b[(i+1) % 3]*grad_apar[(i+2) % 3])
+             for i in range(3)]
+
+    for comp in range(3):
+      expected = sum(weight(g_ij, _G_IJ_COMP[(min(comp,j), max(comp,j))])*dB_up[j]
+                     for j in range(3))
+
+      # g_ij spans four orders of magnitude here and the lowering all but
+      # cancels for comp 2, so the residual is measured against the size of the
+      # component rather than entry by entry.
+      got = ff.fetch_dB_perp(srcs, dir=comp).get_values()
+      assert np.allclose(got, expected, rtol=1e-9, atol=1e-11*np.abs(expected).max())
+
+  def test_the_parallel_component_is_the_small_one(self):
+    """dB_3 carries the whole parallel part, and dB is nearly perpendicular.
+
+    What survives is Apar*bhat.curl(b), which magnetic shear makes nonzero but
+    small; the point is that the perturbation shows up in dB_1 and dB_2, as it
+    would not in the contravariant components.
+    """
+    srcs = self._sources(flatten=False)
+    rms = lambda field: np.sqrt(np.mean(field**2))
+    dB = [rms(_cell_avg_3d(ff.fetch_dB_perp(srcs, dir=comp))) for comp in range(3)]
+
+    assert dB[2] < 0.2*dB[0], "the third covariant component must be the small one"
+    assert dB[2] > 0.0
+
+  def test_the_perturbation_is_a_small_fraction_of_the_field(self):
+    """A units slip would put |dB|/B nowhere near the per-mille level it sits at."""
+    ratio = (_cell_avg_3d(ff.fetch_dB_perp_mag(self._sources(flatten=False)))
+             /_cell_avg_3d(_apar_data("geo_int_bmag")))
+
+    assert np.all(np.isfinite(ratio))
+    assert np.sqrt(np.mean(ratio**2)) > 1e-5
+    assert ratio.max() < 0.05
+
+  def test_the_total_field_barely_departs_from_the_equilibrium_one(self):
+    """sqrt(B_i B^i) against bmag on the real geometry.
+
+    Both representations of the equilibrium have to agree for this to land on
+    bmag at all, and the perturbation may only shift it by the per-mille amount
+    that dB/B allows. The residual is the parallel part of dB, which is what
+    lifts |B| above B rather than leaving it unchanged.
+    """
+    apar, jacobgeo_inv, b_i, g_ij = self._sources(flatten=False)
+    bmag = _apar_data("geo_int_bmag")
+    srcs = [apar, bmag, jacobgeo_inv, b_i, g_ij]
+
+    mag_sq = sum(_cell_avg_3d(ff.fetch_B_tot(srcs, dir=comp))
+                 *_cell_avg_3d(ff.fetch_B_tot_dual(srcs, dir=comp)) for comp in range(3))
+    ratio = np.sqrt(mag_sq)/_cell_avg_3d(bmag)
+
+    assert np.all(np.isfinite(ratio))
+    assert np.allclose(ratio, 1.0, atol=0.02)
+    assert not np.allclose(ratio, 1.0, atol=1e-9), "the perturbation must move it a little"

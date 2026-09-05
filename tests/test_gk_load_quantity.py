@@ -26,12 +26,13 @@ from postgkyl.data import GData
 from postgkyl.pgkyl import cli
 from postgkyl.utils.gk_quantities.registry import gk_quant_registry
 
-# Synthetic DG dataset parameters: 1D, p1 serendipity (num_basis = 2), four
-# physical components so that fetch functions selecting up to component 3 work.
+# Synthetic DG dataset parameters: 1D, p1 serendipity (num_basis = 2), six
+# physical components so that fetch functions selecting up to component 5 work
+# (the metric g_ij is the widest source, with g_11,g_12,g_13,g_22,g_23,g_33).
 _POLY_ORDER = 1
 _BASIS_TYPE = "serendipity"
 _NUM_BASIS = 2
-_NUM_PHYS_COMPS = 4
+_NUM_PHYS_COMPS = 6
 _NUM_CELLS = 4
 
 # Probe whether the gkylsoft DG-operator library is available. Quantities whose
@@ -198,6 +199,37 @@ class TestGkLoadQuantity:
       if not _DGOPS_AVAILABLE:
         pytest.skip(f"'{quantity}' requires the gkylsoft DG library: {err}")
       raise
+
+  @pytest.mark.parametrize("quantity", ["B_tot", "B_tot_dual"])
+  def test_the_total_field_falls_back_to_the_equilibrium_without_apar(
+      self, quantity, tmp_path, monkeypatch):
+    """An electrostatic run has no apar file, so the second source combination
+    must be picked and the total field must come back as the equilibrium one.
+
+    Only the geo files are laid down here, so the fallback is the only
+    combination that can resolve; it carries no frame, which also exercises the
+    frame-less path through the nested geo sources.
+    """
+    if not _DGOPS_AVAILABLE:
+      pytest.skip(f"'{quantity}' requires the gkylsoft DG library")
+
+    monkeypatch.setattr(gkquantity, "GData", _make_synthetic_gdata)
+    quant = gk_quant_registry.get(quantity)
+    path = str(tmp_path)
+
+    # Every source of the fallback combination, and nothing else: no apar.
+    for src in quant.source[-1]:
+      for file_name in _collect_source_files(src, path, self.name, self.species, self.frame):
+        open(file_name, "w").close()
+
+    combo_idx, frames = quant.get_avail_source(path, self.name, self.species, None)
+    assert combo_idx == len(quant.source) - 1, "the no-apar combination must be the one chosen"
+    assert frames == [None], "a geo-only combination carries no frame"
+
+    ctx = self._make_ctx()
+    ctx.invoke(cmd.gk_load_quantity, quantity=quantity, name=self.name,
+               species=self.species, frame=None, path=path, extra="dir=2")
+    assert ctx.obj["data"].get_num_datasets() >= 1
 
   def test_multi_species_quantity_yields_a_single_dataset(self, tmp_path, monkeypatch):
     """A multi-species quantity combines its species into one dataset.

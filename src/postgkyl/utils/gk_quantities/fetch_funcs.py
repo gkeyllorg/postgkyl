@@ -535,10 +535,10 @@ def fetch_vt(gdatas, **kwargs):
 def fetch_larmor_radius(gdatas, **kwargs):
   """
   Species Larmor (gyro-)radius: rho = sqrt(m*T)/(|q|*B). gdatas has:
-    1. temp: temperature (in Joules).
-    2. Bmag: magnetic field magnitude (bmag).
+    1. B: magnetic field magnitude (bmag).
+    2. temp: temperature (in Joules).
   """
-  temp, bmag = gdatas
+  bmag, temp = gdatas
   mass = _get_ctx_val(temp, "mass", **kwargs)
   charge = abs(_get_ctx_val(temp, "charge", **kwargs))
 
@@ -562,10 +562,10 @@ def fetch_larmor_radius(gdatas, **kwargs):
 def fetch_debye_length(gdatas, **kwargs):
   """
   Species-wise Debye length: lambda_D = sqrt(eps0*T/(n*q^2)). gdatas has:
-    1. temp: temperature (in Joules).
-    2. M0: zeroth moment (density).
+    1. M0: zeroth moment (density).
+    2. temp: temperature (in Joules).
   """
-  temp, m0 = gdatas
+  m0, temp = gdatas
   charge = _get_ctx_val(temp, "charge", **kwargs)
   eps0 = gkc.GKYL_EPSILON0
 
@@ -746,19 +746,20 @@ def fetch_ExB_vel(gdatas, **kwargs):
     v_{E,k} = epsilon_{ijk}/(J B) * b_i * d(phi)/dx^j
   where epsilon_{ijk} is the Levi-Civitta tensor
   and gdatas has (in this order):
-    1/(J*B): jacobtot_inv.
-    b_i: covariant components of the magnetic field unit vector.
+    B: magnetic field magnitude (bmag).
+    1/(J*B): inv. total Jacobian (jacobtot_inv).
     phi: electrostatic potential.
+    b_i: covariant components of the magnetic field unit vector.
 
   The k-th component is selected by the 'dir' optional argument.
   """
   if "dir" not in kwargs:
     raise KeyError("fetch_ExB_vel: select the j-th component with '--extra dir=j' (0-index).")
 
-  jacobtot_inv = gdatas[0]
-  bmag = gdatas[1]
-  b_i = gdatas[2]
-  phi = gdatas[3]
+  bmag = gdatas[0]
+  jacobtot_inv = gdatas[1]
+  phi = gdatas[2]
+  b_i = gdatas[3]
 
   # k-th component of b x grad(phi)/B.
   out = _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, kwargs["dir"])
@@ -771,20 +772,20 @@ def fetch_gradB_vel(gdatas, **kwargs):
     v_gradB,k = Tperp/(q B) * epsilon_{ijk} * b_i * d(B)/dx^j / (J B)
   where epsilon_{ijk} is the Levi-Civitta tensor, q the species charge,
   and gdatas has (in this order):
-    1/(J*B): inv. total Jacobian (jacobtot_inv).
     B: magnetic field magnitude (bmag).
-    b_i: covariant components of the magnetic field unit vector.
+    1/(J*B): inv. total Jacobian (jacobtot_inv).
     Tperp: perpendicular temperature (in Joules).
+    b_i: covariant components of the magnetic field unit vector.
 
   The k-th component is selected by the 'dir' optional argument.
   """
   if "dir" not in kwargs:
     raise KeyError("fetch_gradB_vel: select the j-th component with '--extra dir=j' (0-index).")
 
-  jacobtot_inv = gdatas[0]
-  bmag = gdatas[1]
-  b_i = gdatas[2]
-  Tperp = gdatas[3]
+  bmag = gdatas[0]
+  jacobtot_inv = gdatas[1]
+  Tperp = gdatas[2]
+  b_i = gdatas[3]
 
   # k-th component of b x grad(B)/B.
   out = _b_cross_grad_div_B_component(bmag, jacobtot_inv, b_i, kwargs["dir"])
@@ -810,21 +811,21 @@ def fetch_diamag_vel(gdatas, **kwargs):
     v_diamag,k = 1 / (q n) epsilon_{ijk} b_i * d(pperp)/dx^j / (J B)
   where epsilon_{ijk} is the Levi-Civitta tensor, q the species charge,
   and gdatas has (in this order):
-    1/(J*B): inv. total Jacobian (jacobtot_inv).
     B: magnetic field magnitude (bmag).
-    b_i: covariant components of the magnetic field unit vector.
-    m0: zeroth moment (density).
+    1/(J*B): inv. total Jacobian (jacobtot_inv).
+    M0: zeroth moment (density).
     p_perp: perpendicular pressure (in Joules/m^3).
+    b_i: covariant components of the magnetic field unit vector.
   The k-th component is selected by the 'dir' optional argument.
   """
   if "dir" not in kwargs:
     raise KeyError("fetch_diamag_vel: select the j-th component with '--extra dir=j' (0-index).")
 
-  jacobtot_inv = gdatas[0]
-  bmag = gdatas[1]
-  b_i = gdatas[2]
-  m0 = gdatas[3]
-  pressperp = gdatas[4]
+  bmag = gdatas[0]
+  jacobtot_inv = gdatas[1]
+  m0 = gdatas[2]
+  pressperp = gdatas[3]
+  b_i = gdatas[4]
 
   # k-th component of b x grad(p) / B.
   out = _b_cross_grad_div_B_component(pressperp, jacobtot_inv, b_i, kwargs["dir"])
@@ -840,6 +841,252 @@ def fetch_diamag_vel(gdatas, **kwargs):
   out.set_values(out.get_values()/charge)
 
   return out
+
+# -------------------------------------
+# --- Magnetic field perturbations ----
+# -------------------------------------
+
+# Component of the metric tensor g_ij holding the (k,l) entry.
+_G_IJ_COMP = {(0,0): 0, (0,1): 1, (0,2): 2, (1,1): 3, (1,2): 4, (2,2): 5}
+
+def fetch_dB_perp_dual(gdatas, **kwargs):
+  """
+  A contravariant component of the magnetic field perturbation dB = curl(Apar*b),
+    dB^i = ( d(Apar*b_k)/dx^j - d(Apar*b_j)/dx^k ) / J
+  with (j,k) = (i+1,i+2) cyclically.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  if "dir" not in kwargs:
+    raise KeyError("fetch_dB_perp_dual: select the k-th component with '--extra dir=k' (0-index).")
+
+  apar, jacobgeo_inv, b_i = gdatas
+  comp = int(kwargs["dir"])
+  if not 0 <= comp < 3:
+    raise KeyError("fetch_dB_perp_dual: component must be >= 0 and < 3.")
+
+  # Dimension holding each of x, y and z, or None where a reduced simulation
+  # does not carry it: a 2x run holds (x,z) and a 1x run only z.
+  cdim = apar.get_num_dims()
+  axis = (0 if cdim > 1 else None, 1 if cdim > 2 else None, cdim-1)
+
+  dgops = GkeyllDGops()
+  lower, upper = apar.get_bounds()
+  cells = apar.get_num_cells()
+
+  prod = _empty_gdata_from_gdata(apar)
+  term = _empty_gdata_from_gdata(apar)
+  out = _empty_gdata_from_gdata(apar)
+  for diff_dir, b_comp, sign in (((comp+1) % 3, (comp+2) % 3,  1.0),
+                                 ((comp+2) % 3, (comp+1) % 3, -1.0)):
+    dim = axis[diff_dir]
+    if dim is None:
+      continue
+    # d(Apar*b_<b_comp>)/dx^<diff_dir>.
+    dgops.multiply(0, prod, 0, apar, b_comp, b_i)
+    dgops.differentiate(dim, 1, (upper[dim] - lower[dim])/cells[dim], 0, term, 0, prod)
+    out.set_values(out.get_values() + sign*term.get_values())
+
+  # Divide by the Jacobian factor of the curvilinear curl.
+  dgops.multiply(0, out, 0, out, 0, jacobgeo_inv)
+  return out
+
+def fetch_dB_perp(gdatas, **kwargs):
+  """
+  A covariant component of the magnetic field perturbation dB = curl(Apar*b),
+    dB_i = g_ij * dB^j.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  if "dir" not in kwargs:
+    raise KeyError("fetch_dB_perp: select the k-th component with '--extra dir=k' (0-index).")
+
+  apar, g_ij = gdatas[0], gdatas[3]
+  comp = int(kwargs["dir"])
+  if not 0 <= comp < 3:
+    raise KeyError("fetch_dB_perp: component must be >= 0 and < 3.")
+
+  dgops = GkeyllDGops()
+
+  term = _empty_gdata_from_gdata(apar)
+  out = _empty_gdata_from_gdata(apar)
+  for j in range(3):
+    dB_up = fetch_dB_perp_dual(gdatas[:3], dir=j)
+    dgops.multiply(0, term, _G_IJ_COMP[(min(comp,j), max(comp,j))], g_ij, 0, dB_up)
+    out.set_values(out.get_values() + term.get_values())
+
+  return out
+
+def fetch_dB_perp_mag(gdatas, **kwargs):
+  """
+  Magnitude of the magnetic field perturbation, each covariant component paired
+  with its contravariant counterpart,
+    |dB| = sqrt(dB_i * dB^i) = sqrt(g_ij * dB^i * dB^j).
+  Warning: this product is of higher order and may introduce DG basis aliasing.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+  """
+  apar = gdatas[0]
+
+  dgops = GkeyllDGops()
+
+  buff = _empty_gdata_from_gdata(apar)
+  mag_sq = _empty_gdata_from_gdata(apar)
+  for comp in range(3):
+    dgops.multiply(0, buff, 0, fetch_dB_perp(gdatas, dir=comp),
+                   0, fetch_dB_perp_dual(gdatas[:3], dir=comp))
+    mag_sq.set_values(mag_sq.get_values() + buff.get_values())
+
+  return _powsqrt_dg(mag_sq, 1.0)
+
+# ------------------------------
+# --- Total magnetic field -----
+# ------------------------------
+
+def fetch_B_equilibrium(gdatas, **kwargs):
+  """
+  A covariant component of the equilibrium magnetic field, B_i = B*b_i.
+  This is what 'B_tot' falls back to on a run that carries no Apar.
+
+  gdatas has (in this order):
+    B: magnetic field magnitude (bmag).
+    b_i: covariant components of the magnetic field unit vector.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  if "dir" not in kwargs:
+    raise KeyError("fetch_B_equilibrium: select the k-th component with '--extra dir=k' (0-index).")
+
+  bmag, b_i = gdatas
+  comp = int(kwargs["dir"])
+  if not 0 <= comp < 3:
+    raise KeyError("fetch_B_equilibrium: component must be >= 0 and < 3.")
+
+  out = _empty_gdata_from_gdata(bmag)
+  GkeyllDGops().multiply(0, out, comp, b_i, 0, bmag)
+  return out
+
+def fetch_B_tot(gdatas, **kwargs):
+  """
+  A covariant component of the total magnetic field, the equilibrium plus the
+  perturbation carried by the parallel vector potential,
+    B_i = B*b_i + dB_i.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    B: magnetic field magnitude (bmag).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  apar, bmag, jacobgeo_inv, b_i, g_ij = gdatas
+
+  out = fetch_B_equilibrium([bmag, b_i], **kwargs)
+  dB = fetch_dB_perp([apar, jacobgeo_inv, b_i, g_ij], **kwargs)
+
+  out.set_values(out.get_values() + dB.get_values())
+  return out
+
+def fetch_B_dual_equilibrium(gdatas, **kwargs):
+  """
+  A contravariant component of the equilibrium magnetic field. b is the unit
+  vector along e_3, so b^i = delta^i_3/sqrt(g_33) and
+    B^i = B*b^i = (B/sqrt(g_33)) * delta^i_3,
+  the first two components vanishing identically. This is what 'B_tot_dual'
+  falls back to on a run that carries no Apar.
+
+  gdatas has (in this order):
+    B: magnetic field magnitude (bmag).
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  if "dir" not in kwargs:
+    raise KeyError("fetch_B_dual_equilibrium: select the k-th component with "
+                   "'--extra dir=k' (0-index).")
+
+  bmag, g_ij = gdatas
+  comp = int(kwargs["dir"])
+  if not 0 <= comp < 3:
+    raise KeyError("fetch_B_dual_equilibrium: component must be >= 0 and < 3.")
+
+  out = _empty_gdata_from_gdata(bmag)
+  if comp != 2:
+    return out
+
+  nb = _get_num_basis_from_gdata(g_ij)
+  g_33_comp = _G_IJ_COMP[(2,2)]
+  g_33 = _empty_gdata_from_gdata(bmag)
+  g_33.set_values(g_ij.get_values()[..., g_33_comp*nb:(g_33_comp + 1)*nb])
+
+  GkeyllDGops().multiply(0, out, 0, bmag, 0, _powsqrt_dg(g_33, -1.0))
+  return out
+
+def fetch_B_tot_dual(gdatas, **kwargs):
+  """
+  A contravariant component of the total magnetic field,
+    B^i = B*b^i + dB^i.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    B: magnetic field magnitude (bmag).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  apar, bmag, jacobgeo_inv, b_i, g_ij = gdatas
+
+  out = fetch_B_dual_equilibrium([bmag, g_ij], **kwargs)
+  dB = fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], **kwargs)
+
+  out.set_values(out.get_values() + dB.get_values())
+  return out
+
+def fetch_B_tot_mag(gdatas, **kwargs):
+  """
+  Magnitude of the total magnetic field, each covariant component paired with
+  its contravariant counterpart,
+    |B| = sqrt(B_i * B^i) = sqrt(g_ij * B^i * B^j).
+  Warning: this product is of higher order and may introduce DG basis aliasing.
+
+  gdatas has (in this order):
+    Apar: parallel magnetic vector potential (T*m).
+    B: magnetic field magnitude (bmag).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+    g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
+  """
+  bmag = gdatas[1]
+
+  dgops = GkeyllDGops()
+
+  buff = _empty_gdata_from_gdata(bmag)
+  mag_sq = _empty_gdata_from_gdata(bmag)
+  for comp in range(3):
+    dgops.multiply(0, buff, 0, fetch_B_tot(gdatas, dir=comp),
+                   0, fetch_B_tot_dual(gdatas, dir=comp))
+    mag_sq.set_values(mag_sq.get_values() + buff.get_values())
+
+  return _powsqrt_dg(mag_sq, 1.0)
 
 def load_distf(gdatas, **kwargs) -> GData:
   """
@@ -873,23 +1120,23 @@ def load_distf(gdatas, **kwargs) -> GData:
 def _make_fetch_q_norm(name: str):
   """
   Return a fetch function for a heat flux normalized by the free-streaming
-  estimate n*T*c_s:
-    q_norm = q / (n*T*c_s).
+  estimate n*T*vt:
+    q_norm = q / (n*T*vt).
   gdatas has (in this order):
-    1. q: the heat flux to normalize (in W/m^2).
-    2. M0: zeroth moment (density).
+    1. M0: zeroth moment (density).
+    2. q: the heat flux to normalize (in W/m^2).
     3. temp: temperature (in Joules).
-    4. c_s: sound speed (in m/s).
+    4. vt: thermal speed (in m/s).
   """
   def fetch(gdatas, **kwargs):
-    q, m0, temp, c_s = gdatas
+    m0, q, temp, vt = gdatas
 
     dgops = GkeyllDGops()
 
-    # n*T*c_s.
+    # n*T*vt.
     denom = _empty_gdata_from_gdata(m0)
     dgops.multiply(0, denom, 0, m0, 0, temp)
-    dgops.multiply(0, denom, 0, denom, 0, c_s)
+    dgops.multiply(0, denom, 0, denom, 0, vt)
 
     denom_inv = _empty_gdata_from_gdata(m0)
     dgops.invert(0, denom_inv, 0, denom)
@@ -909,10 +1156,10 @@ def fetch_rho_over_lambda(gdatas, **kwargs):
   """
   Ratio of the species Larmor radius to its Debye length: rho/lambda_D.
   gdatas has:
-    1. rho: Larmor radius (m).
-    2. lambda_D: Debye length (m).
+    1. lambda_D: Debye length (m).
+    2. rho: Larmor radius (m).
   """
-  rho, lambda_d = gdatas
+  lambda_d, rho = gdatas
 
   dgops = GkeyllDGops()
 

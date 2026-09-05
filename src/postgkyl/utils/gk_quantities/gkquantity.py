@@ -240,7 +240,9 @@ class GkQuantity:
       return GData(self._src_file_name(path, name, species, src, frame))
 
     # src is a GkQuantity: resolve its own source combination and compute it.
-    combo_idx, _ = src.get_avail_source(path, name, species, str(frame))
+    # A geo-only quantity has no frame, and 'None' is not a frame request.
+    combo_idx, _ = src.get_avail_source(path, name, species,
+                                        None if frame is None else str(frame))
     combo = src.source[combo_idx]
     fetch_func = src.fetch_func[combo_idx]
     gdatas = [src.get_src_gdata(s, path, name, species, frame, **extra) for s in combo]

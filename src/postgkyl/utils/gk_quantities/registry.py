@@ -84,6 +84,21 @@ _geo_int_b_i : GkQuantity = GkQuantity(
 )
 gk_quant_registry.register(_geo_int_b_i)
 
+# -----------------------------------
+# --- Tensor geometric quantities ---
+# -----------------------------------
+
+# Covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33 (interior).
+_geo_int_g_ij : GkQuantity = GkQuantity(
+  name = "geo_int_g_ij",
+  source = [["geo_int_g_ij"],],
+  fetch_func = [ff.fetch_s0cAll],
+  label = r"$g_{ij}$",
+  is_tensor = True,
+  is_geo = True
+)
+gk_quant_registry.register(_geo_int_g_ij)
+
 # --------------------------------------------
 # --- Field quantities (species-dependent) ---
 # --------------------------------------------
@@ -340,7 +355,7 @@ gk_quant_registry.register(_vt)
 # Larmor (gyro-)radius.
 _larmor_radius : GkQuantity = GkQuantity(
   name = "larmor_radius",
-  source = [[_temp, _geo_int_bmag],],
+  source = [[_geo_int_bmag, _temp],],
   fetch_func = [ff.fetch_larmor_radius],
   label = r"$\rho_{%s}$ (m)",
   is_time_dep = True,
@@ -351,7 +366,7 @@ gk_quant_registry.register(_larmor_radius)
 # Debye length.
 _debye_length : GkQuantity = GkQuantity(
   name = "debye_length",
-  source = [[_temp, _M0],],
+  source = [[_M0, _temp],],
   fetch_func = [ff.fetch_debye_length],
   label = r"$\lambda_{D,%s}$ (m)",
   is_time_dep = True,
@@ -378,7 +393,7 @@ gk_quant_registry.register(_c_s)
 # ExB drift velocity.
 _ExB_vel : GkQuantity = GkQuantity(
   name = "ExB_vel",
-  source = [[_geo_int_jacobtot_inv,_geo_int_bmag,_geo_int_b_i,_field],],
+  source = [[_geo_int_bmag, _geo_int_jacobtot_inv, _field, _geo_int_b_i],],
   fetch_func = [ff.fetch_ExB_vel],
   label = r"$v_{E,%s}$ (m/s)",
   is_time_dep = True,
@@ -389,7 +404,7 @@ gk_quant_registry.register(_ExB_vel)
 # Grad B drift velocity.
 _gradB_vel : GkQuantity = GkQuantity(
   name = "gradB_vel",
-  source = [[_geo_int_jacobtot_inv,_geo_int_bmag,_geo_int_b_i, _Tperp]],
+  source = [[_geo_int_bmag, _geo_int_jacobtot_inv, _Tperp, _geo_int_b_i]],
   fetch_func= [ff.fetch_gradB_vel],
   label = r"$v_{\nabla B,%s}$ (m/s)",
   is_time_dep = True,
@@ -401,7 +416,7 @@ gk_quant_registry.register(_gradB_vel)
 # Diamagnetic drift velocity.
 _diamag_vel : GkQuantity = GkQuantity(
   name = "diamag_vel",
-  source = [[_geo_int_jacobtot_inv,_geo_int_bmag,_geo_int_b_i, _M0, _pressperp]],
+  source = [[_geo_int_bmag, _geo_int_jacobtot_inv, _M0, _pressperp, _geo_int_b_i]],
   fetch_func= [ff.fetch_diamag_vel],
   label = r"$v_{dia,%s}$ (m/s)",
   is_time_dep = True,
@@ -409,6 +424,86 @@ _diamag_vel : GkQuantity = GkQuantity(
   is_vector = True
 )
 gk_quant_registry.register(_diamag_vel)
+
+# -------------------------------------
+# --- Magnetic field perturbations ----
+# -------------------------------------
+
+# Parallel component of the perturb. magnetic vector potential.
+_apar : GkQuantity = GkQuantity(
+  name = "apar",
+  source = [["apar"],],
+  fetch_func = [ff.fetch_s0c0],
+  label = r"$A_\parallel$ (T m)",
+  is_time_dep = True,
+)
+gk_quant_registry.register(_apar)
+
+# Contravariant components of  of the pertub. magnetic vector potential.
+_dB_perp_dual : GkQuantity = GkQuantity(
+  name = "dB_perp_dual",
+  source = [[_apar, _geo_int_jacobgeo_inv, _geo_int_b_i],],
+  fetch_func = [ff.fetch_dB_perp_dual],
+  label = r"$\delta B_\perp^{%s}$ (T)",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_dB_perp_dual)
+
+# Covariant components of the same, dB_i = g_ij dB^j.
+_dB_perp : GkQuantity = GkQuantity(
+  name = "dB_perp",
+  source = [[_apar, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij],],
+  fetch_func = [ff.fetch_dB_perp],
+  label = r"$\delta B_{\perp %s}$ (T)",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_dB_perp)
+
+# Magnitude of the magnetic field perturbation.
+_dB_perp_mag : GkQuantity = GkQuantity(
+  name = "dB_perp_mag",
+  source = [[_apar, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij],],
+  fetch_func = [ff.fetch_dB_perp_mag],
+  label = r"$|\delta B_\perp|$ (T)",
+  is_time_dep = True,
+)
+gk_quant_registry.register(_dB_perp_mag)
+
+# Covariant components of the total magnetic field.
+_B_tot : GkQuantity = GkQuantity(
+  name = "B_tot",
+  source = [[_apar, _geo_int_bmag, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij],
+            [_geo_int_bmag, _geo_int_b_i],],
+  fetch_func = [ff.fetch_B_tot, ff.fetch_B_equilibrium],
+  label = r"$B_{%s}$ (T)",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_B_tot)
+
+# Contravariant components of the total magnetic field.
+_B_tot_dual : GkQuantity = GkQuantity(
+  name = "B_tot_dual",
+  source = [[_apar, _geo_int_bmag, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij],
+            [_geo_int_bmag, _geo_int_g_ij],],
+  fetch_func = [ff.fetch_B_tot_dual, ff.fetch_B_dual_equilibrium],
+  label = r"$B^{%s}$ (T)",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_B_tot_dual)
+
+# Total magnetic field magnitude.
+_B_tot_mag : GkQuantity = GkQuantity(
+  name = "B_tot_mag",
+  source = [[_apar, _geo_int_bmag, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij]],
+  fetch_func = [ff.fetch_B_tot_mag],
+  label = r"$|B|$ (T)",
+  is_time_dep = True,
+)
+gk_quant_registry.register(_B_tot_mag)
 
 # ------------------------------
 # --- Phase space quantities ---
@@ -432,7 +527,7 @@ gk_quant_registry.register(_distf)
 # Ratio of the Larmor radius to the Debye length.
 _rho_over_lambda : GkQuantity = GkQuantity(
   name = "rho_over_lambda",
-  source = [[_larmor_radius, _debye_length],],
+  source = [[_debye_length, _larmor_radius],],
   fetch_func = [ff.fetch_rho_over_lambda],
   label = r"$(\rho/\lambda_D)_{%s}$",
   is_time_dep = True,
@@ -454,7 +549,7 @@ gk_quant_registry.register(_phi_norm)
 # Normalized parallel heatflux.
 _qpar_norm : GkQuantity = GkQuantity(
   name = "qpar_norm",
-  source = [[_qpar, _M0, _temp, _vt],],
+  source = [[_M0, _qpar, _temp, _vt],],
   fetch_func = [ff.fetch_qpar_norm],
   label = r"$q_{\parallel %s}/(n T v_{th})$",
   is_time_dep = True,
@@ -465,7 +560,7 @@ gk_quant_registry.register(_qpar_norm)
 # Normalized perpendicular heatflux.
 _qperp_norm : GkQuantity = GkQuantity(
   name = "qperp_norm",
-  source = [[_qperp, _M0, _temp, _vt],],
+  source = [[_M0, _qperp, _temp, _vt],],
   fetch_func = [ff.fetch_qperp_norm],
   label = r"$q_{\perp %s}/(n T v_{th})$",
   is_time_dep = True,
@@ -476,7 +571,7 @@ gk_quant_registry.register(_qperp_norm)
 # Normalized parallel fluid-frame heatflux.
 _qpar_fluid_norm : GkQuantity = GkQuantity(
   name = "qpar_fluid_norm",
-  source = [[_qpar_fluid, _M0, _temp, _vt],],
+  source = [[_M0, _qpar_fluid, _temp, _vt],],
   fetch_func = [ff.fetch_qpar_norm],
   label = r"$q_{\parallel %s}^{fluid}/(n T v_{t})$",
   is_time_dep = True,
@@ -487,7 +582,7 @@ gk_quant_registry.register(_qpar_fluid_norm)
 # Normalized perpendicular fluid-frame heatflux.
 _qperp_fluid_norm : GkQuantity = GkQuantity(
   name = "qperp_fluid_norm",
-  source = [[_qperp_fluid, _M0, _temp, _vt],],
+  source = [[_M0, _qperp_fluid, _temp, _vt],],
   fetch_func = [ff.fetch_qperp_norm],
   label = r"$q_{\perp %s}^{fluid}/(n T v_{t})$",
   is_time_dep = True,
