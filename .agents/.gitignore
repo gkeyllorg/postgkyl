@@ -1,0 +1,7 @@
+*.md
+!CLAUDE.md
+
+# Shared, versioned repository skills.
+!skills/
+!skills/**/
+!skills/**/SKILL.md

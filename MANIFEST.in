@@ -1,0 +1,11 @@
+include scripts/build_gkeyll.sh
+include scripts/build_gpython.sh
+include scripts/gkeyll-revision
+include scripts/smoke_wheel.sh
+include src/postgkyl/gpython/csrc/_gpythonmodule.c
+
+# These are generated while building a wheel.  Never let the order of local
+# release commands leak a platform binary or stale provenance into an sdist.
+exclude src/postgkyl/gpython/_build_info.py
+exclude src/postgkyl/gpython/_gpython.so
+exclude src/postgkyl/gpython/libg0core.so

@@ -1,0 +1,43 @@
+{
+  "01_quickstart.py": {
+    "01_quickstart_comp0.png": "pgkyl tests/test_data/generated/2d_c2p_rot45_ms_p1.gkyl interpolate select --comp 0 plot --title x-component --no_show --dpi 100 --saveas '{output}/01_quickstart_comp0.png'",
+    "01_quickstart_lineout.png": "pgkyl tests/test_data/generated/2d_c2p_rot45_ms_p1.gkyl interpolate select --z1 0.5 plot --title 'lineout at y=0.5' --no_show --dpi 100 --saveas '{output}/01_quickstart_lineout.png'"
+  },
+  "03_diagnostics_five_moment.py": {
+    "03_diagnostics_density.png": "pgkyl tests/test_data/generated/shock_tube_1d_p0.gkyl interpolate five_moment_density plot --title 'density (Sod shock tube)' --no_show --dpi 100 --saveas '{output}/03_diagnostics_density.png'",
+    "03_diagnostics_pressure.png": "pgkyl tests/test_data/generated/shock_tube_1d_p0.gkyl interpolate five_moment_pressure --gas_gamma 1.6666666666666667 plot --title 'pressure (Sod shock tube)' --no_show --dpi 100 --saveas '{output}/03_diagnostics_pressure.png'"
+  },
+  "04_gyrokinetics.py": {
+    "04_gyrokinetics_M0.png": "pgkyl gk_load_quantity --quantity M0 --species ion --name rt_gk_tcv_iwl_adapt_source_1x2v_p1 --frame 250 --path tests/test_data/ plot --title 'Ion density from Hamiltonian moments' --xlabel 'Field-aligned computational coordinate' --ylabel '$M_{0i}$ (m$^{-3}$)' --no_show --dpi 100 --saveas '{output}/04_gyrokinetics_M0.png'",
+    "04_gyrokinetics_jacobtot_inv.png": "pgkyl gk_load_quantity --quantity geo_int_jacobtot_inv --species '' --name rt_gk_tcv_iwl_1x2v_p1 --path tests/test_data/ plot --title '$(J B)^{-1}$' --no_show --dpi 100 --saveas '{output}/04_gyrokinetics_jacobtot_inv.png'",
+    "04_gyrokinetics_distf_slice.png": "pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 --species elc --frame 250 --jacobtot_inv_file tests/test_data/rt_gk_tcv_iwl_1x2v_p1-geo_int_jacobtot_inv.gkyl select --z2 0.0 plot --title 'Electron distribution: lowest mu slice' --xlabel 'Field-aligned computational coordinate' --ylabel 'Computational parallel velocity' --clabel 'Distribution [simulation units]' --no_show --dpi 100 --saveas '{output}/04_gyrokinetics_distf_slice.png'"
+  },
+  "05_gk_rz.py": {
+    "05_gk_rz.png": "pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl gk_rz --z_axis 0.0 --phi_tor 0.0 --nz_interp 2 plot --title 'Electron density in the poloidal plane' --xlabel 'R [m]' --ylabel 'Z [m]' --clabel '$n_e$ [m$^{-3}$]' --fixaspect --no_show --dpi 100 --saveas '{output}/05_gk_rz.png'"
+  },
+  "06_growth.py": {
+    "06_growth.png": "pgkyl tests/test_data/generated/exponential_energy.gkyl evaluate 'f log' fit --fit_type linear evaluate 'f1 exp' plot --title 'Fitted energy growth' --xlabel 'Time [normalized]' --ylabel 'Energy [normalized]' --logy --no_show --dpi 100 --saveas '{output}/06_growth.png'"
+  },
+  "mirror_comparison.py": {
+    "mirror_comparison.png": "pgkyl tests/test_data/generated/mirror_comparison_2em4_1d_ms_p1.gkyl tests/test_data/generated/mirror_comparison_2em5_1d_ms_p1.gkyl interpolate plot --figure 0 --legend_labels 2e-4 --legend_labels 2e-5 --legend_subplot 0 --legend_loc best --title 'Comparing $\\alpha$ = 2e-4 to $\\alpha$ = 2e-5' --xlabel 'z [m]' --figsize 12 10 --split_linear_log --split_point 0 --split_log_side right --split_width_ratios 1 1 --split_gap 0 --split_legend_side log --split_log_nonpositive mask --subplot_ylabels 'Density [$\\mathrm{m}^{-3}$],$U_\\parallel$ [m/s],$T_\\parallel$ [keV],$T_\\perp$ [keV]' --no_show --dpi 150 --saveas '{output}/mirror_comparison.png'"
+  },
+  "07_collect_animate.py": {
+    "07_collect.png": "pgkyl 'tests/test_data/generated/travelling_wave_*.gkyl' interpolate collect plot --title 'Travelling wave: space\u2013time diagram' --xlabel Time --ylabel x --clabel 'Density [normalized]' --no_show --dpi 100 --saveas '{output}/07_collect.png'",
+    "07_wave.gif": "pgkyl 'tests/test_data/generated/travelling_wave_*.gkyl' interpolate animate --saveframes '{output}/07_wave_frame' --fps 8 --dpi 90 --figsize 6 4 --no_show --saveas '{output}/07_wave.gif'",
+    "07_surface.gif": "pgkyl 'tests/test_data/generated/wave_surface_*.gkyl' interpolate animate --saveframes '{output}/07_surface_frame' --fps 6 --dpi 90 --figsize 6 4 --no_show --saveas '{output}/07_surface.gif'"
+  },
+  "08_plotly.py": {
+    "08_surface.html": "pgkyl tests/test_data/generated/wave_surface_000.gkyl interpolate plotly --background light --title 'Travelling-wave height surface' --xlabel x --ylabel y --zlabel 'Density [normalized]' --clabel Density --saveas '{output}/08_surface.html'",
+    "08_volume.html": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate plotly --background light --title 'Gaussian density isosurfaces' --xlabel x --ylabel y --zlabel z --clabel Density --surface_count 8 --opacity 0.15 --cmin 0.1 --cmax 0.9 --saveas '{output}/08_volume.html'"
+  },
+  "09_pyvista.py": {
+    "09_isosurfaces.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --contour_levels 5 --no_show --no_spin --title 'Gaussian density isosurfaces' --xlabel x --ylabel y --zlabel z --clabel Density --theme document --saveas '{output}/09_isosurfaces.png' --camera_elevation 10 --camera_azimuth 20 --hide_axes",
+    "09_volume.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --volume --no_show --no_spin --title 'Gaussian density volume' --xlabel x --ylabel y --zlabel z --clabel Density --theme document --saveas '{output}/09_volume.png' --camera_elevation 10 --camera_azimuth 20 --hide_axes --opacity linear"
+  },
+  "10_manual_arrays.py": {
+    "10_manual.png": "pgkyl tests/test_data/generated/wave_surface_000.gkyl interpolate evaluate 'f 1 - 0.6 /' plot --title 'Normalized density perturbation' --xlabel x --ylabel y --clabel '(n - 1) / 0.6' --no_show --dpi 100 --saveas '{output}/10_manual.png'"
+  },
+  "02_arithmetic_and_numpy.py": {
+    "02_arithmetic.png": "pgkyl tests/test_data/generated/2d_c2p_stretch_ms_p1.gkyl interpolate evaluate 'f sq 2 * sqrt' plot --title 'Componentwise magnitude' --no_show --dpi 100 --saveas '{output}/02_arithmetic.png'"
+  }
+}
