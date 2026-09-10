@@ -333,17 +333,28 @@ class TestCompileMovie:
     with pytest.raises(RuntimeError, match="ffmpeg"):
       anim_mod._compile_movie(paths, str(tmp_path / "out.mp4"), duration=100.0)
 
+  @pytest.mark.parametrize("fail_encoding", [False, True])
   def test_video_writer_protocol_without_external_process(
-      self, monkeypatch, tmp_path):
+      self, monkeypatch, tmp_path, fail_encoding):
     from contextlib import contextmanager
     from PIL import Image
     import matplotlib.animation
 
     events = []
+    images = []
 
     class FakeImage:
-      width = 320
-      height = 200
+      size = (320, 200)
+
+      def __init__(self):
+        self.closed = False
+        images.append(self)
+
+      def __enter__(self):
+        return self
+
+      def __exit__(self, *_exc):
+        self.closed = True
 
     class FakeAxes:
 
@@ -355,6 +366,7 @@ class TestCompileMovie:
 
       def imshow(self, image):
         assert isinstance(image, FakeImage)
+        assert not image.closed
         events.append(("imshow", ))
 
     class FakeFigure:
@@ -376,6 +388,8 @@ class TestCompileMovie:
 
       def grab_frame(self):
         events.append(("grab", ))
+        if fail_encoding:
+          raise RuntimeError("encoding failed")
 
     monkeypatch.setattr(anim_mod, "require_ffmpeg", lambda _caller: "/ffmpeg")
     monkeypatch.setattr(Image, "open", lambda _path: FakeImage())
@@ -385,10 +399,17 @@ class TestCompileMovie:
         ("close", figure)))
 
     output = str(tmp_path / "movie.mp4")
-    anim_mod._compile_movie(["one.png", "two.png"], output, duration=250.0)
+    if fail_encoding:
+      with pytest.raises(RuntimeError, match="encoding failed"):
+        anim_mod._compile_movie(["one.png", "two.png"], output, duration=250.0)
+    else:
+      anim_mod._compile_movie(["one.png", "two.png"], output, duration=250.0)
     assert ("fps", 4.0) in events
     assert ("saving", output, 100) in events
-    assert events.count(("grab", )) == 2
+    assert events.count(("grab", )) == (1 if fail_encoding else 2)
+    assert len(images) == (2 if fail_encoding else 3)
+    assert all(image.closed for image in images)
+    assert events[-1][0] == "close"
 
   @needs_ffmpeg
   @external_tool

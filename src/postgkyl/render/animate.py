@@ -203,9 +203,10 @@ def _compile_movie(frame_files: list[str],
     mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
     movie_fps = fps if fps else 1.0e3 / duration
     writer = FFMpegWriter(fps=movie_fps)
-    first = Image.open(frame_files[0])
+    with Image.open(frame_files[0]) as first:
+      width, height = first.size
     dpi = 100
-    fig = plt.figure(figsize=(first.width / dpi, first.height / dpi), dpi=dpi)
+    fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.axis("off")
     try:
@@ -213,7 +214,8 @@ def _compile_movie(frame_files: list[str],
         for frame_file in frame_files:
           ax.clear()
           ax.axis("off")
-          ax.imshow(Image.open(frame_file))
+          with Image.open(frame_file) as frame:
+            ax.imshow(frame)
           writer.grab_frame()
     finally:
       plt.close(fig)
