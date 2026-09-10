@@ -1,0 +1,9 @@
+Refactor the agentic workflow in this repository. I have AGENTS.md, with CLAUDE.md as a symlink to AGENTS.md. AGENTS.md should have purpose and reason for this repository, which is consise. Break up the current AGENTS.md into several skills which are consise and contained. The skills should be in .agents and create .claude and .codex folders which are symlinks to .agents. Keep the `entire` hooks so that it does not break entire integration
+
+---
+
+Permissions updated to full access
+
+---
+
+Permissions updated to full access
