@@ -1,0 +1,118 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M262P5WD0PNFXEACD976METC",
+  "session_id": "01a08bf6-22c2-72c3-9ca9-8c931e92842a",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-10T16:33:50.79306701Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 6,
+  "save_step_count": 3,
+  "files_touched": [
+    ".github/workflows/docs.yml",
+    "README.md",
+    "docs/_ext/postgkyl_docs.py",
+    "docs/conf.py",
+    "docs/integration-plan.md",
+    "docs/source/animation.rst",
+    "docs/source/cli-tutorial.rst",
+    "docs/source/concepts.rst",
+    "docs/source/contributing.rst",
+    "docs/source/index.rst",
+    "docs/source/interactive.rst",
+    "docs/source/main.rst",
+    "docs/source/manual-arrays.rst",
+    "docs/source/quickstart.rst",
+    "docs/source/tutorials.rst",
+    "examples/README.md",
+    "examples/cli_tutorial.md",
+    "examples/compare_interfaces.py",
+    "examples/figure_commands.json",
+    "examples/scripts/01_quickstart.py",
+    "examples/scripts/02_arithmetic_and_numpy.py",
+    "examples/scripts/03_diagnostics_five_moment.py",
+    "examples/scripts/04_gyrokinetics.py",
+    "examples/scripts/05_gk_rz.py",
+    "examples/scripts/06_growth.py",
+    "examples/scripts/07_collect_animate.py",
+    "examples/scripts/08_plotly.py",
+    "examples/scripts/09_pyvista.py",
+    "examples/scripts/10_manual_arrays.py",
+    "examples/scripts/mirror_comparison.py",
+    "pyproject.toml",
+    "scripts/build_docs.py",
+    "src/postgkyl/diagnostics/mom/multispecies.py",
+    "src/postgkyl/diagnostics/pkpm/__init__.py",
+    "tests/generate_test_data.py",
+    "tests/test_docs_build.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "cef3149e62fc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 388538,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 12628480,
+    "output_tokens": 68664,
+    "api_call_count": 107
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-10T16:33:50.628017996Z",
+    "agent_lines": 927,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 336,
+    "human_removed": 200,
+    "total_committed": 1232,
+    "total_lines_changed": 1463,
+    "agent_percentage": 63.36295283663704,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 180,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/.gitignore": 2,
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 180,
+      "user_lines_removed": 0,
+      "agent_lines_added": 198,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/.gitignore": 2,
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 217,
+      "user_lines_removed": 193,
+      "agent_lines_added": 972,
+      "agent_lines_removed": 47,
+      "user_added_per_file": {
+        ".claude/.gitignore": 2,
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88,
+        "README.md": 7,
+        "docs/integration-plan.md": 30
+      },
+      "user_removed_per_file": {
+        "README.md": 1,
+        "docs/integration-plan.md": 192
+      }
+    }
+  ]
+}

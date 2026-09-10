@@ -1,0 +1,61 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M262P5WD0PNFXEACD976METC",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 6,
+  "files_touched": [
+    ".github/workflows/docs.yml",
+    "README.md",
+    "docs/_ext/postgkyl_docs.py",
+    "docs/conf.py",
+    "docs/integration-plan.md",
+    "docs/source/animation.rst",
+    "docs/source/cli-tutorial.rst",
+    "docs/source/concepts.rst",
+    "docs/source/contributing.rst",
+    "docs/source/index.rst",
+    "docs/source/interactive.rst",
+    "docs/source/main.rst",
+    "docs/source/manual-arrays.rst",
+    "docs/source/quickstart.rst",
+    "docs/source/tutorials.rst",
+    "examples/README.md",
+    "examples/cli_tutorial.md",
+    "examples/compare_interfaces.py",
+    "examples/figure_commands.json",
+    "examples/scripts/01_quickstart.py",
+    "examples/scripts/02_arithmetic_and_numpy.py",
+    "examples/scripts/03_diagnostics_five_moment.py",
+    "examples/scripts/04_gyrokinetics.py",
+    "examples/scripts/05_gk_rz.py",
+    "examples/scripts/06_growth.py",
+    "examples/scripts/07_collect_animate.py",
+    "examples/scripts/08_plotly.py",
+    "examples/scripts/09_pyvista.py",
+    "examples/scripts/10_manual_arrays.py",
+    "examples/scripts/mirror_comparison.py",
+    "pyproject.toml",
+    "scripts/build_docs.py",
+    "src/postgkyl/diagnostics/mom/multispecies.py",
+    "src/postgkyl/diagnostics/pkpm/__init__.py",
+    "tests/generate_test_data.py",
+    "tests/test_docs_build.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 388538,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 12628480,
+    "output_tokens": 68664,
+    "api_call_count": 107
+  }
+}

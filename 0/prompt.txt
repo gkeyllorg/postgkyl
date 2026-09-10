@@ -1,0 +1,45 @@
+We have a documentation website. https://github.com/gkeyllorg/gkyl-doc also found
+  at /home/maxwell-rosen/Documents/gkyl-doc. Add a section to the website for
+  postgkeyll. This⠂section should include documentation for this codebase. The     ⠈
+  documentation should be generated from the postgkeyll⠈repo directly⡀so that there
+  is one source of truth. The documentation to postgkyl repository, but it's hosted
+  on that website. Use good⢀examples from the data inside⠐postgkeyll.⢀If you need
+ ⢀to generate more interesting data for figures,⠄add it to the testing data folder,
+  preffering to use the data generator.⡀Construct a plan for integrating the
+⠠ documentation with postgkeyll. The examples on the⢀website should be clear and
+  realistic use cases.
+
+---
+
+We have a documentation website. https://github.com/gkeyllorg/gkyl-doc also found
+  at /home/maxwell-rosen/Documents/gkyl-doc. Add a section to the website for
+  postgkeyll. This⠂section should include documentation for this codebase. The     ⠈
+  documentation should be generated from the postgkeyll⠈repo directly⡀so that there
+  is one source of truth. The documentation to postgkyl repository, but it's hosted
+  on that website. Use good⢀examples from the data inside⠐postgkeyll.⢀If you need
+ ⢀to generate more interesting data for figures,⠄add it to the testing data folder,
+  preffering to use the data generator.⡀Construct a plan for integrating the
+⠠ documentation with postgkeyll. The examples on the⢀website should be clear and
+  realistic use cases.
+
+---
+
+Implement
+Docs should be generated from postgkeyll on main, not a fixed revision.
+Upgrade the python version of the docs to python 3.12
+Employ CI and github actions to ensure testing of the documentation
+
+---
+
+Implement
+Docs should be generated from postgkeyll on main, not a fixed revision.
+Upgrade the python version of the docs to python 3.12
+Employ CI and github actions to ensure testing of the documentation
+
+---
+
+Add some animations to the generated data and the examples using the animate function to show how to load multiple data files and make figures using collect and animate. Show some examples using plotly for 3D and 2D surface plotting, as well as pyvista. Provide some examples of how to get the grid and values of the data directly out of the loaded objects so that users can manipulate the data manually if they would like.
+
+All the examples on the website should have both a script version to generate the figures as well as a CLI command that generates the same figure. Show that both version generate the same figures
+
+Break the python API section of the docs into different pages for each of the different commands, similar to how the command reference is laid out.
