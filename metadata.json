@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M26KFXHDP2A5BSEZ77GSFW92",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics-releases",
+  "checkpoints_count": 4,
+  "files_touched": [
+    ".agents/skills/postgkyl-architecture/SKILL.md",
+    ".github/workflows/docs.yml",
+    ".github/workflows/test.yml",
+    ".github/workflows/version.yml",
+    ".gitignore",
+    "README.md",
+    "docs/source/index.rst",
+    "docs/source/versioning.md",
+    "pyproject.toml",
+    "scripts/tag_release.py",
+    "setup.py",
+    "src/postgkyl/__init__.py",
+    "src/postgkyl/_release.py",
+    "tests/test_docs_build.py",
+    "tests/test_packaging.py",
+    "tests/test_postgkyl.py",
+    "tests/test_release_version.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 66463,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1917568,
+    "output_tokens": 23504,
+    "api_call_count": 37
+  }
+}

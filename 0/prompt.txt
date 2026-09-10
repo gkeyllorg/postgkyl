@@ -1,0 +1,21 @@
+I'd like to have postgkyl's version number update automatically. So the version numbers go major_release.PR_number.commit. When the PR gets merged, the PR_number should go up. This starts with the current directory, which is pgkyl 2.0.0. Have this automatically maintained
+
+---
+
+I'd like to have postgkyl's version number update automatically. So the version numbers go major_release.PR_number.commit. When the PR gets merged, the PR_number should go up. This starts with the current directory, which is pgkyl 2.0.0. Have this automatically maintained
+
+---
+
+I'd like to have postgkyl's version number update automatically. So the version numbers go major_release.PR_number.commit. When the PR gets merged, the PR_number should go up. This starts with the current directory, which is pgkyl 2.0.0. Have this automatically maintained
+
+---
+
+I'd like to have postgkyl's version number update automatically. So the version numbers go major_release.PR_number.commit. When the PR gets merged, the PR_number should go up. This starts with the current directory, which is pgkyl 2.0.0. Have this automatically maintained
+
+---
+
+Actually, I'd like to do major_release.minor_release.PR_number.commit. Putting minor releases in there helps with small version releases
+
+---
+
+Actually, I'd like to do major_release.minor_release.PR_number.commit. Putting minor releases in there helps with small version releases
