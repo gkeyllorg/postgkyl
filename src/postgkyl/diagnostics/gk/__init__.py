@@ -7,9 +7,8 @@ registry (``registry.py``), and the "physics-ready data by name" entry point
 instruction file's decision record): splitting resolution from physics would
 give gyrokinetics two homes for one piece of equation knowledge. Only the
 equation-blind stem/frame discovery is shared, via
-``postgkyl.diagnostics.discovery``. Geometry-only transformations live below
-this physics layer in ``postgkyl.operations.gyrokinetics``; the R-Z and
-flux-surface names exported here are compatibility aliases.
+``postgkyl.diagnostics.discovery``. Geometry discovery lives here and composes
+explicit coordinate transformations from ``operations.map``.
 """
 
 from __future__ import annotations
@@ -37,12 +36,11 @@ from .registry import gk_quant_registry
 # Layer 13: program-scale diagnostics ported from src_bak's apps/gk_*.py.
 from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_balance
 from .particle_balance import ParticleBalanceTraces, particle_balance, particle_balance_error
-from .nodes import GKYL_GEOMETRY_ID, nodes, is_geo_mapc2p, multib_tag, nodes_to_RZ
+from .nodes import nodes, multib_tag, nodes_to_RZ
 
-# Compatibility exports: canonical transformation APIs now live under
-# postgkyl.operations.gyrokinetics. These imports are exact aliases.
-from .rz import Geometry, RzProjection, gk_rz, map_to_rz, resolve_geometry, resolve_rz_projection
-from .fluxsurf import FluxSurfaceGrid, extract_flux_surface, resolve_flux_surface_grid
+from .geometry import GKYL_GEOMETRY_ID, is_geo_mapc2p, resolve_geometry
+from .rz import rz
+from .fluxsurf import fluxsurf
 
 from typing import Annotated
 
@@ -68,6 +66,9 @@ particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
                                                             KeyValue()]
 for _function in (energy_balance, particle_balance, nodes):
   command(_REPORT_SPEC)(_function)
+
+for _function in (rz, fluxsurf):
+  command(CommandSpec(Section.DIAGNOSTICS, Execution.MAP_REPLACE))(_function)
 
 __all__ = [
     "load_distf",
@@ -100,13 +101,7 @@ __all__ = [
     "is_geo_mapc2p",
     "multib_tag",
     "nodes_to_RZ",
-    "Geometry",
-    "RzProjection",
-    "gk_rz",
-    "map_to_rz",
     "resolve_geometry",
-    "resolve_rz_projection",
-    "FluxSurfaceGrid",
-    "extract_flux_surface",
-    "resolve_flux_surface_grid",
+    "rz",
+    "fluxsurf",
 ]

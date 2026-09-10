@@ -219,7 +219,8 @@ class TestOneFigurePerField:
 class TestPerBlockGeometry:
 
   def test_geometry_prefix_is_per_block(self):
-    from postgkyl.diagnostics.gk import rz
+    from importlib import import_module
+    rz = import_module("postgkyl.diagnostics.gk.rz")
 
     assert rz.geometry_prefix("d/sim_b2-elc_M0_3.gkyl") == "d/sim_b2"
     assert rz.geometry_prefix("d/sim-elc_M0_3.gkyl") == "d/sim"
@@ -237,14 +238,19 @@ class TestPerBlockGeometry:
     # The bug this replaces: geometry was resolved once, from the first
     # dataset, and that one projection was applied to every block -- drawing
     # every block at block 0's position.
-    from postgkyl.diagnostics.gk import rz
+    from importlib import import_module
+    rz = import_module("postgkyl.diagnostics.gk.rz")
 
+    from types import SimpleNamespace
+    monkeypatch.setattr(rz, "validate_mapping_grid", lambda *_args: None)
     seen = []
     monkeypatch.setattr(
         rz, "resolve_geometry",
         lambda file_name, **kw: seen.append(file_name) or file_name)
-    monkeypatch.setattr(rz, "resolve_rz_projection", lambda first, geo, **kw:
-                        ("projection", geo))
+    monkeypatch.setattr(
+        rz, "resolve_rz_projection",
+        lambda first, geo, **kw: SimpleNamespace(computational_grid=(),
+                                                 geometry=geo))
 
     blocks = _blocks(0) + _blocks(1)  # 3 blocks x 2 frames
     projections = rz.rz_projections(blocks)

@@ -102,10 +102,7 @@ def discover_public_surface(facade=postgkyl) -> tuple[DiscoveredCallable, ...]:
     namespace = relative.rsplit(".", 1)[-1]
     for name, value in _functions(module):
       if not value.__module__.startswith("postgkyl.diagnostics"):
-        # Compatibility re-exports owned by a lower layer keep that owner's
-        # canonical command (for example operations.gyrokinetics.gk_rz ->
-        # ``gk_rz``); the diagnostic alias is classified but does not invent
-        # a second command or move it into the wrong help section.
+        # Lower-layer re-exports retain their canonical command vocabulary.
         _classify(value, f"{module.__name__}.{name}")
         continue
       consider(value, f"{module.__name__}.{name}", f"{namespace}_{name}")

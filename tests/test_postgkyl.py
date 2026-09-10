@@ -449,11 +449,8 @@ _ALLOWED = {
     # transform_frame/laguerre) moved up
     # into diagnostics, folded with the
     # models/ array math they delegated to;
-    # flat modules are equation-blind core
-    # verbs; domain subpackages (currently
-    # gyrokinetics) own transformations that
-    # need domain geometry without deriving
-    # a physical conclusion
+    # flat modules are equation-blind core verbs; model-specific auxiliary
+    # discovery and interpretation belong to diagnostics.
     "diagnostics": {
         "gdatastate", "operations", "numerics", "gdata", "render", "io",
         "cli_spec"
@@ -685,3 +682,9 @@ def test_foreign_floor_offenders_flags_ctypes_and_gpython_outside_gpython(
   offenders = _foreign_floor_offenders(pkg_root)
   assert any(o.endswith(": ctypes") for o in offenders)
   assert any(o.endswith(": _gpython") for o in offenders)
+
+
+def test_operations_has_no_domain_subpackages():
+  """Core transformations stay flat; model-family compositions live above."""
+  operations = Path(SRC) / "postgkyl" / "operations"
+  assert list(operations.glob("*/__init__.py")) == []
