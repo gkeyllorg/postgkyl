@@ -20,7 +20,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`02_arithmetic_and_numpy.py`](scripts/02_arithmetic_and_numpy.py) | Weak DG algebra on raw modal data (`*`, `/`, `+`, `.integrate()`) vs. plain NumPy math after `.interpolate()`, and the guardrail between them |
 | [`03_diagnostics_five_moment.py`](scripts/03_diagnostics_five_moment.py) | The `diagnostics` layer: equation-specific physics (`postgkyl.diagnostics.mom.five_moment`) on top of a `GData`, on a generated shock-tube initial state |
 | [`04_gyrokinetics.py`](scripts/04_gyrokinetics.py) | The gyrokinetic diagnostics: `pg.gk.load_quantity` (named moments/geometry, resolved by naming convention) and `pg.gk.load_distf` (full distribution function), on the `rt_gk_tcv_iwl*` fixtures |
-| [`05_gk_rz.py`](scripts/05_gk_rz.py) | The gyrokinetic R-Z operation: one-line fluent and functional calls plus projection reuse over multiple toroidal angles |
+| [`05_gk_rz.py`](scripts/05_gk_rz.py) | Gkeyll geometry discovery with `pg.gk.rz`, plus explicit projection reuse with `map_to_rz` |
 | [`06_growth.py`](scripts/06_growth.py) | Recover a known energy growth rate and inspect log-space residuals |
 | [`07_collect_animate.py`](scripts/07_collect_animate.py) | Load many frames, collect a space–time diagram, and animate 1D/2D travelling waves |
 | [`08_plotly.py`](scripts/08_plotly.py) | Interactive 2D height surfaces and 3D volume isosurfaces |
@@ -49,7 +49,7 @@ See [`cli_tutorial.md`](cli_tutorial.md) -- inspecting a file, the
 `interpolate`/`select`/`plot` chain, discontinuity-preserving plots with
 `local_poly`, DynVector `info`/`fit`, the gyrokinetic loaders
 (`gk_load_quantity`, `gk_load_distf`), the `gk_rz`
-transformation, `save`, and the generated command inventory.
+diagnostic, `save`, and the generated command inventory.
 
 ## Running the tests
 

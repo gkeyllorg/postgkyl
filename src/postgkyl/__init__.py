@@ -17,7 +17,7 @@ owns it and simply gathered here:
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
     interpolate, select              <- operations/ (functional verb spellings)
-    gk_rz                           <- operations/gyrokinetics/ (domain operation)
+    map_to_rz                       <- operations/map.py
     represent, apply                 <- operations/ (value_form verbs)
     available_evaluate_operators     <- operations/ (``evaluate``'s RPN token vocabulary)
     save                             <- io/        (file output)
@@ -75,7 +75,10 @@ from postgkyl.operations import (
     select,
     val2coord,
 )
-from postgkyl.operations.gyrokinetics import gk_fluxsurf, gk_rz
+from postgkyl.operations import (Geometry, RzProjection, FluxSurfaceGrid,
+                                 map_to_rz, resolve_rz_projection,
+                                 extract_flux_surface,
+                                 resolve_flux_surface_grid)
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
 from postgkyl.cli_spec import hidden
@@ -93,7 +96,9 @@ __all__ = [
     "integrate", "interpolate", "local_poly", "select", "average",
     "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
     "extract_input", "fit", "growth", "differentiate", "map", "represent",
-    "apply", "gk_rz", "gk_fluxsurf", "save", "collect", "evaluate", "relchange",
+    "apply", "Geometry", "RzProjection", "FluxSurfaceGrid", "map_to_rz",
+    "resolve_rz_projection", "extract_flux_surface",
+    "resolve_flux_surface_grid", "save", "collect", "evaluate", "relchange",
     "animate", "plotly_animate", "sort", "available_evaluate_operators",
     "plotly", "pyvista", "gk", "__version__", "version_report"
 ]

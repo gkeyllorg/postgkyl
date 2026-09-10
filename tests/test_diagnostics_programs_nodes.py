@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 
 from postgkyl.diagnostics.gk import utils as gk_utils
+from postgkyl.diagnostics.gk import geometry
 
 nodes = importlib.import_module("postgkyl.diagnostics.gk.nodes")
 
@@ -39,19 +40,19 @@ class TestGeometryEnum:
 
   def test_mapc2p_index_matches_gkeyll_header(self):
     # gkeyll/core/zero/gkyl_eqn_type.h: GKYL_GEOMETRY_MAPC2P = 3.
-    assert nodes.GKYL_GEOMETRY_ID.index("GKYL_GEOMETRY_MAPC2P") == 3
+    assert geometry.GKYL_GEOMETRY_ID.index("GKYL_GEOMETRY_MAPC2P") == 3
 
 
 class TestIsGeoMapc2p:
 
   def test_defaults_true_when_absent(self):
-    assert nodes.is_geo_mapc2p({}) is True
+    assert geometry.is_geo_mapc2p({}) is True
 
   def test_true_for_mapc2p(self):
-    assert nodes.is_geo_mapc2p({"geometry_type": 3}) is True
+    assert geometry.is_geo_mapc2p({"geometry_type": 3}) is True
 
   def test_false_for_tokamak(self):
-    assert nodes.is_geo_mapc2p({"geometry_type": 1}) is False
+    assert geometry.is_geo_mapc2p({"geometry_type": 1}) is False
 
 
 class TestNodesToRZ:

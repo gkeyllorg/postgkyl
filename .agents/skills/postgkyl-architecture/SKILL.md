@@ -29,11 +29,12 @@ remain GData without importing gdata. Reuse `gdatastate/guards.py` and
 Readers return `(grid, values)` and fill plain metadata; they never import state.
 
 Diagnostics are free functions under model families `gk`, `vm`, `pkpm`, or `mom`,
-not GData methods. Model-specific loading belongs beside its physics. Resolve
+not GData methods. Model-specific loading and auxiliary-file discovery belong
+beside their compositions. Coordinate operations receive explicit geometry or projections;
+operations has no equation-family subpackages. Resolve
 output stems/frames through `diagnostics/discovery.py`; keep quantity vocabulary
 in the equation module's `VARIABLES` table. Use public functions from lower
 layers and return a state via `_result`, or a Figure for program diagnostics.
-for the current major version.
 
 Run the import, foreign-floor, facade, and canonical-callable contracts in
 `tests/test_postgkyl.py` after structural changes.

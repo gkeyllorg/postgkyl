@@ -10,14 +10,11 @@ on the container backend (Gkeyll kernels for modal data, NumPy for field data);
 ``integrate`` performs full or partial integration inside Gkeyll on modal
 data (full is terminal; partial stays native and lower-dimensional);
 ``average`` reduces modal data over a dimension subset via
-``gkyl_array_average``, producing a new lower-dimensional modal dataset;
-``map`` delegates to the grid-mapping engine in ``dg.map``. Flat modules are
-domain-independent core verbs; domain subpackages such as ``gyrokinetics``
-hold transformations that require domain geometry without interpreting field
-components as new physical conclusions. Equation-specific physics (the former
-``moments``/``agyro``/``current``/``energetics``/``rotate``/
-``transform_frame``/``laguerre`` verbs, folded with the array math they
-delegated to) lives one layer up, in ``diagnostics``.
+``gkyl_array_average``, producing a new lower-dimensional modal dataset.
+
+Coordinate transformations live in ``map`` and receive explicit mappings or
+geometry. Operations are equation-blind; model-specific auxiliary discovery
+and physical compositions belong in ``diagnostics``.
 
 The terminal renderers (``plot``, ``animate``, ``plotly``, ``plotly_animate``,
 and ``pyvista``) are exceptions:
@@ -25,7 +22,7 @@ this namespace re-exports their exact canonical callables from
 :mod:`postgkyl.render` without wrapping them.
 """
 
-from . import arithmetic, gyrokinetics
+from . import arithmetic
 from .interpolate import interpolate
 from .local_poly import local_poly
 from .select import select
@@ -50,7 +47,9 @@ from .fit import fit
 from .growth import growth
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
-from .map import map
+from .map import (map, map_to_rz, resolve_rz_projection, extract_flux_surface,
+                  resolve_flux_surface_grid)
+from .geometry import Geometry, RzProjection, FluxSurfaceGrid
 
 # Command metadata is attached at the layer that owns each operation.  This
 # block is deliberately declarative: discovery still walks the public API and
@@ -171,11 +170,17 @@ hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
+for _function in (map_to_rz, resolve_rz_projection, extract_flux_surface,
+                  resolve_flux_surface_grid):
+  hidden("requires explicit Python geometry or projection objects")(_function)
+
 __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
     "average", "eval_at_coord_proj", "plot", "animate", "plotly",
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
     "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "growth", "gyrokinetics"
+    "available_evaluate_operators", "map", "growth", "map_to_rz",
+    "resolve_rz_projection", "extract_flux_surface",
+    "resolve_flux_surface_grid", "Geometry", "RzProjection", "FluxSurfaceGrid"
 ]
