@@ -70,6 +70,7 @@ from postgkyl.operations import (
     magsq,
     map,
     mask,
+    print,
     represent,
     select,
     val2coord,
@@ -88,11 +89,11 @@ hidden("collection helper is a Python API, not a pipeline command")(
     group_blocks)
 
 __all__ = [
-    "GData", "load", "GDataGroup", "plot", "group_blocks", "info", "integrate",
-    "interpolate", "local_poly", "select", "average", "eval_at_coord_proj",
-    "fft", "magsq", "mask", "grid", "val2coord", "extract_input", "fit",
-    "growth", "differentiate", "map", "represent", "apply", "gk_rz",
-    "gk_fluxsurf", "save", "collect", "evaluate", "relchange", "animate",
-    "plotly_animate", "sort", "available_evaluate_operators", "plotly",
-    "pyvista", "gk", "__version__", "version_report"
+    "GData", "load", "GDataGroup", "plot", "group_blocks", "info", "print",
+    "integrate", "interpolate", "local_poly", "select", "average",
+    "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
+    "extract_input", "fit", "growth", "differentiate", "map", "represent",
+    "apply", "gk_rz", "gk_fluxsurf", "save", "collect", "evaluate", "relchange",
+    "animate", "plotly_animate", "sort", "available_evaluate_operators",
+    "plotly", "pyvista", "gk", "__version__", "version_report"
 ]

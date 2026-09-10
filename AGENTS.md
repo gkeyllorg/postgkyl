@@ -163,6 +163,7 @@ src/postgkyl/
 ├─ operations/         data transformations · the single seam          [VERBS]
 │   ├─ interpolate.py    interpolate(d: GDataState) -> GDataState      (flat core
 │   ├─ select.py                                                       verbs are
+│   ├─ print.py         terminal inspection of stored values or grid coordinates
 │   ├─ average.py        terminal-adjacent: weighted average over a dim subset,
 │   │                    stays modal/gkyl-native (composes with further verbs)
 │   ├─ eval_at_coord_proj.py  terminal-adjacent: eval at coords, project to the

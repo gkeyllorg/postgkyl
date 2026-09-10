@@ -22,6 +22,19 @@ value range, and the DG basis/order it was written with.
 pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl info
 ```
 
+`print` displays stored values with 16-digit precision and singleton
+dimensions squeezed. For DG files, these are modal coefficients; run
+`interpolate` first to print field values. Use `--grid` (or `-g`) to print
+each grid axis, or `--use TAG` to print only datasets with that tag.
+Printing leaves the datasets available for the rest of the chain.
+
+```bash
+pgkyl tests/test_data/generated/energy_dynvec.gkyl print
+pgkyl tests/test_data/generated/distf_p2_0.gkyl interpolate print
+pgkyl tests/test_data/generated/distf_p2_0.gkyl print --grid
+pgkyl tests/test_data/generated/energy_dynvec.gkyl --tag energy print --use energy
+```
+
 ## 2. The chain: interpolate -> select -> plot
 
 Raw `.gkyl` files hold DG *coefficients*; `interpolate` bridges them onto a

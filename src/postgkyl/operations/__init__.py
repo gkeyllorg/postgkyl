@@ -30,6 +30,7 @@ from .interpolate import interpolate
 from .local_poly import local_poly
 from .select import select
 from .info import info
+from .print import print
 from .integrate import integrate
 from .average import average
 from .eval_at_coord_proj import eval_at_coord_proj
@@ -156,6 +157,10 @@ command(
                 Execution.TERMINAL_ALL,
                 result=ResultPolicy.SILENT))(info)
 command(
+    CommandSpec(Section.UTILITY,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))(print)
+command(
     CommandSpec(Section.VERBS,
                 Execution.MAP_OR_TERMINAL_EACH,
                 result=ResultPolicy.VALUE))(integrate)
@@ -167,10 +172,10 @@ hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
 __all__ = [
-    "interpolate", "local_poly", "select", "info", "integrate", "average",
-    "eval_at_coord_proj", "plot", "animate", "plotly", "plotly_animate",
-    "pyvista", "arithmetic", "represent", "apply", "fft", "magsq", "relchange",
-    "mask", "collect", "sort", "grid", "val2coord", "extract_input", "fit",
-    "differentiate", "evaluate", "available_evaluate_operators", "map",
-    "growth", "gyrokinetics"
+    "interpolate", "local_poly", "select", "info", "print", "integrate",
+    "average", "eval_at_coord_proj", "plot", "animate", "plotly",
+    "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
+    "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
+    "extract_input", "fit", "differentiate", "evaluate",
+    "available_evaluate_operators", "map", "growth", "gyrokinetics"
 ]

@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from click.testing import CliRunner
+import numpy as np
+import pytest
+
+import postgkyl as pg
 
 from postgkyl.cli.app import (
     COMMAND_ALIASES,
@@ -55,7 +59,6 @@ def test_removed_manual_commands_and_legacy_spellings_are_rejected():
       "euler",
       "tenmoment",
       "status",
-      "print",
       "dg_local_poly",
       "gk-load-quantity",
       "extractinput",
@@ -68,6 +71,40 @@ def test_aliases_only_add_spellings():
   assert dict(COMMAND_ALIASES) == {"pl": "plot", "ev": "evaluate"}
   assert cli.get_command(None, "pl") is cli.get_command(None, "plot")
   assert cli.get_command(None, "ev") is cli.get_command(None, "evaluate")
+
+
+def test_print_values_preserves_precision_and_pipeline():
+  options = np.get_printoptions()
+  expected = np.array2string(pg.load(ENERGY).values.squeeze(), precision=16)
+  result = _ok(ENERGY, "print", "info")
+  assert result.output == expected + "\n" + _ok(ENERGY, "info").output
+  assert np.get_printoptions() == options
+  assert "print" in COMMAND_SECTIONS["Utility"]
+
+
+@pytest.mark.parametrize("flag", ["--grid", "-g", "--grid=True"])
+def test_print_grid_axes(flag):
+  data = pg.load(DISTF)
+  expected = "".join(
+      np.array2string(axis, precision=16) + "\n" for axis in data.grid)
+  assert _ok(DISTF, "print", flag).output == expected
+
+
+def test_print_tag_selection_and_explicit_false():
+  result = _ok(ENERGY, "--tag", "energy", DISTF, "--tag", "distribution",
+               "print", "--use", "energy", "--grid", "False")
+  assert result.output == _ok(ENERGY, "print").output
+  assert _ok(ENERGY, "print", "--use", "missing").output == ""
+  assert _ok(ENERGY, ENERGY, "print").output == 2 * _ok(ENERGY, "print").output
+
+
+def test_print_modal_coefficients_and_interpolated_values():
+  for pipeline in ((), ("interpolate", )):
+    data = pg.load(DISTF)
+    if pipeline:
+      data = data.interpolate()
+    expected = np.array2string(data.values.squeeze(), precision=16) + "\n"
+    assert _ok(DISTF, *pipeline, "print").output == expected
 
 
 def test_bare_filename_is_a_spelling_for_canonical_load():

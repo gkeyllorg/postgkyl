@@ -443,6 +443,7 @@ _ALLOWED = {
     "render": {"gdatastate", "numerics", "cli_spec"},
     "operations": {"gdatastate", "dg", "io", "numerics", "render",
                    "cli_spec"},  # data transformations:
+    # print.py inspects stored values/grids through gdatastate only
     # the physics verbs (moments/agyro/
     # current/energetics/rotate/
     # transform_frame/laguerre) moved up
