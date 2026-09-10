@@ -21,7 +21,7 @@ from types import ModuleType
 import zipfile
 
 
-def public_functions(module: ModuleType, seen_modules: set):
+def public_functions(module: ModuleType, seen_modules: set, path: str):
   """Yield public function paths through declared module exports."""
   if module in seen_modules:
     return
@@ -32,11 +32,11 @@ def public_functions(module: ModuleType, seen_modules: set):
       continue
     value = getattr(module, name)
     if inspect.isfunction(value) and value.__module__.startswith("postgkyl"):
-      yield f"{module.__name__}.{name}", value
+      yield f"{path}.{name}", value
     elif module.__name__.startswith("postgkyl.diagnostics") and isinstance(
         value,
         ModuleType) and value.__name__.startswith("postgkyl.diagnostics"):
-      yield from public_functions(value, seen_modules)
+      yield from public_functions(value, seen_modules, f"{path}.{name}")
 
 
 def write_reference(output: Path) -> dict:
@@ -56,6 +56,11 @@ def write_reference(output: Path) -> dict:
   command_names = {}
   for model in MODELS:
     command_names.setdefault(model.canonical, []).append(model.name)
+  public_modules = {
+      value: f"postgkyl.{name}"
+      for name in pg.__all__
+      if isinstance(value := getattr(pg, name), ModuleType)
+  }
   roots = [("Core", pg)] + [(f"{name} diagnostics", getattr(
       pg.diagnostics, name)) for name in pg.diagnostics.__all__]
   seen_modules = set()
@@ -63,7 +68,8 @@ def write_reference(output: Path) -> dict:
     api.extend(
         [f"{title}\n{'-' * len(title)}\n", ".. toctree::\n   :maxdepth: 1\n"])
     aliases = []
-    for path, function in public_functions(module, seen_modules):
+    module_path = public_modules.get(module, module.__name__)
+    for path, function in public_functions(module, seen_modules, module_path):
       if function in seen_functions:
         aliases.append(
             f"``{path}`` is an alias of :func:`{seen_functions[function]}`.\n")
@@ -140,7 +146,7 @@ def write_reference(output: Path) -> dict:
   (reference / "quantities.rst").write_text(
       "Gyrokinetic quantities\n======================\n\n"
       "Names below come from ``pg.gk.available_quantities()``. "
-      "See :func:`postgkyl.diagnostics.gk.load_quantity` for loading and "
+      f"See :func:`{seen_functions[pg.gk.load_quantity]}` for loading and "
       "physical parameters.\n\n" + quantities + "\n")
   return {
       "api": list(seen_functions.values()),
