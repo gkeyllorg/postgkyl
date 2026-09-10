@@ -427,6 +427,7 @@ def test_cli_abbreviation_and_info():
 # Architecture contract: the layering is a strict, cycle-free DAG.
 # --------------------------------------------------------------------------
 _ALLOWED = {
+    "_release": set(),  # standard-library-only build and runtime versioning
     "cli_spec": set(),  # frozen CLI metadata; dependency-free leaf
     "gpython": set(),  # the foreign floor (only ctypes owner)
     "numerics": set(),
@@ -486,7 +487,7 @@ _ALLOWED = {
     "gdata": {"gdatastate", "operations", "io", "cli_spec"},
     "": {
         "gdata", "operations", "render", "io", "gdatastate", "diagnostics",
-        "gpython", "_version", "cli_spec"
+        "gpython", "_version", "_release", "cli_spec"
     },  # facade:
     # pure re-export of public names;
     # "gdatastate" is group_blocks, the

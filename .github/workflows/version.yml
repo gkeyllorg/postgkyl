@@ -1,0 +1,44 @@
+name: Version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Release increment (none only catches up on merged PRs)
+        type: choice
+        default: none
+        options: [none, minor, major]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+# Each run reconciles all missing merges, so replacement of a pending run
+# cannot lose a PR increment. Running jobs finish their atomic tag push.
+concurrency:
+  group: postgkyl-release-tags
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Maintain release tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BUMP: ${{ inputs.bump || 'none' }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python scripts/tag_release.py --bump "$RELEASE_BUMP"

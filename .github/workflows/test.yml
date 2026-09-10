@@ -3,7 +3,10 @@ name: CI
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
-  push:
+  # Main artifacts must see the tags created for this merge.
+  workflow_run:
+    workflows: [Version]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
   schedule:
@@ -21,15 +24,17 @@ concurrency:
 
 env:
   # pull_request checks run the contributor's exact commit, rather than a
-  # synthetic merge commit. The fallbacks cover push and workflow_dispatch.
+  # synthetic merge commit. The fallbacks cover completed version maintenance
+  # and manual runs.
   SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha || github.sha }}
   FORCE_COLOR: "1"
   PYTHONFAULTHANDLER: "1"
   PYTHONUNBUFFERED: "1"
 
 jobs:
   quality:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Quality (format and lint)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -39,6 +44,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash
@@ -59,6 +65,7 @@ jobs:
         run: ruff check .
 
   compatibility:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Core / Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -87,6 +94,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash
@@ -109,6 +117,7 @@ jobs:
           --timeout=120
 
   coverage:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Full suite and branch coverage / Linux
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -121,6 +130,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash
@@ -164,6 +174,7 @@ jobs:
           retention-days: 14
 
   native_macos:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Native bridge / macOS
     runs-on: macos-latest
     timeout-minutes: 60
@@ -175,6 +186,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash
@@ -222,6 +234,7 @@ jobs:
           --timeout=120
 
   renderers:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Renderer integrations / Linux
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -234,6 +247,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash
@@ -286,6 +300,7 @@ jobs:
           --timeout=180 --timeout-method=signal
 
   package:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Build and install distribution artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -295,6 +310,7 @@ jobs:
         with:
           repository: ${{ env.SOURCE_REPOSITORY }}
           ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify source commit
         shell: bash

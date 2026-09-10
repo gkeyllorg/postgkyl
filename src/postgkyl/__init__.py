@@ -86,7 +86,7 @@ from postgkyl.io import save
 from postgkyl.diagnostics import gk
 from postgkyl._version import version_report
 
-__version__ = "2.0.0"
+from postgkyl._release import __version__
 
 hidden("collection helper is a Python API, not a pipeline command")(
     group_blocks)

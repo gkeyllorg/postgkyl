@@ -3,6 +3,7 @@ build/
 dist/
 postgkyl.egg-info/
 src/postgkyl/version.py
+src/postgkyl/_release_version.txt
 .DS_Store
 tests/test_data/generated/
 

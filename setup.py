@@ -1,4 +1,5 @@
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -7,11 +8,26 @@ from setuptools import setup
 from setuptools.dist import Distribution
 from setuptools.command.build_py import build_py
 from setuptools.command.develop import develop
+from setuptools.command.sdist import sdist
 
 ROOT_DIR = Path(__file__).parent
 BUILD_SCRIPT = ROOT_DIR / "scripts" / "build_gkeyll.sh"
 BUNDLED_LIB = ROOT_DIR / "src" / "postgkyl" / "gpython" / "libg0core.so"
 SKIP_BUILD_ENV = "POSTGKYL_SKIP_GKEYLL_BUILD"
+RELEASE = runpy.run_path(ROOT_DIR / "src/postgkyl/_release.py")
+
+
+def _write_version(package_dir, version):
+  package_dir.mkdir(parents=True, exist_ok=True)
+  (package_dir / RELEASE["VERSION_FILE"]).write_text(version + "\n")
+
+
+class SdistWithVersion(sdist):
+
+  def make_release_tree(self, base_dir, files):
+    super().make_release_tree(base_dir, files)
+    _write_version(
+        Path(base_dir) / "src/postgkyl", self.distribution.get_version())
 
 
 def _skip_gkeyll_build():
@@ -61,6 +77,8 @@ class BuildPyWithGkeyll(build_py):
     # create and makes ``pip install -e`` fail after a successful compile.
     if getattr(self, "editable_mode", False):
       return
+    _write_version(
+        Path(self.build_lib) / "postgkyl", self.distribution.get_version())
     destination = Path(self.build_lib) / "postgkyl" / "gpython"
     if not built_native:
       # A reused build directory may contain output from an earlier native
@@ -100,5 +118,7 @@ class BinaryDistribution(Distribution):
 setup(cmdclass={
     "build_py": BuildPyWithGkeyll,
     "develop": DevelopWithGkeyll,
+    "sdist": SdistWithVersion,
 },
+      version=RELEASE["__version__"],
       distclass=BinaryDistribution)

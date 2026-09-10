@@ -289,6 +289,13 @@ docstring identity, and deterministic CLI lowering. Run it directly with:
 pytest tests/test_documentation.py
 ```
 
+### Automatic version numbers
+
+Versions use `major.minor.PR.commit`, starting at `2.0.0.0`. Merged PRs
+automatically increment the third component; later commits increment the fourth.
+Use the **Version** workflow on `main` to request a minor or major release.
+See [versioning](docs/source/versioning.md) for examples and local checkout behavior.
+
 ### Checking a release package
 
 Build a wheel (an installable package) and test it in a clean environment:

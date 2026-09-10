@@ -15,4 +15,5 @@ Start with a complete example, then use the reference to adapt it to your run.
    concepts
    reference/quantities
    contributing
+   versioning
    provenance

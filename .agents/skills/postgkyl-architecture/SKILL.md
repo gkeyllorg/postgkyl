@@ -20,6 +20,7 @@ in the same change if ownership changes. Do not maintain a second import matrix.
 | `gdatastate/` | State, clone, `_result`, shared guards and point-value materialization; no verbs |
 | `dg/`, `io/` | Kernel orchestration and file I/O respectively |
 | `numerics/`, `cli_spec.py` | Pure math and frozen command metadata; no internal imports |
+| `_release.py` | Git-derived package version; standard library only, also loaded by packaging |
 | `gpython/` | Sole foreign-library boundary |
 
 Imports point downward along allowed edges, never back to a higher surface.
