@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M25XANMXD4NMVKQSPS4920MA",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AGENTS.md",
+    "examples/cli_tutorial.md",
+    "src/postgkyl/__init__.py",
+    "src/postgkyl/operations/__init__.py",
+    "src/postgkyl/operations/print.py",
+    "tests/test_cli_commands.py",
+    "tests/test_postgkyl.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 37039,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 341376,
+    "output_tokens": 2660,
+    "api_call_count": 10
+  }
+}
