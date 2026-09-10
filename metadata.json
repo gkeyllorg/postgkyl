@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M26DDP6ZQ7699Q37X0ZQ65EX",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".github/workflows/test.yml",
+    "docs/source/arithmetic-representation.rst",
+    "docs/source/cli-tutorial.rst",
+    "docs/source/examples.rst",
+    "docs/source/exponential-growth.rst",
+    "docs/source/fluid-pressure.rst",
+    "docs/source/gyrokinetic-distribution.rst",
+    "docs/source/index.rst",
+    "docs/source/interactive.rst",
+    "docs/source/physical-rz.rst",
+    "docs/source/plotly.rst",
+    "docs/source/profile-comparison.rst",
+    "docs/source/pyvista.rst",
+    "docs/source/tutorials.rst",
+    "tests/test_docs_build.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28140,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 749952,
+    "output_tokens": 2956,
+    "api_call_count": 26
+  }
+}

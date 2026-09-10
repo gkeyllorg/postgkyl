@@ -1,0 +1,87 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "01M26DDP6ZQ7699Q37X0ZQ65EX",
+  "session_id": "01a08cd1-8c14-78a3-aa4b-a6357ae3d4ec",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-10T19:41:25.823638631Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    ".github/workflows/test.yml",
+    "docs/source/arithmetic-representation.rst",
+    "docs/source/cli-tutorial.rst",
+    "docs/source/examples.rst",
+    "docs/source/exponential-growth.rst",
+    "docs/source/fluid-pressure.rst",
+    "docs/source/gyrokinetic-distribution.rst",
+    "docs/source/index.rst",
+    "docs/source/interactive.rst",
+    "docs/source/physical-rz.rst",
+    "docs/source/plotly.rst",
+    "docs/source/profile-comparison.rst",
+    "docs/source/pyvista.rst",
+    "docs/source/tutorials.rst",
+    "tests/test_docs_build.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "30e52c2fdddb",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 28140,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 749952,
+    "output_tokens": 2956,
+    "api_call_count": 26
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-10T19:41:25.804747843Z",
+    "agent_lines": 0,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 6,
+    "human_removed": 99,
+    "total_committed": 11,
+    "total_lines_changed": 106,
+    "agent_percentage": 0.9433962264150944,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 397,
+      "user_lines_removed": 102,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".agents/hooks.json": 88,
+        ".agents/settings.json": 90,
+        "docs/source/arithmetic-representation.rst": 14,
+        "docs/source/cli-tutorial.rst": 1,
+        "docs/source/examples.rst": 33,
+        "docs/source/exponential-growth.rst": 16,
+        "docs/source/fluid-pressure.rst": 15,
+        "docs/source/gyrokinetic-distribution.rst": 21,
+        "docs/source/index.rst": 5,
+        "docs/source/interactive.rst": 7,
+        "docs/source/physical-rz.rst": 14,
+        "docs/source/plotly.rst": 21,
+        "docs/source/profile-comparison.rst": 14,
+        "docs/source/pyvista.rst": 23,
+        "docs/source/tutorials.rst": 15,
+        "tests/test_docs_build.py": 20
+      },
+      "user_removed_per_file": {
+        "docs/source/cli-tutorial.rst": 2,
+        "docs/source/index.rst": 11,
+        "docs/source/interactive.rst": 31,
+        "docs/source/tutorials.rst": 57,
+        "tests/test_docs_build.py": 1
+      }
+    }
+  ]
+}
