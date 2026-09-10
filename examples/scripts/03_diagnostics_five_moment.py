@@ -9,10 +9,9 @@ Mach number, ...). Diagnostics are **free functions**, not ``GData`` methods
 -- ``fm.density(d)``, never ``d.density()`` -- because a diagnostic knows
 about one specific equation system and a ``GData`` doesn't.
 
-This script builds a small 1D Sod shock-tube initial condition by hand (no
-file needed -- any interpolated/NumPy-backed ``GData`` will do, whether it
-came from ``pg.load(...).interpolate()`` or, as here, straight from
-``.push()``) and reads off density, pressure, and Mach number.
+This script loads a generated stationary shock-tube initial condition and
+checks density, pressure, and Mach number against the prescribed state.
+Run ``python tests/generate_test_data.py`` first.
 
 Run directly:
     MPLBACKEND=Agg PYTHONPATH=src python examples/scripts/03_diagnostics_five_moment.py
@@ -35,20 +34,11 @@ OUTPUT_DIR = prepare_output_dir()
 
 GAS_GAMMA = 5.0 / 3.0
 
-# A Sod shock tube: high density/pressure on the left, low on the right, at
-# rest everywhere. Conserved moments are laid out
-# ``[rho, rho*vx, rho*vy, rho*vz, E]`` -- see the five_moment module
-# docstring.
-grid = [np.linspace(0.0, 1.0, 100)]
-x = grid[0]
+# Load the generated p0 modal state and evaluate its physical values.
+d = pg.load(TEST_DATA / "generated/shock_tube_1d_p0.gkyl").interpolate()
+x = 0.5 * (d.grid[0][1:] + d.grid[0][:-1])
 rho = np.where(x < 0.5, 1.0, 0.125)
 p = np.where(x < 0.5, 1.0, 0.1)
-vx = vy = vz = np.zeros_like(x)
-energy = p / (GAS_GAMMA - 1) + 0.5 * rho * (vx**2 + vy**2 + vz**2)
-moments = np.stack([rho, rho * vx, rho * vy, rho * vz, energy], axis=-1)
-
-d = pg.GData()
-d.push(grid, moments)  # diagnostics require field-domain data
 
 # Diagnostics are free functions of a GData(State), returning a new one --
 # the same ``inplace``/``tag``/``label`` contract as every ``operations`` verb.
@@ -56,11 +46,9 @@ density = fm.density(d)
 pressure = fm.pressure(d, gas_gamma=GAS_GAMMA)
 mach = fm.mach(d, gas_gamma=GAS_GAMMA)
 
-print("density matches the input rho profile:",
-      np.allclose(density.values.ravel(), rho))
-print("pressure matches the input p profile: ",
-      np.allclose(pressure.values.ravel(), p))
-print("Mach number at rest:                  ", mach.values.ravel()[0])
+np.testing.assert_allclose(density.values.ravel(), rho)
+np.testing.assert_allclose(pressure.values.ravel(), p)
+np.testing.assert_allclose(mach.values, 0.0)
 
 # Raw modal DG coefficients have no "density"/"pressure" until interpolated
 # -- the diagnostics layer refuses the same way ``operations`` verbs do.

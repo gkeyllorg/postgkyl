@@ -50,6 +50,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+docs = [
+    "sphinx>=8,<9",
+    "furo>=2024.8.6",
+    "myst-parser>=4,<5",
+]
 test = [
     "pre-commit==4.3.0",
     "pytest>=9.0.3",

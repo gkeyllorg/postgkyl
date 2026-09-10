@@ -137,8 +137,8 @@ def load_pkpm(name: str,
   and its companion ``pkpm_vars`` file (whose component 3 is ``T/m`` and
   components 0:3 are the bulk velocity ``(ux, uy, uz)``), interpolates both,
   composes the full distribution function (:func:`laguerre_compose`), and
-    shifts it into the bulk-flow frame (:func:`~postgkyl.diagnostics.vm.kinetic.
-  transform_frame`).
+  shifts it into the bulk-flow frame
+  (:func:`~postgkyl.diagnostics.vm.kinetic.transform_frame`).
 
   Args:
     name: Root name (file prefix) of the simulation.

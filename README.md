@@ -120,8 +120,14 @@ run `source .venv/bin/activate` from the `postgkyl` folder for pyenv/venv, or
 ## Documentation
 
 Full documentation of the Gkeyll project, including Postgkyl, is available at
-[ReadTheDocs](https://gkeyll.readthedocs.io/). The repository also contains
+[ReadTheDocs](https://gkeyll.readthedocs.io/en/latest/postgkyl/index.html). The repository also contains
 [examples](examples/README.md) and [notebooks](notebooks/README.md).
+
+The website generates this section from Postgkyl's `main` branch. Guides live
+in [docs/source](docs/source), reference pages come from the Python API and
+compiled CLI, and figures come from the tested example scripts. See the
+[documentation build instructions](docs/source/contributing.rst) for a local
+preview and [integration notes](docs/integration-plan.md) for the website setup.
 
 For help with a particular command, add `--help`, for example:
 

@@ -50,18 +50,16 @@ print("registered quantities:", pg.gk.available_quantities())
 m0, = pg.gk.load_quantity("M0", "ion", HMOM_NAME, "250", path=str(TEST_DATA))
 print("M0:", repr(m0), " label:", m0.get_label())
 
-fig = m0.plot(title=m0.get_label(), no_show=True)
+fig = m0.plot(title="Ion density from Hamiltonian moments",
+              xlabel="Field-aligned computational coordinate",
+              ylabel=m0.get_label(),
+              no_show=True)
 fig.savefig(OUTPUT_DIR / "04_gyrokinetics_M0.png")
 
-# 2. "M1" needs the species mass to convert a momentum-like moment into a
-#    velocity -- extra per-quantity parameters go through **extra.
-m1, = pg.gk.load_quantity("M1",
-                          "ion",
-                          HMOM_NAME,
-                          "250",
-                          path=str(TEST_DATA),
-                          mass=2.0)
-print("M1:", repr(m1), " label:", m1.get_label())
+# M1 is a density-weighted parallel velocity moment, not velocity itself.
+# Its Hamiltonian conversion requires the simulation's species mass in the
+# same unit system. This fixture has no input deck establishing that mass,
+# so this example limits itself to M0 rather than assigning an arbitrary mass.
 
 # 3. A species-independent geometric factor, from the other simulation --
 #    ``species=None`` since geometry isn't per-species.
@@ -86,7 +84,11 @@ print("distf:", repr(distf))
 # It's a regular GData from here on -- e.g. select a fixed-mu slice down to
 # the (x, vpar) plane and plot it, same as any other 2D field.
 slice_2d = distf.select(z2=0.0)
-fig = slice_2d.plot(title="elc distf, mu=0 slice", no_show=True)
+fig = slice_2d.plot(title="Electron distribution: lowest mu slice",
+                    xlabel="Field-aligned computational coordinate",
+                    ylabel="Computational parallel velocity",
+                    clabel="Distribution [simulation units]",
+                    no_show=True)
 fig.savefig(OUTPUT_DIR / "04_gyrokinetics_distf_slice.png")
 
 print("04_gyrokinetics: OK")

@@ -9,7 +9,7 @@ from the repository root) as a regression check. If the CLI's surface ever
 changes in a way that breaks one of these commands, that test fails -- this
 file cannot silently drift out of date the way a hand-maintained tutorial can.
 
-Run any line yourself from the repository root, after `pip install -e .[test]`
+Run any line yourself from the repository root, after `pip install --no-build-isolation -e '.[test]'`
 and (for the `tests/test_data/generated/` fixtures) `python
 tests/generate_test_data.py`.
 
@@ -77,7 +77,7 @@ pgkyl tests/test_data/generated/distf_p2_0.gkyl \
 
 `.gkyl` files without a spatial grid (diagnostics like a field-energy history)
 are DynVectors: `info` summarizes the data, and `fit` fits a model to it (here,
-a straight line to the series vs. time -- the growth-rate use case).
+a straight line to the series vs. time -- a basic fit, not an exponential growth-rate measurement).
 
 ```bash
 pgkyl tests/test_data/generated/energy_dynvec.gkyl info

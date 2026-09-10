@@ -1,7 +1,6 @@
 """Weak (DG) arithmetic and NumPy interop.
 
-Two backends, two sets of rules (see ``REFACTOR_GKEYLL_FFI.md`` section 3 /
-the "two-domain lifecycle" in the project's ``CLAUDE.md``):
+This example contrasts two representations:
 
 * **modal** (straight off disk): ``+``/``-``/``*``/``/`` on two ``GData``
   run *inside Gkeyll* (coefficient lin-combs / weak DG kernels), and
@@ -25,7 +24,7 @@ import numpy as np
 
 import postgkyl as pg
 
-from _example_paths import TEST_DATA
+from _example_paths import TEST_DATA, prepare_output_dir
 
 # A coordinate-map field: strictly positive everywhere, so weak division
 # never divides near zero (see the note on ``back`` below).
@@ -43,13 +42,15 @@ summ = a + b  # gkyl_array_accumulate -- coefficient sum
 # alias. Weak multiply/divide, by contrast, is a *nonlinear* operation: the
 # product of two degree-p polynomials is degree 2p, and projecting it back
 # onto the degree-p basis is lossy in general. It only round-trips exactly
-# when nothing aliases -- e.g. this field, or dividing by a field that never
-# crosses zero. Compare via NumPy, which means interpolating first.
+# for special inputs. A nonzero divisor does not by itself guarantee an
+# exact round trip. Compare via NumPy, which means interpolating first.
 print("(a*b)/b == a:  ",
       np.allclose(back.interpolate().values,
                   a.interpolate().values))
 print("a+a == 2*a:    ",
       np.allclose(summ.interpolate().values, (2.0 * a).interpolate().values))
+np.testing.assert_allclose(summ.interpolate().values,
+                           (2.0 * a).interpolate().values)
 
 total = a.integrate()  # gkyl_array_integrate -- a terminal verb
 print("integrate(a) = ", total)  # one value per component (this field has 2)
@@ -73,5 +74,10 @@ print("sqrt(a^2+b^2) == sqrt(2)*a:",
 
 as_array = np.asarray(fa)  # plain ndarray -- the escape hatch out of GData
 print("np.asarray(interpolated) ->", as_array.shape, as_array.dtype)
+
+mag.plot(title="Componentwise magnitude",
+         no_show=True,
+         saveas=prepare_output_dir() / "02_arithmetic.png",
+         dpi=100)
 
 print("02_arithmetic_and_numpy: OK")

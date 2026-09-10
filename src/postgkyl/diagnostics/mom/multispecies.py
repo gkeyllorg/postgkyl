@@ -125,8 +125,8 @@ def energetics(elc: "GDataState",
   1. electron kinetic energy
   2. ion thermal energy
   3. ion kinetic energy
-  4. electric field energy (|E|^2 / 2)
-  5. magnetic field energy (|B|^2 / 2)
+  4. electric field energy (``|E|^2 / 2``)
+  5. magnetic field energy (``|B|^2 / 2``)
   6. total energy (sum of the above)
 
   Args:

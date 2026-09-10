@@ -301,6 +301,59 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
 
+  # Stationary shock-tube initial state: p0 modal coefficients are sqrt(2)
+  # times the physical values in the orthonormal 1D basis.
+  x = (np.arange(100) + 0.5) / 100
+  rho = np.where(x < 0.5, 1.0, 0.125)
+  pressure = np.where(x < 0.5, 1.0, 0.1)
+  moments = np.stack([
+      rho,
+      np.zeros_like(x),
+      np.zeros_like(x),
+      np.zeros_like(x), pressure / (5.0 / 3.0 - 1.0)
+  ],
+                     axis=-1)
+  write_gkyl_field(out_dir / "shock_tube_1d_p0.gkyl", [100], [0.0], [1.0],
+                   np.sqrt(2.0) * moments,
+                   poly_order=0,
+                   basis_type="serendipity")
+  growth_time = np.linspace(0.0, 10.0, 101)
+  write_gkyl_dynvector(out_dir / "exponential_energy.gkyl", growth_time,
+                       (1e-6 * np.exp(0.4 * growth_time))[:, None])
+
+  # Time-resolved, positive travelling waves, encoded as p0 modal fields.
+  # Zero-padded frame names preserve time order under shell glob expansion.
+  wave_x = (np.arange(64) + 0.5) * (2 * np.pi / 64)
+  for frame, time in enumerate(np.linspace(0.0, 2 * np.pi, 16, endpoint=False)):
+    wave = 1.0 + 0.6 * np.cos(wave_x - time)
+    write_gkyl_field(out_dir / f"travelling_wave_{frame:03d}.gkyl", [64], [0.0],
+                     [2 * np.pi],
+                     np.sqrt(2) * wave[:, None],
+                     poly_order=0,
+                     basis_type="serendipity",
+                     time=float(time),
+                     frame=frame)
+  surface_axes = [(np.arange(32) + 0.5) * (2 * np.pi / 32)] * 2
+  surface_x, surface_y = np.meshgrid(*surface_axes, indexing="ij")
+  for frame, time in enumerate(np.linspace(0.0, 2 * np.pi, 12, endpoint=False)):
+    wave = 1.0 + 0.6 * np.cos(surface_x - time) * np.cos(surface_y)
+    write_gkyl_field(out_dir / f"wave_surface_{frame:03d}.gkyl", [32, 32],
+                     [0.0, 0.0], [2 * np.pi, 2 * np.pi],
+                     2 * wave[..., None],
+                     poly_order=0,
+                     basis_type="serendipity",
+                     time=float(time),
+                     frame=frame)
+  # An anisotropic Gaussian scalar field for volume and isosurface views.
+  volume_axis = (np.arange(24) + 0.5) / 6 - 2
+  vx, vy, vz = np.meshgrid(volume_axis, volume_axis, volume_axis, indexing="ij")
+  blob = np.exp(-(vx**2 + 2 * vy**2 + 0.5 * vz**2))
+  write_gkyl_field(out_dir / "gaussian_volume.gkyl", [24, 24, 24], [-2.0] * 3,
+                   [2.0] * 3,
+                   np.sqrt(8) * blob[..., None],
+                   poly_order=0,
+                   basis_type="serendipity")
+
   # --- field files (random DG coefficients) ---
   for stem, ndim, cells, poly_order, basis_type in _FIELD_CONFIGS:
     nc = num_comps(basis_type, ndim, poly_order)

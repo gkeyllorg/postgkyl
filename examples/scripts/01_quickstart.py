@@ -26,6 +26,7 @@ import matplotlib
 matplotlib.use("Agg")  # headless-safe; drop this line to see the plot windows
 
 import postgkyl as pg
+import numpy as np
 
 from _example_paths import TEST_DATA, prepare_output_dir
 
@@ -63,6 +64,7 @@ print("saved plot:", lineout_path)
 #    and reading it back recovers the same values exactly.
 gkyl_path = comp0.save(str(OUTPUT_DIR / "01_quickstart_out.gkyl"))
 reloaded = pg.load(gkyl_path)
+np.testing.assert_allclose(reloaded.values, comp0.values, rtol=0, atol=0)
 print("round-tripped through", gkyl_path)
 
 print("01_quickstart: OK")
