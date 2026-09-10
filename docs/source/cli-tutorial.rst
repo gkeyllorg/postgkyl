@@ -1,8 +1,7 @@
 Command-line workflows
 ========================
 
-Every figure in :doc:`quickstart`, :doc:`tutorials`, :doc:`animation`,
-:doc:`interactive`, and :doc:`manual-arrays` has both a complete Python script
+Every figure in :doc:`examples` has both a complete Python script
 and a copyable ``pgkyl`` command. Their generated outputs appear together,
 with the result of the build's equivalence check. See
 :doc:`interface-equivalence` for the complete comparison report.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 from pathlib import Path
 import runpy
 import subprocess
@@ -50,7 +51,28 @@ def test_published_inventory_and_navigation(documentation):
   inventory = json.loads((documentation / "source/build-info.json").read_text())
   assert set(inventory["commands"]) == set(cli.commands)
   index = (documentation / "html/index.html").read_text()
-  assert 'href="tutorials.html"' in index
+  assert 'href="examples.html"' in index
+  with (documentation /
+        "html/.doctrees/environment.pickle").open("rb") as stream:
+    environment = pickle.load(stream)
+  assert environment.toctree_includes["index"] == [
+      "installation", "examples", "reference/api", "reference/cli", "concepts",
+      "reference/quantities", "contributing", "provenance"
+  ]
+  examples = environment.toctree_includes["examples"]
+  assert {"cli-tutorial", "interface-equivalence"} <= set(examples)
+  pairs = []
+  for page in examples:
+    assert (documentation / f"html/{page}.html").is_file()
+    source = (documentation / f"source/{page}.rst").read_text()
+    includes = [
+        line for line in source.splitlines()
+        if line.startswith(".. include:: _pairs/")
+    ]
+    assert len(includes) <= 1, page
+    pairs.extend(line.split("_pairs/")[1] for line in includes)
+  assert sorted(pairs) == sorted(
+      path.name for path in (documentation / "source/_pairs").glob("*.inc"))
   assert 'href="reference/cli.html"' in index
   api = (documentation / "html/reference/api.html").read_text()
   assert "postgkyl.load" in api

@@ -210,6 +210,16 @@ jobs:
           --timeout=120
           --capture=no
           --forked
+          --ignore=tests/test_examples.py
+      - name: Run tutorial tests in a fresh interpreter
+        # PyVista rendering initializes macOS Objective-C classes, which is
+        # unsafe in pytest-forked's fork-without-exec children. Keep these
+        # examples in a separate, unforked pytest session so they retain the
+        # GUI guards and VTK shutdown handling in tests/conftest.py.
+        run: >-
+          python -m pytest tests/test_examples.py
+          --strict-config --strict-markers
+          --timeout=120
 
   renderers:
     name: Renderer integrations / Linux
