@@ -1,0 +1,73 @@
+Help me construct a plan for this. Here is a conversation from slack about the organization of gk_rz
+
+I'm really bothered that I've been coerced to put gk_rz  in the operations/ folder and not diagnostics/. Mana and Antoine argue that this is a command not a diagnostic because it's just a kind of interpolation at nodes, which is a file provided from the user. However, this is a GK specific operation because of the file naming conventions, and loads files, so I think it belongs in diagnostics, which is where we put the equation-aware scripts. Although, this is just a general interpolation command, it has gk in the name, so it sounds equation specific to me. It is pretty obvious how much this stands out when comparing gk_rz  to its compatriots like fit, sort, collect, select. What does the community think?
+
+This being in operations means someone can call data.gk_rz(), but if it's in diagnostics, one would have to do pg.gk.rz(data) 
+
+Mana  [4:07 PM]
+The gk in it is just a side detail. The point is that this is a type of interpolation for field aligned coordinates in magnetized toroidal plasmas. The same coordinates have been used for fluids in the past, so this same operation would then be used to interpolate fluid data if we did fluids in such coordinate system.
+
+Mana  [4:07 PM]
+The gk in it is just a side detail. The point is that this is a type of interpolation for field aligned coordinates in magnetized toroidal plasmas. The same coordinates have been used for fluids in the past, so this same operation would then be used to interpolate fluid data if we did fluids in such coordinate system.
+7 repliesMaxwell Rosen  [4:08 PM]
+Can you think of a better name? Such as nodal-interpolation? This should then be done in a file-naming agnostic way, so filenames must be parsed, but I'm still privy to loading separate data files inside an operation, as this mixes functionality
+Mana  [4:11 PM]
+you need to expand your understanding of "operations". I don't see an issue with "operations" loading auxiliary files.
+
+And yes, you can change the name to simply interp_rz or something like that
+Maxwell Rosen  [4:12 PM]
+The point is that operations have a narrow scope so that they are contained. Diagnostics are for functions which have an expanded scope. That's why we have diagnostics
+Mana  [4:15 PM]
+I wouldn't place the boundary based on scope but rather function. The function of this thing is to interpolate, just like interp
+Maxwell Rosen  [4:17 PM]
+How about interpolate_from_file as the operation, and we have a gk.rz() which wraps this command with some file naming conventions?
+Mana  [4:18 PM]
+sounds unnecessarily complicated and long
+Maxwell Rosen  [4:19 PM]
+I agree, but do you like the general premisse of splitting this into a general method and the GK specific file naming going in diagnostics?
+
+construct a plan for how to refactor this to fit the principles of operations/ being a core set of commands
+
+---
+
+Help me construct a plan for this. Here is a conversation from slack about the organization of gk_rz
+
+I'm really bothered that I've been coerced to put gk_rz  in the operations/ folder and not diagnostics/. Mana and Antoine argue that this is a command not a diagnostic because it's just a kind of interpolation at nodes, which is a file provided from the user. However, this is a GK specific operation because of the file naming conventions, and loads files, so I think it belongs in diagnostics, which is where we put the equation-aware scripts. Although, this is just a general interpolation command, it has gk in the name, so it sounds equation specific to me. It is pretty obvious how much this stands out when comparing gk_rz  to its compatriots like fit, sort, collect, select. What does the community think?
+
+This being in operations means someone can call data.gk_rz(), but if it's in diagnostics, one would have to do pg.gk.rz(data) 
+
+Mana  [4:07 PM]
+The gk in it is just a side detail. The point is that this is a type of interpolation for field aligned coordinates in magnetized toroidal plasmas. The same coordinates have been used for fluids in the past, so this same operation would then be used to interpolate fluid data if we did fluids in such coordinate system.
+
+Mana  [4:07 PM]
+The gk in it is just a side detail. The point is that this is a type of interpolation for field aligned coordinates in magnetized toroidal plasmas. The same coordinates have been used for fluids in the past, so this same operation would then be used to interpolate fluid data if we did fluids in such coordinate system.
+7 repliesMaxwell Rosen  [4:08 PM]
+Can you think of a better name? Such as nodal-interpolation? This should then be done in a file-naming agnostic way, so filenames must be parsed, but I'm still privy to loading separate data files inside an operation, as this mixes functionality
+Mana  [4:11 PM]
+you need to expand your understanding of "operations". I don't see an issue with "operations" loading auxiliary files.
+
+And yes, you can change the name to simply interp_rz or something like that
+Maxwell Rosen  [4:12 PM]
+The point is that operations have a narrow scope so that they are contained. Diagnostics are for functions which have an expanded scope. That's why we have diagnostics
+Mana  [4:15 PM]
+I wouldn't place the boundary based on scope but rather function. The function of this thing is to interpolate, just like interp
+Maxwell Rosen  [4:17 PM]
+How about interpolate_from_file as the operation, and we have a gk.rz() which wraps this command with some file naming conventions?
+Mana  [4:18 PM]
+sounds unnecessarily complicated and long
+Maxwell Rosen  [4:19 PM]
+I agree, but do you like the general premisse of splitting this into a general method and the GK specific file naming going in diagnostics?
+
+construct a plan for how to refactor this to fit the principles of operations/ being a core set of commands
+
+---
+
+Regarding map_to_rz, is it cleaner to put this inside operations/map.py? I agree with splitting this into a more abstract, universal operation, then having the GK-specifics inside the diagnostics. What are the file names you're discussing putting this to. Provide a list of files and a description of what they do / what happens there / purpose / intent / design
+
+---
+
+Regarding map_to_rz, is it cleaner to put this inside operations/map.py? I agree with splitting this into a more abstract, universal operation, then having the GK-specifics inside the diagnostics. What are the file names you're discussing putting this to. Provide a list of files and a description of what they do / what happens there / purpose / intent / design
+
+---
+
+Implement this plan. Do not preserve legacy code. Aim for a clean refactor. Remove operations/gyrokinetics, as operations should be equation module agnostic
