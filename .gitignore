@@ -32,3 +32,4 @@ examples/scripts/output/
 .coverage.*
 coverage.xml
 htmlcov/
+.entire

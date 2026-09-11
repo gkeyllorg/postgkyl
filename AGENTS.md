@@ -19,4 +19,6 @@ For code changes, read the design skill and the task-relevant skills below:
 - [Development](.agents/skills/postgkyl-development/SKILL.md): setup, checks, and agent configuration.
 - [Testing] (.agents/skills/postgkyl-testing/SKILL.md): How to write good unit tests.
 
-`.agents/` is shared through `.claude` and `.codex` symlinks; `CLAUDE.md` links here.
+Shared skills live in `.agents/skills/`, which Codex reads directly. `.claude`
+links to `.agents/`; `CLAUDE.md` links here. Keep `.codex/` a real directory for
+Codex configuration: a top-level symlink prevents the Linux sandbox from starting.
