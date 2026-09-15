@@ -1,0 +1,1 @@
+So in '/home/maxwell-rosen/postgkyl/compare.py', it plots 4 subfigures. Add an option to pg.plot so that it only shows the legend in one of the subfigures, specified by the user. Add the option to change the location of the legend, and it defaults to best. When specifying labels for the legned, ommit the _c* and just use the labels directly
