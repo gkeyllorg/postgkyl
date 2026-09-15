@@ -1,0 +1,1 @@
+How does postgkeyll's gdata indexing work? I want it to be indexing like [z0,z1,z2, component, file]
