@@ -1,0 +1,15 @@
+Several of the diagnostics repeat gyrokinetics and gk in the cli pgkyl --help menu
+
+  gyrokinetics-gk-energy-balance  Plot (and compute) the energy balance of a
+                                  gyrokinetic simulation.
+  gyrokinetics-gk-nodes           Plot the nodes of a (possibly multiblock)
+                                  grid, with optional overlays.
+  gyrokinetics-gk-particle-balance
+                                  Plot (and compute) the particle balance of a
+                                  single species.
+  gyrokinetics-load-gk-distf      Build a real distribution function from
+                                  saved ``Jf`` data.
+  gyrokinetics-load-gk-quantity   Load and compute a pre-named gyrokinetic
+                                  quantity.
+
+Please condense the names, for instance to be gyrokinetics-load-quantity, gyrokinetics-load-distf
