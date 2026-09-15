@@ -1,0 +1,1 @@
+Add an option to '/home/maxwell-rosen/postgkyl/src/postgkyl/operations/fit.py' which prints the coefficients of the fitted curve
