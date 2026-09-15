@@ -1,0 +1,5 @@
+Add some animations to the generated data and the examples using the animate function to show how to load multiple data files and make figures using collect and animate. Show some examples using plotly for 3D and 2D surface plotting, as well as pyvista. Provide some examples of how to get the grid and values of the data directly out of the loaded objects so that users can manipulate the data manually if they would like.
+
+All the examples on the website should have both a script version to generate the figures as well as a CLI command that generates the same figure. Show that both version generate the same figures
+
+Break the python API section of the docs into different pages for each of the different commands, similar to how the command reference is laid out.
