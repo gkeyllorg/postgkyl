@@ -1,0 +1,15 @@
+For the CLI generator, I'd like to have shorthand - single dash options, which are automatically detected based on whether there are no conflicts. so here are the options for select.   --comp TEXT        Component selector such as ``"0"``, ``"0:3"``, or
+                     ``"0,2"``.
+  --z0 TEXT          Selector for coordinate direction 0.
+  --z1 TEXT          Selector for coordinate direction 1.
+  --z2 TEXT          Selector for coordinate direction 2.
+  --z3 TEXT          Selector for coordinate direction 3.
+  --z4 TEXT          Selector for coordinate direction 4.
+  --z5 TEXT          Selector for coordinate direction 5.
+  --inplace BOOLEAN  Mutate and return ``data`` instead of creating a dataset.
+                     [default: False]
+  --tag TEXT         Optional tag for the returned dataset.
+  --label TEXT       Optional label for the returned dataset.
+  -h, --help         Show this message and exit.
+
+Here, there could be -c for --comp, -i for inplace, -t for tag, -l for label. These should be automatically detected and generated
