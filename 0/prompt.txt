@@ -1,0 +1,1 @@
+Something is saving a pgkyl.gif file in the root directory. Either don't save this file or gitignore it, saved in subdirectory but not on root. I think this is made by the unit tests
