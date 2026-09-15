@@ -1,0 +1,73 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2K3QS5C15EXKR3GQ704VNWR",
+  "session_id": "01a0a630-060e-7c72-87fa-f5ea22997e20",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-15T18:02:18.340504895Z",
+  "branch": "refactor-diagnostics-gk-rz",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".agents/skills/postgkyl-development/SKILL.md",
+    "AGENTS.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "8257970ae1d3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 7768,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 54016,
+    "output_tokens": 716,
+    "api_call_count": 6
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-15T18:02:18.331009929Z",
+    "agent_lines": 14,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 1,
+    "total_committed": 14,
+    "total_lines_changed": 23,
+    "agent_percentage": 91.30434782608695,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 882,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".agents/settings.json": 90,
+        ".claude/.gitignore": 7,
+        ".claude/settings.json": 90,
+        ".claude/skills/postgkyl-api-cli/SKILL.md": 39,
+        ".claude/skills/postgkyl-architecture/SKILL.md": 40,
+        ".claude/skills/postgkyl-data/SKILL.md": 43,
+        ".claude/skills/postgkyl-design/SKILL.md": 82,
+        ".claude/skills/postgkyl-development/SKILL.md": 48,
+        ".claude/skills/postgkyl-native/SKILL.md": 35,
+        ".claude/skills/postgkyl-testing/SKILL.md": 12,
+        ".codex/.gitignore": 7,
+        ".codex/settings.json": 90,
+        ".codex/skills/postgkyl-api-cli/SKILL.md": 39,
+        ".codex/skills/postgkyl-architecture/SKILL.md": 40,
+        ".codex/skills/postgkyl-data/SKILL.md": 43,
+        ".codex/skills/postgkyl-design/SKILL.md": 82,
+        ".codex/skills/postgkyl-development/SKILL.md": 48,
+        ".codex/skills/postgkyl-native/SKILL.md": 35,
+        ".codex/skills/postgkyl-testing/SKILL.md": 12
+      },
+      "user_removed_per_file": {
+        ".claude": 1,
+        ".codex": 1
+      }
+    }
+  ]
+}

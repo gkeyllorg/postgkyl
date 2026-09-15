@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2K3QS5C15EXKR3GQ704VNWR",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics-gk-rz",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".agents/skills/postgkyl-development/SKILL.md",
+    "AGENTS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 7768,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 54016,
+    "output_tokens": 716,
+    "api_call_count": 6
+  }
+}
