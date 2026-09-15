@@ -1,0 +1,35 @@
+(refactor-diagnostics-gk-rz) postgkyl: entire doctor
+✓ Metadata branches: OK (no remote-tracking metadata ref found)
+
+✓ Git hooks: OK
+Agent config directories: SYMLINKS PRESENT
+  .claude -> .agents
+  .codex -> .agents
+  Entire will not create or write through a symlinked path here, so the
+  hooks and skills that belong under these paths are not installed, and
+  `entire status` reports them as absent rather than as blocked.
+  Fix: replace each path above with a real directory or file. If it is
+  tracked in git, `git rm --cached` it first, and add it to .gitignore so it
+  does not come back.
+Codex hooks: DISCOVERED CONFIGURATION UNAVAILABLE
+  Codex-discovered hooks: /home/maxwell-rosen/postgkyl/.codex/hooks.json
+  Error: repository .codex path "/home/maxwell-rosen/postgkyl/.codex" is not a directory
+  Fix this discovered .codex/hooks.json file in its project root.
+  .codex/hooks.json is tracked — commit it and make sure the root worktree has it
+  (merge to the default branch, or check that branch out there).
+No stuck sessions found.
+(refactor-diagnostics-gk-rz) postgkyl: entire status
+● Enabled · branch refactor-diagnostics-gk-rz
+  ! Codex-discovered hooks are unavailable · run 'entire doctor'
+  Checkpoints sync to: origin
+
+── Active Sessions ─────────────────────────────────────────────────────────────
+
+Codex (gpt-6-astra) · 01a0a62b-cda0-7241-a5d4-52fc46016eb3
+> "The goal of this branch is to abstract the gk-rz command ..."
+started just now
+
+────────────────────────────────────────────────────────────────────────────────
+1 session
+
+Agents: run `entire agent-help` for machine-readable usage.
