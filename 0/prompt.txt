@@ -1,0 +1,6 @@
+So if I have 
+
+data.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_0.gkyl")
+data.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_1.gkyl")
+
+Will this then mutate into a GData state object where the two datasets are in there? So i could call data.collect() to combine them?
