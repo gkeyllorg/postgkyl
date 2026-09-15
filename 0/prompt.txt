@@ -1,0 +1,48 @@
+How would I take this script and move the grid of single_comparison over by 3 units? So I want to subtract 3 from the grid here? Show me how we can do it in the present version of the code and suggest a more elegant approach from the input file level of how we can manipulate the grids. 
+import postgkyl as pg
+
+data = pg.load("zzim-ion_BiMaxwellianMoments_130.gkyl").interpolate().map("zzim-geo_corn_mc2nu_pos_deflated.gkyl")
+
+factor = 1.67e-27 * 2.014 / 1e-19 / 1000
+
+data[...,2:4] *= factor
+
+single_comparison = pg.load("../1x-beams-R-scan/R-scan/R-15/zzim-ion_BiMaxwellianMoments_65.gkyl").interpolate().map("../1x-beams-R-scan/R-scan/R-15/zzim-geo_corn_mc2nu_pos_deflated.gkyl")
+single_comparison[...,2:4] *= factor
+
+pg.plot(
+    data, single_comparison,
+    legend=True,
+    legend_labels=["Tandem", "Simple"],
+    legend_subplot=1,
+    legend_loc="best",
+    title="Tandem mirror R=15",
+    xlabel="z [m]",
+    figsize="12,10",
+    split_linear_log=True,
+    split_point=0.0,
+    split_log_side="right",
+    split_width_ratios=(1.0, 1.0),
+    split_gap=0.0,
+    split_legend_side="linear",
+    split_log_nonpositive="mask",
+    split_linear_ylim=[
+        (0.0, 3e19),
+        (-1.4e6, 1.4e6),
+        (-2, 22.0),
+        (0.0, 45.0),
+    ],
+    split_log_ylim=[
+        (1e13, 4e19),
+        (1e2, 2e6),
+        (1e-1, 30.0),
+        (1e-1, 100.0),
+    ],
+    subplot_ylabels=(
+        r"Density [$\mathrm{m}^{-3}$],"
+        r"$U_\parallel$ [m/s],"
+        r"$T_\parallel$ [keV],"
+        r"$T_\perp$ [keV]"
+    ),
+    saveas="tandem-mirror-15.pdf",
+)
