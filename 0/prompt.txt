@@ -1,0 +1,1 @@
+Why is command_spec a seperate directory? Shouldn't it be inside the CLI directory?
