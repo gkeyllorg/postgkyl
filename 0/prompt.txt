@@ -1,0 +1,1 @@
+Add support for color as a vector of all the different line colors, while maintaining existing functionality
