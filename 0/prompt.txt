@@ -1,0 +1,1 @@
+Write a small bash script that renames all *.gkyl suffix files from gk_lorentzian_mirror to zzim, so it doesn't alter anything that comes after. This is the prefix for files like gk_lorentzian_mirror-elc_2.gkyl
