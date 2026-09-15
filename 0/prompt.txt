@@ -1,0 +1,1 @@
+Can you add a unit test to make that the methods are all members of the objects, as well as pg. functions? Add a unit test to prevent the issue that we experienced here
