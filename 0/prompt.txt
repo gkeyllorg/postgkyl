@@ -1,0 +1,24 @@
+I was trying to do this in the script, but it errored. why did it error? 
+
+import postgkyl as pg
+import numpy as np
+
+max_field = np.max(pg.load('zzim-field_65.gkyl').interpolate())
+zero_field = pg.load('zzim-field_65.gkyl').interpolate().select(z0 = 0.0)
+
+diff = max_field - zero_field
+
+print(diff)
+
+
+Traceback (most recent call last):
+  File "/pscratch/sd/m/mhrosen/gkylmax/a-thesis-simulations/1x-beams/calc-beam-confining-potential.py", line 4, in <module>
+    max_field = np.max(pg.load('zzim-field_65.gkyl').interpolate())
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/numpy/_core/fromnumeric.py", line 3161, in max
+    return _wrapreduction(a, np.maximum, 'max', axis, None, out,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/numpy/_core/fromnumeric.py", line 83, in _wrapreduction
+    return ufunc.reduce(obj, axis, dtype, out, **passkwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: operand type(s) all returned NotImplemented from __array_ufunc__(<ufunc 'maximum'>, 'reduce', <GData (800,) | 1 comp | [-2.5,2.5] | serendipity p1 interpolate | tag 'default'>, axis=None, dtype=None): 'GData'
