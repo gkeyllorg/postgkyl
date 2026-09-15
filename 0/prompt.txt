@@ -1,0 +1,1 @@
+How do I use plot in matplotlib.py to set the line color of 1D lines from the postgkeyll interface? Say I want to set the line colors for 3 lines, each with a distinct line color
