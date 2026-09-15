@@ -1,0 +1,13 @@
+How would we do something like this, which defines the GData object, then loads onto it?
+
+import postgkyl as pg
+
+data = pg.GData()
+data.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_0.gkyl").local_poly().plot()
+
+python test.py
+Traceback (most recent call last):
+  File "/home/maxwell-rosen/gkeyll/test.py", line 4, in <module>
+    data.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_0.gkyl").local_poly().plot()
+    ^^^^^^^^^
+AttributeError: 'GData' object has no attribute 'load'
