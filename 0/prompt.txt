@@ -1,0 +1,132 @@
+Can you weigh in on this conversation? 
+
+Antoine  [4:15 PM]
+how do I know how to use gk-rz?
+[4:15 PM]using the API
+Maxwell Rosen  [4:16 PM]
+I think you have to call pg.gk_rz because it's a diagnostic, not an ops (edited) 
+Antoine  [4:16 PM]
+import postgkyl as pg
+
+session = pg.load("/Users/ahoffman/personal_gkyl_scripts/sim_data/3x2v/tcv_pt_0.5mw_coarse/rt_gk_tcv_nt_iwl_adapt_src_3x2v_p1-ion_M0_700.gkyl")
+session.gk_rz()[4:16 PM]like this does not work
+[4:16 PM]it is definitely an operation gk-rz
+Maxwell Rosen  [4:16 PM]
+It's a diagnostic because it's gk specific (edited) 
+Antoine  [4:17 PM]
+it's a special kind of interpolation
+[4:17 PM]but it's the same category of operation than interpolation
+Maxwell Rosen  [4:17 PM]
+But it's gk specific, and we put those operations in a different place
+Antoine  [4:18 PM]
+why can't GData inherit from all specific operations?
+Maxwell Rosen  [4:19 PM]
+I think it's because it breaks the layering. Diagnostics sit on top of GData because they invoke GData methods, so it would create a cyclical dependency issue
+Antoine  [4:19 PM]
+I don't find any gk_rz in pg
+Maxwell Rosen  [4:19 PM]
+We can make a GKData class which has all these methods
+Mana  [4:20 PM]
+that sounds like a bad idea
+Mana  [4:20 PM]
+so let's not go that way/discuss that (edited) 
+Maxwell Rosen  [4:20 PM]
+check out src/postgkyl/cli/commands/gk_rz.py for how its used
+Antoine  [4:21 PM]
+hmm
+Maxwell Rosen  [4:21 PM]
+Looks like it's called pg.diagnostics.gyrokinetics.rz.map_to_rz() or something
+Mana  [4:21 PM]
+guys, if you figure how how to do something, please throw it in the examples folder!
+Maxwell Rosen  [4:21 PM]
+I'll put my examples above in there
+[4:22 PM]Feel free to PR into this branch. Layering is important though, and there is a unit test for this
+Antoine  [4:22 PM]
+i don't understand how to use gk-rz in the API
+Maxwell Rosen  [4:22 PM]
+Did you ask an LLM?
+Antoine  [4:22 PM]
+no
+[4:22 PM]I did not have to ask an LLM with postgkyl 1
+Mana  [4:23 PM]
+indeed. The answer should not be: ask an LLM
+Maxwell Rosen  [4:23 PM]
+Read src/postgkyl/diagnostics/gyrokinetics/rz.py
+Mana  [4:23 PM]
+Max, you can create examples 10X faster than us. If we ask you for one, just put it together and throw it in the Examples folder please
+Antoine  [4:23 PM]
+Max, we should be able to do data.gk_rz() to transform our data exactly like the CLI
+Mana  [4:24 PM]
+you've given like 10 examples in this thread. But Examples only has 4 scripts.
+Maxwell Rosen  [4:24 PM]
+No because this is a GK specific operation and it breaks layering
+Antoine  [4:24 PM]
+if giving a direct access to a commonly used routine is breaking layering then the layering is wrong I guess
+Maxwell Rosen  [4:25 PM]
+The solution is to make a GK_GData class, only for GK operations. Vlasov data or FV should not need GK info
+Antoine  [4:25 PM]
+the philosophy between CLI and API should be the same, there is data on the stack and we perform operations on it
+Maxwell Rosen  [4:26 PM]
+This is the same philosophy between the split of GData and GDataState to break dependency cycles through layering
+[4:26 PM]Then you'd invoke some kind of pg.load_gk command, similar to pg.load_gk_quantity() (edited) 
+Antoine  [4:26 PM]
+:face_with_spiral_eyes:
+[4:27 PM]I'm asking Claude to generate an example we'll see
+Maxwell Rosen  [4:27 PM]
+It's day 1. It's an adjustment, but there are huge benifits
+Antoine  [4:28 PM]
+  import postgkyl as pg
+  from postgkyl.diagnostics.gyrokinetics import rz
+
+  path = "/Users/ahoffman/personal_gkyl_scripts/sim_data/3x2v/tcv_pt_0.5mw_coarse/rt_gk_tcv_nt_iwl_adapt_src_3x2v_p1-ion_M0_700.gkyl"
+
+  data = pg.load(path)  # keep it modal (don't .interpolate() yourself)
+
+  geo = rz.resolve_geometry(path)                          # finds the -geo_int_nodes/mapc2p file
+  proj = rz.resolve_rz_projection(data, geo, z_axis=0.0)    # set z_axis = Z_axis from your input file
+  mapped = rz.map_to_rz(data, proj, phi_tor=0.0)            # phi_tor = toroidal angle to slice at
+
+  mapped.plot()Mana  [4:28 PM]
+you are both right I think.
+Question @Maxwell Rosen: If we can do data.interpolate() , and I see interpolate is in operatons/, why isn't it data.operations.interpolate() while for gk_rz we have to do pg.diagnostics.gyrokinetics.rz.map_to_rz() ?
+Mana  [4:29 PM]
+it does seem to me that there's an inappropriate partioning or uneven treatment of operations vs diagnostics.gyrokinetics.
+[4:30 PM]how do you decide what goes into operations vs diagnostics then?
+Antoine  [4:30 PM]
+the example works but it plots the thing twice, this is because plot should not show the image. I want to set no show somehow but the docstring is not made properly because it does not tell you what parameter you can pass to the plot function. This is a serious thing and my CLAP interface was made to always give you access to the parameters so that you can be very efficient and learn live while your coding.
+Screenshot 2026-09-01 at 4.29.14 PM.png Maxwell Rosen  [4:31 PM]
+Equation specific or knowledgeable functions are diagnostics, while operations which are fundamental, think /core , are in ops
+Antoine  [4:31 PM]
+if we create a Session object that inherit from GData and will be the interface with the user, we can provide shortcut to many things
+Maxwell Rosen  [4:32 PM]
+There is a show=False option in plot
+Antoine  [4:34 PM]
+I'm sure everything is there, it's just that we cannot guess, we need the docstring to know that when we use the API
+Maxwell Rosen  [4:34 PM]
+There are docstrings
+Mana  [4:34 PM]
+but I don't see why .operations is not needed while .diagnostics is
+
+if anything there should be sub-folders in operations for core/moments/vlasov/gyrokinetics and likewise in diagnostics. gk-rz is a type of operation, while energy_balance is a diagnostic
+[4:35 PM]so we'd have
+operations/core/interpolate
+operations/gyrokinetics/gk_rz
+diagnostics/gyrokinetics/energy_balanceMaxwell Rosen  [4:38 PM]
+This is a problem because the gk_rz would want to call ops (select or interp or something) also, so they can't live inside the same data class without importing itself
+Mana  [4:39 PM]
+Nope.
+gk_rz doesn't call interp, nor select because select, if at all, has to be called before calling gk_rz (@Antoine can correct me)
+Antoine  [4:40 PM]
+nope
+[4:40 PM]you just call gk-rz
+Mana  [4:40 PM]
+gk_rz is just a special interpolation, that's all
+Maxwell Rosen  [4:40 PM]
+Would this operation be applicable to other equation systems?
+[4:41 PM]Is there a more general name to make it less GK specific sounding?
+Mana  [4:41 PM]
+in principle much of what we call GK-specific is applicable to vlasov/pkpm if those solvers had curvilinear coordinates, but they don't
+[4:41 PM]so in practice some of these things are "gk-specific"
+[4:42 PM]but my intuition is that postgkyl needs more of the same structure as gkeyll (core/moments/vlasov/gyrokinetic/pkpm). It will simplify things in the future
+Maxwell Rosen  [4:43 PM]
+I don't think there is anything structurally wrong with making a directory src/postgkyl/operations/gyrokinetics/init.py which has all the definitions, but this does break a principle that ops do not know about equations
