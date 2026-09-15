@@ -1,0 +1,2 @@
+Why does the 06_alpha_convergence example need 
+    multiblock=True, ? this should not be multiblock data
