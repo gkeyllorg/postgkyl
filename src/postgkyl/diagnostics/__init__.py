@@ -146,10 +146,8 @@ for _name in (
     "fetch_Tperp_from_M0_M2perp",
     "energy_balance_error",
     "particle_balance_error",
-    "is_geo_mapc2p",
     "multib_tag",
     "nodes_to_RZ",
-    "resolve_geometry",
 ):
   _function = getattr(gk, _name)
   if command_spec(_function) is None and hidden_spec(_function) is None:

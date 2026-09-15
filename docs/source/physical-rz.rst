@@ -9,13 +9,18 @@ The Python and CLI outputs below are both generated and compared when this websi
 Computational coordinates are useful for analysis, but a poloidal view places
 the field in its physical geometry. Keep the companion
 ``rt_gk_tcv_nt_iwl_3x2v_p1-geo_int_mapc2p.gkyl`` beside the electron density
-file so ``pg.gk.rz`` can resolve it by the simulation prefix. This diagnostic
-loads Gkeyll geometry and composes equation-independent coordinate operations.
+file so ``pg.map_to_rz`` can resolve it by the simulation prefix. The mapping
+operation uses the same geometry filenames for every Gkeyll equation system.
+The matching CLI verb is ``map_to_rz``.
 
-For explicit geometry, construct ``pg.Geometry`` from coordinate arrays, build
+Load reusable geometry with ``pg.resolve_geometry(data.file_name)`` or construct
+``pg.Geometry`` from coordinate arrays, build
 ``pg.resolve_rz_projection(data, geometry)``, and apply it with
 ``data.map_to_rz(projection=projection)``. The projection can be reused for
 fields on the same computational grid. Three-dimensional reconstruction
 assumes periodic field-aligned coordinates and twist-and-shift boundaries.
 
-.. include:: _pairs/05_gk_rz.inc
+Related toroidal surface sampling is available through
+``data.extract_flux_surface(...)`` and the ``extract_flux_surface`` CLI verb.
+
+.. include:: _pairs/05_map_to_rz.inc

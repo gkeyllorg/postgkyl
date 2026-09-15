@@ -449,8 +449,9 @@ _ALLOWED = {
     # transform_frame/laguerre) moved up
     # into diagnostics, folded with the
     # models/ array math they delegated to;
-    # flat modules are equation-blind core verbs; model-specific auxiliary
-    # discovery and interpretation belong to diagnostics.
+    # flat modules are equation-blind core verbs; I/O owns shared geometry
+    # filenames/layouts and operations assembles and maps that geometry.
+    # Model-specific quantity discovery and physics belong to diagnostics.
     "diagnostics": {
         "gdatastate", "operations", "numerics", "gdata", "render", "io",
         "cli_spec"

@@ -1,14 +1,19 @@
-"""In-memory coordinate geometry and shared field-mapping contracts.
+"""In-memory cylindrical geometry and its assembly from Gkeyll output.
 
-These records and helpers do not discover or load auxiliary datasets.
+I/O owns filenames and on-disk layouts. This module evaluates modal geometry
+and assembles point coordinates for equation-agnostic mapping operations.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 import numpy as np
 
-from postgkyl.dg import num_basis
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.io.geometry import (
+    resolve_geometry_files,
+    geometry_components,
+    geometry_coordinates,
+)
 from postgkyl.numerics import nodal_to_cell_centered_grid
 from .interpolate import interpolate
 
@@ -26,33 +31,6 @@ class Geometry:
   vert_z: np.ndarray
   phi: np.ndarray | None
   corner: tuple[list[np.ndarray], np.ndarray, np.ndarray] | None
-
-
-@dataclass(frozen=True)
-class RzProjection:
-  """Precomputed R-Z mapping reusable by fields on one computational grid."""
-
-  num_dims: int
-  r: np.ndarray
-  z: np.ndarray
-  computational_grid: tuple[np.ndarray, ...]
-  zc: np.ndarray | None = None
-  zf: np.ndarray | None = None
-  box: float | None = None
-  wind: np.ndarray | None = None
-  phi0_zf: np.ndarray | None = None
-
-
-@dataclass(frozen=True)
-class FluxSurfaceGrid:
-  """Precomputed toroidal sampling grid for one radial flux surface."""
-
-  x_idx: int
-  zc: np.ndarray
-  zf: np.ndarray
-  phi_tor_list: np.ndarray
-  phi_2d: np.ndarray
-  computational_grid: tuple[np.ndarray, ...]
 
 
 def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
@@ -95,110 +73,54 @@ def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
           "Corner geometry coordinate and R/Z array shapes are incompatible.")
 
 
-def _validate_positive_int(value: int, name: str) -> int:
-  if isinstance(value, bool) or not isinstance(value,
-                                               (int, np.integer)) or value <= 0:
-    raise ValueError(f"{name} must be a positive integer.")
-  return int(value)
+def _pointwise_file(
+    path: str) -> tuple[list[np.ndarray], np.ndarray, GDataState]:
+  """Load a geometry point file without evaluating its stored coordinates."""
+  data = GDataState(path)
+  return [np.squeeze(axis) for axis in data.grid], np.squeeze(data.values), data
 
 
-def _validate_modal_data(data: GDataState, operation: str,
-                         dimensions: tuple[int, ...]) -> None:
-  """Enforce the shared raw-DG input contract for coordinate projections."""
-  if data.num_dims not in dimensions:
-    expected = " or ".join(f"{dim}-D" for dim in dimensions)
-    raise ValueError(
-        f"{operation} requires {expected} data; got {data.num_dims}-D.")
-  if data.values is None:
-    raise ValueError(f"{operation} requires a loaded dataset.")
-  if data.ctx.get("interpolated") or data.ctx.get("value_form",
-                                                  "modal") != "modal":
-    raise ValueError(f"{operation} expects un-interpolated modal DG data.")
-  if not data.ctx.get("basis_type"):
-    raise ValueError(
-        f"{operation} requires 'basis_type' metadata on the input data.")
-  poly_order = data.ctx.get("poly_order")
-  if isinstance(poly_order, bool) or not isinstance(poly_order, (int, np.integer)) \
-      or poly_order < 0:
-    raise ValueError(
-        f"{operation} requires a nonnegative integer 'poly_order'.")
-  if len(data.grid) != data.num_dims or any(
-      np.asarray(axis).ndim != 1 or np.asarray(axis).size < 2
-      for axis in data.grid):
-    raise ValueError(
-        f"{operation} requires one one-dimensional edge grid per data dimension."
-    )
-  if any(not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))
-         for axis in data.grid):
-    raise ValueError(
-        f"{operation} requires strictly monotonic data edge grids.")
+def _read_nodes_geometry(path: str):
+  grid, values, data = _pointwise_file(path)
+  coords = geometry_coordinates(grid, values, path)
+  return coords, *geometry_components(values, data.ctx, path)
 
 
-def _num_fields(data: GDataState) -> int:
-  """Return the number of physical fields stored in raw modal data."""
-  basis_count = num_basis(data.num_dims, int(data.ctx["poly_order"]),
-                          data.ctx["basis_type"])
-  stored = data.values.shape[-1]
-  if stored % basis_count:
-    raise ValueError(
-        f"Data stores {stored} coefficients per cell, which is incompatible "
-        f"with a {basis_count}-coefficient basis.")
-  return stored // basis_count
+def _read_mapc2p_geometry(path: str):
+  field = interpolate(GDataState(path))
+  coords = nodal_to_cell_centered_grid(field.grid, field.values.shape[:-1])
+  return coords, *geometry_components(field.values, field.ctx, path)
 
 
-def _validate_component(data: GDataState, comp: int) -> int:
-  if isinstance(comp, bool) or not isinstance(comp, (int, np.integer)):
-    raise ValueError("comp must be an integer component index.")
-  comp = int(comp)
-  num_fields = _num_fields(data)
-  if not 0 <= comp < num_fields:
-    raise ValueError(
-        f"comp {comp} is out of bounds for data with {num_fields} component(s)."
-    )
-  return comp
+def _read_corner_rz(path: str):
+  grid, values, data = _pointwise_file(path)
+  coords = geometry_coordinates(grid, values, path, corner=True)
+  major_r, vert_z, _ = geometry_components(values, data.ctx, path)
+  return coords, major_r, vert_z
 
 
-def _interpolation_grid(
-    data: GDataState) -> tuple[list[np.ndarray], list[np.ndarray]]:
-  """Return interpolation edges/centers without evaluating field values."""
-  num_interp = int(data.ctx["poly_order"]) + 1
-  edges = [
-      np.linspace(axis[0], axis[-1],
-                  num_interp * (axis.size - 1) + 1) for axis in data.grid
-  ]
-  centers = nodal_to_cell_centered_grid(
-      edges, np.array([axis.size - 1 for axis in edges]))
-  return edges, centers
+def resolve_geometry(file_name: str | None,
+                     *,
+                     mapc2p: str | None = None,
+                     nodes_file: str | None = None) -> Geometry:
+  """Load cylindrical geometry for any Gkeyll simulation output.
+
+  Prefer ``<prefix>-geo_int_nodes.gkyl``, falling back to the modal
+  ``<prefix>-geo_int_mapc2p.gkyl``. Optional ``geo_corn_nodes`` close the
+  poloidal boundary. Filenames and coordinate layouts are owned by I/O.
+  ``mapc2p`` and ``nodes_file`` are mutually exclusive overrides; an empty
+  ``mapc2p`` requests the inferred modal filename. '*' selects the source block.
+  """
+  files = resolve_geometry_files(file_name,
+                                 mapc2p=mapc2p,
+                                 nodes_file=nodes_file)
+  coords, major_r, vert_z, phi = (_read_nodes_geometry(files.interior)
+                                  if files.kind == "nodes" else
+                                  _read_mapc2p_geometry(files.interior))
+  corner = _read_corner_rz(files.corner) if files.corner is not None else None
+  geometry = Geometry(coords, major_r, vert_z, phi, corner)
+  _validate_geometry(geometry, len(coords))
+  return geometry
 
 
-def _interpolate_component(
-    data: GDataState,
-    comp: int) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
-  """Interpolate and return a component already checked by the public API."""
-  field = interpolate(data)
-  cells = field.values.shape[:-1]
-  centers = nodal_to_cell_centered_grid(field.grid, cells)
-  return field.grid, centers, field.values[..., comp]
-
-
-def _same_grid(left: tuple[np.ndarray, ...] | list[np.ndarray],
-               right: tuple[np.ndarray, ...] | list[np.ndarray]) -> bool:
-  return len(left) == len(right) and all(
-      a.shape == b.shape and np.allclose(a, b, rtol=1e-12, atol=1e-14)
-      for a, b in zip(left, right))
-
-
-def validate_mapping_grid(data: GDataState,
-                          computational_grid: tuple[np.ndarray, ...]) -> None:
-  """Require the modal field grid used to construct a reusable mapping."""
-  _validate_modal_data(data, "coordinate mapping", (len(computational_grid), ))
-  edges, _ = _interpolation_grid(data)
-  if not _same_grid(computational_grid, edges):
-    raise ValueError(
-        "Incompatible mapping: data computational grid does not match "
-        "the grid used to build the projection.")
-
-
-__all__ = [
-    "Geometry", "RzProjection", "FluxSurfaceGrid", "validate_mapping_grid"
-]
+__all__ = ["Geometry", "resolve_geometry"]

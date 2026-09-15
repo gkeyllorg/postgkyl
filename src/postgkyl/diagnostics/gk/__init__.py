@@ -7,8 +7,8 @@ registry (``registry.py``), and the "physics-ready data by name" entry point
 instruction file's decision record): splitting resolution from physics would
 give gyrokinetics two homes for one piece of equation knowledge. Only the
 equation-blind stem/frame discovery is shared, via
-``postgkyl.diagnostics.discovery``. Geometry discovery lives here and composes
-explicit coordinate transformations from ``operations.map``.
+``postgkyl.diagnostics.discovery``. Shared geometry loading and coordinate
+mapping are owned by I/O and operations, respectively.
 """
 
 from __future__ import annotations
@@ -38,10 +38,6 @@ from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_ba
 from .particle_balance import ParticleBalanceTraces, particle_balance, particle_balance_error
 from .nodes import nodes, multib_tag, nodes_to_RZ
 
-from .geometry import GKYL_GEOMETRY_ID, is_geo_mapc2p, resolve_geometry
-from .rz import rz
-from .fluxsurf import fluxsurf
-
 from typing import Annotated
 
 from postgkyl.cli_spec import (
@@ -66,9 +62,6 @@ particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
                                                             KeyValue()]
 for _function in (energy_balance, particle_balance, nodes):
   command(_REPORT_SPEC)(_function)
-
-for _function in (rz, fluxsurf):
-  command(CommandSpec(Section.DIAGNOSTICS, Execution.MAP_REPLACE))(_function)
 
 __all__ = [
     "load_distf",
@@ -96,12 +89,7 @@ __all__ = [
     "ParticleBalanceTraces",
     "particle_balance",
     "particle_balance_error",
-    "GKYL_GEOMETRY_ID",
     "nodes",
-    "is_geo_mapc2p",
     "multib_tag",
     "nodes_to_RZ",
-    "resolve_geometry",
-    "rz",
-    "fluxsurf",
 ]

@@ -215,66 +215,24 @@ class TestOneFigurePerField:
       assert mesh.get_clim() == pytest.approx((-1.0, 1.0))
 
 
-# ================================== per-block geometry (gk_rz/gk_fluxsurf)
+# ================================== per-block geometry mappings
 class TestPerBlockGeometry:
 
   def test_geometry_prefix_is_per_block(self):
     from importlib import import_module
-    rz = import_module("postgkyl.diagnostics.gk.rz")
+    rz = import_module("postgkyl.io.geometry")
 
     assert rz.geometry_prefix("d/sim_b2-elc_M0_3.gkyl") == "d/sim_b2"
     assert rz.geometry_prefix("d/sim-elc_M0_3.gkyl") == "d/sim"
     assert rz.geometry_prefix("") is None
 
   def test_explicit_geometry_path_substitutes_the_block_index(self):
-    from postgkyl.diagnostics.gk.rz import per_block_path
+    from postgkyl.io.geometry import per_block_path
 
     assert per_block_path("geo_b*.gkyl", 3) == "geo_b3.gkyl"
     assert per_block_path("geo.gkyl", 3) == "geo.gkyl"  # no '*' -> as given
     assert per_block_path("geo_b*.gkyl", None) == "geo_b*.gkyl"  # single block
     assert per_block_path(None, 3) is None
-
-  def test_each_block_resolves_its_own_geometry(self, monkeypatch):
-    # The bug this replaces: geometry was resolved once, from the first
-    # dataset, and that one projection was applied to every block -- drawing
-    # every block at block 0's position.
-    from importlib import import_module
-    rz = import_module("postgkyl.diagnostics.gk.rz")
-
-    from types import SimpleNamespace
-    monkeypatch.setattr(rz, "validate_mapping_grid", lambda *_args: None)
-    seen = []
-    monkeypatch.setattr(
-        rz, "resolve_geometry",
-        lambda file_name, **kw: seen.append(file_name) or file_name)
-    monkeypatch.setattr(
-        rz, "resolve_rz_projection",
-        lambda first, geo, **kw: SimpleNamespace(computational_grid=(),
-                                                 geometry=geo))
-
-    blocks = _blocks(0) + _blocks(1)  # 3 blocks x 2 frames
-    projections = rz.rz_projections(blocks)
-
-    # One geometry read per block, not per dataset and not just one overall.
-    assert len(seen) == 3
-    assert set(projections) == {
-        os.path.join(GEN, f"mb_sim_b{b}")
-        for b in (0, 1, 2)
-    }
-    for data in blocks:
-      assert rz.projection_for(
-          projections, data) is projections[rz.geometry_prefix(data.file_name)]
-
-  def test_interpolated_grid_values_is_idempotent(self):
-    # 'pgkyl ... interp gk_rz' must not interpolate twice: the second pass
-    # would run the DG evaluation matrix over values that are already point
-    # values, silently producing garbage instead of raising.
-    from postgkyl.diagnostics.gk import utils
-
-    raw = pg.load(os.path.join(GEN, "mb_sim_b0-elc_M0_0.gkyl"))
-    once = utils.interpolated_grid_values(raw)
-    twice = utils.interpolated_grid_values(raw.interpolate())
-    assert np.allclose(once[2], twice[2])
 
 
 # ================================================================== CLI

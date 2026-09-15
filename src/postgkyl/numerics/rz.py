@@ -1,7 +1,7 @@
-"""Fourier reconstruction of a periodic field-aligned poloidal slice.
+"""Reconstruct slices and sample surfaces in periodic field-aligned coordinates.
 
-The binormal direction is periodic; parallel endpoints obey twist-and-shift.
-All coordinate and boundary information is supplied as numerical arrays.
+The poloidal Fourier reconstruction uses twist-and-shift parallel boundaries.
+All coordinate and boundary information is supplied explicitly.
 """
 import numpy as np
 from scipy.interpolate import PchipInterpolator
@@ -37,3 +37,24 @@ def fft_poloidal_project(values: np.ndarray, zc: np.ndarray, box: float,
     out += weight * np.real(
         fk_zf[:, mode, :] * np.exp(-1j * 2.0 * np.pi * mode * fraction))
   return out
+
+
+def sample_flux_surface(values: np.ndarray, zc: np.ndarray, zf: np.ndarray,
+                        phi_2d: np.ndarray, phi_tor: np.ndarray) -> np.ndarray:
+  """Resample a radial slice in parallel position and periodic toroidal angle."""
+  vals_zf = PchipInterpolator(zc, values, axis=-1, extrapolate=True)(zf)
+  ny = values.shape[0]
+  surface = np.empty((phi_tor.size, zf.size))
+  for iz in range(zf.size):
+    phi_y = phi_2d[:, iz]
+    val_y = vals_zf[:, iz]
+    box = np.mean(np.diff(phi_y)) * ny
+    if not np.isfinite(box) or np.isclose(box, 0.0):
+      raise ValueError(
+          "Toroidal geometry has a zero or non-finite binormal angular span.")
+    phi_ext = np.concatenate([phi_y - box, phi_y, phi_y + box])
+    val_ext = np.concatenate([val_y, val_y, val_y])
+    order = np.argsort(phi_ext)
+    folded = phi_y[0] + np.mod(phi_tor - phi_y[0], box)
+    surface[:, iz] = np.interp(folded, phi_ext[order], val_ext[order])
+  return surface

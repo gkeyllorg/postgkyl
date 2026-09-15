@@ -14,6 +14,7 @@ import pytest
 import postgkyl.cli.compiler as compiler
 from postgkyl.cli_spec import (
     CliArgument,
+    CliHidden,
     CliType,
     CommandSpec,
     Execution,
@@ -42,6 +43,50 @@ class Format(Enum):
 
 
 _CALLS = []
+
+
+def test_hidden_keyword_parameter_keeps_its_python_default_in_cli():
+  calls = []
+
+  @command(
+      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
+  def sample(*,
+             cached: Annotated[object | None,
+                               CliHidden("Python cache")] = None,
+             count: int = 2):
+    """Use an optional Python cache.
+
+    Args:
+      cached: A reusable Python object.
+      count: Number of samples.
+    """
+    calls.append((cached, count))
+
+  generated = build_click_command(compile_callable(sample))
+  result = CliRunner().invoke(generated, ["--count", "3"], obj=DataSpace())
+  assert result.exit_code == 0, result.output
+  assert calls == [(None, 3)]
+  assert "--cached" not in CliRunner().invoke(generated, ["--help"]).output
+  cache = object()
+  sample(cached=cache)
+  assert calls[-1] == (cache, 2)
+
+
+@pytest.mark.parametrize("parameters, message", [
+    ("*, value: Annotated[object, CliHidden('cache')]", "with a default"),
+    ("value: Annotated[object, CliHidden('cache')] = None", "keyword-only"),
+    ("*, value: Annotated[object, CliHidden('cache'), CliType(str)] = None",
+     "cannot be combined"),
+])
+def test_hidden_parameters_reject_required_positional_or_conflicting_markers(
+    parameters, message):
+  namespace = dict(Annotated=Annotated, CliHidden=CliHidden, CliType=CliType)
+  exec(f"def sample({parameters}): pass", namespace)
+  sample = command(
+      CommandSpec(Section.UTILITY, Execution.LOAD,
+                  result=ResultPolicy.SILENT))(namespace["sample"])
+  with pytest.raises(CommandCompilationError, match=message):
+    compile_callable(sample)
 
 
 @command(

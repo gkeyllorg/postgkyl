@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from .geometry import is_geo_mapc2p
+from postgkyl.io.geometry import is_geo_mapc2p
 
 from . import utils
 

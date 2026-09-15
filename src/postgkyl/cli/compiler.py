@@ -15,6 +15,7 @@ import click
 from postgkyl.cli_spec import (
     ChoiceProvider,
     CliArgument,
+    CliHidden,
     CliType,
     CommandSpec,
     DatasetRef,
@@ -356,6 +357,16 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
       raise _error(canonical, parameter.name, "**kwargs is not representable")
     annotation = hints.get(parameter.name, parameter.annotation)
     base, markers = _unwrap_annotated(annotation)
+    if any(isinstance(marker, CliHidden) for marker in markers):
+      if len(markers) != 1:
+        raise _error(canonical, parameter.name,
+                     "CliHidden cannot be combined with other markers")
+      if (parameter.kind is not inspect.Parameter.KEYWORD_ONLY
+          or parameter.default is inspect.Parameter.empty):
+        raise _error(
+            canonical, parameter.name,
+            "CliHidden requires a keyword-only parameter with a default")
+      continue
     marker_injected = any(
         isinstance(marker, PipelineInput) for marker in markers)
     if sum(isinstance(marker, PipelineInput) for marker in markers) > 1:

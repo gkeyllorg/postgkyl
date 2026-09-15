@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 
 from postgkyl.diagnostics.gk import utils as gk_utils
-from postgkyl.diagnostics.gk import geometry
+from postgkyl.io import geometry
 
 nodes = importlib.import_module("postgkyl.diagnostics.gk.nodes")
 

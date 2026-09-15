@@ -12,9 +12,10 @@ data (full is terminal; partial stays native and lower-dimensional);
 ``average`` reduces modal data over a dimension subset via
 ``gkyl_array_average``, producing a new lower-dimensional modal dataset.
 
-Coordinate transformations live in ``map`` and receive explicit mappings or
-geometry. Operations are equation-blind; model-specific auxiliary discovery
-and physical compositions belong in ``diagnostics``.
+Coordinate transformations have their own flat verb modules. ``geometry``
+assembles point coordinates using I/O's shared Gkeyll file conventions;
+mapping operations accept reusable projections or resolve that geometry.
+Equation-specific physical compositions belong in ``diagnostics``.
 
 The terminal renderers (``plot``, ``animate``, ``plotly``, ``plotly_animate``,
 and ``pyvista``) are exceptions:
@@ -47,9 +48,11 @@ from .fit import fit
 from .growth import growth
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
-from .map import (map, map_to_rz, resolve_rz_projection, extract_flux_surface,
-                  resolve_flux_surface_grid)
-from .geometry import Geometry, RzProjection, FluxSurfaceGrid
+from .map import map
+from .map_to_rz import map_to_rz, resolve_rz_projection, RzProjection
+from .extract_flux_surface import (extract_flux_surface,
+                                   resolve_flux_surface_grid, FluxSurfaceGrid)
+from .geometry import Geometry, resolve_geometry
 
 # Command metadata is attached at the layer that owns each operation.  This
 # block is deliberately declarative: discovery still walks the public API and
@@ -58,6 +61,7 @@ from typing import Annotated, Literal
 
 from postgkyl.cli_spec import (
     CliArgument,
+    CliHidden,
     CliType,
     CommandSpec,
     DatasetRef,
@@ -137,10 +141,17 @@ mask.__annotations__["mask_data"] = Annotated[GDataState | None, DatasetRef()]
 fit.__annotations__["guess"] = str | None
 map.__annotations__["data"] = GDataState
 map.__annotations__["mapping"] = str
+map_to_rz.__annotations__["projection"] = Annotated[
+    RzProjection | None,
+    CliHidden("reuse a projection through the Python API")]
+extract_flux_surface.__annotations__["fs_grid"] = Annotated[
+    FluxSurfaceGrid | None,
+    CliHidden("reuse a sampling grid through the Python API")]
 represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 
 for _function in (interpolate, local_poly, select, average, eval_at_coord_proj,
-                  fft, magsq, grid, differentiate, map):
+                  fft, magsq, grid, differentiate, map, map_to_rz,
+                  extract_flux_surface):
   command(_MAP)(_function)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
@@ -170,9 +181,9 @@ hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
-for _function in (map_to_rz, resolve_rz_projection, extract_flux_surface,
+for _function in (resolve_geometry, resolve_rz_projection,
                   resolve_flux_surface_grid):
-  hidden("requires explicit Python geometry or projection objects")(_function)
+  hidden("constructs geometry or projections for the Python API")(_function)
 
 __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
@@ -182,5 +193,6 @@ __all__ = [
     "extract_input", "fit", "differentiate", "evaluate",
     "available_evaluate_operators", "map", "growth", "map_to_rz",
     "resolve_rz_projection", "extract_flux_surface",
-    "resolve_flux_surface_grid", "Geometry", "RzProjection", "FluxSurfaceGrid"
+    "resolve_flux_surface_grid", "resolve_geometry", "Geometry", "RzProjection",
+    "FluxSurfaceGrid"
 ]

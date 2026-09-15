@@ -17,7 +17,7 @@ owns it and simply gathered here:
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
     interpolate, select              <- operations/ (functional verb spellings)
-    map_to_rz                       <- operations/map.py
+    map_to_rz, resolve_geometry       <- operations/ (coordinate mapping)
     represent, apply                 <- operations/ (value_form verbs)
     available_evaluate_operators     <- operations/ (``evaluate``'s RPN token vocabulary)
     save                             <- io/        (file output)
@@ -76,8 +76,8 @@ from postgkyl.operations import (
     val2coord,
 )
 from postgkyl.operations import (Geometry, RzProjection, FluxSurfaceGrid,
-                                 map_to_rz, resolve_rz_projection,
-                                 extract_flux_surface,
+                                 resolve_geometry, map_to_rz,
+                                 resolve_rz_projection, extract_flux_surface,
                                  resolve_flux_surface_grid)
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from postgkyl.gdatastate import group_blocks
@@ -97,7 +97,7 @@ __all__ = [
     "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
     "extract_input", "fit", "growth", "differentiate", "map", "represent",
     "apply", "Geometry", "RzProjection", "FluxSurfaceGrid", "map_to_rz",
-    "resolve_rz_projection", "extract_flux_surface",
+    "resolve_rz_projection", "resolve_geometry", "extract_flux_surface",
     "resolve_flux_surface_grid", "save", "collect", "evaluate", "relchange",
     "animate", "plotly_animate", "sort", "available_evaluate_operators",
     "plotly", "pyvista", "gk", "__version__", "version_report"

@@ -11,7 +11,7 @@ import pytest
 import postgkyl as pg
 from postgkyl import gpython
 from postgkyl import operations as mapping
-from postgkyl.diagnostics.gk.geometry import resolve_geometry
+from postgkyl.operations.geometry import resolve_geometry
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "tests", "test_data")
@@ -27,7 +27,7 @@ needs_gkeyll = pytest.mark.skipif(
 
 @needs_gkeyll
 def test_2d_mapping_reference_grid_and_values():
-  mapped = pg.gk.rz(pg.load(F2D), nz_interp=2)
+  mapped = pg.map_to_rz(pg.load(F2D), nz_interp=2)
   assert [axis.shape for axis in mapped.grid] == [(33, 33), (33, 33)]
   assert mapped.values.shape == (32, 32, 1)
   np.testing.assert_allclose(mapped.values.flat[:5], [
@@ -164,14 +164,14 @@ def test_state_propagation_projection_reuse_and_public_surfaces():
   np.testing.assert_allclose(first.values, second.values)
 
   fluent = source.map_to_rz(projection=projection)
-  functional = pg.gk.rz(source, mapc2p=F2D_GEO, nz_interp=2)
+  functional = pg.map_to_rz(source, mapc2p=F2D_GEO, nz_interp=2)
   np.testing.assert_allclose(fluent.values, functional.values)
   assert pg.map_to_rz is mapping.map_to_rz is pg.GData.map_to_rz
   assert not hasattr(pg, "gk_rz")
   assert not hasattr(pg.GData, "gk_rz")
 
   inplace = source.clone()
-  result = pg.gk.rz(inplace, mapc2p=F2D_GEO, nz_interp=2, inplace=True)
+  result = pg.map_to_rz(inplace, mapc2p=F2D_GEO, nz_interp=2, inplace=True)
   assert result is inplace and result.ctx["interpolated"] is True
 
 
@@ -185,8 +185,8 @@ def test_comp_selects_an_explicit_physical_field():
   multi.push([axis.copy() for axis in source.grid],
              np.concatenate([source.values, 2.0 * source.values], axis=-1))
   multi._file_name = source.file_name
-  first = pg.gk.rz(multi, comp=0, nz_interp=2)
-  second = pg.gk.rz(multi, comp=1, nz_interp=2)
+  first = pg.map_to_rz(multi, comp=0, nz_interp=2)
+  second = pg.map_to_rz(multi, comp=1, nz_interp=2)
   np.testing.assert_allclose(second.values, 2.0 * first.values)
 
 

@@ -11,7 +11,7 @@ import pytest
 import postgkyl as pg
 from postgkyl import gpython
 from postgkyl import operations as mapping
-from postgkyl.diagnostics.gk.geometry import resolve_geometry
+from postgkyl.operations.geometry import resolve_geometry
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIELD = os.path.join(ROOT, "tests", "test_data",
