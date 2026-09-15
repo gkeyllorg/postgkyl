@@ -1,0 +1,3 @@
+I'm confused about these functions. It really does seem to break some organization and hierarchy of the code, but they're arguing that it's fine Group the diagnostics into their appropriate gkeyll folder names of gyrokinetics /
+  vlasov / pkpm / moments. Several of the python files here are moments, such as enstrophy,
+  five_moment, plasma, rotations, etc
