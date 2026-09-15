@@ -1,0 +1,1 @@
+There should be 1 public method, which has all the options for how the plot is constructed. I like having all the functionality for making figures in 1 place though so that there is one source of truth. How should this be structured? Explain it to me simply. We want to keep the code condensed, simple, consise, and in one place.
