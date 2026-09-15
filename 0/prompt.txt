@@ -1,0 +1,1 @@
+How would we do this for a 1x2v simulation? Write a script utilizing the pg native functionality?
