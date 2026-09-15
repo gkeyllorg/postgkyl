@@ -1,0 +1,33 @@
+In README.md:
+
+> @@ -13,25 +13,14 @@ Full documentation of the Gkeyll project is available at
+ 
+ ## Dependencies and Installation
+ 
+-Postgkyl requires the following packages:
++Postgkyl requires the packages listed in pyproject.toml
+The installation instructions are, overall, confusing. It needs to be written so a high-schooler can just follow a set of steps and do it, without needing to know what a number of things you mention are.
+
+I suggest you rewrite it with this structure:
+
+## Installation
+
+1. Create environment
+(at least mention conda, even if you are not going to provide detail steps)
+### pyenv
+### mamba
+2. Install dependencies
+distinguish between dependencies in environment.yml and those in the .toml file (not sure why they can't just stay in a single file, but ok)
+3. Install postgkyl
+
+## Documentation
+
+
+### Additional installation notes
+#### Gkeyll bridge
+
+## Developing for postgkyl
+
+### pytest
+### formatting
+This way the user is first faced with just what it needs to know (installation+documentation). The rest is to be left for later sections.
