@@ -1,0 +1,1 @@
+I'd like to add some kind of auto axis labeling features for gyrokinetics simulations. How should we do this?
