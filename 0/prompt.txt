@@ -1,0 +1,1 @@
+We do not want to support one-argument component shorthand anymore. Depricate this
