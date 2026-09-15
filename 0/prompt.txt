@@ -1,0 +1,1 @@
+Right now test_examples.py does not recognize mirror_comparison.py. It should
