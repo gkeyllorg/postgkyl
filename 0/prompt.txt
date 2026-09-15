@@ -1,0 +1,11 @@
+python test.py
+Traceback (most recent call last):
+  File "/home/maxwell-rosen/gkeyll/test.py", line 3, in <module>
+    pg.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_*.gkyl").sort().interpolate().collect().plot()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/maxwell-rosen/postgkyl/src/postgkyl/gdata/gdatagroup.py", line 74, in __getattr__
+    values = [getattr(member, name) for member in self._datasets]
+              ~~~~~~~^^^^^^^^^^^^^^
+AttributeError: 'GData' object has no attribute 'sort'
+
+pg.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_*.gkyl").sort().interpolate().collect().plot()
