@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2K6YADWTMXJY2MQXCW4YXX2",
+  "session_id": "01a0a63c-0b2e-7f31-bb4f-99a43551db4b",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-15T18:58:19.107697224Z",
+  "branch": "refactor-diagnostics-gk-rz",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/physical-rz.rst",
+    "examples/README.md",
+    "examples/cli_tutorial.md",
+    "examples/scripts/05_gk_rz.py",
+    "examples/scripts/05_map_to_rz.py",
+    "src/postgkyl/__init__.py",
+    "src/postgkyl/cli/compiler.py",
+    "src/postgkyl/cli_spec.py",
+    "src/postgkyl/diagnostics/__init__.py",
+    "src/postgkyl/diagnostics/gk/__init__.py",
+    "src/postgkyl/diagnostics/gk/fluxsurf.py",
+    "src/postgkyl/diagnostics/gk/geometry.py",
+    "src/postgkyl/diagnostics/gk/nodes.py",
+    "src/postgkyl/diagnostics/gk/rz.py",
+    "src/postgkyl/diagnostics/gk/utils.py",
+    "src/postgkyl/io/__init__.py",
+    "src/postgkyl/io/geometry.py",
+    "src/postgkyl/io/naming.py",
+    "src/postgkyl/numerics/rz.py",
+    "src/postgkyl/operations/__init__.py",
+    "src/postgkyl/operations/_mapping.py",
+    "src/postgkyl/operations/extract_flux_surface.py",
+    "src/postgkyl/operations/geometry.py",
+    "src/postgkyl/operations/map.py",
+    "src/postgkyl/operations/map_to_rz.py",
+    "tests/generate_test_data.py",
+    "tests/test_cli_generator.py",
+    "tests/test_diagnostics_gk_fluxsurf.py",
+    "tests/test_diagnostics_gk_geometry.py",
+    "tests/test_diagnostics_gk_rz.py",
+    "tests/test_diagnostics_programs_nodes.py",
+    "tests/test_docs_build.py",
+    "tests/test_io_geometry.py",
+    "tests/test_mapping_api.py",
+    "tests/test_multiblock.py",
+    "tests/test_operations_geometry.py",
+    "tests/test_operations_map_fluxsurf.py",
+    "tests/test_operations_map_rz.py",
+    "tests/test_postgkyl.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "fc8d6ddcea8e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 169377,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5767040,
+    "output_tokens": 40196,
+    "api_call_count": 48
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-15T18:58:18.999442619Z",
+    "agent_lines": 1412,
+    "agent_removed": 1367,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1412,
+    "total_lines_changed": 2779,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 88,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".codex/hooks.json": 88
+      }
+    }
+  ]
+}
