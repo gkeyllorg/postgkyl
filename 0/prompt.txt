@@ -1,0 +1,28 @@
+So I'd like indexing to work as I have in the example.py. python example.py
+(default#0)
+├─ Time: 5.001200e-01
+├─ Frame: 65
+├─ Number of components: 4
+├─ Number of dimensions: 1
+├─ Grid: (uniform)
+│  └─ Dim 0: Num. cells: 800; Lower: -2.500000e+00; Upper: 2.500000e+00
+├─ Maximum: 2.494718e+19 at (363,) component 0
+├─ Minimum: -1.256329e+06 at (0,) component 1
+├─ DG: serendipity p1 (interpolated)
+├─ Created with Gkeyll:
+│  ├─ Changeset: 9cad0f073ac9
+│  └─ Build Date: 2026-06-19 18:07:53 PDT
+├─ Geometry info:
+│  ├─ Type: 2
+│  ├─ GEQDSK sign convention: 0
+├─ Description: Number density, drift velocity, parallel and perpendicular thermal speed squared.
+└─ File: gk_lorentzian_mirror-ion_BiMaxwellianMoments_65.gkyl
+
+Traceback (most recent call last):
+  File "/home/maxwell-rosen/postgkyl/example.py", line 6, in <module>
+    data[:,2:4] *= 5
+    ~~~~^^^^^^^
+  File "/home/maxwell-rosen/postgkyl/src/postgkyl/gdatastate/gdatastate.py", line 237, in __getitem__
+    return self.get_values()[..., comp]
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+IndexError: only integers, slices (`:`), ellipsis (`...`), numpy.newaxis (`None`) and integer or boolean arrays are valid indices
