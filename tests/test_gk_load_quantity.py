@@ -164,6 +164,11 @@ class TestGkLoadQuantity:
 
     ctx = self._make_ctx()
     try:
+      if quantity in _NEEDS_RADIAL_COORD:
+        with pytest.raises(ValueError, match="no radial coordinate"):
+          ctx.invoke(cmd.gk_load_quantity, quantity=quantity, name=self.name, species=species,
+                     frame=str(self.frame), path=path, extra=_extra_opts_for(quant))
+        return
       ctx.invoke(
         cmd.gk_load_quantity,
         quantity=quantity,
