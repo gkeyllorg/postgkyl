@@ -1,0 +1,1 @@
+Add sort as a GData method so that it mirrors the fact that all ops are gdata methods
