@@ -1,0 +1,1 @@
+Ruff is now installed. Run the relevant tests. Is there anything else which must be installed?
