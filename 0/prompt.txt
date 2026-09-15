@@ -1,0 +1,103 @@
+Why is there both a plot in commands and a plot in render? Can
+  we have just one place that this function is called?
+
+
+• I’ll trace the plot call path and option ownership across the command, operation, and renderer layers, then tell
+  you whether the duplication is real or just boundary plumbing—and what the cleanest single call site would be.
+
+• Ran 2 commands · ctrl + t to view transcript
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The repository already tries to separate two roles: operations.plot is the public verb and collection/
+  materialization policy; render.matplotlib.plot is the backend drawing engine. I’m checking the generated CLI
+  metadata now, because the comments still refer to an old cli/commands/plot.py that may no longer exist and can
+  make this look like three implementations.
+
+• Ran 3 commands · ctrl + t to view transcript
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The key inconsistency is real: GData.plot and the generated CLI use operations.plot, but pg.plot currently
+  maintained as another source function.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Currently:
+
+  - operations.plot owns dataset preparation, multiblock grouping, and modal checks.
+  - render.matplotlib.plot owns Matplotlib drawing and advanced/internal options.
+  - The CLI has no maintained commands/plot.py; it is generated from operations.plot’s signature.
+  - However, pg.plot incorrectly exports render.plot, while data.plot() and the CLI use operations.plot. That
+    creates two inconsistent public APIs.
+
+  Recommended structure:
+
+  CLI ─┐
+  pg.plot ─┼─> operations.plot ─> private Matplotlib renderer
+  data.plot ┘
+  start_axes, and spread_axes should remain private in src/postgkyl/render/matplotlib.py:333. The facade at src/
+  postgkyl/__init__.py:62 should export operations.plot.
+
+  The commands/plot.py under the untracked main/ tree is legacy code and is not part of the current runtime. The
+─ Worked for 1m 08s ──────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› How about just doing
+
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to
+report the issue.
+
+
+› Why can't we just get rid of operations/plot.py?
+
+
+• We could remove it, but its responsibilities must move somewhere:
+
+  - Materialize point-value datasets and reject modal coefficients.
+  - Group multiblock datasets into figures.
+  - Generate indexed save paths.
+  - Provide the CLI-compatible signature and command metadata.
+  - Keep GData.plot() independent of Matplotlib internals.
+
+  Moving those into render.matplotlib.plot would make the backend own application policy and require new gdata →
+  render and render → dg dependencies. Its Python-only parameters (fig, axes offsets, figure objects) also cannot
+  become CLI options cleanly.
+
+  So the cleaner consolidation is not removing operations.plot; it is making it the sole public function and
+  turning render.matplotlib.plot into a private drawing routine. The current mistake is exposing both publicly,
+  especially pg.plot = render.plot.
+
+
+› There should be 1 public method, which has all the options for how the plot is constructed. I like having all
+  the functionality for making figures in 1 place though so that there is one source of truth. How should this be
+  structured? Explain it to me simply. We want to keep the code condensed, simple, consise, and in one place.
+• Given that goal, yes: remove operations/plot.py.
+
+  Make src/postgkyl/render/matplotlib.py the sole owner:
+
+  CLI plot ────────┘
+
+  plot() should:
+
+  - Declare every user-facing plotting option once.
+  - Prepare and group datasets.
+  - Construct, save, and display figures.
+  - Carry the CLI command metadata.
+
+  Private helpers such as _draw_1d() or _save_figure() can remain in that module, but they should accept only what
+  they need. They must not repeat the complete option list or define competing defaults.
+
+  Internal controls such as an existing Figure, axes offsets, or animation frame reuse should be private helper
+  parameters—not public plot options.
+
+  Then:
+  plot = render.plot
+
+  # package facade
+  from postgkyl.render import plot
+
+
+› Implement
+
+This was performed for the matplotlib backend, but do the same for the plotly and pyvista backends. We want 1 source of truth
