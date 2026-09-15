@@ -1,0 +1,10 @@
+We have a documentation website. https://github.com/gkeyllorg/gkyl-doc also found
+  at /home/maxwell-rosen/Documents/gkyl-doc. Add a section to the website for
+  postgkeyll. This⠂section should include documentation for this codebase. The     ⠈
+  documentation should be generated from the postgkeyll⠈repo directly⡀so that there
+  is one source of truth. The documentation to postgkyl repository, but it's hosted
+  on that website. Use good⢀examples from the data inside⠐postgkeyll.⢀If you need
+ ⢀to generate more interesting data for figures,⠄add it to the testing data folder,
+  preffering to use the data generator.⡀Construct a plan for integrating the
+⠠ documentation with postgkeyll. The examples on the⢀website should be clear and
+  realistic use cases.
