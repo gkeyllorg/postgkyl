@@ -1,0 +1,1 @@
+'/home/maxwell-rosen/Downloads/pytest.out' A user sent this error messages from installing on an m3 pro 26.6.2 (25G83) mac. What is the issue? How should we debug?
