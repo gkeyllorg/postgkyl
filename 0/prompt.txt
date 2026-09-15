@@ -1,0 +1,1 @@
+Similarly, plotly_animate should be in the render side, not having a duplicate in operations and render
