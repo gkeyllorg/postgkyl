@@ -522,6 +522,49 @@ def _project_powsqrt_reference(coeff0: float, coeff1: float, exponent: float,
   return np.array([np.sum(weights*g_at_ords*psi[k]) for k in range(_NUM_BASIS)])
 
 
+# --- Inverse gradient lengths -------------------------------------------------
+def _linear_gdata_2x(value0: float, grad_x: float, grad_z: float,
+                     ncells=(5, 4), lengths=(1.5, 3.0)) -> GData:
+  """A 2x p1 serendipity field X = value0 + grad_x*x + grad_z*z."""
+  grid = [np.linspace(0.0, L, n + 1) for L, n in zip(lengths, ncells)]
+  xc, zc = np.meshgrid(*[0.5*(g[1:] + g[:-1]) for g in grid], indexing="ij")
+  dx, dz = [L/n for L, n in zip(lengths, ncells)]
+
+  # Basis: 1/2, sqrt(3)/2*xi_x, sqrt(3)/2*xi_z, 3/2*xi_x*xi_z.
+  values = np.zeros((*ncells, 4))
+  values[..., 0] = 2.0*(value0 + grad_x*xc + grad_z*zc)
+  values[..., 1] = grad_x*dx/np.sqrt(3.0)
+  values[..., 2] = grad_z*dz/np.sqrt(3.0)
+
+  gdata = GData(ctx={"poly_order": _POLY_ORDER, "basis_type": _BASIS_TYPE, "mass": _MASS, "charge": 1.0})
+  gdata.push(grid, values)
+  return gdata
+
+
+@_needs_dgops
+class TestInverseGradientLength:
+  """1/L_X = -(dX/dx)/X, x being the radial coordinate."""
+
+  @pytest.mark.parametrize("fetch", [ff.fetch_inv_L_n, ff.fetch_inv_L_T])
+  def test_radial_gradient_over_the_field(self, fetch):
+    """Only the x derivative enters, with a minus sign, divided by X."""
+    grad_x, grad_z = -2.2, 1.3
+    field = _linear_gdata_2x(50.0, grad_x, grad_z)
+
+    out = fetch([field])
+    GkeyllDGops().multiply(0, out, 0, out, 0, field)
+
+    assert np.allclose(out.get_values()[..., 0]*0.5, -grad_x, rtol=1e-10)
+
+  def test_decreasing_profile_is_positive(self):
+    out = ff.fetch_inv_L_n([_linear_gdata_2x(50.0, -2.2, 0.0)])
+    assert np.all(out.get_values()[..., 0] > 0.0)
+
+  def test_1x_is_an_error(self):
+    with pytest.raises(ValueError, match="no radial coordinate"):
+      ff.fetch_inv_L_n([_const_gdata(1.0)])
+
+
 @_needs_dgops
 class TestPowSqrt:
   """The gkyl_proj_powsqrt_on_basis binding backing vth."""

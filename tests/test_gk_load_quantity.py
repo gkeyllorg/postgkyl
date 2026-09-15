@@ -46,7 +46,10 @@ except Exception:  # noqa: BLE001 - any failure means the lib is unusable here
 
 # Extra command options required by specific quantities (beyond the per-component
 # selection that every vector quantity needs, which is added automatically below).
-_EXTRA_OPTS = {}
+
+# Quantities differentiating along the radial coordinate x, which the 1x synthetic
+# data does not carry; the command must report that rather than load them.
+_NEEDS_RADIAL_COORD = {"inv_L_n", "inv_L_T"}
 
 # Species names used in the test. Multi-species quantities (e.g. the sound speed)
 # combine an electron species with one or more ion species, so they are requested

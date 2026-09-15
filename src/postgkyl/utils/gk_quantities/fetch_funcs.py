@@ -737,6 +737,44 @@ def fetch_beta_from_bmag_press(gdatas, **kwargs):
   return out
 
 # ------------------------
+# --- Gradient lengths ---
+# ------------------------
+
+def _get_fetch_inv_grad_length(name: str):
+  """
+  Return a fetch function for the radial inverse gradient length of a scalar field X,
+    1/L_X = -(dX/dx)/X
+  where x is the radial (first) configuration space coordinate. gdatas has:
+    1. X: the scalar field (e.g. M0 or temp).
+  """
+  def fetch(gdatas, **kwargs):
+    field = gdatas[0]
+    if field.get_num_dims() < 2:
+      raise ValueError(f"fetch_inv_L_{name}: a 1x simulation has no radial coordinate x.")
+
+    dgops = GkeyllDGops()
+    lower, upper = field.get_bounds()
+    cells = field.get_num_cells()
+
+    # dX/dx.
+    out = _empty_gdata_from_gdata(field)
+    dgops.differentiate(0, 1, (upper[0] - lower[0])/cells[0], 0, out, 0, field)
+
+    # Divide by X.
+    field_inv = _empty_gdata_from_gdata(field)
+    dgops.invert(0, field_inv, 0, field)
+    dgops.multiply(0, out, 0, out, 0, field_inv)
+
+    out.set_values(-out.get_values())
+    return out
+  # end
+  fetch.__name__ = f"fetch_inv_L_{name}"
+  return fetch
+
+fetch_inv_L_n = _get_fetch_inv_grad_length("n")
+fetch_inv_L_T = _get_fetch_inv_grad_length("T")
+
+# ------------------------
 # --- Drift velocities ---
 # ------------------------
 

@@ -387,6 +387,32 @@ _c_s : GkQuantity = GkQuantity(
 gk_quant_registry.register(_c_s)
 
 # ------------------------
+# --- Gradient lengths ---
+# ------------------------
+
+# Radial inverse density gradient length, -(dn/dx)/n.
+_inv_L_n : GkQuantity = GkQuantity(
+  name = "inv_L_n",
+  source = [[_M0],],
+  fetch_func = [ff.fetch_inv_L_n],
+  label = r"$1/L_{n,%s}$ (1/m)",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_inv_L_n)
+
+# Radial inverse temperature gradient length, -(dT/dx)/T.
+_inv_L_T : GkQuantity = GkQuantity(
+  name = "inv_L_T",
+  source = [[_temp],],
+  fetch_func = [ff.fetch_inv_L_T],
+  label = r"$1/L_{T,%s}$ (1/m)",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_inv_L_T)
+
+# ------------------------
 # --- Drift velocities ---
 # ------------------------
 
