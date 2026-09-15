@@ -1,0 +1,1 @@
+Why can't we just get rid of operations/plot.py?
