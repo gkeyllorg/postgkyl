@@ -1,0 +1,1 @@
+Which .json files should I commit to the shared github repo. .agents/settings.json or .codex/hooks.json. Should these go to the git repo?
