@@ -1,0 +1,300 @@
+I wrote this script which splits the subfigures into being linear on the left and log scale on the right. Add feature-rich options to pg.plot, focused around a flag like split_linear_log. Use compare.py as an example script to put this feature in
+import postgkyl as pg
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+
+
+# ---------------------------------------------------------------------------
+# Plot styling
+# ---------------------------------------------------------------------------
+matplotlib.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.size": 12,
+        "axes.titlesize": 18,
+        "axes.labelsize": 22,
+        "legend.fontsize": 12,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+    }
+)
+
+# ---------------------------------------------------------------------------
+# Simulation directories and frame numbers
+# ---------------------------------------------------------------------------
+DIR_MAXW_POA = "/home/mr1884/scratch/gkylmax/stellar-lorentzian1x-orbit-average"
+DIR_BEAM_POA = "/scratch/gpfs/mr1884/scratch/gkylmax/stellar-lorentzian1x-orbit-average-beams"
+
+FRAME_MAXW_POA = 65  # Maxwellian POA end frame
+FRAME_BEAM_POA = 65  # Beam POA end frame
+
+# ---------------------------------------------------------------------------
+# Physical constants
+# ---------------------------------------------------------------------------
+eps0 = 8.8541878128e-12  # F/m
+mu0 = 4 * np.pi * 1e-7  # H/m
+eV = 1.602176634e-19  # J
+mp = 1.67262192369e-27  # kg
+me = 9.1093837015e-31  # kg
+
+# ---------------------------------------------------------------------------
+# Plasma parameters
+# ---------------------------------------------------------------------------
+mi = 2.014 * mp  # kg   deuteron mass
+Te0 = 940 * eV  # J    electron temperature
+n0 = 3e19  # m^-3 midplane density
+B_p = 0.53  # T    magnetic field
+beta = 0.4  # plasma beta
+tau = (B_p**2) * beta / (2.0 * mu0 * n0 * Te0) - 1.0  # temperature ratio
+Ti0 = tau * Te0  # J    ion temperature
+c_s = np.sqrt(Te0 / mi)  # m/s  sound speed
+
+# ---------------------------------------------------------------------------
+# Color scheme: plasma colormap, two POA curves
+# ---------------------------------------------------------------------------
+_cmap = plt.cm.inferno
+COLORS = [_cmap(0.00), _cmap(0.6)]
+# COLORS[0]: Maxwellian POA result
+# COLORS[1]: Beam POA result
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+def load_z_nodes(directory: str) -> np.ndarray:
+    """Load the Z coordinate array from a mapc2p file."""
+    data = pg.GData(f"{directory}/gk_lorentzian_mirror-mapc2p.gkyl")
+    interp = pg.GInterpModal(data, 1, "ms")
+    _, nodes = interp.interpolate(1)
+    return np.squeeze(nodes)
+
+
+def load_moments(directory: str, frame: int) -> tuple:
+    """
+    Load BiMaxwellian moments for a given frame.
+
+    Returns
+    -------
+    dens  : number density (m^-3)
+    upar  : parallel velocity normalised to c_s
+    Tpar  : parallel temperature (keV)
+    Tperp : perpendicular temperature (keV)
+    """
+    path = f"{directory}/gk_lorentzian_mirror-ion_BiMaxwellianMoments_{frame}.gkyl"
+    data = pg.GData(path)
+    interp = pg.GInterpModal(data, 1, "ms")
+
+    _, dens = interp.interpolate(0)
+    _, upar = interp.interpolate(1)
+    _, Tpar_div_m = interp.interpolate(2)
+    _, Tperp_div_m = interp.interpolate(3)
+
+    dens = np.squeeze(dens)
+    upar = np.squeeze(upar) / c_s  # normalise to sound speed
+    Tpar = np.squeeze(Tpar_div_m) * mi / eV / 1e3  # keV
+    Tperp = np.squeeze(Tperp_div_m) * mi / eV / 1e3  # keV
+
+    return dens, upar, Tpar, Tperp
+
+
+def split_at_midplane(Z: np.ndarray, y: np.ndarray) -> tuple:
+    """
+    Split arrays at Z = 0 into left (Z < 0) and right (Z >= 0) halves.
+
+    Returns
+    -------
+    Z_left, y_left, Z_right, y_right
+    """
+    Z_1d = Z.flatten() if Z.ndim > 1 else Z
+    y_1d = y.flatten() if y.ndim > 1 else y
+    left = Z_1d < 0
+    return Z_1d[left], y_1d[left], Z_1d[~left], y_1d[~left]
+
+
+def plot_moments_row(
+    ax, Z, dens, upar, Tpar, Tperp, color, linestyle="-", linewidth=1.0
+):
+    """
+    Plot all four moments (density, upar, Tpar, Tperp) across the 2x4 axis
+    grid. Each quantity occupies one left panel (full-range) and one right
+    panel (exhaust/log-scale).
+
+    Layout
+    ------
+    ax[0, 0/1] : density  |  ax[0, 2/3] : upar
+    ax[1, 0/1] : Tpar     |  ax[1, 2/3] : Tperp
+    """
+    kw = dict(color=color, linestyle=linestyle, linewidth=linewidth)
+
+    quantities = [dens, upar, Tpar, Tperp]
+    panel_coords = [(0, 0), (0, 2), (1, 0), (1, 2)]
+
+    for qty, (row, col) in zip(quantities, panel_coords):
+        Zl, yl, Zr, yr = split_at_midplane(Z, qty)
+        ax[row, col].plot(Zl, yl, **kw)
+        ax[row, col + 1].plot(Zr, yr, **kw)
+
+
+def add_mirror_throat_lines(ax):
+    """Vertical grey dashed lines marking the mirror throat (|Z| = 0.98 m)."""
+    kw = dict(color="grey", linestyle="--", linewidth=1)
+    ax[0, 0].plot([-0.98, -0.98], [0, 4e19], **kw)
+    ax[0, 1].plot([0.98, 0.98], [1e13, 1e20], **kw)
+    ax[0, 2].plot([-0.98, -0.98], [-10, 10], **kw)
+    ax[0, 3].plot([0.98, 0.98], [-10, 10], **kw)
+    ax[1, 0].plot([-0.98, -0.98], [0, 15000], **kw)
+    ax[1, 1].plot([0.98, 0.98], [0, 15000], **kw)
+    ax[1, 2].plot([-0.98, -0.98], [0, 35000], **kw)
+    ax[1, 3].plot([0.98, 0.98], [0, 3.5e6], **kw)
+
+
+def configure_axes(ax, x_min, x_max):
+    """Apply axis limits, scales, labels, and panel letters."""
+
+    # row 0, cols 0-1: density
+    ax[0, 0].text(-2.3, 2.6e19, r"$\mathbf{(a)}$", fontsize=18)
+    ax[0, 0].set_ylabel(r"$n_i$ (m$^{-3}$)")
+    ax[0, 0].set_xlim(x_min, 0)
+    ax[0, 0].set_ylim(0, 3e19)
+    ax[0, 1].set_yscale("log")
+    ax[0, 1].yaxis.tick_right()
+    ax[0, 1].yaxis.set_label_position("right")
+    ax[0, 1].set_xlim(0, x_max)
+    ax[0, 1].set_ylim(1e13, 4e19)
+
+    # row 0, cols 2-3: upar
+    ax[0, 2].text(-2.3, 5.1, r"$\mathbf{(b)}$", fontsize=18)
+    ax[0, 2].set_ylabel(r"$u_{||} / c_s$")
+    ax[0, 2].set_xlim(x_min, 0)
+    ax[0, 2].set_ylim(-7, 7)
+    ax[0, 3].set_yscale("log")
+    ax[0, 3].yaxis.tick_right()
+    ax[0, 3].yaxis.set_label_position("right")
+    ax[0, 3].set_xlim(0, x_max)
+    ax[0, 3].set_ylim(0.001, 10)
+
+    # row 1, cols 0-1: Tpar
+    ax[1, 0].text(-2.3, 10.5, r"$\mathbf{(c)}$", fontsize=18)
+    ax[1, 0].set_ylabel(r"$T_{||}$ (keV)")
+    ax[1, 0].set_xlim(x_min, 0)
+    ax[1, 0].set_ylim(0, 12.5)
+    ax[1, 1].set_yscale("log")
+    ax[1, 1].yaxis.tick_right()
+    ax[1, 1].yaxis.set_label_position("right")
+    ax[1, 1].set_xlim(0, x_max)
+    ax[1, 1].set_ylim(0, 15)
+
+    # row 1, cols 2-3: Tperp
+    ax[1, 2].text(-2.3, 38, r"$\mathbf{(d)}$", fontsize=18)
+    ax[1, 2].set_ylabel(r"$T_{\perp}$ (keV)")
+    ax[1, 2].set_xlim(x_min, 0)
+    ax[1, 2].set_ylim(0, 45)
+    ax[1, 3].set_yscale("log")
+    ax[1, 3].yaxis.tick_right()
+    ax[1, 3].yaxis.set_label_position("right")
+    ax[1, 3].set_xlim(0, x_max)
+    ax[1, 3].set_ylim(0, 100)
+
+    # x-axis labels centred between each merged pair
+    ax[1, 1].set_xlabel(r"$z$ (m)")
+    ax[1, 1].xaxis.set_label_coords(-0, -0.15)
+    ax[1, 3].set_xlabel(r"$z$ (m)")
+    ax[1, 3].xaxis.set_label_coords(-0, -0.15)
+
+
+def merge_subplot_pairs(ax):
+    """
+    Scale subplot widths by 1.5x and close the gap between each left/right
+    panel pair (cols 0-1 and cols 2-3).
+    """
+    for i in range(2):
+        for j in range(4):
+            pos = ax[i, j].get_position()
+            ax[i, j].set_position([pos.x0, pos.y0, pos.width * 1.5, pos.height])
+
+    for i in range(2):
+        for j in range(4):
+            pos = ax[i, j].get_position()
+            if j == 0:
+                ax[i, j].set_position([pos.x0 + 0.02, pos.y0, pos.width, pos.height])
+            elif j == 1:
+                left_edge = ax[i, 0].get_position().x0 + ax[i, 0].get_position().width
+                ax[i, j].set_position([left_edge, pos.y0, pos.width, pos.height])
+            elif j == 3:
+                left_edge = ax[i, 2].get_position().x0 + ax[i, 2].get_position().width
+                ax[i, j].set_position([left_edge, pos.y0, pos.width, pos.height])
+            # j == 2: no adjustment needed
+
+
+# ---------------------------------------------------------------------------
+# Load Z coordinate grids
+# ---------------------------------------------------------------------------
+Z_poa = load_z_nodes(DIR_MAXW_POA)
+Z_beam_poa = load_z_nodes(DIR_BEAM_POA)
+
+x_min = Z_poa.min()
+x_max = Z_poa.max()
+
+# ---------------------------------------------------------------------------
+# Load moment data for POA end states
+# ---------------------------------------------------------------------------
+dens_max_poa, upar_max_poa, Tpar_max_poa, Tperp_max_poa = load_moments(
+    DIR_MAXW_POA, FRAME_MAXW_POA
+)
+dens_beam_poa, upar_beam_poa, Tpar_beam_poa, Tperp_beam_poa = load_moments(
+    DIR_BEAM_POA, FRAME_BEAM_POA
+)
+
+# ---------------------------------------------------------------------------
+# Build figure
+# ---------------------------------------------------------------------------
+fig, ax = plt.subplots(2, 4, figsize=(10, 6))
+
+solid_linewidth = 1.2
+plot_moments_row(
+    ax,
+    Z_poa,
+    dens_max_poa,
+    upar_max_poa,
+    Tpar_max_poa,
+    Tperp_max_poa,
+    color=COLORS[0],
+    linestyle="-",
+    linewidth=solid_linewidth,
+)
+plot_moments_row(
+    ax,
+    Z_beam_poa,
+    dens_beam_poa,
+    upar_beam_poa,
+    Tpar_beam_poa,
+    Tperp_beam_poa,
+    color=COLORS[1],
+    linestyle="-",
+    linewidth=solid_linewidth,
+)
+
+add_mirror_throat_lines(ax)
+configure_axes(ax, x_min, x_max)
+
+ax[0, 3].legend(
+    [
+        plt.Line2D([], [], color=COLORS[0], linestyle="-", linewidth=solid_linewidth),
+        plt.Line2D([], [], color=COLORS[1], linestyle="-", linewidth=solid_linewidth),
+    ],
+    [
+        r"Maxwellian",
+        r"Beam",
+    ],
+    loc="lower right",
+    framealpha=1.0,
+)
+
+plt.tight_layout()
+merge_subplot_pairs(ax)
+
+plt.savefig("moments_poa.pdf")
+plt.show()
+plt.close()
