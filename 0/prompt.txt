@@ -1,0 +1,1 @@
+Fix the documentation to represent the user-facing way that these would be called. So if the path is exposed to the top-level API, then use that, but otherwise use .diagnostics. So in this example, gk is presented as postgkyl.gk.load_quantity()
