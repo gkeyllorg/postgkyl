@@ -206,15 +206,17 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    # --- all-frames / collect (field-independent, so they never reset) ------
-    all_frames = mo.ui.checkbox(label="all frames")
+    # --- frame range / collect (field-independent, so they never reset) -----
+    # Python slice over the detected frames: ':' all, '::2' every other, '-10:'
+    # the last ten, '-1' the last one. Blank = the single frame of the slider.
+    frame_range = mo.ui.text(value="", label="frame range", placeholder=": | ::2 | -10: | -1")
     collect_chk = mo.ui.checkbox(label="collect (time series)")
-    return all_frames, collect_chk
+    return collect_chk, frame_range
 
 
 @app.cell
 def _(
-    dir_input, field_dropdown, get_frame, gk_quant_registry, load_mode, mo,
+    dir_input, field_dropdown, frame_range, get_frame, gk_quant_registry, load_mode, mo,
     outputs, quantity, set_frame, simprefix, species,
 ):
     # --- frame selection: slider with limits from the detected frames -------
@@ -236,9 +238,11 @@ def _(
 
     if frames:
         _fval = get_frame() if get_frame() in frames else frames[0]
+        # The slider is unused while a frame range is given.
         frame_slider = mo.ui.slider(
             steps=frames, value=_fval, label="frame", show_value=True,
             include_input=True, full_width=True, on_change=set_frame,
+            disabled=bool(frame_range.value.strip()),
         )
     else:
         frame_slider = mo.ui.slider(steps=[0], value=0, label="frame", disabled=True)
@@ -543,7 +547,6 @@ def _(mo):
 @app.cell
 def _(
     PgkylSession,
-    all_frames,
     base64,
     clabel,
     cmap,
@@ -560,7 +563,9 @@ def _(
     contour,
     field_dropdown,
     fixaspect,
+    frame_range,
     frame_slider,
+    frames,
     grid_info,
     info,
     interp_pts,
@@ -611,15 +616,39 @@ def _(
         v = (widget.value or "").strip()
         return float(v) if v else default
 
+    def _frame_list():
+        """Frames picked by the frame range (a slice over the detected frames), or None."""
+        text = frame_range.value.strip()
+        if not text:
+            return None
+        parts = text.split(":")
+        try:
+            if len(parts) == 1:
+                return [frames[int(parts[0])]]
+            if len(parts) > 3:
+                raise ValueError
+            return frames[slice(*[int(v) if v.strip() else None for v in parts])]
+        except (ValueError, IndexError):
+            raise ValueError(f"frame range '{text}' is not a valid index or slice of the "
+                             f"{len(frames)} available frame(s), e.g. ':', '::2', '-10:', '-1'.")
+
     def _run():
         # 1) load -----------------------------------------------------------
         plt.close("all")
         pg = PgkylSession()
 
+        _frames = _frame_list()
+        if _frames is not None and not _frames:
+            return None, "", "", f"Frame range `{frame_range.value.strip()}` selects no frame."
+        _all = _frames is not None and len(_frames) == len(frames)
+
         if load_mode.value == "gk-load-quantity":
             if not (quantity.value and simprefix.value):
                 return None, "", "", "Choose a quantity and a simulation prefix."
-            _frame = ":" if all_frames.value else str(frame_slider.value)
+            if _frames is None:
+                _frame = str(frame_slider.value)
+            else:
+                _frame = ":" if _all else ",".join(str(f) for f in _frames)
             pg.gk_load_quantity(
                 quantity=quantity.value, name=simprefix.value,
                 path=dir_input.value.strip(), frame=_frame,
@@ -628,12 +657,14 @@ def _(
         else:
             if not field_dropdown.value:
                 return None, "", "", "Select a data directory and field on the left."
-            if info["type"] == "series":
-                src = (f"{info['stem']}_[0-9]*.gkyl" if all_frames.value
-                       else f"{info['stem']}_{frame_slider.value}.gkyl")
+            if info["type"] != "series":
+                pg.load(info["path"])
+            elif _frames is None:
+                pg.load(f"{info['stem']}_{frame_slider.value}.gkyl")
+            elif _all:
+                pg.load(f"{info['stem']}_[0-9]*.gkyl")
             else:
-                src = info["path"]
-            pg.load(src)
+                pg.load(*[f"{info['stem']}_{f}.gkyl" for f in _frames])
 
         # 2) average (dg-avg works on DG data, so it runs before any transform)
         avg_dirs = []
@@ -680,7 +711,7 @@ def _(
             pg.select(**sel_kwargs)
 
         # 5) collect --------------------------------------------------------
-        if all_frames.value and collect_chk.value:
+        if _frames is not None and collect_chk.value:
             pg.collect()
 
         # active dimensionality (pgkyl only plots 1D/2D) --------------------
@@ -781,12 +812,12 @@ def _(
 
 @app.cell
 def _(
-    all_frames,
     collect_chk,
     comp_enable,
     comp_slider,
     dir_input,
     field_dropdown,
+    frame_range,
     frame_slider,
     grid_info,
     header,
@@ -849,7 +880,7 @@ def _(
         # mo.md("#### 2 · Load"),
         load_mode,
         _source_block,
-        mo.hstack([all_frames, collect_chk], justify="start", gap=1),
+        mo.hstack([frame_range, collect_chk], justify="start", align="center", gap=1),
         frame_slider,
         # mo.md("#### 3 · Processing"),
         mo.hstack([transform, interp_pts], justify="start", gap=1),
