@@ -1,0 +1,1 @@
+Group the diagnostics into their appropriate gkeyll folder names of gyrokinetics / vlasov / pkpm / moments. Several of the python files here are moments, such as enstrophy, five_moment, plasma, rotations, etc
