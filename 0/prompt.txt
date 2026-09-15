@@ -1,0 +1,4 @@
+So it can work like this? import postgkyl as pg
+
+data = pg.GDataGroup()
+data.load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_0.gkyl").load("rt_gk_mirror_boltz_elc_1x2v_p1-ion_M0_1.gkyl").local_poly().collect().plot()
