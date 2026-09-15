@@ -190,6 +190,7 @@ def _(mo):
     get_frame, set_frame = mo.state(None)
     get_sel_en, set_sel_en = mo.state([])
     get_sel_val, set_sel_val = mo.state([])
+    get_sel_mode, set_sel_mode = mo.state([])
     get_comp_en, set_comp_en = mo.state(False)
     get_comp_val, set_comp_val = mo.state(0)
     
@@ -198,8 +199,8 @@ def _(mo):
     get_xidx, set_xidx = mo.state(0)
     return (
         get_comp_en, get_comp_val, get_field, get_frame, get_sel_en,
-        get_sel_val, get_xidx, set_comp_en, set_comp_val, set_field,
-        set_frame, set_sel_en, set_sel_val, set_xidx,
+        get_sel_mode, get_sel_val, get_xidx, set_comp_en, set_comp_val, set_field,
+        set_frame, set_sel_en, set_sel_mode, set_sel_val, set_xidx,
     )
 
 
@@ -359,8 +360,26 @@ def _(
     return (grid_info,)
 
 @app.cell
+def _(get_sel_mode, grid_info, mo, set_sel_mode):
+    # --- per-dimension mode: select (slice at a coordinate) or average ------
+    # Kept in its own cell: changing a mode updates the persisted state, which
+    # re-runs the slider cell so an averaged dimension's slider is disabled.
+    if grid_info.get("ok"):
+        _prev_mode = get_sel_mode()
+        sel_modes = mo.ui.array(
+            [mo.ui.dropdown(options=["select", "average"],
+                            value=_prev_mode[i] if i < len(_prev_mode) else "select")
+             for i in range(grid_info["ndim"])],
+            on_change=lambda vals: set_sel_mode(list(vals)),
+        )
+    else:
+        sel_modes = mo.ui.array([])
+    return (sel_modes,)
+
+
+@app.cell
 def _(
-    get_comp_en, get_comp_val, get_sel_en, get_sel_val, grid_info, mo,
+    get_comp_en, get_comp_val, get_sel_en, get_sel_mode, get_sel_val, grid_info, mo,
     set_comp_en, set_comp_val, set_sel_en, set_sel_val,
 ):
     # --- dynamic `select` sliders, limits taken from the field's grid -------
@@ -377,6 +396,7 @@ def _(
         _dims = grid_info["dims"]
         _prev_en = get_sel_en()
         _prev_val = get_sel_val()
+        _prev_mode = get_sel_mode()
 
         def _slider(i, d):
             span = d["up"] - d["lo"]
@@ -385,9 +405,12 @@ def _(
                 val = _clamp(float(_prev_val[i]), d["lo"], d["up"])
             else:
                 val = d["lo"] + span / 2.0
+            # An averaged dimension has no slice coordinate.
+            averaged = i < len(_prev_mode) and _prev_mode[i] == "average"
             return mo.ui.slider(
                 start=d["lo"], stop=d["up"], step=step, value=val,
                 show_value=True, include_input=True, full_width=True,
+                disabled=averaged,
             )
 
         def _enabled(i):
@@ -554,6 +577,7 @@ def _(
     re,
     refresh,
     sel_enables,
+    sel_modes,
     sel_sliders,
     showgrid,
     simprefix,
@@ -611,7 +635,18 @@ def _(
                 src = info["path"]
             pg.load(src)
 
-        # 2) transform ------------------------------------------------------
+        # 2) average (dg-avg works on DG data, so it runs before any transform)
+        avg_dirs = []
+        if grid_info.get("ok"):
+            avg_dirs = [i for i in range(grid_info["ndim"])
+                        if sel_enables.value[i] and sel_modes.value[i] == "average"]
+        if avg_dirs:
+            if transform.value in ("gk-rz", "gk-fluxsurf"):
+                return None, "", "", (f"Averaging is not available with the **{transform.value}** "
+                                      "transform, which needs the full configuration space.")
+            pg.dg_avg(**{f"z{i}": True for i in avg_dirs})
+
+        # 3) transform ------------------------------------------------------
         if transform.value == "interpolate":
             pg.interpolate(interp=int(interp_pts.value) if interp_pts.value else None)
         elif transform.value == "dg-local-poly":
@@ -631,18 +666,20 @@ def _(
                 nz_interp=int(interp_pts.value) if interp_pts.value else 8
             )
 
-        # 3) select (slice by coordinate value from the dynamic sliders) ----
+        # 4) select (slice by coordinate value from the dynamic sliders) ----
+        # dg-avg removes the averaged dimensions, shifting the later ones down.
         sel_kwargs = {}
         if grid_info.get("ok"):
             for i in range(grid_info["ndim"]):
-                if sel_enables.value[i]:
-                    sel_kwargs[f"z{i}"] = repr(float(sel_sliders.value[i]))
+                if sel_enables.value[i] and sel_modes.value[i] == "select":
+                    j = i - sum(1 for a in avg_dirs if a < i)
+                    sel_kwargs[f"z{j}"] = repr(float(sel_sliders.value[i]))
             if comp_enable.value:
                 sel_kwargs["comp"] = str(int(comp_slider.value))
         if sel_kwargs:
             pg.select(**sel_kwargs)
 
-        # 4) collect --------------------------------------------------------
+        # 5) collect --------------------------------------------------------
         if all_frames.value and collect_chk.value:
             pg.collect()
 
@@ -660,11 +697,11 @@ def _(
             need = max_dim - 2
             hint = (
                 f"This data is **{max_dim}D**; pgkyl plots only 1D/2D. Enable "
-                f"**{need}** more `select` slider(s) on the left to slice it down."
+                f"**{need}** more dimension(s) on the left to select or average it down."
             )
             return None, _clean_cmd(), status, hint
 
-        # 5) plot -> PNG ----------------------------------------------------
+        # 6) plot -> PNG ----------------------------------------------------
         png = os.path.join(tempfile.gettempdir(), "pgkyl_marimo.png")
         if os.path.exists(png):
             os.remove(png)
@@ -759,6 +796,7 @@ def _(
     plot_view,
     refresh,
     sel_enables,
+    sel_modes,
     sel_sliders,
     transform,
     plot_options,
@@ -776,8 +814,8 @@ def _(
     if grid_info.get("ok"):
         _rows = [
             mo.hstack(
-                [sel_enables[i], mo.md(f"**z{i}**"), sel_sliders[i]],
-                justify="start", align="center", gap=0.5, widths=[0.5, 0.6, 6],
+                [sel_enables[i], mo.md(f"**z{i}**"), sel_modes[i], sel_sliders[i]],
+                justify="start", align="center", gap=0.5, widths=[0.5, 0.6, 1.8, 6],
             )
             for i in range(grid_info["ndim"])
         ]
@@ -818,7 +856,8 @@ def _(
         mapc2p_file,
         x_idx if transform.value == "gk-fluxsurf" else mo.md(""),
         phi_tor_val if transform.value == "gk-rz" else mo.md(""),
-        mo.md("**select** — enable a dimension to slice it at the slider's coordinate"),
+        mo.md("**select / average** — enable a dimension to slice it at the slider's "
+              "coordinate, or to average over it (`dg-avg`)"),
         _select_block,
         mo.md("#### Plot options"),
         plot_options,
