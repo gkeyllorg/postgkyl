@@ -1,0 +1,1 @@
+Actually, I'd like to do major_release.minor_release.PR_number.commit. Putting minor releases in there helps with small version releases
