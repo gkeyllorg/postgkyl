@@ -1,0 +1,1 @@
+Why are the options in '/home/maxwell-rosen/postgkyl/src/postgkyl/render/matplotlib.py' not in '/home/maxwell-rosen/postgkyl/src/postgkyl/operations/plot.py'? Why is there both a plot in commands and a plot in render? Can we have just one place that this function is called?
