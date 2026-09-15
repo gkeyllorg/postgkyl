@@ -1,0 +1,8 @@
+[4:08 PM]============================ warnings summary ============================
+tests/test_coverage_container.py::test_cli_plot_batch_mode_default_save_path
+  /Users/ahoffman/new_postgkyl/postgkyl/tests/test_coverage_container.py:284: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+Fix the warning
