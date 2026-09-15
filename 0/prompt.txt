@@ -1,0 +1,46 @@
+This error still remains after 3 attempts to resolve it. It's only on python 3.10. It's on both the macos and ubuntu versions of CI. This started when the CLI commands became automatically generated, so it's likely something about the generator. This error seems not reproducable on this laptop and needs github actions __________________ ERROR collecting tests/test_multiblock.py ___________________
+tests/test_multiblock.py:25: in <module>
+    from postgkyl.cli.app import cli
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:357: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:357: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:337: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:256: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+_______________ ERROR collecting tests/test_operations_gk_rz.py ________________
+tests/test_operations_gk_rz.py:14: in <module>
+    from postgkyl.cli.commands import gk_rz as gk_rz_command
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:357: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:357: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:337: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:256: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+=========================== short test summary info ============================
+ERROR tests/test_cli_commands.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_cli_diagnostics.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_cli_generator.py
+ERROR tests/test_documentation.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_examples.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_multiblock.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_operations_gk_rz.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+!!!!!!!!!!!!!!!!!!! Interrupted: 7 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 7 errors in 19.36s ==============================
