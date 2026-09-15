@@ -1,0 +1,1 @@
+Rather than changing the prefix to the boolean flags, change the scripts themselves so that the CLI perfectly mirrors the API. therefore, all API booleans should default to False. Update the documentation too and agent tools to reflect this
