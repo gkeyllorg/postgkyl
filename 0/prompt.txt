@@ -1,0 +1,7 @@
+<environment_context>
+  <cwd>/home/maxwell-rosen/postgkyl</cwd>
+  <shell>zsh</shell>
+  <current_date>2026-08-20</current_date>
+  <timezone>America/New_York</timezone>
+  <filesystem><workspace_roots><root>/home/maxwell-rosen/postgkyl</root></workspace_roots><permission_profile type="managed"><file_system type="restricted"><entry access="read"><special>:root</special></entry><entry access="write"><path>/home/maxwell-rosen/postgkyl</path></entry><entry access="write"><special>:slash_tmp</special></entry><entry access="write"><special>:tmpdir</special></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.git</path></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.agents</path></entry><entry access="read"><path>/home/maxwell-rosen/postgkyl/.codex</path></entry></file_system></permission_profile></filesystem>
+</environment_context>
