@@ -1,0 +1,378 @@
+I got a big error running pip install -e '.[test]'
+
+Requirement already satisfied: mdurl~=0.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from markdown-it-py>=2.2.0->rich>=13.6.0->cyclopts>=4.0.0->pyvista>=0.48.4->postgkyl==2.0.0) (0.1.2)
+Requirement already satisfied: numexpr>=2.6.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (2.14.1)
+Requirement already satisfied: py-cpuinfo in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (9.0.0)
+Requirement already satisfied: blosc2>=2.3.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from tables>=3.10.1->postgkyl==2.0.0) (4.2.0)
+Requirement already satisfied: ndindex in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (1.10.1)
+Requirement already satisfied: pydantic in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.13.4)
+Requirement already satisfied: requests in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.32.5)
+Requirement already satisfied: threadpoolctl in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.6.0)
+Requirement already satisfied: readme-renderer>=35.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (46.0)
+Requirement already satisfied: requests-toolbelt!=0.9.0,>=0.8.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.0.0)
+Requirement already satisfied: urllib3>=1.26.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.6.3)
+Requirement already satisfied: keyring>=21.2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (25.7.0)
+Requirement already satisfied: rfc3986>=1.4.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: id in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from twine>=6.2.0->postgkyl==2.0.0) (1.6.1)
+Requirement already satisfied: SecretStorage>=3.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.5.0)
+Requirement already satisfied: jeepney>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (0.9.0)
+Requirement already satisfied: jaraco.classes in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (3.4.0)
+Requirement already satisfied: jaraco.functools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (4.6.0)
+Requirement already satisfied: jaraco.context in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (6.1.2)
+Requirement already satisfied: nh3>=0.2.14 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from readme-renderer>=35.0->twine>=6.2.0->postgkyl==2.0.0) (0.3.7)
+Requirement already satisfied: charset_normalizer<4,>=2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.4.6)
+Requirement already satisfied: idna<4,>=2.5 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (3.11)
+Requirement already satisfied: certifi>=2017.4.17 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from requests->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2026.2.25)
+Requirement already satisfied: cryptography>=2.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0)(50.0.1)
+Requirement already satisfied: cffi>=2.0.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.0.0)
+Requirement already satisfied: pycparser in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from cffi>=2.0.0->cryptography>=2.0->SecretStorage>=3.2->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (2.22)
+Requirement already satisfied: distlib<1,>=0.3.7 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (0.4.3)
+Requirement already satisfied: filelock<4,>=3.24.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (3.32.5)
+Requirement already satisfied: python-discovery>=1.6 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from virtualenv>=20.10.0->pre-commit==4.3.0->postgkyl==2.0.0) (1.6.0)
+Requirement already satisfied: more-itertools in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from jaraco.classes->keyring>=21.2.0->twine>=6.2.0->postgkyl==2.0.0) (11.1.0)
+Requirement already satisfied: annotated-types>=0.6.0 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.4 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (2.46.4)
+Requirement already satisfied: typing-inspection>=0.4.2 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from pydantic->blosc2>=2.3.0->tables>=3.10.1->postgkyl==2.0.0) (0.4.2)
+Downloading pre_commit-4.3.0-py2.py3-none-any.whl (220 kB)
+Building wheels for collected packages: postgkyl
+  Building editable for postgkyl (pyproject.toml) ... error
+  error: subprocess-exited-with-error
+  
+  × Building editable for postgkyl (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [326 lines of output]
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+      !!
+      
+              ********************************************************************************
+              Please use a simple string containing a SPDX expression for `project.license`.You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+      
+              By 2027-Feb-18, you need to update your project and remove deprecated calls
+              or your builds will no longer be supported.
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        corresp(dist, value, root_dir)
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        dist._finalize_license_expression()
+      /tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: MIT License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        self._finalize_license_expression()
+      running editable_wheel
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info
+      writing /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/PKG-INFO
+      writing dependency_links to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/dependency_links.txt
+      writing entry points to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/entry_points.txt
+      writing requirements to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/requires.txt
+      writing top-level names to /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/top_level.txt
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      reading manifest template 'MANIFEST.in'
+      warning: no previously-included files found matching 'src/postgkyl/gpython/libg0core.so'
+      adding license file 'LICENSE'
+      adding license file 'AUTHORS.md'
+      writing manifest file '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl.egg-info/SOURCES.txt'
+      creating '/tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info'
+      creating /tmp/pip-ephem-wheel-cache-lg23qv0s/wheels/16/c8/34/9d9734334ac3339409a7c9708db07dfd1997a129b4ac8a051b/tmpiv8ifpyb/.tmp-pcbdc8r_/postgkyl-2.0.0.dist-info/WHEEL
+      running build_py
+      # gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps
+      HEAD is now at bdd19d26 Update wrappers
+      # Using pinned Gkeyll revision bdd19d26973d8dbc7fbe30599f3d8ee5acc98aec
+      # Configuring gkeyll core (CC=cc, lapack-lite, app=core)
+      # OS type is GNU/Linux on maxwell-framework13 user maxwell-rosen
+      Building APP  core
+      # Wrote config.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      # Installation directory
+      PREFIX=/home/maxwell-rosen/gkylsoft
+      # Compilers
+      CC=cc
+      ARCH_FLAGS=-march=native
+      CUDA_ARCH=70
+      
+      # App to build
+      BUILD_APP=core
+      
+      # Library paths
+      LAPACK_INC_DIR=.
+      LAPACK_LIB_DIR=.
+      LAPACK_LIB_NAME=m
+      
+      SUPERLU_INC_DIR=/home/maxwell-rosen/gkylsoft/superlu/include/
+      SUPERLU_LIB_DIR=/home/maxwell-rosen/gkylsoft/superlu/lib/
+      SUPERLU_LIB_NAME=superlu
+      
+      USE_MPI=
+      CONF_MPI_INC_DIR=/home/maxwell-rosen/gkylsoft/openmpi/include/
+      CONF_MPI_LIB_DIR=/home/maxwell-rosen/gkylsoft/openmpi/lib/
+      
+      USE_LAPACK_LITE=1
+      
+      USE_NCCL=
+      CONF_NCCL_INC_DIR=
+      CONF_NCCL_LIB_DIR=
+      
+      USE_CUDSS=
+      CONF_CUDSS_INC_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/include/
+      CONF_CUDSS_LIB_DIR=/home/maxwell-rosen/gkylsoft/cuDSS/lib/
+      
+      USE_LUA=
+      CONF_LUA_INC_DIR=/home/maxwell-rosen/gkylsoft/luajit/include/luajit-2.1/
+      CONF_LUA_LIB_DIR=/home/maxwell-rosen/gkylsoft/luajit/lib/
+      CONF_LUA_LIB=luajit-5.1
+      
+      CUDAMATH_LIB_DIR=
+      
+      FIN_APP_LIB_DIR=-L../${BUILD_DIR}/core
+      FIN_APP_LIB=-lg0core
+      
+      HAVE_APP_FLAGS=
+      
+      # Wrote alltargets.mak with contents:
+      # -*- makefile-gmake -*-
+      # Generated automatically! Do not edit
+      
+      .PHONY:
+      all: core core-unit core-regression ## Build only specified Apps (core)
+      
+      .PHONY: install
+      install: core-install ## Install gkeyll executable
+          cd gkeyll && ${MAKE} -f Makefile-gkeyll install
+      
+      # Building libg0core.so (ARCH_FLAGS=<none -- compiler default>)
+      cd core && make -f Makefile-core
+      make[1]: Entering directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      make[1]: Nothing to be done for 'all'.
+      make[1]: Leaving directory '/home/maxwell-rosen/postgkyl/gkeyll/core'
+      # Built /home/maxwell-rosen/postgkyl/gkeyll/build/core/libg0core.so
+      # Building _gpython extension (CC=cc) -> /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Built /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_gpython.so
+      # Wrote /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/_build_info.py
+      copying /home/maxwell-rosen/postgkyl/src/postgkyl/gpython/libg0core.so -> /tmp/tmp68mij4f6.build-lib/postgkyl/gpython
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 39, in _copy_file_contents
+          fdst = open(dst, 'wb')  # noqa: SIM115 # closed in the finally below
+      FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so'
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 306, in _safely_run
+          return self.run_command(cmd_name)
+                 ~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 342, in run_command
+          self.distribution.run_command(command)
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 71, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/build_py.py", line 66, in copy_file
+          return super().copy_file(  # pyright: ignore[reportReturnType] # pypa/distutils#309
+                 ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              infile, outfile, preserve_mode, preserve_times, link, level
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 406, in copy_file
+          return file_util.copy_file(
+                 ~~~~~~~~~~~~~~~~~~~^
+              infile,
+              ^^^^^^^
+          ...<4 lines>...
+              link,
+              ^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 151, in copy_file
+          _copy_file_contents(src, dst)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/file_util.py", line 41, in _copy_file_contents
+          raise DistutilsFileError(f"could not create '{dst}': {e.strerror}")
+      distutils.errors.DistutilsFileError: could not create '/tmp/tmp68mij4f6.build-lib/postgkyl/gpython/libg0core.so': No such file or directory
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+          ~~~~^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+                                   ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 303, in build_editable
+          return hook(wheel_directory, config_settings, metadata_directory)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 474, in build_editable
+          return self._build_with_temp_dir(
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~^
+              cmd, ".whl", wheel_directory, config_settings
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
+          self.run_setup()
+          ~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 317, in run_setup
+          exec(code, locals())  # noqa: S102 # exec is intentional here
+          ~~~~^^^^^^^^^^^^^^^^
+        File "<string>", line 100, in <module>
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/__init__.py", line 117, in setup
+          return distutils.core.setup(**attrs)  # type: ignore[return-value]
+                 ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 168, in setup
+          return run_commands(dist)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 184, in run_commands
+          dist.run_commands()
+          ~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1028, in run_commands
+          self.run_command(cmd)
+          ~~~~~~~~~~~~~~~~^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1106, in run_command
+          super().run_command(command)
+          ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1047, in run_command
+          cmd_obj.run()
+          ~~~~~~~~~~~^^
+        File "<string>", line 85, in run
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 142, in run
+          self._create_wheel_file(bdist_wheel)
+          ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 352, in _create_wheel_file
+          files, mapping = self._run_build_commands(dist_name, unpacked, lib, tmp)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 275, in _run_build_commands
+          self._run_build_subcommands()
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 300, in _run_build_subcommands
+          self._safely_run(name)
+          ~~~~~~~~~~~~~~~~^^^^^^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 308, in _safely_run
+          SetuptoolsDeprecationWarning.emit(
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+              "Customization incompatible with editable install",
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          ...<19 lines>...
+              # needs work.
+              ^^^^^^^^^^^^^
+          )
+          ^
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 49, in emit
+          text = cls._format(summary_, details_, due, see_url or docs_url, kwargs)
+        File "/tmp/pip-build-env-0sv6btj5/overlay/lib/python3.13/site-packages/setuptools/warnings.py", line 67, in _format
+          cleandoc(details).format_map(format_args or {}),
+          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+      KeyError: 'dst'
+      An error occurred when building editable wheel for postgkyl.
+      See debugging tips in: https://setuptools.pypa.io/en/latest/userguide/development_mode.html#debugging-tips
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building editable for postgkyl
+Failed to build postgkyl
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> postgkyl
