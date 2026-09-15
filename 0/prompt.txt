@@ -1,0 +1,1 @@
+I've gotten the warning Repository inspection is blocked by a sandbox error involving the .codex symlink, so I can’t verify the current implementation or read the skills. Please investigate the issues with the agentic workflow here
