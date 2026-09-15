@@ -1,0 +1,137 @@
+Run # macOS only: --forked (pytest-forked, installed via pyproject.toml's
+============================= test session starts ==============================
+platform darwin -- Python 3.10.11, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+testpaths: tests
+plugins: forked-1.7.5
+collected 1563 items / 7 errors
+
+==================================== ERRORS ====================================
+_________________ ERROR collecting tests/test_cli_commands.py __________________
+tests/test_cli_commands.py:32: in <module>
+    from postgkyl.cli.app import cli
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+________________ ERROR collecting tests/test_cli_diagnostics.py ________________
+tests/test_cli_diagnostics.py:26: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+_________________ ERROR collecting tests/test_cli_generator.py _________________
+ImportError while importing test module '/Users/runner/work/postgkyl/postgkyl/tests/test_cli_generator.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_cli_generator.py:14: in <module>
+    import postgkyl.cli.compiler as compiler
+E   ImportError: cannot import name 'cli' from 'postgkyl' (/Users/runner/work/postgkyl/postgkyl/src/postgkyl/__init__.py)
+_________________ ERROR collecting tests/test_documentation.py _________________
+tests/test_documentation.py:11: in <module>
+    from postgkyl.cli.commands import GENERATED_COMMANDS, MODELS
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+___________________ ERROR collecting tests/test_examples.py ____________________
+tests/test_examples.py:25: in <module>
+    from postgkyl.cli.app import cli
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+__________________ ERROR collecting tests/test_multiblock.py ___________________
+tests/test_multiblock.py:25: in <module>
+    from postgkyl.cli.app import cli
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+_______________ ERROR collecting tests/test_operations_gk_rz.py ________________
+tests/test_operations_gk_rz.py:14: in <module>
+    from postgkyl.cli.commands import gk_rz as gk_rz_command
+src/postgkyl/cli/__init__.py:3: in <module>
+    from .app import cli
+src/postgkyl/cli/app.py:24: in <module>
+    from postgkyl.cli.commands import (
+src/postgkyl/cli/commands/__init__.py:36: in <module>
+    MODELS = compile_public_surface(discover_public_surface())
+src/postgkyl/cli/compiler.py:349: in compile_public_surface
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:349: in <genexpr>
+    models = tuple(compile_callable(item.callable, name=item.name) for item in callables)
+src/postgkyl/cli/compiler.py:329: in compile_callable
+    if is_dataset_ref else _codec(canonical, parameter.name, base, markers))
+src/postgkyl/cli/compiler.py:248: in _codec
+    raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E   postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+=========================== short test summary info ============================
+ERROR tests/test_cli_commands.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_cli_diagnostics.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_cli_generator.py
+ERROR tests/test_documentation.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_examples.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_multiblock.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+ERROR tests/test_operations_gk_rz.py - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+!!!!!!!!!!!!!!!!!!! Interrupted: 7 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 7 errors in 20.00s ==============================
