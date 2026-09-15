@@ -1,0 +1,9 @@
+Explain these parameters with examples AlwaysBreakAfterReturnType: AllDefinitions
+BreakBeforeBraces: WebKit
+AllowShortFunctionsOnASingleLine: None
+
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+IncludeBlocks: Preserve
+SortIncludes: Never
