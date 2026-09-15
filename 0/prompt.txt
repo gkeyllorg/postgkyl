@@ -1,0 +1,1 @@
+Implement this plan. Do not preserve legacy code. Aim for a clean refactor. Remove operations/gyrokinetics, as operations should be equation module agnostic
