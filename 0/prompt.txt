@@ -1,0 +1,1 @@
+Can you configure it such that CI formats the code, runs the test, then pushes a new commit of the formatted code?
