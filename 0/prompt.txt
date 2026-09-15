@@ -1,0 +1,1 @@
+In '/home/maxwell-rosen/postgkyl/examples/scripts/05_gk_rz.py', how can we refactor the directory finding to make this simpler? This could apply to all the examples to make them simpler and easy to read
