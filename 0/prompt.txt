@@ -1,0 +1,7 @@
+Make a plan for this GK_RZ_REFACTOR.md Mana  [4:50 PM]
+i think either we have domain subfolders in each operations/diagnostics folder (i think this makes more sense), or we have domain folders with operations/diagnostics subfolders in them.
+
+I also see no issue with simply putting things like gk-rz in operations/ as is, it'll just be a bit more disorganized and poorly named.
+Maxwell Rosen  [4:50 PM]
+I'm starting to agree with you on this. I think it's a clean approach for this
+[4:51 PM]I think we should keep it diagnostics/operations with equation specific folders in them to retain the layering that diagnostics compose GData functions while  operations are independent functions
