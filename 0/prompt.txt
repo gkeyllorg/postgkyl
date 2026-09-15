@@ -1,0 +1,1 @@
+Regarding map_to_rz, is it cleaner to put this inside operations/map.py? I agree with splitting this into a more abstract, universal operation, then having the GK-specifics inside the diagnostics. What are the file names you're discussing putting this to. Provide a list of files and a description of what they do / what happens there / purpose / intent / design
