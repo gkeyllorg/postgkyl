@@ -1,0 +1,53 @@
+So these two options have manditory arguments, but they need a --axis and -c / --chain in the CLI. Why is that? How do we set these two options to be the non -- or - options so we specify like integrate-axis 2 or ev "f0 2 *"?
+
+(refactor-diagnostics) postgkyl: pgkyl integrate-axis --help
+Usage: pgkyl integrate-axis [OPTIONS]
+
+  ``int dz`` over one or more axes of point-value data (non-terminal).
+
+Options:
+  -a, --axis TEXT        axis (or axes) to integrate over: an ``int``, a
+                         ``tuple`` of ``int``, a comma-separated string
+                         (``"0,1"``), a colon slice string (``"0:2"``), or
+                         ``None`` (integrate over every axis).
+  -i, --inplace BOOLEAN  Mutate and return ``data`` instead of creating a
+                         dataset.  [default: False]
+  -t, --tag TEXT         Optional tag for the returned dataset.
+  -l, --label TEXT       Optional label for the returned dataset.
+  -h, --help             Show this message and exit.
+(refactor-diagnostics) postgkyl: 
+ *  History restored 
+
+(refactor-diagnostics) postgkyl: pgkyl integrate-axis --help
+Usage: pgkyl integrate-axis [OPTIONS]
+
+  Integrate over one or more axes of point-value data (non-terminal).
+
+Options:
+  -a, --axis TEXT        axis (or axes) to integrate over: an ``int``, a
+                         ``tuple`` of ``int``, a comma-separated string
+                         (``"0,1"``), a colon slice string (``"0:2"``), or
+                         ``None`` (integrate over every axis).
+  -i, --inplace BOOLEAN  Mutate and return ``data`` instead of creating a
+                         dataset.  [default: False]
+  -t, --tag TEXT         Optional tag for the returned dataset.
+  -l, --label TEXT       Optional label for the returned dataset.
+  -h, --help             Show this message and exit.
+(refactor-diagnostics) postgkyl: pgkyl ev --help            
+Usage: pgkyl ev [OPTIONS]
+
+  Evaluate an RPN expression over an explicit list of datasets.
+
+  ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
+  see the module docstring for the token grammar. The result is built via
+  ``datasets[0]._result(...)`` (so it stays the caller's concrete dataset
+  class) and holds the single value left on top of the stack.
+
+Options:
+  -c, --chain TEXT  the RPN expression, e.g. ``"f0 f1 +"`` or ``"f sq 2 *"``.
+                    [required]
+  -t, --tag TEXT    optional tag for the returned dataset (defaults to
+                    ``'default'``).
+  -l, --label TEXT  optional label for the returned dataset (defaults to
+                    ``chain``).
+  -h, --help        Show this message and exit.
