@@ -12,8 +12,8 @@
     "04_gyrokinetics_jacobtot_inv.png": "pgkyl gk_load_quantity --quantity geo_int_jacobtot_inv --species '' --name rt_gk_tcv_iwl_1x2v_p1 --path tests/test_data/ plot --title '$(J B)^{-1}$' --no_show --dpi 100 --saveas '{output}/04_gyrokinetics_jacobtot_inv.png'",
     "04_gyrokinetics_distf_slice.png": "pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 --species elc --frame 250 --jacobtot_inv_file tests/test_data/rt_gk_tcv_iwl_1x2v_p1-geo_int_jacobtot_inv.gkyl select --z2 0.0 plot --title 'Electron distribution: lowest mu slice' --xlabel 'Field-aligned computational coordinate' --ylabel 'Computational parallel velocity' --clabel 'Distribution [simulation units]' --no_show --dpi 100 --saveas '{output}/04_gyrokinetics_distf_slice.png'"
   },
-  "05_gk_rz.py": {
-    "05_gk_rz.png": "pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl gk_rz --z_axis 0.0 --phi_tor 0.0 --nz_interp 2 plot --title 'Electron density in the poloidal plane' --xlabel 'R [m]' --ylabel 'Z [m]' --clabel '$n_e$ [m$^{-3}$]' --fixaspect --no_show --dpi 100 --saveas '{output}/05_gk_rz.png'"
+  "05_map_to_rz.py": {
+    "05_map_to_rz.png": "pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl map_to_rz --z_axis 0.0 --phi_tor 0.0 --nz_interp 2 plot --title 'Electron density in the poloidal plane' --xlabel 'R [m]' --ylabel 'Z [m]' --clabel '$n_e$ [m$^{-3}$]' --fixaspect --no_show --dpi 100 --saveas '{output}/05_map_to_rz.png'"
   },
   "06_growth.py": {
     "06_growth.png": "pgkyl tests/test_data/generated/exponential_energy.gkyl evaluate 'f log' fit --fit_type linear evaluate 'f1 exp' plot --title 'Fitted energy growth' --xlabel 'Time [normalized]' --ylabel 'Energy [normalized]' --logy --no_show --dpi 100 --saveas '{output}/06_growth.png'"
@@ -36,6 +36,9 @@
   },
   "10_manual_arrays.py": {
     "10_manual.png": "pgkyl tests/test_data/generated/wave_surface_000.gkyl interpolate evaluate 'f 1 - 0.6 /' plot --title 'Normalized density perturbation' --xlabel x --ylabel y --clabel '(n - 1) / 0.6' --no_show --dpi 100 --saveas '{output}/10_manual.png'"
+  },
+  "11_multiblock.py": {
+    "11_multiblock.png": "pgkyl 'tests/test_data/generated/mb_sim_b*-elc_M0_0.gkyl' interpolate plot --title 'One field across three blocks' --xlabel x --ylabel y --clabel 'Synthetic field [arbitrary units]' --fixaspect --no_show --dpi 100 --saveas '{output}/11_multiblock.png'"
   },
   "02_arithmetic_and_numpy.py": {
     "02_arithmetic.png": "pgkyl tests/test_data/generated/2d_c2p_stretch_ms_p1.gkyl interpolate evaluate 'f sq 2 * sqrt' plot --title 'Componentwise magnitude' --no_show --dpi 100 --saveas '{output}/02_arithmetic.png'"

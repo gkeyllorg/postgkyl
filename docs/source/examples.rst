@@ -23,6 +23,7 @@ resolve correctly.
    plotly
    pyvista
    manual-arrays
+   multiblock
 
 For help adapting the commands and comparing their results:
 
