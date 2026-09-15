@@ -1,0 +1,1 @@
+Make a CLAUDE.md which is a symlink to AGENTS.md, similarly with .claude so that this works for both claude code and general harnesses
