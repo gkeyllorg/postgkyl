@@ -1,0 +1,1 @@
+How do I hard copy one variable into another? Like single_comparison.copy() or something?
