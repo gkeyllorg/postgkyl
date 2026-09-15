@@ -1,0 +1,9 @@
+yapf is now installed
+
+(refactor-diagnostics) postgkyl: pip install yapf                                                
+Collecting yapf
+  Downloading yapf-0.43.0-py3-none-any.whl.metadata (46 kB)
+Requirement already satisfied: platformdirs>=3.5.1 in /home/maxwell-rosen/miniforge3/lib/python3.13/site-packages (from yapf) (4.9.4)
+Downloading yapf-0.43.0-py3-none-any.whl (256 kB)
+Installing collected packages: yapf
+Successfully installed yapf-0.43.0
