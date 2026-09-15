@@ -1,0 +1,1 @@
+In '/home/maxwell-rosen/postgkyl/src/postgkyl/render/matplotlib.py', put saving the figure in this file, including pdf and png. I think this functionality is in the CLI command, so move it into matplotlib.py, thinning the CLI command. Ensure this is consistent with the other rendering commands
