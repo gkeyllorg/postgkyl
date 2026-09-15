@@ -1,0 +1,6 @@
+I still see gk diagnostics
+postgkyl.diagnostics.gk.load_distf
+postgkyl.diagnostics.gk.resolve_frames
+postgkyl.diagnostics.gk.available_quantities
+postgkyl.diagnostics.gk.load_quantity 
+when looking at file:///home/maxwell-rosen/Documents/gkyl-doc/build/html/postgkyl/reference/api.html
