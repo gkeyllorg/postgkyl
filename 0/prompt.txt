@@ -1,0 +1,1 @@
+Add an option to matplotlib plot to put the grid as indicies rather than values. So I'm thinking about using an integrated diagnostic and it defaults to plotting in time, but I want to plot in index on the x axis
