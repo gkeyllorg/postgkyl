@@ -1,0 +1,1 @@
+I wrote this script which splits the subfigures into being linear on the left and log scale on the right. Add feature-rich options to pg.plot, focused around a flag like split_linear_log. Use compare.py as an example script to put this feature in
