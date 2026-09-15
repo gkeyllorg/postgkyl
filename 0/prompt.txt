@@ -1,0 +1,35 @@
+Is there an issue with putting quotes here?
+
+pip install -e '.[test]' --no-build-isolation
+
+Here is the convo
+
+Antoine  [2:10 PM]
+pip install -e '.[test]' --no-build-isolationcan we write this like that? I mean with the quotes?
+Mana  [2:10 PM]
+issues with Macs: just pytest right @Maxwell Rosen?
+Antoine  [2:10 PM]
+or is it problematic on liux?
+Maxwell Rosen  [2:10 PM]
+Just pytest
+[2:10 PM]I'm used to seeing that without quotes
+Antoine  [2:11 PM]
+yeah but it never works on mac shell
+Maxwell Rosen  [2:11 PM]
+Do pip install -e .[test] --no-build-isolation
+Antoine  [2:11 PM]
+(.venv) ahoffman@ahoffman-lt postgkyl % pip install -e .[test] --no-build-isolation
+zsh: no matches found: .[test][2:11 PM]you cannot
+[2:11 PM]zsh needs the quotation mark
+Maxwell Rosen  [2:11 PM]
+Can you ask a CLI LLM harness (claude code / codex / opencode) to install it and provide instructions for your machine? (edited) 
+Antoine  [2:12 PM]
+you just need the quotation mark
+Maxwell Rosen  [2:12 PM]
+Ok we can update the readme
+Antoine  [2:12 PM]
+I want to know from you if it poses a problem in linux
+Maxwell Rosen  [2:12 PM]
+I'll test
+Antoine  [2:12 PM]
+but if it does not, I think it's better with the quotation marks
