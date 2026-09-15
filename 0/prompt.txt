@@ -1,0 +1,5 @@
+The goal of this branch is to abstract the gk-rz command into operations in an equation agnostic manner. We have done some work to move this into operations. This is fundamentally a type of mapping operation. Although some things look gk specific, lots of it is not. All simulations deal with geometry and will likely load the same file names. The names should not be gk-specific and relevant to any gkeyll simulation. The code must be organized, as this is a refactor, considering layering
+
+---
+
+The goal of this branch is to abstract the gk-rz command into operations in an equation agnostic manner. We have done some work to move this into operations. This is fundamentally a type of mapping operation. Although some things look gk specific, lots of it is not. All simulations deal with geometry and will likely load the same file names. The names should not be gk-specific and relevant to any gkeyll simulation. The code must be organized, as this is a refactor, considering layering
