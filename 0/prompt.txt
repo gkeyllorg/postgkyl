@@ -1,0 +1,21 @@
+I'm confused about these functions. It really does seem to break some organization and hierarchy of the code, but they're arguing that it's fine.
+
+Looking at gk_rz, I don't think this is an operations function. This is a diagnostic because it's loading multiple files inside of it. It's a composition, specific to GK, therefore it belongs in diagnostics (edited) 
+image.png Mana  [1:54 PM]
+Max, it's an operation. You just need to expand your understanding of operations.
+Maxwell Rosen  [1:54 PM]
+Operations don't load data
+Mana  [1:54 PM]
+that's too restrictive.
+It's a type of interpolation. It just need more info that's in other files.Maxwell Rosen  [1:54 PM]
+That's why it's a diagnostic
+Mana  [1:55 PM]
+Native interpolation needs to know what nodes to interpolate to. That could've been stored in a file somewhere (but it's not, it's in our code)
+[1:56 PM]Please expand your view of interpolation/operations. It's ok for operations to load other files as long as there's an appropriate infra for that (and in this case it is a single set of files, geo files, it's not like it's a separate frame file for every frame)
+[1:56 PM]In the future we may have CAD files needed to interpolate
+Maxwell Rosen  [1:56 PM]
+I think the distinction really is whether the operation is equation specific versus if it's some general operation (like integration, select, evaluate)
+Mana  [1:57 PM]
+interpolation is fundamentally an operation, not a diagnostic. We may interpolate (to native nodes, GK locations, or CAD-specificed locations), and later do further diagnosis
+
+What is your input on this?
