@@ -1,0 +1,73 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2K7P09RJA5CCWWRQ99A1N6G",
+  "session_id": "01a0a66f-bf2f-7c31-b2e5-e8798a8f8733",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-15T19:11:15.621843752Z",
+  "branch": "refactor-diagnostics-gk-rz",
+  "checkpoints_count": 4,
+  "save_step_count": 2,
+  "files_touched": [
+    "docs/source/examples.rst",
+    "docs/source/multiblock.rst",
+    "examples/README.md",
+    "examples/figure_commands.json",
+    "examples/scripts/11_multiblock.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "e2fcbb7a48f6",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 48637,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1469184,
+    "output_tokens": 5200,
+    "api_call_count": 33
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-15T19:11:15.58503178Z",
+    "agent_lines": 53,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 4,
+    "human_removed": 20,
+    "total_committed": 55,
+    "total_lines_changed": 77,
+    "agent_percentage": 68.83116883116884,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 90,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".codex/hooks.json": 88,
+        "examples/figure_commands.json": 2
+      },
+      "user_removed_per_file": {
+        "examples/figure_commands.json": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 90,
+      "user_lines_removed": 11,
+      "agent_lines_added": 79,
+      "agent_lines_removed": 2,
+      "user_added_per_file": {
+        ".codex/hooks.json": 88,
+        "examples/scripts/11_multiblock.py": 2
+      },
+      "user_removed_per_file": {
+        "examples/scripts/11_multiblock.py": 11
+      }
+    }
+  ]
+}
