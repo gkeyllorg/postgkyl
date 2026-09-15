@@ -1,0 +1,1 @@
+Implement and enhance. You may spawn sub-agents and implement this over a long session
