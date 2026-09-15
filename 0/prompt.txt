@@ -1,0 +1,4 @@
+Implement
+Docs should be generated from postgkeyll on main, not a fixed revision.
+Upgrade the python version of the docs to python 3.12
+Employ CI and github actions to ensure testing of the documentation
