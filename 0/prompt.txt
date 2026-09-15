@@ -1,0 +1,5 @@
+So I get the output like this
+pgkyl zzim-ion_source_integrated_moms.gkyl zzim-ion_bflux_xupper_integrated_HamiltonianMoments.gkyl sel -c 0 ev "f1 f0 / 2 *" sel --z0 100: fit -f 'exp_plateau' -p
+fit 'exp_plateau', component 0: coefficients = [0.1884599782521278, -8959.07543390874, 1.2269165753085576]
+
+Which is not the most readable. It's difficult to know what the coefficients represent. Please increase the detail in the descriptions of what the fitted coefficients are, perhaps adding the equation it is fitted to with the relevant variables
