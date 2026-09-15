@@ -1,0 +1,1 @@
+Can we merge integrate and integrate-axis into one "integrate" command which captures both full integration and partial integration? This must preserve performing exact DG integration
