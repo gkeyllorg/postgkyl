@@ -1,0 +1,19 @@
+I'm seeing an issue when I'm loading data like this
+
+data = pg.load("zzim-ion_BiMaxwellianMoments_*.gkyl").interpolate().collect().plot()
+
+I intend for it to load all frames and data files which match with the wildcard flag there, so it would load all the BiMaxwellianMoments frames, which exist from 0 to 65. The error is
+
+Traceback (most recent call last):
+  File "/pscratch/sd/m/mhrosen/gkylmax/a-thesis-simulations/1x-beams/plot.py", line 3, in <module>
+    data = pg.load("zzim-ion_BiMaxwellianMoments_*.gkyl").interpolate().collect().plot()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/gdata/load.py", line 39, in load
+    return GData(file_name, tag=tag, label=label, ctx=ctx,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/gdatastate/gdatastate.py", line 52, in __init__
+    self._grid, self._values = io.read(self._file_name, self.ctx,
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/io/__init__.py", line 56, in read
+    raise FileNotFoundError(f"No such file: '{file_name}'")
+FileNotFoundError: No such file: 'zzim-ion_BiMaxwellianMoments_*.gkyl'
