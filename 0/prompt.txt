@@ -1,0 +1,43 @@
+Add the ability for gyrokinetics-load-distf to load multiple frames, like this pgkyl gyrokinetics-load-distf --name zzim --species ion -f : --suffix fdot --use-c2p-vel True --use-mc2nu 
+True ev "f0 abs" sel --z0 0.0 anim
+Usage: pgkyl gyrokinetics-load-distf [OPTIONS]
+Try 'pgkyl gyrokinetics-load-distf --help' for help.
+
+Error: Invalid value for '--frame' / '-f': ':' is not a valid integer.
+(pgkyl) mhrosen@login29:~/scratch/gkylmax/a-thesis-simulations/1x-beams-anneal> pgkyl gyrokinetics-load-distf --help
+Usage: pgkyl gyrokinetics-load-distf [OPTIONS]
+
+  Build a real distribution function from saved ``Jf`` data.
+
+Options:
+  --name TEXT               Simulation name prefix.  [required]
+  --species TEXT            Species name.  [required]
+  -f, --frame INTEGER       Frame index.  [required]
+  -t, --tag TEXT            Tag for the resulting dataset.  [default: f]
+  --suffix TEXT             Use ``<name>-<species>_<suffix>_<frame>.gkyl`` as
+                            the input.  [default: ""]
+  --use-c2p-vel BOOLEAN     Convert velocity-space computational coordinates
+                            to physical ones using the ``mapc2p_vel`` mapping.
+                            [default: False]
+  --use-mc2nu BOOLEAN       Convert non-uniform computational coordinates to
+                            field-aligned ones.  [default: False]
+  --use-mapc2p BOOLEAN      Convert position-space computational coordinates
+                            to Cartesian/cylindrical.  [default: False]
+  -b, --block-idx INTEGER   Use block-specific files with a ``_b<idx>``
+                            prefix.
+  --num-interp INTEGER      Interpolate onto a general mesh of the specified
+                            amount (default: ``poly_order + 1`` points per
+                            cell).
+  --jf-file TEXT            Explicit saved-distribution filename override.
+  --mapc2p-vel-file TEXT    Explicit velocity-coordinate mapping filename
+                            override.
+  --jacobvel-file TEXT      Explicit velocity-space Jacobian filename
+                            override.
+  --mc2nu-file TEXT         Explicit field-aligned coordinate mapping filename
+                            override.
+  --mapc2p-file TEXT        Explicit configuration-space mapping filename
+                            override.
+  --jacobtot-inv-file TEXT  Explicit inverse total-Jacobian filename override.
+  -h, --help                Show this message and exit.
+(pgkyl) mhrosen@login29:~/scratch/gkylmax/a-thesis-simulations/1x-beams-anneal> pgkyl gyrokinetics-load-distf --name zzim --species ion -f 0:100 --suffix fdot --use-c2p-vel True --use-mc
+2nu True ev "f0 abs" sel --z0 0.0 anim
