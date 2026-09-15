@@ -1,0 +1,1 @@
+Also ensure that the dependencies for pre-commit are installed correctly in the configuration files and that errors are presented if yapf  is not installed correctly
