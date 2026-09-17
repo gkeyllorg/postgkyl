@@ -1,0 +1,15 @@
+I keep getting this message
+
+pgkyl zzim-ion_M1_21.gkyl pl
+Usage: pgkyl pl [OPTIONS]
+Try 'pgkyl pl --help' for help.
+
+Error: modal DG coefficients are not plottable; choose explicitly: .interpolate() (uniform evaluation mesh), .to_nodal() or .to_quad() (plot at the basis/quadrature points).
+
+We should be able to plot the modal DG coefficients. Also, there are other interpolation commands than these. Please fix this
+
+---
+
+> Should plotting modal data show the stored coefficients (one selectable channel per coefficient), or automatically evaluate the DG field on a plotting mesh?
+
+Plot the stored coefficients

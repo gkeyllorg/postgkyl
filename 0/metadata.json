@@ -1,0 +1,79 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2RJ63CXRZKFWJ04JKJXBK9B",
+  "session_id": "01a0b11f-512a-7a32-8a16-8760fafc532f",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-17T20:51:00.067371998Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/concepts.rst",
+    "src/postgkyl/gdatastate/materialize.py",
+    "src/postgkyl/render/_prep.py",
+    "src/postgkyl/render/animate.py",
+    "src/postgkyl/render/matplotlib.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/test_cli_commands.py",
+    "tests/test_operations_animate.py",
+    "tests/test_postgkyl.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "7145b91326c1",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 61388,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 550400,
+    "output_tokens": 3755,
+    "api_call_count": 19
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-17T20:51:00.032765774Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 6,
+    "human_removed": 26,
+    "total_committed": 0,
+    "total_lines_changed": 32,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 72,
+      "user_lines_removed": 26,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/source/concepts.rst": 7,
+        "src/postgkyl/gdatastate/materialize.py": 4,
+        "src/postgkyl/render/_prep.py": 15,
+        "src/postgkyl/render/animate.py": 3,
+        "src/postgkyl/render/matplotlib.py": 7,
+        "src/postgkyl/render/plotly.py": 4,
+        "src/postgkyl/render/pyvista.py": 4,
+        "tests/test_cli_commands.py": 7,
+        "tests/test_operations_animate.py": 11,
+        "tests/test_postgkyl.py": 10
+      },
+      "user_removed_per_file": {
+        "src/postgkyl/gdatastate/materialize.py": 3,
+        "src/postgkyl/render/_prep.py": 2,
+        "src/postgkyl/render/animate.py": 3,
+        "src/postgkyl/render/matplotlib.py": 3,
+        "src/postgkyl/render/plotly.py": 3,
+        "src/postgkyl/render/pyvista.py": 3,
+        "tests/test_operations_animate.py": 7,
+        "tests/test_postgkyl.py": 2
+      }
+    }
+  ]
+}
