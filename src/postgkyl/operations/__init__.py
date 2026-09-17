@@ -10,14 +10,12 @@ on the container backend (Gkeyll kernels for modal data, NumPy for field data);
 ``integrate`` performs full or partial integration inside Gkeyll on modal
 data (full is terminal; partial stays native and lower-dimensional);
 ``average`` reduces modal data over a dimension subset via
-``gkyl_array_average``, producing a new lower-dimensional modal dataset;
-``map`` delegates to the grid-mapping engine in ``dg.map``. Flat modules are
-domain-independent core verbs; domain subpackages such as ``gyrokinetics``
-hold transformations that require domain geometry without interpreting field
-components as new physical conclusions. Equation-specific physics (the former
-``moments``/``agyro``/``current``/``energetics``/``rotate``/
-``transform_frame``/``laguerre`` verbs, folded with the array math they
-delegated to) lives one layer up, in ``diagnostics``.
+``gkyl_array_average``, producing a new lower-dimensional modal dataset.
+
+Coordinate transformations have their own flat verb modules. ``geometry``
+assembles point coordinates using I/O's shared Gkeyll file conventions;
+mapping operations accept reusable projections or resolve that geometry.
+Equation-specific physical compositions belong in ``diagnostics``.
 
 The terminal renderers (``plot``, ``animate``, ``plotly``, ``plotly_animate``,
 and ``pyvista``) are exceptions:
@@ -25,7 +23,7 @@ this namespace re-exports their exact canonical callables from
 :mod:`postgkyl.render` without wrapping them.
 """
 
-from . import arithmetic, gyrokinetics
+from . import arithmetic
 from .interpolate import interpolate
 from .local_poly import local_poly
 from .select import select
@@ -51,6 +49,10 @@ from .growth import growth
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
+from .map_to_rz import map_to_rz, resolve_rz_projection, RzProjection
+from .extract_flux_surface import (extract_flux_surface,
+                                   resolve_flux_surface_grid, FluxSurfaceGrid)
+from .geometry import Geometry, resolve_geometry
 
 # Command metadata is attached at the layer that owns each operation.  This
 # block is deliberately declarative: discovery still walks the public API and
@@ -59,6 +61,7 @@ from typing import Annotated, Literal
 
 from postgkyl.cli_spec import (
     CliArgument,
+    CliHidden,
     CliType,
     CommandSpec,
     DatasetRef,
@@ -138,10 +141,17 @@ mask.__annotations__["mask_data"] = Annotated[GDataState | None, DatasetRef()]
 fit.__annotations__["guess"] = str | None
 map.__annotations__["data"] = GDataState
 map.__annotations__["mapping"] = str
+map_to_rz.__annotations__["projection"] = Annotated[
+    RzProjection | None,
+    CliHidden("reuse a projection through the Python API")]
+extract_flux_surface.__annotations__["fs_grid"] = Annotated[
+    FluxSurfaceGrid | None,
+    CliHidden("reuse a sampling grid through the Python API")]
 represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 
 for _function in (interpolate, local_poly, select, average, eval_at_coord_proj,
-                  fft, magsq, grid, differentiate, map):
+                  fft, magsq, grid, differentiate, map, map_to_rz,
+                  extract_flux_surface):
   command(_MAP)(_function)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
@@ -171,11 +181,18 @@ hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
 
+for _function in (resolve_geometry, resolve_rz_projection,
+                  resolve_flux_surface_grid):
+  hidden("constructs geometry or projections for the Python API")(_function)
+
 __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
     "average", "eval_at_coord_proj", "plot", "animate", "plotly",
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
     "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "growth", "gyrokinetics"
+    "available_evaluate_operators", "map", "growth", "map_to_rz",
+    "resolve_rz_projection", "extract_flux_surface",
+    "resolve_flux_surface_grid", "resolve_geometry", "Geometry", "RzProjection",
+    "FluxSurfaceGrid"
 ]

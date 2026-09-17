@@ -15,15 +15,10 @@ A Gkeyll output file name encodes four facts::
 - **quantity** the output name (species/moment/geometry field),
 - **frame**    the trailing ``_<digits>`` of the quantity, when present.
 
-Before this module the convention was re-derived in three places with three
-slightly different rules (``diagnostics.gk.rz._file_prefix``'s
-``rsplit('-', 1)``, ``diagnostics.discovery.find_output_stems``'s
-``_\\d+$`` strip, and the animation operation's port of main's
-``utils.set_frame``, which recovered a frame index by diffing the loaded file
-names character by character). It lives in ``io`` because it is knowledge
-about Gkeyll's *files*, which is what this layer owns, and because ``io`` is
-below every consumer (``gdatastate`` stamps it into ``ctx`` at load time;
-``diagnostics`` builds directory discovery on top of it).
+This convention is shared by geometry lookup, output discovery, and frame
+grouping. It lives in ``io`` because it describes Gkeyll's files and sits below
+every consumer: ``gdatastate`` stamps identity into ``ctx`` at load time and
+``diagnostics`` builds quantity discovery on top of it.
 
 The parser is *pure*: it never touches the filesystem. ``os.path.exists`` is
 the caller's business.
@@ -74,8 +69,7 @@ class OutputName:
     """The ``'<dir>/<sim>[_b<N>]'`` path every sibling file of this *block*
     shares -- what a geometry lookup appends ``'-geo_int_nodes.gkyl'`` to.
 
-    For single-block output this is exactly the old
-    ``rz._file_prefix`` (the part of the path before the last ``'-'``).
+    For single-block output this is the path before the last ``'-'``.
     """
     base = self.sim if self.block is None else f"{self.sim}_b{self.block:d}"
     return os.path.join(self.directory, base) if self.directory else base

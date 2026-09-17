@@ -95,7 +95,7 @@ class GDataState:
     Header metadata wins: ``setdefault`` never overwrites a ``frame`` (or
     anything else) a reader already read out of the file itself. Because
     ``clone`` copies ``ctx``, the identity survives every verb, so a
-    multiblock family is still recognizable after ``interpolate``/``gk_rz``
+    multiblock family is still recognizable after ``interpolate``/``map_to_rz``
     -- which is what lets terminal verbs draw one field's blocks together
     (see ``gdatastate.collection.group_blocks``).
     """

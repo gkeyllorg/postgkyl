@@ -68,6 +68,7 @@ def write_gkyl_field(
     basis_type: str,
     time: float = 0.0,
     frame: int = 0,
+    metadata: dict | None = None,
 ) -> None:
   """Write a minimal valid .gkyl v1 binary field file with msgpack metadata."""
   ndim = len(cells)
@@ -78,6 +79,7 @@ def write_gkyl_field(
       "basisType": basis_type,
       "time": time,
       "frame": frame,
+      **(metadata or {}),
   })
 
   with open(path, "wb") as f:
@@ -457,6 +459,58 @@ def generate_all(out_dir: Path | str) -> None:
           time=0.1 * frame,
           frame=frame,
       )
+
+  # --- equation-agnostic geometry: two blocks and frames, in 2-D and 3-D ---
+  # The fields are constant, while the geometry is affine in computational
+  # coordinates. Both values and physical grid locations have analytic oracles.
+  for ndim in (2, 3):
+    edges = np.linspace(0.0, 1.0, 5)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    gauss = (centers[:, None] + np.array([-1.0, 1.0])[None, :] /
+             (8 * np.sqrt(3.0))).ravel()
+    coords = np.meshgrid(*([gauss] * ndim), indexing="ij")
+    for block in (0, 1):
+      prefix = f"mapped_{ndim}d_b{block}"
+      for frame in (0, 1):
+        value = 7.0 + block + 2 * frame
+        write_gkyl_field(out_dir / f"{prefix}-fluid_{frame}.gkyl", [4] * ndim,
+                         [0.0] * ndim, [1.0] * ndim,
+                         np.full((4, ) * ndim + (1, ), value * 2**(ndim / 2)),
+                         poly_order=0,
+                         basis_type="serendipity",
+                         frame=frame)
+      # 2-D uses Cartesian X/Y/Z; 3-D uses R/Z/phi on a field-aligned grid.
+      point_values = (np.stack(
+          [2.0 + block + coords[0],
+           np.zeros_like(coords[0]), coords[1]],
+          axis=-1) if ndim == 2 else np.stack([
+              2.0 + block + coords[0], coords[2], 2 * np.pi * coords[1] +
+              0.2 * coords[2]
+          ],
+                                              axis=-1))
+      write_gkyl_field(out_dir / f"{prefix}-geo_int_nodes.gkyl", [8] * ndim,
+                       [0.0] * ndim, [1.0] * ndim,
+                       point_values,
+                       poly_order=0,
+                       basis_type="serendipity",
+                       metadata={
+                           "value_form": "nodal",
+                           "geometry_type": 3 if ndim == 2 else 1
+                       })
+      if ndim == 2:
+        # Exact p1 coefficients for X=2+block+x, Y=0, Z=z.
+        x, z = np.meshgrid(centers, centers, indexing="ij")
+        modal = np.zeros((4, 4, 12))
+        modal[..., 0] = 2 * (2.0 + block + x)
+        modal[..., 1] = 0.25 / np.sqrt(3.0)
+        modal[..., 8] = 2 * z
+        modal[..., 10] = 0.25 / np.sqrt(3.0)
+        write_gkyl_field(out_dir / f"{prefix}-geo_int_mapc2p.gkyl", [4, 4],
+                         [0.0, 0.0], [1.0, 1.0],
+                         modal,
+                         poly_order=1,
+                         basis_type="serendipity",
+                         metadata={"geometry_type": 3})
 
   # --- dynvector (bare time series, e.g. a field-energy history) ---
   # Two components, each a smooth logistic growth-then-saturate curve (one

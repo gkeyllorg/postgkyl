@@ -119,7 +119,7 @@ def test_downloaded_examples_run_outside_repository(documentation, tmp_path):
                  capture_output=True,
                  text=True)
   assert (tmp_path / "figures/06_growth.png").stat().st_size > 0
-  assert (tmp_path / "figures/05_gk_rz.png").stat().st_size > 0
+  assert (tmp_path / "figures/05_map_to_rz.png").stat().st_size > 0
 
 
 def test_comparison_rejects_changed_pixels(tmp_path):

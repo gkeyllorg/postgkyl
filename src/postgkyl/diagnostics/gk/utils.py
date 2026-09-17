@@ -20,7 +20,6 @@ import glob
 import os
 
 import numpy as np
-from postgkyl import numerics
 from postgkyl.gdata import GData
 
 # Maximum number of blocks a multiblock simulation is assumed to have, used
@@ -111,37 +110,6 @@ def read_interpolated_gfile(
   values = interpolated.get_values()
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), interpolated
-
-
-def interpolated_grid_values(
-    data: GData,
-    *,
-    comp: int = 0) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
-  """Interpolate ``data``'s DG coefficients onto its computational mesh.
-
-  Shared by :mod:`~postgkyl.diagnostics.gk.rz` and
-  :mod:`~postgkyl.diagnostics.gk.fluxsurf`, which both need a
-  field-aligned dataset's fine computational grid (for sampling the
-  simulation's geometry) alongside its interpolated values.
-
-  Args:
-    data: The dataset. Normally not yet interpolated; an already-interpolated
-      dataset is accepted and used as-is.
-    comp: Component to return.
-
-  Returns:
-    ``(edges, centers, values)``: the refined edge grid (one 1-D array per
-    dimension), its cell-centered equivalent, and component ``comp``'s
-    values on that grid.
-  """
-  # Idempotent on purpose: 'pgkyl ... interp gk_rz' is a natural thing to
-  # type, and interpolating twice would run the DG evaluation matrix over
-  # values that are already point values -- silently wrong output rather
-  # than an error.
-  field = data if data.ctx.get("interpolated") else data.interpolate()
-  cells = field.values.shape[:-1]
-  centers = numerics.nodal_to_cell_centered_grid(field.grid, cells)
-  return field.grid, centers, field.values[..., comp]
 
 
 def set_tick_font_size(ax, size: float) -> None:

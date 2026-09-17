@@ -120,7 +120,10 @@ class KeyValue:
 
 @dataclass(frozen=True)
 class CliHidden:
-  """Explicitly exclude a public callable from command generation."""
+  """Exclude a callable, or an optional keyword parameter, from the CLI.
+
+  As an Annotated parameter marker, the Python default is used unchanged.
+  """
 
   reason: str
 

@@ -123,9 +123,9 @@ pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
     info
 ```
 
-## 7. Map a gyrokinetic field to R-Z
+## 7. Map a field to R-Z
 
-`gk_rz` is a data transformation: it interpolates one raw DG component and
+`map_to_rz` is an equation-independent mapping: it interpolates one raw DG component and
 maps it onto the physical poloidal plane. Geometry is inferred from the
 field's filename, preferring nodal geometry and falling back to modal
 `mapc2p` geometry. The CLI and Python calls below use the same operation and
@@ -133,15 +133,16 @@ defaults:
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl \
-    gk_rz --nz_interp 2 info
+    map_to_rz --nz_interp 2 info
 ```
 
 ```python
 import postgkyl as pg
 
-mapped = pg.load(
+data = pg.load(
     "tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl"
-).gk_rz(nz_interp=2)
+)
+mapped = pg.map_to_rz(data, nz_interp=2)
 ```
 
 ## 8. Saving to another format

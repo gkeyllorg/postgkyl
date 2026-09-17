@@ -5,7 +5,7 @@ single ``self``, a module-level function in ``api.verbs``), the fluent
 facade re-exports.
 
 Physics diagnostics are deliberately not fluent methods. Domain-specific data
-transformations such as ``gk_rz`` are operations and do belong on the fluent
+transformations with explicit geometry such as ``map_to_rz`` belong on the fluent
 surface alongside domain-independent core verbs.
 """
 
@@ -68,8 +68,8 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 # operations that act on the group as a whole. Every multi-dataset operation
 # also has a functional spelling on the top-level ``pg`` facade.
 INSTANCE_VERBS = [
-    "load", "interpolate", "local_poly", "gk_rz", "select", "plot", "plotly",
-    "pyvista", "save", "mul", "div", "integrate", "average",
+    "load", "interpolate", "local_poly", "map_to_rz", "select", "plot",
+    "plotly", "pyvista", "save", "mul", "div", "integrate", "average",
     "eval_at_coord_proj", "to_modal", "to_nodal", "to_quad", "apply", "fft",
     "magsq", "mask", "val2coord", "extract_input", "fit", "differentiate", "map"
 ]

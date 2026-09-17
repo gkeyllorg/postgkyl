@@ -43,7 +43,7 @@ def _family_key(data) -> tuple | None:
   Built from the identity ``GDataState`` stamps at load time (``sim``,
   ``quantity``, ``frame`` -- see ``io.naming``) plus the dataset's ``tag``,
   so two differently-tagged results of the same source file (e.g. the raw
-  load and a ``gk_rz`` projection of it) never merge. ``block`` is
+  load and a ``map_to_rz`` projection of it) never merge. ``block`` is
   deliberately absent: it is what family members differ by.
 
   Returning ``None`` for single-block data is the property that keeps every

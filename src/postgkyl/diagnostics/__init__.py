@@ -5,9 +5,8 @@ Folds together the old ``models`` (array math) and ``operations`` physics-verb
 here take loaded ``GData``/``GDataState`` (one or several) plus physical
 scalars as keyword-only options, and return a ``GDataState`` (via
 ``_result``) or, in later layers, a ``Figure``. Equation-blind core verbs
-stay in flat ``operations`` modules. Domain-specific transformations live in
-operation subpackages (for example ``operations.gyrokinetics``); this layer
-is reserved for code that knows what field components physically mean.
+stay in flat ``operations`` modules. Model-specific auxiliary discovery and
+interpretation live beside their diagnostic compositions.
 
 The four public packages mirror Gkeyll's model families: ``gk``, ``vm``,
 ``pkpm``, and ``mom``. The equation-blind ``discovery`` module
@@ -147,14 +146,8 @@ for _name in (
     "fetch_Tperp_from_M0_M2perp",
     "energy_balance_error",
     "particle_balance_error",
-    "is_geo_mapc2p",
     "multib_tag",
     "nodes_to_RZ",
-    "map_to_rz",
-    "resolve_geometry",
-    "resolve_rz_projection",
-    "extract_flux_surface",
-    "resolve_flux_surface_grid",
 ):
   _function = getattr(gk, _name)
   if command_spec(_function) is None and hidden_spec(_function) is None:

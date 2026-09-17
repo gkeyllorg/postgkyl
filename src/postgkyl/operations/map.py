@@ -1,4 +1,4 @@
-"""The ``map`` verb -- deform a dataset's grid by evaluating a coordinate map.
+"""The ``map`` verb deforms a dataset's grid by evaluating a coordinate map.
 
 See ``MAPPING.md`` for the full design. A mapping file is a DG field whose
 components hold the coefficients of the physical coordinates of each mapped
@@ -13,7 +13,6 @@ copy: this verb never touches them).
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-
 from postgkyl import dg
 from postgkyl.gdatastate.gdatastate import GDataState
 
