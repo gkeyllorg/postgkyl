@@ -714,6 +714,77 @@ def fetch_c_s(gdatas, **kwargs):
   # end
   return c_s_kinds[kind](gdatas, **kwargs)
 
+def _gkyl_coulomb_log(ns, nr, ms, mr, Ts, Tr, qs, qr, bmag, eps0, hbar, eV):
+  """
+  Coulomb logarithm, transcribed literally from gkeyll's coulomb_log
+  (vlasov/zero/spitzer_coll_freq.c) so that it matches what a simulation used.
+  """
+  vts = np.sqrt(Ts/ms)
+  vtr = np.sqrt(Tr/mr)
+  wps = np.sqrt(ns*eV*eV/ms/eps0)
+  wpr = np.sqrt(nr*eV*eV/mr/eps0)
+  wcs = qs*bmag/ms
+  wcr = qr*bmag/mr
+  inner1 = (wps*wps + wcs*wcs)/(Ts/ms + 3*Ts/ms) + (wpr*wpr + wcr*wcr)/(Tr/mr + 3*Ts/ms)
+  u = 3*(vts*vts + vtr*vtr)
+  msr = ms*mr/(ms+mr)
+  inner2 = max(abs(qs*qr)/(4*np.pi*eps0*msr*u*u), hbar/(2*np.sqrt(eV)*msr*u))
+  inner = (1/inner1)*(1/inner2/inner2) + 1
+  return 0.5*np.log(inner)
+
+def fetch_collision_freq(gdatas, **kwargs):
+  """
+  Collision frequency of species s with species r (1/s), as computed by the
+  gyrokinetic app (LBO/BGK collisions with a normalized nu):
+    nu_sr = norm_nu_sr * n_r/(v_ts^2+v_tr^2)^(3/2),
+    norm_nu_sr = nu_frac * (1/m_s)*(1/m_s+1/m_r) * q_s^2*q_r^2*log(Lambda_sr)
+                 / (3*(2*pi)^(3/2)*eps0^2),
+  """
+  if len(gdatas) != 2:
+    raise ValueError(f"fetch_collision_freq: expected two species (s,r) but got {len(gdatas)}. "
+                     f"Use e.g. '--species elc,ion', or '--species ion,ion' for self-collisions.")
+
+  species_names = kwargs.get("species", [])
+  if len(species_names) != len(gdatas):
+    species_names = ["s", "r"]
+
+  # Species attributes and reference values, resolved against each species' slot in a '--extra' array.
+  q, m, den_ref, temp_ref, bmag_ref = [], [], [], [], []
+  for species_idx, (name, srcs) in enumerate(zip(species_names, gdatas)):
+    species_kwargs = dict(kwargs, species_idx=species_idx, species=name)
+    q.append(_get_ctx_val(srcs[1], "charge", **species_kwargs))
+    m.append(_get_ctx_val(srcs[1], "mass", **species_kwargs))
+    den_ref.append(_get_ctx_val(srcs[1], "den_ref", **species_kwargs))
+    temp_ref.append(_get_ctx_val(srcs[1], "temp_ref", **species_kwargs))
+    bmag_ref.append(_get_ctx_val(srcs[1], "bmag_ref", **species_kwargs))
+
+  eps0 = gkc.GKYL_EPSILON0
+  hbar = gkc.GKYL_PLANCKS_CONSTANT_H/(2.0*gkc.GKYL_PI)
+  eV = gkc.GKYL_ELEMENTARY_CHARGE
+  nu_frac = float(kwargs.get("nu_frac", 1.0))
+
+  # Symmetrized Coulomb logarithm from the reference values (bmag_ref of species s).
+  coul_log = 0.5*(_gkyl_coulomb_log(den_ref[0], den_ref[1], m[0], m[1], temp_ref[0], temp_ref[1],
+                                    q[0], q[1], bmag_ref[0], eps0, hbar, eV)
+                 +_gkyl_coulomb_log(den_ref[1], den_ref[0], m[1], m[0], temp_ref[1], temp_ref[0],
+                                    q[1], q[0], bmag_ref[0], eps0, hbar, eV))
+
+  norm_nu = nu_frac/m[0]*(1.0/m[0] + 1.0/m[1])*(q[0]*q[1])**2*coul_log \
+            /(3.0*(2.0*gkc.GKYL_PI)**1.5*eps0**2)
+
+  (m0_s, temp_s), (m0_r, temp_r) = gdatas
+
+  # (v_ts^2 + v_tr^2)^(-3/2).
+  vtsq_sum = _empty_gdata_from_gdata(temp_s)
+  vtsq_sum.set_values(temp_s.get_values()/m[0] + temp_r.get_values()/m[1])
+  nu = _powsqrt_dg(vtsq_sum, -3.0)
+
+  dgops = GkeyllDGops()
+  dgops.multiply(0, nu, 0, nu, 0, m0_r)
+  nu.set_values(norm_nu*nu.get_values())
+
+  return nu
+
 def fetch_beta_from_bmag_press(gdatas, **kwargs):
   """
   beta = 2*mu_0*press/bmag^2

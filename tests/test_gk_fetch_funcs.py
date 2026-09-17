@@ -316,6 +316,17 @@ class TestHeatFluxes:
 
 
 @_needs_dgops
+class TestBeta:
+  """beta = 2*mu0*p/B^2, and its value in percent."""
+
+  _BMAG = 2.3
+
+  def test_beta(self):
+    beta = ff.fetch_beta_from_bmag_press([_const_gdata(self._BMAG), _const_gdata(_DENS*_TEMP)])
+    expected = 2.0*gkc.GKYL_MU0*_DENS*_TEMP/self._BMAG**2
+    assert np.allclose(_cell_avg(beta), expected, rtol=1e-12)
+
+@_needs_dgops
 class TestThermalSpeed:
   """vth = sqrt(T/m), m being the requested species' own mass."""
 
@@ -520,6 +531,107 @@ def _project_powsqrt_reference(coeff0: float, coeff1: float, exponent: float,
   g_at_ords = np.power(np.sqrt(f_at_ords), exponent)
 
   return np.array([np.sum(weights*g_at_ords*psi[k]) for k in range(_NUM_BASIS)])
+
+
+# --- Collision frequency -------------------------------------------------------
+#
+# The reference is gkeyll's own compiled gkyl_calc_Morse_alpha_E_const, combined
+# the way gk_species_lbo.c builds the normalized collision frequency.
+try:
+  import ctypes
+  from postgkyl._gkylsoft_path import resolve_gkylsoft_path
+  _VLASOV_LIB = ctypes.CDLL(f"{resolve_gkylsoft_path(None)}/gkeyll/lib/libg0vlasov.so")
+  _VLASOV_LIB.gkyl_calc_Morse_alpha_E_const.restype = ctypes.c_double
+  _VLASOV_LIB.gkyl_calc_Morse_alpha_E_const.argtypes = [ctypes.c_double]*12
+except Exception:  # noqa: BLE001 - any failure means the lib is unusable here
+  _VLASOV_LIB = None
+
+_needs_vlasov_lib = pytest.mark.skipif(
+  _VLASOV_LIB is None, reason="requires gkeyll's libg0vlasov")
+
+_BMAG_REF = 2.3
+_NU_FRAC = 0.7
+
+
+def _collision_freq_reference(s, r):
+  """nu_sr of gkeyll's gyrokinetic app, from (n, T, m, q, den_ref, temp_ref) of s and r."""
+  n_s, T_s, m_s, q_s, nref_s, Tref_s = s
+  n_r, T_r, m_r, q_r, nref_r, Tref_r = r
+  alpha_E = _NU_FRAC*_VLASOV_LIB.gkyl_calc_Morse_alpha_E_const(
+    nref_s, nref_r, m_s, m_r, q_s, q_r, Tref_s, Tref_r, _BMAG_REF,
+    gkc.GKYL_EPSILON0, gkc.GKYL_PLANCKS_CONSTANT_H/(2.0*gkc.GKYL_PI), gkc.GKYL_ELEMENTARY_CHARGE)
+  # Self-collisions use alpha_E directly; cross-collisions scale it by (m_s+m_r)/(delta_sr*(1+beta)*m_s).
+  norm_nu = alpha_E if s == r else alpha_E*(m_s + m_r)/(2.0*m_s)
+  return norm_nu*n_r/(T_s/m_s + T_r/m_r)**1.5
+
+
+@_needs_dgops
+@_needs_vlasov_lib
+class TestCollisionFreq:
+  """nu_sr, with s the first and r the second requested species."""
+
+  # (n, T, m, q, den_ref, temp_ref)
+  _ELC = (_N_E, _T_E, _M_E, -_E_CHARGE, 1.0e19, 1.6e-17)
+  _ION1 = (_N_I1, _T_I1, _M_I1, _Z_I1*_E_CHARGE, 1.2e19, 1.3e-17)
+  _ION2 = (_N_I2, _T_I2, _M_I2, _Z_I2*_E_CHARGE, 3.0e18, 8.0e-18)
+
+  def _nu(self, s, r, **extra):
+    extra = dict(dict(den_ref=[s[4], r[4]], temp_ref=[s[5], r[5]], bmag_ref=_BMAG_REF,
+                      nu_frac=_NU_FRAC), **extra)
+    return ff.fetch_collision_freq([_species_srcs(*s[:4]), _species_srcs(*r[:4])],
+                                   species=["s", "r"], **extra)
+
+  def _check(self, s, r):
+    assert np.allclose(_cell_avg(self._nu(s, r)), _collision_freq_reference(s, r), rtol=1e-10)
+
+  def test_electron_ion(self):
+    self._check(self._ELC, self._ION1)
+
+  def test_ion_electron(self):
+    """nu_sr is not symmetric: the order of the species matters."""
+    self._check(self._ION1, self._ELC)
+
+  def test_multiply_charged_impurity(self):
+    """Z=2 distinguishes q^2*q^2 from q*q."""
+    self._check(self._ION1, self._ION2)
+
+  def test_self_collisions(self):
+    self._check(self._ION1, self._ION1)
+
+  def test_coulomb_log_uses_the_reference_values(self):
+    """Only den_ref/temp_ref enter the Coulomb logarithm, not the local moments."""
+    other_ref = (*self._ELC[:4], 5.0e19, 4.0e-17)
+    assert not np.allclose(_cell_avg(self._nu(self._ELC, self._ION1)),
+                           _cell_avg(self._nu(other_ref, self._ION1)))
+
+  def test_nu_frac_defaults_to_one(self):
+    default = self._nu(self._ELC, self._ION1, nu_frac=1.0)
+    extra = dict(den_ref=[self._ELC[4], self._ION1[4]], temp_ref=[self._ELC[5], self._ION1[5]],
+                 bmag_ref=_BMAG_REF)
+    unset = ff.fetch_collision_freq([_species_srcs(*self._ELC[:4]), _species_srcs(*self._ION1[:4])],
+                                    **extra)
+    assert np.allclose(_cell_avg(default), _cell_avg(unset), rtol=1e-12)
+
+  def test_missing_reference_values_are_an_error(self):
+    with pytest.raises(KeyError, match="den_ref"):
+      ff.fetch_collision_freq([_species_srcs(*self._ELC[:4]), _species_srcs(*self._ION1[:4])])
+
+  def test_needs_exactly_two_species(self):
+    with pytest.raises(ValueError, match="expected two species"):
+      ff.fetch_collision_freq([_species_srcs(*self._ELC[:4])])
+
+  @pytest.mark.parametrize("T_eV", [1.0, 30.0, 1000.0])
+  @pytest.mark.parametrize("dens", [1.0e17, 1.0e20])
+  @pytest.mark.parametrize("bmag", [0.0, 5.0])
+  def test_coulomb_log_matches_gkeyll(self, T_eV, dens, bmag):
+    """The transcribed Coulomb logarithm must equal gkeyll's own coulomb_log."""
+    lib_log = _VLASOV_LIB.coulomb_log
+    lib_log.restype = ctypes.c_double
+    lib_log.argtypes = [ctypes.c_double]*12
+    T = T_eV*_E_CHARGE
+    args = (dens, 0.5*dens, _M_E, _M_I1, T, 2.0*T, -_E_CHARGE, _E_CHARGE, bmag,
+            gkc.GKYL_EPSILON0, gkc.GKYL_PLANCKS_CONSTANT_H/(2.0*gkc.GKYL_PI), _E_CHARGE)
+    assert np.isclose(ff._gkyl_coulomb_log(*args), lib_log(*args), rtol=1e-12)
 
 
 # --- Inverse gradient lengths -------------------------------------------------

@@ -386,6 +386,18 @@ _c_s : GkQuantity = GkQuantity(
 )
 gk_quant_registry.register(_c_s)
 
+# Collision frequency of species s with species r (-s s,r).
+_collision_freq : GkQuantity = GkQuantity(
+  name = "collision_freq",
+  source = [[_M0, _temp],],
+  fetch_func = [ff.fetch_collision_freq],
+  label = r"$\nu_{sr}$ (1/s)",
+  is_time_dep = True,
+  is_species_dep = False,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_collision_freq)
+
 # ------------------------
 # --- Gradient lengths ---
 # ------------------------
