@@ -16,8 +16,21 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from postgkyl.gdatastate import materialize_point_values
+
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
+
+
+def materialize_plot_data(data: "GDataState") -> "GDataState":
+  """Keep modal coefficients on their cell grid; materialize point values.
+
+  Each stored coefficient is a separate plotting channel. Rendering neither
+  evaluates the DG expansion nor changes the input representation.
+  """
+  if data.ctx.get("value_form", "modal") == "modal":
+    return data
+  return materialize_point_values(data)
 
 
 def default_axis_labels(num_dims: int) -> list[str]:
@@ -148,8 +161,8 @@ def prep_plot_data(data: "GDataState",
   """Squeeze collapsed axes and resolve axis/colorbar label defaults.
 
   Args:
-    data: The dataset to prepare (point-value/NumPy-backed; the ``plot``
-      verb has already bridged any modal data through its NumPy shadow).
+    data: The dataset to prepare, with modal coefficients on the cell grid
+      or point values materialized on their sampling grid.
     xlabel: Explicit x-axis label; auto-derived (``$z_0$``) when ``None``.
     ylabel: Explicit y-axis label; auto-derived (``$z_1$``) when ``None``
       and the (squeezed) dataset is 2-D, else empty.

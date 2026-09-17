@@ -184,3 +184,10 @@ def test_version_and_unknown_command_edges():
   version = _ok("--version")
   assert "postgkyl" in version.output
   assert _run("definitely-not-a-command").exit_code != 0
+
+
+def test_plot_modal_coefficients_with_short_alias(tmp_path):
+  output = tmp_path / "coefficients.png"
+  _ok(DATA / "generated" / "1d_ms_p1.gkyl", "pl", "--no_show", "--saveas",
+      output)
+  assert output.is_file()

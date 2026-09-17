@@ -21,10 +21,11 @@ from postgkyl.cli_spec import (
     Section,
     command,
 )
-from postgkyl.gdatastate import GDataState, materialize_point_values
+from postgkyl.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
-from ._prep import resolve_axis_labels, squeeze_collapsed_axes
+from ._prep import (materialize_plot_data, resolve_axis_labels,
+                    squeeze_collapsed_axes)
 from .labels import latex_to_unicode
 
 
@@ -138,7 +139,7 @@ def pyvista(data: GDataState,
       extension.
     RuntimeError: PyVista could not obtain a working OpenGL context.
   """
-  data = materialize_point_values(data)
+  data = materialize_plot_data(data)
   _valid_exts = ("", ".html", ".png", ".jpg", ".jpeg", ".pdf", ".svg", ".gltf",
                  ".vtksz")
   if saveas and not os.path.splitext(saveas)[1]:

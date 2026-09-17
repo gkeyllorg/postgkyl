@@ -43,9 +43,8 @@ class TestAnimateVerb:
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 3
 
-  def test_modal_frames_are_materialized_first(self):
-    """A raw (non-interpolated) modal dataset is bridged through its NumPy
-    shadow (nodal value_form), just like ``render.plot``."""
+  def test_nodal_frames_are_materialized_first(self):
+    """Native nodal data is materialized at its true point locations."""
     from matplotlib.animation import FuncAnimation
     a = pg.load(F1D).to_nodal()
     b = pg.load(F1D).to_nodal()
@@ -53,10 +52,15 @@ class TestAnimateVerb:
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2
 
-  def test_raw_modal_frame_without_representation_raises(self):
-    a = pg.load(F1D)  # still modal coefficients
-    with pytest.raises(ValueError, match="not plottable"):
-      operations.animate([a], no_show=True)
+  def test_raw_modal_frames_plot_coefficients(self):
+    import numpy as np
+    a = pg.load(F1D)
+    anim = operations.animate([a], no_show=True)
+    anim._func(0, *anim._args)
+    for comp, ax in enumerate(anim._fig.axes):
+      np.testing.assert_array_equal(ax.lines[0].get_ydata(), a.values[:, comp])
+    assert a.backend == "gkyl"
+    assert a.ctx.get("value_form", "modal") == "modal"
 
   def test_grouped_frames_preserve_structure(self):
     from matplotlib.animation import FuncAnimation

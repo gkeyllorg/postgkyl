@@ -35,10 +35,9 @@ from postgkyl.gdatastate import (
     GDataStateGroup,
     flatten_datasets,
     group_blocks,
-    materialize_point_values,
 )
 
-from ._prep import subplot_grid
+from ._prep import materialize_plot_data, subplot_grid
 from .style import apply_style
 
 _AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
@@ -427,6 +426,11 @@ def plot(
   primarily useful to CLI callers that request both a named output and frame
   output.
 
+  Modal DG data plots each stored coefficient as a separate channel on the
+  cell grid. To plot the evaluated field, first use ``interpolate`` (uniform
+  mesh), ``local_poly`` (preserves cell jumps), ``to_nodal`` (basis nodes),
+  or ``to_quad`` (quadrature points). The input dataset is unchanged.
+
   For 1-D data, passing ``cmap`` together with ``cval`` colors the line by
   mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
   normalization range (typically the min/max of the ``cval`` values across
@@ -574,7 +578,7 @@ def plot(
   figures = []
   plot_args = () if args is None else args
   for family_index, states in enumerate(families):
-    states = [materialize_point_values(state) for state in states]
+    states = [materialize_plot_data(state) for state in states]
     family_saveas = _indexed_saveas(saveas, family_index, indexed)
     for st in states:
       if st.values is None:

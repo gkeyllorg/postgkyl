@@ -30,6 +30,13 @@ facts. ``to_modal()``, ``to_nodal()``, and ``to_quad()`` explicitly change
 representation. ``interpolate()`` creates a new NumPy-backed field on a
 refined mesh for selection, plotting, and general analysis.
 
+Plotting raw modal data draws the stored coefficients as separate channels
+on the cell grid, without changing the representation. For example,
+``pgkyl file.gkyl pl`` plots coefficients. To plot the evaluated field, use
+``pgkyl file.gkyl interpolate pl`` or ``pgkyl file.gkyl local_poly pl``.
+``to_nodal`` and ``to_quad`` also provide field values at basis nodes and
+quadrature points respectively.
+
 For nonlinear operations on a modal field, ``apply(fn, num_quad=...)`` spells
 out evaluation at quadrature points followed by projection back to modal
 coefficients. Mixing representations in arithmetic raises an error.

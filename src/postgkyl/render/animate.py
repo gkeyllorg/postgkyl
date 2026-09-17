@@ -32,11 +32,11 @@ from postgkyl.gdatastate import (
     GDataState,
     group_blocks,
     group_frames,
-    materialize_point_values,
 )
 
 from . import matplotlib as backend
 from ._ffmpeg import require_ffmpeg
+from ._prep import materialize_plot_data
 
 if TYPE_CHECKING:
   from matplotlib.figure import Figure
@@ -52,9 +52,8 @@ def _normalize_frames(data,
   items = list(data)
   if items and all(isinstance(item, GDataState) for item in items):
     items = group_frames(items) if multiblock else group_blocks(items)
-  frames = [([materialize_point_values(item)] if isinstance(item, GDataState)
-             else [materialize_point_values(dat) for dat in item])
-            for item in items]
+  frames = [([materialize_plot_data(item)] if isinstance(item, GDataState) else
+             [materialize_plot_data(dat) for dat in item]) for item in items]
   if not frames:
     raise ValueError("animate: no datasets to animate.")
   return frames

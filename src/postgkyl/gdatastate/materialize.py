@@ -22,9 +22,10 @@ def materialize_point_values(data: "GDataState") -> "GDataState":
   value_form = data.ctx.get("value_form", "modal")
   if value_form == "modal":
     raise ValueError(
-        "modal DG coefficients are not plottable; choose explicitly: "
-        ".interpolate() (uniform evaluation mesh), .to_nodal() or .to_quad() "
-        "(plot at the basis/quadrature points).")
+        "modal DG coefficients are not point values; evaluate explicitly: "
+        ".interpolate() (uniform evaluation mesh), .local_poly() "
+        "(discontinuous plotting mesh), .to_nodal() or .to_quad() "
+        "(basis/quadrature points).")
   grid, values = rep.materialize(str(data.ctx["basis_type"]), data.num_dims,
                                  int(data.ctx["poly_order"]),
                                  data.native, data.grid, value_form,

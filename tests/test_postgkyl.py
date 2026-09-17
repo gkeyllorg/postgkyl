@@ -311,8 +311,17 @@ def test_conversions_are_always_explicit():
     np.sqrt(a)  # ufuncs have no modal meaning
   with pytest.raises(ValueError):
     np.asarray(a)  # coefficients are not values
-  with pytest.raises(ValueError):
-    a.plot(no_show=True)  # coefficients are not plottable
+  coefficients = a.values.copy()
+  fig = a.plot(no_show=True)
+  assert len(fig.axes) == coefficients.shape[-1]
+  centers = (a.grid[0][:-1] + a.grid[0][1:]) / 2
+  for comp, ax in enumerate(fig.axes):
+    np.testing.assert_allclose(ax.lines[0].get_xdata(), centers)
+    np.testing.assert_array_equal(ax.lines[0].get_ydata(), coefficients[:,
+                                                                        comp])
+  assert a.backend == "gkyl"
+  assert a.ctx.get("value_form", "modal") == "modal"
+  np.testing.assert_array_equal(a.values, coefficients)
 
 
 @needs_gkeyll

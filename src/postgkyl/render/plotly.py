@@ -40,11 +40,12 @@ from postgkyl.cli_spec import (
     Section,
     command,
 )
-from postgkyl.gdatastate import GDataState, materialize_point_values
+from postgkyl.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._ffmpeg import require_ffmpeg
-from ._prep import resolve_axis_labels, squeeze_collapsed_axes, subplot_grid
+from ._prep import (materialize_plot_data, resolve_axis_labels,
+                    squeeze_collapsed_axes, subplot_grid)
 from .labels import latex_to_html
 from .style import DEFAULT_STYLE, apply_style
 
@@ -595,7 +596,7 @@ def plotly(data: GDataState,
   Returns:
     plotly.graph_objects.Figure: the assembled figure.
   """
-  data = materialize_point_values(data)
+  data = materialize_plot_data(data)
   theme_colors = _apply_plot_style(style,
                                    rcParams,
                                    diverging,
