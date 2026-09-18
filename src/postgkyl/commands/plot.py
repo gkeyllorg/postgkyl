@@ -33,6 +33,19 @@ def _get_frames(datasets: list) -> list | None:
   return None
 
 
+def _label_to_file_name(label: str, index: int) -> str:
+  """Turns a dataset label into a fragment usable as a file name.
+
+  Datasets synthesized by 'ev' carry no file name, so the label is used to name the
+  saved figure instead. That label defaults to the RPN expression (e.g. 'f[0] f[1] /'),
+  which holds spaces and characters that are awkward or outright invalid in a path, so
+  everything outside of [A-Za-z0-9_.+-] is folded into underscores. The dataset index
+  is the fallback for a label which is empty or made of separators only.
+  """
+  cleaned = re.sub(r"[^\w.+-]+", "_", label or "").strip("_")
+  return cleaned if cleaned else str(index)
+
+
 @click.command()
 @click.option("--use", "-u", default=None, help="Specify the tag to plot.")
 @click.option("--figure", "-f", default=None,
@@ -307,7 +320,12 @@ def plot(ctx, **kwargs):
   file_name = ""
 
   # ---- Loop over all the datasets ----
-  for i, dat in ctx.obj["data"].iterator(kwargs["use"], enum=True):
+  # 'enum' of the DataSpace iterator numbers the datasets by their position in the
+  # tag, which skips values when earlier datasets have been deactivated (e.g. by
+  # dg-avg) and restarts at zero for every tag. Everything indexed by 'i' below
+  # (cval_list, legend_labels, ...) is built from the very same iterator, so count
+  # the datasets we actually plot instead.
+  for i, dat in enumerate(ctx.obj["data"].iterator(kwargs["use"])):
     if dataset_fignum:
       kwargs["figure"] = int(i)
     # end
@@ -349,7 +367,7 @@ def plot(ctx, **kwargs):
         if dat._file_name:
           file_name = file_name + dat._file_name.split(".")[0]
         else:
-          file_name = file_name + "ev_" + ctx.obj["labels"][i].replace(" ", "_")
+          file_name = file_name + "ev_" + _label_to_file_name(dat.get_label(), i)
         # end
       # end
     # end

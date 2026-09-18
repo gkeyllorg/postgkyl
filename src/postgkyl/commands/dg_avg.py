@@ -87,6 +87,10 @@ def dg_avg(ctx, **kwargs):
     out = ops.average(avg_dirs, out, weight=weight,
                       comp_grid=ctx.obj["compgrid"])
 
+    # Carry the provenance of the source over to the average.
+    out._file_name = dat.get_file_name()
+    out.set_label(dat.get_label())
+
     if kwargs["tag"]:
       out.set_tag(kwargs["tag"])
     if kwargs["label"]:
