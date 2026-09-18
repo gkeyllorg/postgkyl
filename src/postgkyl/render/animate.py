@@ -54,7 +54,7 @@ def _normalize_frames(data,
     items = group_frames(items) if multiblock else group_blocks(items)
   frames = [([materialize_plot_data(item)] if isinstance(item, GDataState) else
              [materialize_plot_data(dat) for dat in item]) for item in items]
-  if not frames:
+  if not frames or any(not frame for frame in frames):
     raise ValueError("animate: no datasets to animate.")
   return frames
 
@@ -63,7 +63,9 @@ def _frame_value_range(frames: list[list["GDataState"]],
                        cutoff: float | None = None,
                        *,
                        yscale: float = 1.0,
-                       zscale: float = 1.0) -> tuple[float, float]:
+                       zscale: float = 1.0,
+                       yshift: float = 0.0,
+                       zshift: float = 0.0) -> tuple[float, float]:
   """Value range spanning every dataset in every frame.
 
   Each dataset is scaled by ``yscale`` (1-D) or ``zscale`` (2-D) before its
@@ -79,7 +81,8 @@ def _frame_value_range(frames: list[list["GDataState"]],
   extrema = []
   for frame in frames:
     for dat in frame:
-      scaled = dat.values * (yscale if dat.num_dims == 1 else zscale)
+      scaled = ((dat.values + yshift) * yscale if dat.num_dims == 1 else
+                (dat.values + zshift) * zscale)
       extrema.append(np.nanmin(scaled))
       extrema.append(np.nanmax(scaled))
   extrema = np.array(extrema)
@@ -100,7 +103,15 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
   respected and shown on every frame.
   """
   kwargs = dict(plot_kwargs)
+  if kwargs.pop("variable_range", False):
+    _apply_value_range([frame], kwargs)
+  kwargs.pop("cutoffglobalrange", None)
+  if kwargs.pop("subplots", False):
+    step = 2 if kwargs.get("quiver") or kwargs.get("streamline") else 1
+    kwargs["num_axes"] = sum(dat.num_comps // step for dat in frame)
   notitle = kwargs.pop("notitle", False)
+  if notitle:
+    kwargs["title"] = ""
   if not notitle and kwargs.get("title") is None:
     dat0 = frame[0]
     parts = []
@@ -186,13 +197,16 @@ def _compile_movie(frame_files: list[str],
 
   ext = os.path.splitext(output_file)[1].lower()
   if ext in (".gif", ".webp", ".apng"):
-    images = [Image.open(f) for f in frame_files]
-    images[0].save(output_file,
-                   save_all=True,
-                   append_images=images[1:],
-                   duration=duration,
-                   loop=0,
-                   optimize=False)
+    from contextlib import ExitStack
+
+    with ExitStack() as stack:
+      images = [stack.enter_context(Image.open(f)) for f in frame_files]
+      images[0].save(output_file,
+                     save_all=True,
+                     append_images=images[1:],
+                     duration=duration,
+                     loop=0,
+                     optimize=False)
     return
   if ext in _VIDEO_EXTS:
     import matplotlib as mpl
@@ -229,6 +243,60 @@ def _compile_movie(frame_files: list[str],
 def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                             PipelineInput()],
             *,
+            use: str | None = None,
+            collected: bool = False,
+            squeeze: bool = False,
+            subplots: bool = False,
+            num_subplot_row: int | None = None,
+            num_subplot_col: int | None = None,
+            transpose: bool = False,
+            contour: bool = False,
+            clevels: str | None = None,
+            quiver: bool = False,
+            streamline: bool = False,
+            sdensity: float = 1.0,
+            arrowstyle: str | None = None,
+            group: int | None = None,
+            scatter: bool = False,
+            markersize: float | None = None,
+            linewidth: float | None = None,
+            linestyle: str | None = None,
+            color: str | None = None,
+            style: str | None = None,
+            diverging: bool = False,
+            arg: str | None = None,
+            fixaspect: bool = False,
+            logx: bool = False,
+            logy: bool = False,
+            logz: bool = False,
+            xshift: float = 0.0,
+            xscale: float = 1.0,
+            yshift: float = 0.0,
+            yscale: float = 1.0,
+            zshift: float = 0.0,
+            zscale: float = 1.0,
+            xmin: float | None = None,
+            xmax: float | None = None,
+            ymin: float | None = None,
+            ymax: float | None = None,
+            zmin: float | None = None,
+            zmax: float | None = None,
+            xlim: Annotated[tuple[float, float] | str | None,
+                            CliType(tuple[float, float] | None)] = None,
+            ylim: Annotated[tuple[float, float] | str | None,
+                            CliType(tuple[float, float] | None)] = None,
+            zlim: Annotated[tuple[float, float] | str | None,
+                            CliType(tuple[float, float] | None)] = None,
+            no_legend: bool = False,
+            no_colorbar: bool = False,
+            forcelegend: bool = False,
+            xlabel: str | None = None,
+            ylabel: str | None = None,
+            clabel: str | None = None,
+            title: str | None = None,
+            edgecolors: str | None = None,
+            no_showgrid: bool = False,
+            hashtag: bool = False,
             multiblock: bool = False,
             grouptags: bool = False,
             interval: int = 100,
@@ -251,6 +319,57 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     data: a flat iterable of datasets (each becomes a single-dataset frame),
       or an iterable of frames where each frame is itself a list of
       datasets drawn together (overlaid, as in ``matplotlib.plot``).
+    use: Select datasets with this tag.
+    collected: Treat the leading axis of each dataset as time.
+    squeeze: Draw all components in one panel.
+    subplots: Draw each dataset in a separate block of panels.
+    num_subplot_row: Number of subplot rows.
+    num_subplot_col: Number of subplot columns.
+    transpose: Transpose the display axes.
+    contour: Draw contours.
+    clevels: Contour count or start:end:count levels.
+    quiver: Draw vector arrows.
+    streamline: Draw streamlines.
+    sdensity: Streamline density.
+    arrowstyle: Streamline arrow style.
+    group: Draw lineouts along coordinate 0 or 1.
+    scatter: Draw point markers without connecting lines.
+    markersize: Marker size in points.
+    linewidth: Line width.
+    linestyle: Matplotlib line style.
+    color: Line or vector color.
+    style: Matplotlib style name or file.
+    diverging: Use a diverging colormap.
+    arg: Matplotlib format string, for example *--.
+    fixaspect: Use equal scaling on the display axes.
+    logx: Use logarithmic x scaling.
+    logy: Use logarithmic y scaling.
+    logz: Use logarithmic z scaling.
+    xshift: X shift, applied before scaling.
+    xscale: X scale factor.
+    yshift: Y shift, applied before scaling.
+    yscale: Y scale factor.
+    zshift: Z shift, applied before scaling.
+    zscale: Z scale factor.
+    xmin: X minimum limit.
+    xmax: X maximum limit.
+    ymin: Y minimum limit.
+    ymax: Y maximum limit.
+    zmin: Z minimum limit.
+    zmax: Z maximum limit.
+    xlim: X limits as a pair or comma-separated string; overrides individual bounds.
+    ylim: Y limits as a pair or comma-separated string; overrides individual bounds.
+    zlim: Z limits as a pair or comma-separated string; overrides individual bounds.
+    no_legend: Suppress legends.
+    no_colorbar: Suppress colorbars.
+    forcelegend: Show a legend even for one curve.
+    xlabel: Override the x label.
+    ylabel: Override the y label.
+    clabel: Override the c label.
+    title: Title shown on every frame.
+    edgecolors: Mesh cell edge color.
+    no_showgrid: Suppress grid lines.
+    hashtag: Display the Postgkyl hashtag.
     multiblock: Force datasets with the same frame index into one frame.
     grouptags: Build a separate animation for each dataset tag.
     interval: live-animation delay between frames, in milliseconds.
@@ -280,65 +399,185 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     The list of written frame paths when ``saveframes`` is set; otherwise
     the ``FuncAnimation`` (keep a reference -- Matplotlib does not keep the
     live animation alive for you). When ``nproc`` renders through the
-    ``tmpdir`` compile path, the compiled output path is returned instead.
+    ``tmpdir`` compile path, or when saving WebP/APNG without ``saveframes``,
+    the compiled output path is returned instead. With ``grouptags``, returns
+    one result per tag.
 
   Raises:
     ValueError: no datasets to animate, or an unsupported ``saveas``
       extension.
     RuntimeError: saving to a video container without ffmpeg on ``PATH``.
   """
+  if interval <= 0 or (fps is not None and fps <= 0) or nproc < 1:
+    raise ValueError("animate: interval, fps, and nproc must be positive")
+  if cutoffglobalrange is not None and not 0 < cutoffglobalrange <= 1:
+    raise ValueError("animate: cutoffglobalrange must be in (0, 1]")
+  if group not in (None, 0, 1):
+    raise ValueError("animate: group must be 0 or 1")
+  if isinstance(figsize, str):
+    figsize = tuple(float(value) for value in figsize.split(","))
+  plot_kwargs = dict(squeeze=squeeze,
+                     subplots=subplots,
+                     num_subplot_row=num_subplot_row,
+                     num_subplot_col=num_subplot_col,
+                     transpose=transpose,
+                     contour=contour,
+                     clevels=clevels,
+                     quiver=quiver,
+                     streamline=streamline,
+                     sdensity=sdensity,
+                     arrowstyle=arrowstyle,
+                     scatter=scatter,
+                     markersize=markersize,
+                     linewidth=linewidth,
+                     linestyle=linestyle,
+                     color=color,
+                     style=style,
+                     diverging=diverging,
+                     fixaspect=fixaspect,
+                     logx=logx,
+                     logy=logy,
+                     logz=logz,
+                     xshift=xshift,
+                     xscale=xscale,
+                     yshift=yshift,
+                     yscale=yscale,
+                     zshift=zshift,
+                     zscale=zscale,
+                     xmin=xmin,
+                     xmax=xmax,
+                     ymin=ymin,
+                     ymax=ymax,
+                     zmin=zmin,
+                     zmax=zmax,
+                     no_legend=no_legend,
+                     no_colorbar=no_colorbar,
+                     forcelegend=forcelegend,
+                     xlabel=xlabel,
+                     ylabel=ylabel,
+                     clabel=clabel,
+                     title=title,
+                     edgecolors=edgecolors,
+                     no_showgrid=no_showgrid,
+                     hashtag=hashtag,
+                     lineouts=group,
+                     args=[arg] if arg else None,
+                     notitle=notitle,
+                     variable_range=variable_range,
+                     cutoffglobalrange=cutoffglobalrange)
+  for axis, limits in zip("xyz", (xlim, ylim, zlim)):
+    if limits is not None:
+      if isinstance(limits, str):
+        limits = tuple(float(value) for value in limits.split(","))
+      lower, upper = limits
+      plot_kwargs[f"{axis}min"] = lower
+      plot_kwargs[f"{axis}max"] = upper
+
   items = list(data)
-  if items and grouptags and all(
-      isinstance(item, GDataState) for item in items):
-    tags: dict[str, list[GDataState]] = {}
+  if use is not None:
+    selected = []
     for item in items:
-      tags.setdefault(item.tag, []).append(item)
+      if isinstance(item, GDataState):
+        if item.tag == use:
+          selected.append(item)
+      else:
+        frame = [dat for dat in item if dat.tag == use]
+        if frame:
+          selected.append(frame)
+    items = selected
+  if collected:
+    expanded = []
+    for item in items:
+      if not isinstance(item, GDataState) or item.backend != "numpy":
+        raise ValueError("animate: collected requires NumPy datasets")
+      for index, values in enumerate(item.values):
+        expanded.append(
+            item._result(list(item.grid[1:]),
+                         values,
+                         frame=index,
+                         time=float(item.grid[0][index])))
+    items = expanded
+  groups = {}
+  if grouptags:
+    for item in items:
+      if not isinstance(item, GDataState):
+        raise ValueError("animate: grouptags requires a flat dataset sequence")
+      groups.setdefault(item.tag, []).append(item)
+  else:
+    groups[None] = items
+  if not groups:
+    raise ValueError("animate: no datasets to animate.")
 
-    def suffixed(path, tag):
-      if path is None:
-        return None
-      stem, extension = os.path.splitext(path)
-      return f"{stem}_{tag}{extension}"
+  results = []
+  for tag, datasets in groups.items():
+    frames = _normalize_frames(datasets, multiblock=multiblock)
+    options = dict(plot_kwargs)
+    if multiblock and color is None and frames[0][0].num_dims == 1:
+      options["color"] = "tab:blue"
+    output = os.fspath(saveas) if saveas is not None else "anim.gif"
+    prefix = os.fspath(saveframes) if saveframes is not None else None
+    if grouptags and tag is not None:
+      stem, extension = os.path.splitext(output)
+      output = f"{stem}_{tag}{extension}"
+      if prefix is not None:
+        prefix = f"{prefix}_{tag}"
+    results.append(
+        _animate_frames(frames,
+                        plot_kwargs=options,
+                        interval=interval,
+                        save=save or saveas is not None,
+                        saveas=output,
+                        fps=fps,
+                        dpi=dpi,
+                        saveframes=prefix,
+                        figsize=figsize,
+                        nproc=nproc,
+                        tmpdir=tmpdir))
+  if not no_show and saveframes is None and nproc == 1:
+    import matplotlib.pyplot as plt
+    plt.show()
+  return results if grouptags else results[0]
 
-    return [
-        animate(tagged,
-                multiblock=multiblock,
-                interval=interval,
-                variable_range=variable_range,
-                cutoffglobalrange=cutoffglobalrange,
-                notitle=notitle,
-                no_show=no_show,
-                save=save,
-                saveas=suffixed(saveas, tag),
-                fps=fps,
-                dpi=dpi,
-                saveframes=suffixed(saveframes, tag),
-                figsize=figsize,
-                nproc=nproc,
-                tmpdir=tmpdir) for tag, tagged in tags.items()
-    ]
 
-  frames = _normalize_frames(items, multiblock=multiblock)
-  plot_kwargs = {}
-  plot_kwargs["notitle"] = notitle
+def _apply_value_range(frames, kwargs):
+  """Fill unspecified value bounds without constraining spatial coordinates."""
+  for dimension in (1, 2):
+    selected = [[dat for dat in frame if dat.num_dims == dimension]
+                for frame in frames]
+    selected = [frame for frame in selected if frame]
+    if not selected:
+      continue
+    low, high = _frame_value_range(selected,
+                                   kwargs.get("cutoffglobalrange"),
+                                   yscale=kwargs.get("yscale", 1.0),
+                                   zscale=kwargs.get("zscale", 1.0),
+                                   yshift=kwargs.get("yshift", 0.0),
+                                   zshift=kwargs.get("zshift", 0.0))
+    if dimension == 2 and kwargs.get("diverging"):
+      high = max(abs(low), abs(high))
+      low = -high
+    axis = ("x" if kwargs.get("transpose") else "y") if dimension == 1 else "z"
+    for bound, value in (("min", low), ("max", high)):
+      if kwargs.get(axis + bound) is None:
+        kwargs[axis + bound] = value
 
-  if not variable_range:
-    vmin, vmax = _frame_value_range(frames,
-                                    cutoffglobalrange,
-                                    yscale=plot_kwargs.get("yscale", 1.0),
-                                    zscale=plot_kwargs.get("zscale", 1.0))
-    # Applied as both the 1-D y-limits (ymin/ymax) and the 2-D color range
-    # (zmin/zmax) -- whichever the frame's dimensionality actually uses.
-    plot_kwargs.setdefault("ymin", vmin)
-    plot_kwargs.setdefault("ymax", vmax)
-    plot_kwargs.setdefault("zmin", vmin)
-    plot_kwargs.setdefault("zmax", vmax)
 
+def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
+                    saveframes, figsize, nproc, tmpdir):
+  """Render one normalized sequence through the selected output path."""
+  if not plot_kwargs["variable_range"]:
+    _apply_value_range(frames, plot_kwargs)
   num_frames = len(frames)
   duration = 1.0e3 / fps if fps else float(interval)
   out_file = saveas or "anim.gif"
   if not os.path.splitext(out_file)[1]:
     out_file += ".gif"
+
+  ext = os.path.splitext(out_file)[1].lower()
+  if ext not in (".gif", ".webp", ".apng") + _VIDEO_EXTS:
+    raise ValueError(f"animate: unsupported output format {ext!r}")
+  if (save or nproc > 1) and ext in _VIDEO_EXTS:
+    require_ffmpeg("animate")
 
   if saveframes:
     frame_files = _save_frames(frames,
@@ -347,11 +586,11 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                                figsize=figsize,
                                plot_kwargs=plot_kwargs,
                                nproc=nproc)
-    if save or saveas:
+    if save:
       _compile_movie(frame_files, out_file, fps=fps, duration=duration)
     return frame_files
 
-  if nproc > 1:
+  if nproc > 1 or (save and ext in (".webp", ".apng")):
     # No standing PNGs requested -- render into a scratch directory, compile,
     # then discard it. Mirrors the ``saveframes`` path with parallel workers,
     # so it always produces the compiled output (there is no live window to
@@ -379,11 +618,12 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                        fargs=(frames, fig, plot_kwargs),
                        interval=interval,
                        blit=False)
-  if save or saveas:
+  if save:
     import matplotlib as mpl
 
-    mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
-    anim.save(out_file, writer="ffmpeg", fps=fps, dpi=dpi)
-  if not no_show:
-    plt.show()
+    writer = "pillow"
+    if ext in _VIDEO_EXTS:
+      mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
+      writer = "ffmpeg"
+    anim.save(out_file, writer=writer, fps=fps or 1.0e3 / interval, dpi=dpi)
   return anim

@@ -191,3 +191,11 @@ def test_plot_modal_coefficients_with_short_alias(tmp_path):
   _ok(DATA / "generated" / "1d_ms_p1.gkyl", "pl", "--no_show", "--saveas",
       output)
   assert output.is_file()
+
+
+def test_animation_plot_options_reach_saved_frames(tmp_path):
+  prefix = tmp_path / "animation"
+  _ok(FIELD, "interpolate", "select", "--z1", "0", "animate", "--saveframes",
+      prefix, "--no_show", "--scatter", "--color", "red", "--ylim", "-100",
+      "100", "--figsize", "3", "2", "--notitle", "--dpi", "40")
+  assert (tmp_path / "animation_0.png").is_file()

@@ -308,7 +308,9 @@ def plot(
     num_subplot_row: int | None = None,
     num_subplot_col: int | None = None,
     streamline: bool = False,
-    sdensity: int = 1,
+    sdensity: float = 1.0,
+    arrowstyle: str | None = None,
+    scatter: bool = False,
     quiver: bool = False,
     contour: bool = False,
     clevels: str | None = None,
@@ -481,6 +483,8 @@ def plot(
     num_subplot_col: Forced subplot column count.
     streamline: Draw two-component fields as streamlines.
     sdensity: Streamline density.
+    arrowstyle: Streamline arrow style.
+    scatter: Draw markers without connecting lines.
     quiver: Draw two-component fields as arrows.
     contour: Draw two-dimensional values as contours.
     clevels: Explicit contour-level specification.
@@ -878,6 +882,8 @@ def plot(
           explicit_legend_label = True
         elif len(states) > 1 or forcelegend:
           label_prefix = data.get_label()
+          if forcelegend and not label_prefix:
+            label_prefix = f"dataset {ds_i}"
           explicit_legend_label = False
         else:
           label_prefix = ""
@@ -961,10 +967,13 @@ def plot(
               else:
                 t = 0.5
               line_color = plt.get_cmap(cmap)(t)
-            line_style = line_styles[ds_i] if line_styles is not None else None
+            line_style = line_styles[
+                ds_i] if line_styles is not None else linestyle
             line_kwargs = dict(color=line_color,
                                label=comp_label,
                                markersize=markersize)
+            if scatter:
+              line_kwargs.update(marker=".", linestyle="None")
             if line_style is not None:
               line_kwargs["linestyle"] = line_style
             if split_linear_log:
@@ -1043,7 +1052,9 @@ def plot(
               if cnlevels:
                 levels = int(cnlevels) - 1
               elif clevels:
-                if ":" in clevels:
+                if clevels.isdigit():
+                  levels = int(clevels)
+                elif ":" in clevels:
                   s = clevels.split(":")
                   levels = np.linspace(float(s[0]), float(s[1]), int(s[2]))
                 else:
@@ -1079,7 +1090,7 @@ def plot(
                 cax.clabel(im, inline=1)
 
             elif quiver:  # -----------------------------------------------------
-              skip = int(np.max((len(grid[0]), len(grid[1]))) // 15)
+              skip = max(1, int(np.max((len(grid[0]), len(grid[1]))) // 15))
               skip2 = int(skip // 2)
               nodal_grid = _nodal_grid(grid, cells)
               if nodal_grid[0].ndim == 1:
@@ -1111,6 +1122,7 @@ def plot(
                                   z2,
                                   *plot_args,
                                   density=sdensity,
+                                  arrowstyle=arrowstyle or "-|>",
                                   broken_streamlines=False,
                                   color=cl,
                                   linewidth=linewidth)
@@ -1165,8 +1177,9 @@ def plot(
                 x, y = x.transpose(), y.transpose()
               comp_zmin, comp_zmax = zmin, zmax
               if diverging:
-                comp_zmax = np.abs(z).max()
-                comp_zmin = -comp_zmax
+                extent = np.abs(z).max()
+                comp_zmax = zmax if zmax is not None else extent
+                comp_zmin = zmin if zmin is not None else -extent
               elif shared_z is not None and comp < len(shared_z):
                 comp_zmin, comp_zmax = shared_z[comp]
               vmax, vmin = comp_zmax, comp_zmin

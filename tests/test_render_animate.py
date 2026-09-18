@@ -421,3 +421,234 @@ class TestCompileMovie:
     anim_mod._compile_movie(paths, str(out), fps=10, duration=100.0)
     assert out.exists()
     assert out.stat().st_size > 0
+
+
+def _draw_animation(data, **options):
+  animation = anim_mod.animate(data, no_show=True, **options)
+  animation._func(0, *animation._args)
+  return animation
+
+
+def _field_frame(offset=0):
+  dat = GDataState()
+  dat.push(
+      [np.linspace(10, 20, 9), np.linspace(30, 40, 9)],
+      np.arange(64, dtype=float).reshape(8, 8, 1) + offset)
+  return dat
+
+
+def test_line_controls_and_explicit_limits():
+  animation = _draw_animation(_three_frames(),
+                              xshift=1,
+                              xscale=2,
+                              yshift=3,
+                              yscale=-2,
+                              xlim="2,4",
+                              ylim=(-25, 0),
+                              color="red",
+                              linewidth=3,
+                              linestyle="dashed",
+                              arg="o",
+                              markersize=7,
+                              title="Title",
+                              xlabel="Position",
+                              ylabel="Field",
+                              no_showgrid=True,
+                              forcelegend=True)
+  ax = animation._fig.axes[0]
+  line = ax.lines[0]
+  np.testing.assert_allclose(line.get_ydata(), -2 * (np.arange(8) + 3))
+  assert ax.get_xlim() == (2, 4)
+  assert ax.get_ylim() == (-25, 0)
+  assert line.get_color() == "red"
+  assert line.get_linewidth() == 3
+  assert line.get_markersize() == 7
+  assert line.get_linestyle() == "--"
+  assert animation._fig._suptitle.get_text() == "Title"
+  assert ax.get_legend() is not None
+
+
+def test_shifted_fixed_range_and_transpose():
+  animation = _draw_animation(_three_frames(),
+                              yshift=3,
+                              yscale=-2,
+                              transpose=True)
+  assert animation._fig.axes[0].get_xlim() == (-24, -6)
+
+
+def test_2d_range_does_not_clip_spatial_y_axis():
+  animation = _draw_animation([_field_frame(), _field_frame(10)],
+                              zshift=2,
+                              zscale=3,
+                              no_colorbar=True)
+  ax = animation._fig.axes[0]
+  assert ax.get_ylim() == (30, 40)
+  assert ax.collections[0].get_clim() == (6, 225)
+  assert len(animation._fig.axes) == 1
+
+
+def test_variable_range_combines_blocks_and_preserves_explicit_bound():
+  animation = _draw_animation(
+      [[_field_frame(), _field_frame(100)], [_field_frame(200)]],
+      variable_range=True,
+      zmin=-1,
+      no_colorbar=True)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-1, 163)
+  animation._func(1, *animation._args)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-1, 263)
+
+
+def test_subplots_scatter_and_layout():
+  animation = _draw_animation([[_line_frame(0), _line_frame(1)]],
+                              subplots=True,
+                              num_subplot_col=2,
+                              scatter=True,
+                              figsize="6,3",
+                              no_legend=True)
+  assert len(animation._fig.axes) == 2
+  np.testing.assert_allclose(animation._fig.get_size_inches(), (6, 3))
+  for ax in animation._fig.axes:
+    assert len(ax.lines) == 1
+    assert ax.lines[0].get_linestyle() == "None"
+    assert ax.lines[0].get_marker() == "."
+    assert ax.get_legend() is None
+
+
+def test_collected_and_tag_selection():
+  from postgkyl.operations.collect import collect
+  collected = collect(*_three_frames(), tag="chosen")
+  animation = _draw_animation([collected, _line_frame(9)],
+                              use="chosen",
+                              collected=True)
+  assert animation._save_count == 3
+  animation._func(2, *animation._args)
+  np.testing.assert_array_equal(animation._fig.axes[0].lines[0].get_ydata(),
+                                np.arange(8) + 2)
+  assert "time: 2.0000e-01" in animation._fig._suptitle.get_text()
+
+
+@pytest.mark.parametrize("mode", ["contour", "quiver", "streamline", "group"])
+def test_field_modes(mode):
+  frame = _field_frame()
+  if mode in ("quiver", "streamline"):
+    frame.push(list(frame.grid), np.repeat(frame.values, 2, axis=-1))
+  options = {mode: 0 if mode == "group" else True}
+  if mode == "contour":
+    options["clevels"] = "5"
+  if mode == "streamline":
+    options.update(sdensity=0.5, arrowstyle="->")
+  animation = _draw_animation([frame], **options)
+  assert animation._fig.axes[0].has_data()
+
+
+def test_grouped_tags_keep_plot_controls():
+  frames = _three_frames()
+  frames[0].tag = "first"
+  animations = anim_mod.animate(frames,
+                                grouptags=True,
+                                no_show=True,
+                                color="purple",
+                                title="fixed",
+                                notitle=True)
+  for animation in animations:
+    animation._func(0, *animation._args)
+    assert animation._fig.axes[0].lines[0].get_color() == "purple"
+    assert animation._fig._suptitle is None
+
+
+@pytest.mark.parametrize("extension", ["gif", "webp", "apng"])
+def test_image_movie_formats_without_ffmpeg(tmp_path, monkeypatch, extension):
+  from PIL import Image
+  monkeypatch.setattr(anim_mod, "require_ffmpeg",
+                      lambda *_: pytest.fail("image movie requested ffmpeg"))
+  output = tmp_path / f"movie.{extension}"
+  anim_mod.animate(_three_frames(),
+                   saveas=output,
+                   no_show=True,
+                   figsize=(3, 2),
+                   dpi=40)
+  with Image.open(output) as movie:
+    assert movie.n_frames == 3
+
+
+def test_invalid_output_rejected_before_frame_writes(tmp_path):
+  with pytest.raises(ValueError, match="unsupported"):
+    anim_mod.animate(_three_frames(),
+                     saveas=tmp_path / "movie.xyz",
+                     saveframes=str(tmp_path / "frame"),
+                     no_show=True)
+  assert list(tmp_path.iterdir()) == []
+
+
+def test_log_axes_labels_aspect_and_component_squeeze():
+  frame = _line_frame(1)
+  frame.push(list(frame.grid), np.repeat(frame.values, 2, axis=-1))
+  animation = _draw_animation([frame],
+                              squeeze=True,
+                              logx=True,
+                              logy=True,
+                              fixaspect=True,
+                              xlabel="x",
+                              ylabel="y",
+                              no_legend=True)
+  ax = animation._fig.axes[0]
+  assert len(animation._fig.axes) == 1
+  assert len(ax.lines) == 2
+  assert ax.get_xscale() == "log"
+  assert ax.get_yscale() == "log"
+  assert ax.get_xlabel() == "x"
+  assert ax.get_ylabel() == "y"
+  assert ax.get_aspect() == 1
+
+
+def test_field_color_controls_and_coordinate_transforms():
+  animation = _draw_animation([_field_frame(1)],
+                              logz=True,
+                              zlim=(1, 100),
+                              xshift=2,
+                              xscale=3,
+                              yshift=4,
+                              yscale=2,
+                              clabel="density",
+                              diverging=True,
+                              edgecolors="red")
+  ax = animation._fig.axes[0]
+  mesh = ax.collections[0]
+  assert isinstance(mesh.norm, matplotlib.colors.SymLogNorm)
+  assert mesh.get_clim() == (1, 100)
+  assert mesh.get_cmap().name == "RdBu_r"
+  assert ax.get_xlim() == (36, 66)
+  assert ax.get_ylim() == (68, 88)
+  assert animation._fig.axes[-1].get_ylabel() == "density"
+  np.testing.assert_allclose(mesh.get_edgecolors()[0], [1, 0, 0, 1])
+
+
+def test_frame_options_match_sequential_and_parallel_output(tmp_path):
+  from PIL import Image
+  options = dict(color="red",
+                 scatter=True,
+                 ylim=(-1, 10),
+                 figsize=(3, 2),
+                 dpi=40,
+                 notitle=True,
+                 no_show=True)
+  sequential = anim_mod.animate(_three_frames(),
+                                saveframes=str(tmp_path / "serial"),
+                                **options)
+  parallel = anim_mod.animate(_three_frames(),
+                              nproc=2,
+                              saveframes=str(tmp_path / "parallel"),
+                              **options)
+  for first, second in zip(sequential, parallel):
+    with Image.open(first) as serial_image, Image.open(
+        second) as parallel_image:
+      np.testing.assert_array_equal(np.asarray(serial_image),
+                                    np.asarray(parallel_image))
+
+
+def test_diverging_limits_are_fixed_across_frames():
+  animation = _draw_animation(
+      [_field_frame(1), _field_frame(10)], diverging=True, no_colorbar=True)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-73, 73)
+  animation._func(1, *animation._args)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-73, 73)

@@ -17,7 +17,8 @@ A 1-D sequence therefore becomes a 2-D space–time plot. Its timestamps are
 sorted using the files' metadata. Interpolate before collecting.
 
 ``animate(frames)`` instead draws the original individual frames in sequence.
-Do not pass the collected space–time dataset as though it were a sequence.
+To play a collected space–time dataset, use
+``animate([collected_data], collected=True)``.
 The example keeps a fixed value range across all frames, so a changing color
 does not merely reflect a changing scale. The second animation shows a 2-D
 travelling wave. ``saveframes`` also saves each frame as a PNG; ``fps`` controls
@@ -27,3 +28,31 @@ Both GIFs below are generated and checked frame by frame during the build.
 Use the browser's image controls or open the images separately to inspect them.
 
 .. include:: _pairs/07_collect_animate.inc
+
+Animation controls
+------------------
+
+Animation accepts the plotting controls for contours, quiver, streamlines,
+scatter, line styling, labels, legends, colorbars, axis transforms, logarithmic
+scales, aspect ratio, and mesh edges. ``subplots=True`` gives each dataset in a
+frame its own panels; ``squeeze=True`` overlays components in one panel.
+``group=0`` or ``group=1`` draws field lineouts along that coordinate.
+
+``xlim``, ``ylim``, and ``zlim`` accept pairs (or comma-separated strings) and
+supersede individual minimum/maximum bounds. Fixed ranges include value shifts
+and scaling. ``variable_range=True`` recomputes the range over all blocks of
+each frame, while respecting explicit bounds. ``cutoffglobalrange`` selects a
+central fraction of the dataset extrema, between zero and one.
+
+The generated CLI uses the public API's names: the former ``--float`` control
+is ``--variable_range``, ``--nsubplotrow`` / ``--nsubplotcol`` are
+``--num_subplot_row`` / ``--num_subplot_col``, and ``--fix-aspect`` is
+``--fixaspect``. Use ``--no_legend``, ``--no_colorbar``, ``--no_showgrid``, and
+``--no_show`` to disable default display features. ``--forcelegend`` forces a
+legend. All options are listed by ``pgkyl animate --help``.
+
+``use`` selects a tag; ``grouptags=True`` produces separate animations with
+tag suffixes on output filenames. ``multiblock=True`` combines blocks with the
+same frame index. ``saveframes`` writes numbered PNG files; ``nproc`` selects
+the number of frame workers and ``tmpdir`` places temporary frames. GIF, WebP,
+and APNG output use Pillow; MP4, MOV, AVI, and MKV require ffmpeg.
