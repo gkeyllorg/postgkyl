@@ -1,4 +1,4 @@
-"""Cell-center DG selection preserves the polynomial on surviving axes."""
+"""Modal DG selection preserves whole cells and their coordinate axes."""
 
 from pathlib import Path
 
@@ -15,37 +15,6 @@ FIELD = Path(__file__).parent / "test_data/generated/select_2d_tensor_p2.gkyl"
 @pytest.fixture
 def data():
   return pg.load(FIELD)
-
-
-@pytest.mark.parametrize("selector,cell", [
-    (0, 0),
-    (-1, 3),
-    (np.int64(1), 1),
-    (0.0, 0),
-    (1.9, 1),
-    (2.0, 1),
-    (-100.0, 0),
-    (100.0, 3),
-    ("2", 2),
-    ("2.0", 1),
-])
-def test_scalar_evaluates_at_center_and_removes_dimension(data, selector, cell):
-  result = data.select(z0=selector)
-  assert result.backend == "gkyl"
-  assert result.ctx["value_form"] == "modal"
-  assert result.num_dims == 1
-  np.testing.assert_array_equal(result.grid[0], data.grid[1])
-  points = np.array([[-0.7], [0.2], [0.8]])
-  donor_basis = gpython.basis.eval_matrix("tensor", 2, 2, np.c_[np.zeros(3),
-                                                                points])
-  target_basis = gpython.basis.eval_matrix(result.ctx["basis_type"], 1, 2,
-                                           points)
-  expected = np.einsum("pk,cfk->cpf", donor_basis,
-                       data.values[cell].reshape(3, 2, 9))
-  actual = np.einsum("pk,cfk->cpf", target_basis,
-                     result.values.reshape(3, 2, 3))
-  np.testing.assert_allclose(actual, expected, atol=1e-12)
-  assert data.num_dims == 2
 
 
 @pytest.mark.parametrize("selector,expected", [
@@ -83,30 +52,33 @@ def test_components_are_complete_fields(data, comp, fields):
 
 
 def test_mixed_selection_and_inplace(data):
-  expected = data.select(z0=1).select(z0="1:", comp=1)
+  expected = data.values[1:2, 1:, 9:].copy()
   result = data.select(z0=1,
                        z1="1:",
                        comp=1,
                        inplace=True,
                        tag="slice",
-                       label="Center slice")
+                       label="Cell slice")
   assert result is data
   assert result.tag == "slice"
-  assert result.label == "Center slice"
-  np.testing.assert_allclose(result.values, expected.values)
-  np.testing.assert_array_equal(result.grid[0], [1., 2., 3.])
-  np.testing.assert_array_equal(result.ctx["lower"], [1.])
-  np.testing.assert_array_equal(result.ctx["upper"], [3.])
+  assert result.label == "Cell slice"
+  np.testing.assert_array_equal(result.values, expected)
+  np.testing.assert_array_equal(result.grid[0], [1., 2.])
+  np.testing.assert_array_equal(result.grid[1], [1., 2., 3.])
+  np.testing.assert_array_equal(result.num_cells, [1, 2])
+  np.testing.assert_array_equal(result.ctx["lower"], [1., 1.])
+  np.testing.assert_array_equal(result.ctx["upper"], [2., 3.])
 
 
-def test_all_dimensions_evaluate_to_constant_dummy_cell(data):
+def test_selecting_all_axes_preserves_one_complete_cell(data):
   result = data.select(z0=1, z1=-1)
-  basis = gpython.basis.eval_matrix("tensor", 2, 2, np.zeros((1, 2)))[0]
-  expected = data.values[1, -1].reshape(2, 9) @ basis
+  assert result.num_dims == 2
+  np.testing.assert_array_equal(result.num_cells, [1, 1])
+  np.testing.assert_array_equal(result.values, data.values[1:2, -1:])
+  np.testing.assert_array_equal(result.grid[0], [1., 2.])
+  np.testing.assert_array_equal(result.grid[1], [2., 3.])
   np.testing.assert_allclose(result.interpolate().values,
-                             expected[None, :],
-                             atol=1e-12)
-  np.testing.assert_array_equal(result.grid[0], [0., 1.])
+                             data.interpolate().values[3:6, -3:])
 
 
 @pytest.mark.parametrize("kwargs,error", [
@@ -140,13 +112,3 @@ def test_invalid_selection_does_not_mutate(data, kwargs, error):
   with pytest.raises(error):
     data.select(**kwargs, inplace=True)
   np.testing.assert_array_equal(data.values, original)
-
-
-def test_cli_float_selector_removes_dimension():
-  from click.testing import CliRunner
-  from postgkyl.cli.app import cli
-
-  result = CliRunner().invoke(
-      cli, [str(FIELD), "select", "--z0", "0.0", "--comp", "1", "info"])
-  assert result.exit_code == 0, result.output
-  assert "Number of dimensions: 1" in result.output
