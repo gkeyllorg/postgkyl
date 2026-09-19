@@ -1,0 +1,1 @@
+Set the -m argument to be the default argument for the map operation so that map <filename> maps the associated file
