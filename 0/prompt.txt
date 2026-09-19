@@ -1,0 +1,1 @@
+There are unit tests that are failing. Are they outdated? If so, delete them. Code coverage should aim for near 100% for unit testing pytest --cov. All unit tests should be passing for CI to pass
