@@ -1,0 +1,87 @@
+Running an animate command on perlmutter resulted in an error. Continue work prior on making the animate command feature-rich and robust
+
+(pgkyl) mhrosen@login13:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pip install ffmpeg
+Collecting ffmpeg
+  Downloading ffmpeg-1.4.tar.gz (5.1 kB)
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+Building wheels for collected packages: ffmpeg
+  Building wheel for ffmpeg (pyproject.toml) ... done
+  Created wheel for ffmpeg: filename=ffmpeg-1.4-py3-none-any.whl size=6127 sha256=6c1bd2f3560e1e4bc55690a2538b7a6c8e872ee6bafd3a06d757c26d061f2262
+  Stored in directory: /global/u2/m/mhrosen/.cache/pip/wheels/26/21/0c/c26e09dff860a9071683e279445262346e008a9a1d2142c4ad
+Successfully built ffmpeg
+Installing collected packages: ffmpeg
+Successfully installed ffmpeg-1.4
+(pgkyl) mhrosen@login13:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pgkyl "zzim-ion_BiMaxwellianMoments_[0-9]*.gkyl" interp map -m zzim-geo_corn_mc2nu_pos_deflated.gkyl anim --saveas "bimax_anim.mp4" --nproc 10 -f
+MovieWriter stderr:
+Unknown encoder 'h264'
+
+Traceback (most recent call last):
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/animation.py", line 226, in saving
+    yield self
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/render/animate.py", line 232, in _compile_movie
+    writer.grab_frame()
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/animation.py", line 354, in grab_frame
+    self.fig.savefig(self._proc.stdin, format=self.frame_format,
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/figure.py", line 3515, in savefig
+    self.canvas.print_figure(fname, **kwargs)
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/backends/backend_qtagg.py", line 75, in print_figure
+    super().print_figure(*args, **kwargs)
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2281, in print_figure
+    result = print_method(
+             ^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2138, in <lambda>
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 476, in print_raw
+    fh.write(renderer.buffer_rgba())
+BrokenPipeError: [Errno 32] Broken pipe
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/bin/pgkyl", line 6, in <module>
+    sys.exit(cli())
+             ^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/core.py", line 1631, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/core.py", line 1552, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/core.py", line 2063, in invoke
+    rv.append(sub_ctx.command.invoke(sub_ctx))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/core.py", line 1415, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/core.py", line 910, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/click/decorators.py", line 34, in new_func
+    return f(get_current_context(), *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/cli/compiler.py", line 740, in callback
+    return execute_model(click_context, model, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/cli/compiler.py", line 658, in execute_model
+    result, referenced = _call(model, selected, values, ctx)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/cli/compiler.py", line 604, in _call
+    return model.canonical(*args, **kwargs), referenced
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/render/animate.py", line 525, in animate
+    _animate_frames(frames,
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/render/animate.py", line 608, in _animate_frames
+    _compile_movie(frame_files, out_file, fps=fps, duration=duration)
+  File "/global/u2/m/mhrosen/postgkyl/src/postgkyl/render/animate.py", line 226, in _compile_movie
+    with writer.saving(fig, output_file, dpi):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/animation.py", line 228, in saving
+    self.finish()
+  File "/global/homes/m/mhrosen/.conda/envs/pgkyl/lib/python3.12/site-packages/matplotlib/animation.py", line 343, in finish
+    raise subprocess.CalledProcessError(
+subprocess.CalledProcessError: Command '['/usr/bin/ffmpeg', '-f', 'rawvideo', '-vcodec', 'rawvideo', '-s', '640x480', '-pix_fmt', 'rgba', '-framerate', '10.0', '-loglevel', 'error', '-i', 'pipe:', '-vcodec', 'h264', '-pix_fmt', 'yuv420p', '-y', 'bimax_anim.mp4']' returned non-zero exit status 1.

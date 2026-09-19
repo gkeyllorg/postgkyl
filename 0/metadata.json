@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2X3TMS7C7XX17HAP1XY3881",
+  "session_id": "01a0b4b9-a3a7-7ff0-b1b0-dbe5fd593678",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-19T15:16:17.479464684Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/animation.rst",
+    "src/postgkyl/render/_ffmpeg.py",
+    "src/postgkyl/render/animate.py",
+    "src/postgkyl/render/matplotlib.py",
+    "tests/test_render_animate.py",
+    "tests/test_render_ffmpeg.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "bbb26c0f3ce1",
+  "checkpoint_transcript_start": 205,
+  "transcript_lines_at_start": 205,
+  "compact_transcript_start": 25,
+  "token_usage": {
+    "input_tokens": 97009,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3077376,
+    "output_tokens": 11705,
+    "api_call_count": 33
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-19T15:16:17.354100905Z",
+    "agent_lines": 273,
+    "agent_removed": 39,
+    "human_added": 36,
+    "human_modified": 34,
+    "human_removed": 0,
+    "total_committed": 343,
+    "total_lines_changed": 382,
+    "agent_percentage": 81.67539267015707,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
