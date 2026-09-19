@@ -211,7 +211,8 @@ class TestLiveAnimation:
     def save(self, filename, **kwargs):
       saved.append((filename, kwargs))
 
-    monkeypatch.setattr(anim_mod, "require_ffmpeg", lambda _caller: "/ffmpeg")
+    monkeypatch.setattr(anim_mod, "resolve_video_encoder", lambda *_:
+                        ("/ffmpeg", "libx264"))
     monkeypatch.setattr("matplotlib.animation.FuncAnimation.save", save)
     out = tmp_path / "movie.mp4"
     anim_mod.animate(_three_frames(),
@@ -220,7 +221,11 @@ class TestLiveAnimation:
                      fps=5,
                      dpi=80,
                      no_show=True)
-    assert saved == [(str(out), {"writer": "ffmpeg", "fps": 5, "dpi": 80})]
+    filename, options = saved[0]
+    assert filename == str(out)
+    assert options["dpi"] == 80
+    assert options["writer"].codec == "libx264"
+    assert options["writer"].fps == 5
 
 
 # --------------------------------------------------------------------------
@@ -328,6 +333,7 @@ class TestCompileMovie:
   def test_video_extension_raises_clearly_without_ffmpeg(
       self, monkeypatch, tmp_path):
     monkeypatch.setattr(_ffmpeg, "resolve_ffmpeg", lambda: None)
+    monkeypatch.setattr(_ffmpeg, "_bundled_ffmpeg", lambda: None)
     prefix = str(tmp_path / "frame")
     paths = anim_mod.animate(_three_frames(), saveframes=prefix, no_show=True)
     with pytest.raises(RuntimeError, match="ffmpeg"):
@@ -377,8 +383,9 @@ class TestCompileMovie:
 
     class FakeWriter:
 
-      def __init__(self, fps):
+      def __init__(self, fps, codec, extra_args):
         events.append(("fps", fps))
+        assert codec == "libx264"
 
       @contextmanager
       def saving(self, figure, output_file, dpi):
@@ -391,10 +398,14 @@ class TestCompileMovie:
         if fail_encoding:
           raise RuntimeError("encoding failed")
 
-    monkeypatch.setattr(anim_mod, "require_ffmpeg", lambda _caller: "/ffmpeg")
+    monkeypatch.setattr(anim_mod, "resolve_video_encoder", lambda *_:
+                        ("/ffmpeg", "libx264"))
     monkeypatch.setattr(Image, "open", lambda _path: FakeImage())
     monkeypatch.setattr(matplotlib.animation, "FFMpegWriter", FakeWriter)
-    monkeypatch.setattr(plt, "figure", lambda **_kwargs: FakeFigure())
+    monkeypatch.setattr("matplotlib.figure.Figure",
+                        lambda **_kwargs: FakeFigure())
+    monkeypatch.setattr("matplotlib.backends.backend_agg.FigureCanvasAgg",
+                        lambda _figure: None)
     monkeypatch.setattr(plt, "close", lambda figure: events.append(
         ("close", figure)))
 
@@ -559,7 +570,7 @@ def test_grouped_tags_keep_plot_controls():
 @pytest.mark.parametrize("extension", ["gif", "webp", "apng"])
 def test_image_movie_formats_without_ffmpeg(tmp_path, monkeypatch, extension):
   from PIL import Image
-  monkeypatch.setattr(anim_mod, "require_ffmpeg",
+  monkeypatch.setattr(anim_mod, "resolve_video_encoder",
                       lambda *_: pytest.fail("image movie requested ffmpeg"))
   output = tmp_path / f"movie.{extension}"
   anim_mod.animate(_three_frames(),
@@ -652,3 +663,85 @@ def test_diverging_limits_are_fixed_across_frames():
   assert animation._fig.axes[0].collections[0].get_clim() == (-73, 73)
   animation._func(1, *animation._args)
   assert animation._fig.axes[0].collections[0].get_clim() == (-73, 73)
+
+
+@pytest.mark.parametrize("nproc", [1, 2])
+def test_unavailable_codec_fails_before_rendering(monkeypatch, tmp_path, nproc):
+
+  def resolve(*_args):
+    raise RuntimeError("no usable 'missing' video encoder")
+
+  monkeypatch.setattr(anim_mod, "resolve_video_encoder", resolve)
+  monkeypatch.setattr(anim_mod, "_save_frames",
+                      lambda *_args, **_kwargs: pytest.fail("frames rendered"))
+  monkeypatch.setattr(plt, "figure",
+                      lambda *_args, **_kwargs: pytest.fail("figure created"))
+  with pytest.raises(RuntimeError, match="no usable"):
+    anim_mod.animate(_three_frames(),
+                     saveas=tmp_path / "movie.mp4",
+                     codec="missing",
+                     nproc=nproc,
+                     no_show=True)
+  assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("saved_frames", [False, True])
+def test_codec_forwarded_once_and_errors_include_encoder(
+    monkeypatch, tmp_path, saved_frames):
+  import subprocess
+  from contextlib import contextmanager
+  from matplotlib.animation import FFMpegWriter
+
+  calls = []
+  original_path = matplotlib.rcParams["animation.ffmpeg_path"]
+
+  def resolve(context, codec):
+    calls.append((context, codec))
+    return "/chosen/ffmpeg", "mpeg4"
+
+  def failure():
+    raise subprocess.CalledProcessError(1, ["ffmpeg"],
+                                        stderr="Encoder initialization failed")
+
+  def save(animation, filename, **kwargs):
+    writer = kwargs["writer"]
+    assert writer.codec == "mpeg4"
+    assert matplotlib.rcParams["animation.ffmpeg_path"] == "/chosen/ffmpeg"
+    failure()
+
+  @contextmanager
+  def saving(writer, figure, filename, dpi):
+    assert writer.codec == "mpeg4"
+    failure()
+    yield
+
+  monkeypatch.setattr(anim_mod, "resolve_video_encoder", resolve)
+  monkeypatch.setattr("matplotlib.animation.FuncAnimation.save", save)
+  monkeypatch.setattr(FFMpegWriter, "saving", saving)
+  options = {"saveframes": str(tmp_path / "frame")} if saved_frames else {}
+  with pytest.raises(RuntimeError,
+                     match="Encoder initialization failed") as error:
+    anim_mod.animate(_three_frames(),
+                     saveas=tmp_path / "movie.mp4",
+                     codec="mpeg4",
+                     no_show=True,
+                     **options)
+  assert "codec 'mpeg4'" in str(error.value)
+  assert "/chosen/ffmpeg" in str(error.value)
+  assert calls == [("animate", "mpeg4")]
+  assert matplotlib.rcParams["animation.ffmpeg_path"] == original_path
+
+
+@needs_ffmpeg
+@external_tool
+@pytest.mark.parametrize("nproc", [1, 2])
+def test_mpeg4_export_accepts_odd_frame_dimensions(tmp_path, nproc):
+  output = tmp_path / "odd.mp4"
+  anim_mod.animate(_three_frames(),
+                   codec="mpeg4",
+                   saveas=output,
+                   figsize=(3.01, 2.01),
+                   dpi=100,
+                   nproc=nproc,
+                   no_show=True)
+  assert output.stat().st_size > 0

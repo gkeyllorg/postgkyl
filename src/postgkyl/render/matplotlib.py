@@ -1052,9 +1052,7 @@ def plot(
               if cnlevels:
                 levels = int(cnlevels) - 1
               elif clevels:
-                if clevels.isdigit():
-                  levels = int(clevels)
-                elif ":" in clevels:
+                if ":" in clevels:
                   s = clevels.split(":")
                   levels = np.linspace(float(s[0]), float(s[1]), int(s[2]))
                 else:

@@ -56,3 +56,26 @@ tag suffixes on output filenames. ``multiblock=True`` combines blocks with the
 same frame index. ``saveframes`` writes numbered PNG files; ``nproc`` selects
 the number of frame workers and ``tmpdir`` places temporary frames. GIF, WebP,
 and APNG output use Pillow; MP4, MOV, AVI, and MKV require ffmpeg.
+
+Video encoders on clusters
+------------------------------
+
+Finding an ``ffmpeg`` executable is not enough: it must contain an encoder
+for the requested video format. Animation checks encoders before generating
+frames. It prefers software H.264 (``libx264`` or ``libopenh264``) in the
+executable on ``PATH``, then tries the executable supplied by
+``imageio-ffmpeg``. If neither provides software H.264, it uses ``mpeg4``.
+Hardware encoders are used only when explicitly requested.
+
+Use ``--codec mpeg4`` (Python: ``codec="mpeg4"``) to choose MPEG-4 explicitly,
+or ``--codec libx264`` to require that encoder. Explicit choices produce a
+clear error if unavailable. For example::
+
+    pgkyl "frames_*.gkyl" interpolate animate --saveas movie.mp4 --nproc 10 --codec mpeg4
+
+``pip install ffmpeg`` installs a Python package, not an ffmpeg executable.
+A pip installation that includes an executable is available through
+``python -m pip install -U imageio-ffmpeg``. GIF, WebP, and APNG require no
+ffmpeg installation. Video export reports the chosen executable and encoder
+if encoding fails, uses a noninteractive canvas when compiling saved frames,
+and pads odd-sized H.264/MPEG-4 frames to even dimensions.

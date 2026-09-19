@@ -7,13 +7,14 @@ materialization as well as ``FuncAnimation`` / saved frames / movie compile.
 The module is separate from ``matplotlib.py`` because it owns the one
 external-process dependency in this layer -- ``ffmpeg`` -- reached through
 Matplotlib's ``FFMpegWriter``/``Animation.save``. Every entry point that needs
-it resolves a binary via ``_ffmpeg.require_ffmpeg`` up front and raises a clear
+it resolves a binary and encoder via ``_ffmpeg.resolve_video_encoder`` up front and raises a clear
 ``RuntimeError`` instead of failing deep inside the writer.
 """
 
 from __future__ import annotations
 
 import os.path
+from contextlib import contextmanager
 from collections.abc import Iterable
 from typing import Annotated, TYPE_CHECKING
 
@@ -35,7 +36,7 @@ from postgkyl.gdatastate import (
 )
 
 from . import matplotlib as backend
-from ._ffmpeg import require_ffmpeg
+from ._ffmpeg import resolve_video_encoder
 from ._prep import materialize_plot_data
 
 if TYPE_CHECKING:
@@ -189,7 +190,9 @@ def _compile_movie(frame_files: list[str],
                    output_file: str,
                    *,
                    fps: int | None = None,
-                   duration: float = 100.0) -> None:
+                   duration: float = 100.0,
+                   codec: str | None = None,
+                   encoder: tuple[str, str] | None = None) -> None:
   """Compile PNG frames into an animation: PIL for gif/webp/apng, the
   Matplotlib ffmpeg writer for video containers. ``duration`` is the
   per-frame time in milliseconds, used when ``fps`` is not given."""
@@ -209,21 +212,22 @@ def _compile_movie(frame_files: list[str],
                      optimize=False)
     return
   if ext in _VIDEO_EXTS:
-    import matplotlib as mpl
     import matplotlib.pyplot as plt
-    from matplotlib.animation import FFMpegWriter
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
 
-    mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
+    encoder = encoder or resolve_video_encoder("animate", codec)
     movie_fps = fps if fps else 1.0e3 / duration
-    writer = FFMpegWriter(fps=movie_fps)
     with Image.open(frame_files[0]) as first:
       width, height = first.size
     dpi = 100
-    fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
+    fig = Figure(figsize=(width / dpi, height / dpi), dpi=dpi)
+    FigureCanvasAgg(fig)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.axis("off")
     try:
-      with writer.saving(fig, output_file, dpi):
+      with _video_export(output_file, encoder, movie_fps) as writer, \
+          writer.saving(fig, output_file, dpi):
         for frame_file in frame_files:
           ax.clear()
           ax.axis("off")
@@ -234,6 +238,31 @@ def _compile_movie(frame_files: list[str],
       plt.close(fig)
     return
   raise ValueError(f"animate: unsupported output format {ext!r}")
+
+
+@contextmanager
+def _video_export(output_file, encoder, fps):
+  """Scope ffmpeg configuration and report encoding failures with context."""
+  import subprocess
+  import matplotlib as mpl
+  from matplotlib.animation import FFMpegWriter
+
+  path, codec = encoder
+  extra_args = None
+  if codec in ("libx264", "libopenh264", "mpeg4"):
+    extra_args = ["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-pix_fmt", "yuv420p"]
+  with mpl.rc_context({"animation.ffmpeg_path": path}):
+    try:
+      yield FFMpegWriter(fps=fps, codec=codec, extra_args=extra_args)
+    except (subprocess.CalledProcessError, BrokenPipeError) as err:
+      detail = getattr(err, "stderr", None) or str(err)
+      if isinstance(detail, bytes):
+        detail = detail.decode(errors="replace")
+      raise RuntimeError(
+          f"animate: failed to encode {os.fspath(output_file)!r} with "
+          f"{path!r} (codec {codec!r}): {detail.strip()} "
+          "Check that the encoder supports this container; try --codec mpeg4 "
+          "or a .gif output.") from None
 
 
 @command(
@@ -307,6 +336,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             save: bool = False,
             saveas: str | None = None,
             fps: int | None = None,
+            codec: str | None = None,
             dpi: int | None = None,
             saveframes: str | None = None,
             figsize: Annotated[tuple[float, float] | str | None,
@@ -340,7 +370,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     color: Line or vector color.
     style: Matplotlib style name or file.
     diverging: Use a diverging colormap.
-    arg: Matplotlib format string, for example *--.
+    arg: Matplotlib format string, for example ``*--``.
     fixaspect: Use equal scaling on the display axes.
     logx: Use logarithmic x scaling.
     logy: Use logarithmic y scaling.
@@ -384,6 +414,8 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
       ``.webp``/``.apng`` via PIL, ``.mp4``/``.mov``/``.avi``/``.mkv`` via
       ffmpeg).
     fps: frames per second for the saved movie; defaults from ``interval``.
+    codec: Video encoder name, such as libx264 or mpeg4. By default, prefer
+      software H.264, then MPEG-4. Checked before frame generation.
     dpi: resolution for saved frames/movies.
     saveframes: when given, write ``<saveframes>_<i>.png`` for every frame
       instead of building a live ``FuncAnimation``.
@@ -423,6 +455,8 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                      transpose=transpose,
                      contour=contour,
                      clevels=clevels,
+                     cnlevels=int(clevels) +
+                     1 if clevels and clevels.isdigit() else None,
                      quiver=quiver,
                      streamline=streamline,
                      sdensity=sdensity,
@@ -528,6 +562,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                         save=save or saveas is not None,
                         saveas=output,
                         fps=fps,
+                        codec=codec,
                         dpi=dpi,
                         saveframes=prefix,
                         figsize=figsize,
@@ -562,8 +597,8 @@ def _apply_value_range(frames, kwargs):
         kwargs[axis + bound] = value
 
 
-def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
-                    saveframes, figsize, nproc, tmpdir):
+def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, codec,
+                    dpi, saveframes, figsize, nproc, tmpdir):
   """Render one normalized sequence through the selected output path."""
   if not plot_kwargs["variable_range"]:
     _apply_value_range(frames, plot_kwargs)
@@ -576,8 +611,9 @@ def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
   ext = os.path.splitext(out_file)[1].lower()
   if ext not in (".gif", ".webp", ".apng") + _VIDEO_EXTS:
     raise ValueError(f"animate: unsupported output format {ext!r}")
+  encoder = None
   if (save or nproc > 1) and ext in _VIDEO_EXTS:
-    require_ffmpeg("animate")
+    encoder = resolve_video_encoder("animate", codec)
 
   if saveframes:
     frame_files = _save_frames(frames,
@@ -587,7 +623,11 @@ def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
                                plot_kwargs=plot_kwargs,
                                nproc=nproc)
     if save:
-      _compile_movie(frame_files, out_file, fps=fps, duration=duration)
+      _compile_movie(frame_files,
+                     out_file,
+                     fps=fps,
+                     duration=duration,
+                     encoder=encoder)
     return frame_files
 
   if nproc > 1 or (save and ext in (".webp", ".apng")):
@@ -605,7 +645,11 @@ def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
                                  figsize=figsize,
                                  plot_kwargs=plot_kwargs,
                                  nproc=nproc)
-      _compile_movie(frame_files, out_file, fps=fps, duration=duration)
+      _compile_movie(frame_files,
+                     out_file,
+                     fps=fps,
+                     duration=duration,
+                     encoder=encoder)
     return out_file
 
   import matplotlib.pyplot as plt
@@ -619,11 +663,10 @@ def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, dpi,
                        interval=interval,
                        blit=False)
   if save:
-    import matplotlib as mpl
-
-    writer = "pillow"
-    if ext in _VIDEO_EXTS:
-      mpl.rcParams["animation.ffmpeg_path"] = require_ffmpeg("animate")
-      writer = "ffmpeg"
-    anim.save(out_file, writer=writer, fps=fps or 1.0e3 / interval, dpi=dpi)
+    movie_fps = fps or 1.0e3 / interval
+    if encoder is not None:
+      with _video_export(out_file, encoder, movie_fps) as writer:
+        anim.save(out_file, writer=writer, dpi=dpi)
+    else:
+      anim.save(out_file, writer="pillow", fps=movie_fps, dpi=dpi)
   return anim
