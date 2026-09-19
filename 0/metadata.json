@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2X8649JSTG64AC74EY000D2",
+  "session_id": "01a0ba58-93db-78b3-bd50-f562da5722e9",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-19T16:32:28.452762289Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 3,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/cli-tutorial.rst"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "89630987ec1c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 88417,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3394944,
+    "output_tokens": 14928,
+    "api_call_count": 55
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-19T16:32:28.337564248Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 3,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 4,
+    "total_lines_changed": 14,
+    "agent_percentage": 14.285714285714285,
+    "metric_version": 2
+  }
+}
