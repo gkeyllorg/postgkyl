@@ -102,6 +102,34 @@ class TestMultiPanel:
     assert [text.get_text()
             for text in legend.get_texts()] == ["first", "second"]
 
+  @pytest.mark.parametrize("count", [1, 2])
+  @pytest.mark.parametrize("components", [1, 2])
+  @pytest.mark.parametrize("forcelegend", [False, True])
+  def test_default_legend_labels(self, count, components, forcelegend):
+    datasets = [_line(offset=i) for i in range(count)]
+    for i, data in enumerate(datasets):
+      data._file_name = f"/results/run{i}.gkyl"
+      data.values = np.repeat(data.values, components, axis=-1)
+    fig = backend.plot(*datasets,
+                       multiblock=True,
+                       no_show=True,
+                       forcelegend=forcelegend)
+    for comp, ax in enumerate(fig.axes):
+      expected = ([f"c{comp}"] if count == 1 else
+                  [f"run{i}.gkyl_c{comp}" for i in range(count)])
+      assert [text.get_text()
+              for text in ax.get_legend().get_texts()] == expected
+
+  def test_partial_legend_labels_and_in_memory_fallback(self):
+    datasets = [_line() for _ in range(3)]
+    datasets[1].label = "computed"
+    fig = backend.plot(*datasets,
+                       multiblock=True,
+                       no_show=True,
+                       legend_labels=["new,old"])
+    assert [text.get_text() for text in fig.axes[0].get_legend().get_texts()
+            ] == ["new,old", "computed_c0", "dataset 2_c0"]
+
   def test_legend_subplot_rejects_an_out_of_range_index(self):
     with pytest.raises(ValueError, match="between 0 and 0"):
       backend.plot(_line(), no_show=True, legend_subplot=1)

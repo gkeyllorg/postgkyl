@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 import inspect
+import json
 from pathlib import Path
 import types
 from typing import Annotated, Any, Literal, Union, get_args, get_origin, get_type_hints
@@ -471,6 +472,28 @@ def compile_public_surface(callables) -> tuple[CommandModel, ...]:
           (list(Section).index(model.section), model.spec.order, model.name)))
 
 
+class _SequenceItem(click.ParamType):
+  """Accept one sequence item or a JSON array using the same item codec."""
+
+  def __init__(self, item_type):
+    self.item_type = item_type
+    self.name = f"{item_type.name} or JSON array"
+
+  def convert(self, value, param, ctx):
+    if isinstance(value, str) and value.lstrip().startswith("["):
+      try:
+        items = json.loads(value)
+      except json.JSONDecodeError as exc:
+        self.fail(
+            f"invalid JSON array: {exc.msg}; quote the entire list "
+            "(e.g. '[\"old\",\"new\"]')", param, ctx)
+    else:
+      items = [value]
+    if any(item is None for item in items):
+      self.fail("sequence items cannot be null", param, ctx)
+    return [self.item_type.convert(item, param, ctx) for item in items]
+
+
 def _click_scalar(codec: TypeCodec):
   if codec.kind is CodecKind.STRING:
     return click.STRING
@@ -484,9 +507,10 @@ def _click_scalar(codec: TypeCodec):
     return click.Path(path_type=Path)
   if codec.kind in (CodecKind.CHOICE, CodecKind.ENUM):
     return click.Choice(codec.choices, case_sensitive=True)
-  if codec.kind in (CodecKind.SEQUENCE, CodecKind.MAPPING):
-    return _click_scalar(
-        codec.items[0]) if codec.kind is CodecKind.SEQUENCE else click.STRING
+  if codec.kind is CodecKind.SEQUENCE:
+    return _SequenceItem(_click_scalar(codec.items[0]))
+  if codec.kind is CodecKind.MAPPING:
+    return click.STRING
   if codec.kind is CodecKind.TUPLE:
     return click.Tuple([_click_scalar(item) for item in codec.items])
   raise AssertionError(codec.kind)
@@ -504,7 +528,10 @@ def _convert(value, codec: TypeCodec):
   if value is None:
     return None
   if codec.kind is CodecKind.SEQUENCE:
-    return [_convert_scalar(item, codec.items[0]) for item in value]
+    return [
+        _convert_scalar(item, codec.items[0]) for entry in value
+        for item in entry
+    ]
   if codec.kind is CodecKind.TUPLE:
     return tuple(
         _convert_scalar(item, sub) for item, sub in zip(value, codec.items))

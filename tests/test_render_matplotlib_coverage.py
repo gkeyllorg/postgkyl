@@ -358,7 +358,7 @@ class TestMultiDatasetLabel:
     a.label, b.label = "first", "second"
     fig = backend.plot(a, b, multiblock=True, no_show=True)
     texts = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
-    assert "first" in texts and "second" in texts
+    assert texts == ["first_c0", "second_c0"]
 
 
 # --------------------------------------------------------------------------
@@ -692,13 +692,19 @@ class TestRemainingSurfaceBranches:
     assert fig.axes[0].get_zlabel() == "density"
     assert fig.axes[0].get_zlim() == (1.0, 9.0)
 
-  def test_unlabelled_surface_comparison_needs_no_legend_handle(self):
-    fig = backend.plot(_field_2d(), no_show=True, surface=True, comparison=True)
-    assert fig.axes[0].get_legend() is None
-
-  def test_unlabelled_contour_comparison_needs_no_legend_handle(self):
-    fig = backend.plot(_field_2d(), no_show=True, contour=True, comparison=True)
-    assert fig.axes[0].get_legend() is None
+  @pytest.mark.parametrize("kind", ["surface", "contour"])
+  @pytest.mark.parametrize("labels", [None, [""]])
+  def test_comparison_default_and_empty_legend_labels(self, kind, labels):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       comparison=True,
+                       legend_labels=labels,
+                       **{kind: True})
+    legend = fig.axes[0].get_legend()
+    if labels is None:
+      assert [text.get_text() for text in legend.get_texts()] == ["c0"]
+    else:
+      assert legend is None
 
   def test_cval_without_bounds_uses_colormap_midpoint(self):
     fig = backend.plot(_line(), no_show=True, cmap="viridis", cval=3.0)

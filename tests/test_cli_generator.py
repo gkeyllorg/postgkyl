@@ -489,3 +489,62 @@ def test_cli_has_no_manual_command_package_or_compatibility_layer():
   assert not (root / "commands").exists()
   assert not (root / "compat.py").exists()
   assert not (root / "legacy.py").exists()
+
+
+@pytest.mark.parametrize("annotation, arguments, expected", [
+    (list[str], ['["old", "new"]'], ["old", "new"]),
+    (list[str], ['["old result", "new,result", "[literal]"]'
+                 ], ["old result", "new,result", "[literal]"]),
+    (list[str], ["first", '["second", "third"]', "last"
+                 ], ["first", "second", "third", "last"]),
+    (list[str], ["[]"], []),
+    (list[str], ["old,new"], ["old,new"]),
+    (list[int], ["[1, 2]", "3"], [1, 2, 3]),
+    (list[float], ["[1, 2.5]"], [1.0, 2.5]),
+    (list[Path], ['["a", "b"]'], [Path("a"), Path("b")]),
+    (list[Format], ['["text", "binary"]'], [Format.TEXT, Format.BINARY]),
+])
+def test_sequence_options_accept_json_arrays(annotation, arguments, expected):
+  received = []
+
+  @command(
+      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
+  def sample(*, items: annotation):
+    """Receive a sequence.
+
+    Args:
+      items: Sequence entries.
+    """
+    received.append(items)
+
+  sample.__annotations__["items"] = annotation
+  argv = [part for value in arguments for part in ("--items", value)]
+  result = CliRunner().invoke(build_click_command(compile_callable(sample)),
+                              argv,
+                              obj=DataSpace())
+  assert result.exit_code == 0, result.output
+  assert received == [expected]
+
+
+@pytest.mark.parametrize("value, message", [
+    ("[old,new]", "invalid JSON array"),
+    ('["old",]', "invalid JSON array"),
+    ('[1, "bad"]', "not a valid integer"),
+    ("[null]", "sequence items cannot be null"),
+])
+def test_sequence_array_errors_identify_the_option(value, message):
+
+  @command(
+      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
+  def sample(*, items: list[int]):
+    """Receive integers.
+
+    Args:
+      items: Integer entries.
+    """
+
+  result = CliRunner().invoke(build_click_command(compile_callable(sample)),
+                              ["--items", value])
+  assert result.exit_code == 2
+  assert "--items" in result.output
+  assert message in result.output

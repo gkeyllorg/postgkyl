@@ -452,8 +452,12 @@ def plot(
   subplot index to draw the legend only there; ``legend_loc`` accepts any
   Matplotlib legend location and defaults to ``"best"``. Explicit
   ``legend_labels`` are used verbatim on every component, without an added
-  ``_cN`` suffix. ``xkcd`` no longer leaks into Matplotlib's global rcParams
-  past this call -- it is scoped to the figure drawn here.
+  ``_cN`` suffix. In Python, pass ``legend_labels=["new", "old"]``;
+  in the CLI, pass ``--legend_labels '["new","old"]'``. Quote the entire
+  JSON array so the shell preserves its brackets and double quotes.
+  Repeating ``--legend_labels new --legend_labels old`` also works.
+  Labels follow dataset input order and are reused on each component subplot.
+  A comma-separated CLI value without brackets is one literal label.
 
   ``split_linear_log=True`` turns every 1-D component panel into a joined
   pair split at ``split_point``: coordinates below the point are drawn on the
@@ -511,10 +515,11 @@ def plot(
     style: Matplotlib style name or style-file path.
     rcParams: Matplotlib configuration overrides.
     no_legend: Suppress legends for line plots.
-    legend_labels: Explicit dataset legend labels.
+    legend_labels: Dataset labels in input order; CLI: --legend_labels
+      '["new","old"]' (quote the whole JSON array), or repeat the option.
     legend_subplot: Zero-based subplot receiving the legend.
     legend_loc: Matplotlib legend location.
-    forcelegend: Draw a legend even for one unlabeled curve.
+    forcelegend: Retained for compatibility; default curves already have labels.
     no_colorbar: Suppress color bars for field plots.
     xlabel: Horizontal-axis label override.
     ylabel: Vertical-axis label override.
@@ -880,10 +885,9 @@ def plot(
         if legend_labels is not None and ds_i < len(legend_labels):
           label_prefix = legend_labels[ds_i]
           explicit_legend_label = True
-        elif len(states) > 1 or forcelegend:
-          label_prefix = data.get_label()
-          if forcelegend and not label_prefix:
-            label_prefix = f"dataset {ds_i}"
+        elif len(states) > 1:
+          label_prefix = (os.path.basename(data.file_name) or data.get_label()
+                          or f"dataset {ds_i}")
           explicit_legend_label = False
         else:
           label_prefix = ""
@@ -938,9 +942,8 @@ def plot(
           else:
             cax = ax[logical_ax_idx]
             component_axes = [cax]
-          comp_label = (label_prefix if explicit_legend_label else
-                        (f"{label_prefix:s}_c{comp:d}".strip("_")
-                         if len(idx_comps) > 1 else label_prefix))
+          comp_label = (label_prefix if explicit_legend_label else (
+              f"{label_prefix}_c{comp}" if label_prefix else f"c{comp}"))
           comp_legend = (not no_legend and
                          (legend_subplot is None or
                           (logical_ax_idx == legend_subplot

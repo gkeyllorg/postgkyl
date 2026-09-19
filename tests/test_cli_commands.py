@@ -175,6 +175,24 @@ def test_plot_uses_generated_render_options(tmp_path):
   assert output.is_file()
 
 
+@pytest.mark.parametrize("labels", [
+    ["--legend_labels", "new result", "--legend_labels", "old result"],
+    ["--legend_labels", '["new result", "old result"]'],
+])
+def test_plot_legend_labels(labels):
+  import matplotlib.pyplot as plt
+
+  plt.close("all")
+  try:
+    field = DATA / "generated" / "1d_ms_p1.gkyl"
+    _ok(field, field, "interp", "pl", "-f0", "--no_show", *labels)
+    for ax in plt.figure(0).axes:
+      assert [text.get_text() for text in ax.get_legend().get_texts()
+              ] == ["new result", "old result"]
+  finally:
+    plt.close("all")
+
+
 def test_manual_session_render_options_are_not_registered():
   assert _run("--batch_mode", FIELD, "info").exit_code != 0
   assert _run("--saveframes-prefix", "frame", FIELD, "info").exit_code != 0
