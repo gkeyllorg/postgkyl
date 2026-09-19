@@ -160,6 +160,19 @@ def test_declared_cli_arguments_are_positional():
   assert _run(FIELD_3D, "integrate_axis", "2").exit_code != 0
 
 
+def test_map_accepts_a_positional_mapping_filename():
+  field = DATA / "generated" / "2d_ms_p1.gkyl"
+  mapping = DATA / "generated" / "2d_c2p_stretch_ms_p1.gkyl"
+  mapped = pg.load(field).interpolate().map(str(mapping))
+  expected = "".join(
+      np.array2string(axis, precision=16) + "\n" for axis in mapped.grid)
+
+  result = _ok(field, "interpolate", "map", mapping, "print", "--grid")
+  assert result.output == expected
+  assert "MAPPING" in _ok("map", "--help").output
+  assert _run(field, "interpolate", "map").exit_code != 0
+
+
 def test_generated_save_options_match_python_parameter_names(tmp_path):
   output = tmp_path / "field"
   _ok(DISTF, "save", "--out_name", output, "--extension", "npy")

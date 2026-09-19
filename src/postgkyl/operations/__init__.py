@@ -140,7 +140,7 @@ relchange.__annotations__.update(data0=Annotated[GDataState,
 mask.__annotations__["mask_data"] = Annotated[GDataState | None, DatasetRef()]
 fit.__annotations__["guess"] = str | None
 map.__annotations__["data"] = GDataState
-map.__annotations__["mapping"] = str
+map.__annotations__["mapping"] = Annotated[str, CliArgument()]
 map_to_rz.__annotations__["projection"] = Annotated[
     RzProjection | None,
     CliHidden("reuse a projection through the Python API")]
