@@ -24,7 +24,7 @@ also contains the longer, executable CLI walkthrough in
 ``examples/cli_tutorial.md``.
 
 List-valued options
-------------------
+-------------------
 
 Options corresponding to Python lists accept a quoted JSON array. For example,
 Python's ``legend_labels=["old", "new"]`` becomes

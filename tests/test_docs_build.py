@@ -32,18 +32,14 @@ def documentation(tmp_path_factory):
       str(source)
   ],
                  cwd=ROOT,
-                 check=True,
-                 capture_output=True,
-                 text=True)
+                 check=True)
   subprocess.run([
       sys.executable, "-m", "sphinx", "-W", "--keep-going", "-b", "html", "-c",
       str(ROOT / "docs"),
       str(source),
       str(destination / "html")
   ],
-                 check=True,
-                 capture_output=True,
-                 text=True)
+                 check=True)
   return destination
 
 
@@ -115,9 +111,7 @@ def test_downloaded_examples_run_outside_repository(documentation, tmp_path):
   ],
                  cwd=tmp_path,
                  env=env,
-                 check=True,
-                 capture_output=True,
-                 text=True)
+                 check=True)
   assert (tmp_path / "figures/06_growth.png").stat().st_size > 0
   assert (tmp_path / "figures/05_map_to_rz.png").stat().st_size > 0
 
