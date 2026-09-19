@@ -56,7 +56,7 @@ def test_select_by_coordinate_on_a_nodal_grid(tmp_path):
   np.testing.assert_allclose(by_int.grid[0], [0.5])
 
   by_float = d.select(z0=0.6)
-  np.testing.assert_allclose(by_float.values, [[3.0]])
+  np.testing.assert_allclose(by_float.values, [[2.0]])
 
   by_slice = d.select(z0="1:3")
   np.testing.assert_allclose(by_slice.values, [[2.0], [3.0]])

@@ -96,14 +96,15 @@ def test_arithmetic_and_ufunc():
 
 
 def test_capability_guardrails_on_modal_data():
-  """Modal data supports the Gkeyll verbs; everything NumPy-shaped refuses."""
+  """Modal data allows whole-field selection, but refuses pointwise math."""
   a = pg.load(F1)
   with pytest.raises(ValueError):
     np.sqrt(a)  # general ufunc: no modal meaning
   with pytest.raises(ValueError):
     np.asarray(a)  # coefficients are not point values
-  with pytest.raises(ValueError):
-    a.select(comp=0)  # slicing would mix basis functions
+  np.testing.assert_allclose(
+      a.select(comp=0).interpolate().values,
+      a.interpolate().select(comp=0).values)
   with pytest.raises(ValueError):
     _ = a + a.interpolate()  # mixed modal + field domains
 

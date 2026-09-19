@@ -48,13 +48,13 @@ def test_find_nearest_index_raises_without_a_coordinate_array():
 
 def test_find_nearest_index_edge_cases():
   arr = np.array([0.0, 1.0, 2.0, 3.0])
-  assert ip._find_nearest_index(arr, 10.0) == 2  # beyond the end -> idx-2
+  assert ip._find_nearest_index(arr, 10.0) == 3  # nearest endpoint
   assert ip._find_nearest_index(arr, -10.0) == 0  # before the start -> idx==0
 
 
-def test_find_cell_index_raises_without_a_coordinate_array():
+def test_point_selector_raises_without_a_coordinate_array():
   with pytest.raises(TypeError, match="no coordinate array"):
-    ip._find_cell_index(None, 1.0)
+    ip.idx_parser(1.0, nodal=True)
 
 
 def test_string_to_index_rejects_non_strings():
@@ -65,26 +65,23 @@ def test_string_to_index_rejects_non_strings():
 def test_string_to_index_parses_a_float_string():
   arr = np.array([0.0, 1.0, 2.0, 3.0])
   assert ip._string_to_index("1.4", arr) == 1
-  assert ip._string_to_index("1.4", arr, nodal=True) == 2
 
 
 def test_idx_parser_slice_with_empty_start_and_stop():
   arr = np.array([0.0, 1.0, 2.0, 3.0])
-  s = ip.idx_parser("2:", arr)  # empty stop -> len(array)
-  assert s == slice(2, 4)
+  s = ip.idx_parser("2:", arr)  # empty stop -> number of cells
+  assert s == slice(2, 3)
   s2 = ip.idx_parser(":2", arr)  # empty start -> 0
   assert s2 == slice(0, 2)
 
 
 def test_idx_parser_slice_negative_stop():
   arr = np.array([0.0, 1.0, 2.0, 3.0])
-  assert ip.idx_parser("0:-1", arr) == slice(0, 4)
+  assert ip.idx_parser("0:-1", arr) == slice(0, -1)
 
 
 def test_idx_parser_slice_with_non_integer_stop_falls_back_to_float_lookup():
-  """``hi`` failing int() parsing (a float-valued stop) is swallowed by the
-  ``except ValueError: pass`` guard, then resolved via the float-coordinate
-  path instead of the integer-count adjustment."""
+  """Float stops snap to a center, then act as an exclusive index."""
   arr = np.array([0.0, 1.0, 2.0, 3.0])
   s = ip.idx_parser("0:1.4", arr)
   assert s == slice(0, 1)

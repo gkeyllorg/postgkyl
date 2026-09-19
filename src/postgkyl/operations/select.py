@@ -66,7 +66,12 @@ def select(data: "GDataState",
   Each selector accepts an int index, a float coordinate value, or a slice
   string ``"start:end"``; ``comp`` additionally accepts ``"a,b"``. Unspecified
   axes are kept in full. The selected dimension is retained (length-1), matching
-  the legacy behaviour.
+  the legacy behaviour. Floats snap to the nearest stored point, or cell
+  center on an edge grid; ties choose the first index and out-of-domain
+  coordinates snap to an endpoint. No values are evaluated or interpolated.
+  Modal DG selection copies whole cells with every coefficient unchanged.
+  ``comp`` on modal DG data selects whole physical fields, retaining each
+  field's complete basis coefficient block. Slice stops are exclusive.
 
   A curvilinear axis (a multi-dimensional grid array, produced by ``.map()``
   with ``space="conf"``) has no single 1-D coordinate array of its own to
@@ -86,7 +91,7 @@ def select(data: "GDataState",
   or an earlier one in the chain).
 
   Args:
-    data: Dataset whose point values are selected.
+    data: Dataset whose cells or point values are selected.
     comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
     z0: Selector for coordinate direction 0.
     z1: Selector for coordinate direction 1.
@@ -99,17 +104,10 @@ def select(data: "GDataState",
     label: Optional label for the returned dataset.
 
   Raises:
-    ValueError: if ``data`` holds native modal DG coefficients (nodal/quad
-      value_forms of gkyl-backed data are point values and slice fine),
-      or a coordinate/slice selector targets a curvilinear axis whose
+    ValueError: if a selection is empty or nonfinite, or a
+      coordinate/slice selector targets a curvilinear axis whose
       physical coordinate still varies along an unresolved sibling axis.
   """
-  if data.backend == "gkyl" and data.ctx.get("value_form", "modal") == "modal":
-    raise ValueError(
-        "select operates on interpolated (NumPy) values, or on gkyl-native "
-        "nodal/quad value_forms; call .interpolate()/.to_nodal()/"
-        ".to_quad() first -- slicing raw modal DG coefficients would mix "
-        "basis functions.")
   zs = (z0, z1, z2, z3, z4, z5)
   grid = list(data.grid)
   values = data.values
@@ -142,8 +140,8 @@ def select(data: "GDataState",
     rel = d - offset if curvilinear else d
     len_grid = grid_arr.shape[rel] if curvilinear else grid_arr.shape[0]
     is_matching = values.shape[d] == len_grid
-    if curvilinear and isinstance(z, int):
-      idx = z
+    if curvilinear and isinstance(z, (int, np.integer)):
+      idx = int(z)
     elif curvilinear:
       coord_curve = _curvilinear_coord_curve(grid_arr, rel, d, offset,
                                              values.shape,
@@ -154,11 +152,16 @@ def select(data: "GDataState",
     if isinstance(idx, int):
       if idx < 0:
         idx = values.shape[d] + idx
+      if not 0 <= idx < values.shape[d]:
+        raise IndexError(f"Index {idx} is out of bounds for z{d}.")
       v_idx = slice(idx, idx + 1)
       g_idx = slice(idx, idx + 1) if is_matching else slice(idx, idx + 2)
     elif isinstance(idx, slice):
-      v_idx = idx
-      g_idx = idx if is_matching else slice(idx.start, idx.stop + 1)
+      start, stop, step = idx.indices(values.shape[d])
+      if start >= stop:
+        raise ValueError(f"Selection for z{d} is empty.")
+      v_idx = slice(start, stop, step)
+      g_idx = v_idx if is_matching else slice(start, stop + 1)
     else:
       raise TypeError("Coordinate selector must be a single index or a slice.")
     if curvilinear:
@@ -176,7 +179,22 @@ def select(data: "GDataState",
     values_idx[d] = v_idx
 
   if comp is not None:
-    values_idx[-1] = idx_parser(comp)
+    modal = (data.ctx.get("basis_type")
+             and data.ctx.get("value_form", "modal") == "modal"
+             and not data.ctx.get("interpolated", False))
+    if modal:
+      nb = dg.num_basis(data.num_dims, data.ctx["poly_order"],
+                        data.ctx["basis_type"])
+      fields = np.arange(values.shape[-1] // nb)
+      selector = idx_parser(comp, fields, nodal=True)
+      if isinstance(selector, tuple):
+        selector = list(selector)
+      selected = np.atleast_1d(fields[selector])
+      if not selected.size:
+        raise ValueError("Component selection is empty.")
+      values_idx[-1] = (selected[:, None] * nb + np.arange(nb)).ravel()
+    else:
+      values_idx[-1] = idx_parser(comp)
 
   values_out = values[tuple(values_idx)]
   if num_dims == values_out.ndim:  # restore the squeezed component axis
@@ -184,14 +202,8 @@ def select(data: "GDataState",
 
   ctx_updates = {}
   if data.backend == "gkyl":
-    # A nodal/quad value_form stays gkyl-native (REFACTOR_GKEYLL_FFI.md
-    # §3b): ``values`` above was only a read-only NumPy *view* of the native
-    # array for slicing purposes -- wrap the sliced result back into a
-    # native GkylArray so the dataset doesn't silently fall out of the gkyl
-    # backend (and lose its value_form) just for having been selected.
-    # Cell layout isn't derivable from the flat native array (see
-    # ``GDataState.set_values``), so it must be threaded through explicitly,
-    # the same way ``average``/``eval_at_coord_proj`` do.
+    # Copy the selected cells back into native storage, keeping their
+    # representation and original-dimensional basis unchanged.
     ctx_updates["cells"] = np.array(values_out.shape[:-1], dtype=np.int64)
     values_out = dg.rep.wrap(values_out)
 
