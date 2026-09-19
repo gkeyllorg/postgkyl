@@ -1,0 +1,20 @@
+Add better documentation to how to use the legend_labels option in the plot command, capturing both the CLI and the API usage. As a use case, none of these CLI commands produce the legend labels correctly
+(pgkyl) mhrosen@login05:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pgkyl zzim-ion_BiMaxwellianMoments_65.gkyl old-with-bug/zzim-ion_BiMaxwellianMoments_65.gkyl interp pl -f0 --legend_labels "new,old"
+(pgkyl) mhrosen@login05:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pgkyl zzim-ion_BiMaxwellianMoments_65.gkyl old-with-bug/zzim-ion_BiMaxwellianMoments_65.gkyl interp pl -f0 --legend_labels n
+ew,old
+(pgkyl) mhrosen@login05:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pgkyl zzim-ion_BiMaxwellianMoments_65.gkyl old-with-bug/zzim-ion_BiMaxwellianMoments_65.gkyl interp pl -f0 --legend_labels ["new","old"]
+(pgkyl) mhrosen@login05:~/scratch/gkylmax/a-thesis-simulations/1x-maxw> pgkyl zzim-ion_BiMaxwellianMoments_65.gkyl old-with-bug/zzim-ion_BiMaxwellianMoments_65.gkyl interp pl -f0 --legend_labels ["new","old"]
+
+When no subplot labels are specified, When plotting 1 dataset, default to the c0, c1, etc labels, but when multiple datasets are present, put <filename>_c0, <filename>_c1, etc
+
+---
+
+From the CLI, I'd like to specify a list as well, like --legend_labels ["old","new"]. I would think this would align with the syntax of the CLI. If this is not a maintainable option, push back. This should be a concise way to use this. It's not consise to specify --legend_labels several times
+
+---
+
+This structure gets the CLI to mirror the API
+
+---
+
+Or it could alternativly take --legend_labels "old","new"
