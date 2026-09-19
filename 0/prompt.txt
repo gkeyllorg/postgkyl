@@ -1,0 +1,15 @@
+So select doesn't work on DG data that is not interpolated, but I'd like to add some support for this. Indexing those dimensions should work, as this doesn't need interpolation at all. When passed floating point numbers (e.g. 0.0), it should snap to the nearest neighbor to avoid interpolation. Are there any other cases that are needed. Ask questions as needed
+
+---
+
+> For raw DG data, I plan to make select(z0=0.0) retain the whole cell nearest to 0.0 (by cell center), with all its coefficients and the dimension retained at length 1. Is that the behavior you want?
+
+Evaluate at the snapped center and remove the dimension
+
+---
+
+Why does selecting scalars require projection support? Shouldn't it just collapse to a certain dimension along that index? So like, select all the points where --z1 has index 5
+
+---
+
+There might be a misunderstanding. So say we load a 6 coefficient 3D array. Then the data is like (c0,c1,c2,c3,c4,c5,c6) on coodrinates (x,y,z). Select should select, for instance, y=0.5. So we are looking at a grid (x,y=0.5,z). This select operation should snap to the data which is closest to 0.5, colapsing that dimension. This doesn't require any interpolation. Similarly, selecting index 5 in the y direction should not require interpolation. Is that how this is implemented. Is there a misunderstanding? I don't see why we need the eval_at_coord_proj operator here
