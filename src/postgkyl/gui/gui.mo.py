@@ -15,6 +15,7 @@ def _():
 
     import base64
     import glob
+    import numpy as np
     import html
     import os
     import re
@@ -25,7 +26,7 @@ def _():
     from postgkyl.clap import PgkylSession
 
     return (
-        PgkylSession, base64, glob, html, mo, os, plt, re, shutil,
+        PgkylSession, base64, glob, html, mo, np, os, plt, re, shutil,
         tempfile, traceback,
     )
 
@@ -89,7 +90,6 @@ def _(mo, os):
     # The starting directory can be passed on launch, e.g.
     #     marimo run dev_gui.mo.py --path /path/to/my/data/simulation
     # (also works with `marimo edit`). Falls back to the default below.
-    refresh = mo.ui.run_button(label="Reset figure")
     _default_dir = "tests/test_data"
     _cli_path = mo.cli_args().get("path")
     _start_dir = os.path.expanduser(str(_cli_path)) if _cli_path else _default_dir
@@ -99,7 +99,7 @@ def _(mo, os):
         placeholder="path to a Gkeyll data directory",
         full_width=True,
     )
-    return dir_input, refresh
+    return (dir_input,)
 
 
 @app.cell
@@ -529,6 +529,9 @@ def _(mo):
     ymax_t = mo.ui.text(value="", label="y max")
     cmin_t = mo.ui.text(value="", label="cbar min")
     cmax_t = mo.ui.text(value="", label="cbar max")
+    # Color range symmetric about 0 (e.g. white = 0 with RdBu_r): +-|cbar max|
+    # (or |cbar min|) when given, else +- the max |value| of the plotted field.
+    sym_chk = mo.ui.checkbox(label="symmetric (0 centred)")
 
     # shift (blank = 0) and scale (blank = 1) per axis; z = value/colorbar axis
     xshift_t = mo.ui.text(value="0", label="x shift", placeholder="0")
@@ -547,14 +550,15 @@ def _(mo):
         mo.hstack([xlabel, ylabel, clabel, title], justify="start", gap=0.5, wrap=True),
         mo.md("**limits** — _blank = auto_"),
         mo.hstack([xmin_t, xmax_t, ymin_t, ymax_t], justify="start", gap=0.5, wrap=True),
-        mo.hstack([cmin_t, cmax_t], justify="start", gap=0.5, wrap=True),
+        mo.hstack([cmin_t, cmax_t, sym_chk], justify="start", align="center", gap=0.5,
+                  wrap=True),
         mo.md("**shift / scale** _(z = value / colorbar axis)_"),
         mo.hstack([xshift_t, yshift_t, zshift_t], justify="start", gap=0.5, wrap=True),
         mo.hstack([xscale_t, yscale_t, zscale_t], justify="start", gap=0.5, wrap=True),
     ], gap=0.4)
     return (
         clabel, cmap, cmax_t, cmin_t, contour, fixaspect, legend, logx, logy,
-        logz, plot_options, showgrid, surface, title, xlabel, xmax_t,
+        logz, plot_options, showgrid, surface, sym_chk, title, xlabel, xmax_t,
         xmin_t, xscale_t, xshift_t, ylabel, ymax_t, ymin_t, yscale_t, yshift_t,
         zscale_t, zshift_t,
     )
@@ -593,11 +597,11 @@ def _(
     logz,
     mapc2p_file,
     mo,
+    np,
     os,
     plt,
     quantity,
     re,
-    refresh,
     sel_enables,
     sel_modes,
     sel_sliders,
@@ -605,6 +609,7 @@ def _(
     simprefix,
     species,
     surface,
+    sym_chk,
     tempfile,
     title,
     tr_output,
@@ -624,8 +629,8 @@ def _(
     zshift_t,
 ):
     # --- execute the chain & build the figure view --------------------------
-    refresh.value  # clicking the refresh button forces this cell to re-run
-
+    # process_frame/plot_session are exported so the movie cell replays the
+    # exact same chain, one frame at a time.
     def _opt(widget):
         v = (widget.value or "").strip()
         return v or None
@@ -634,9 +639,9 @@ def _(
         v = (widget.value or "").strip()
         return float(v) if v else default
 
-    def _frame_list():
-        """Frames picked by the frame range (a slice over the detected frames), or None."""
-        text = frame_range.value.strip()
+    def pick_frames(text, what="frame range"):
+        """Frames picked by a range text (a slice over the detected frames), or None if blank."""
+        text = (text or "").strip()
         if not text:
             return None
         parts = text.split(":")
@@ -647,24 +652,32 @@ def _(
                 raise ValueError
             return frames[slice(*[int(v) if v.strip() else None for v in parts])]
         except (ValueError, IndexError):
-            raise ValueError(f"frame range '{text}' is not a valid index or slice of the "
+            raise ValueError(f"{what} '{text}' is not a valid index or slice of the "
                              f"{len(frames)} available frame(s), e.g. ':', '::2', '-10:', '-1'.")
 
-    def _run():
+    def process_frame(frame=None):
+        """
+        Run the load -> fluct -> average -> transform -> select -> collect chain.
+
+        frame=None follows the frame slider / frame range; an explicit frame
+        number loads that single frame (ignoring the frame range and collect).
+        Returns (session, status, error): session is None when the chain could
+        not produce plottable data, and error then explains why.
+        """
         # 1) load -----------------------------------------------------------
-        plt.close("all")
         pg = PgkylSession()
 
-        _frames = _frame_list()
+        _frames = pick_frames(frame_range.value) if frame is None else None
         if _frames is not None and not _frames:
-            return None, "", "", f"Frame range `{frame_range.value.strip()}` selects no frame."
+            return pg, "", f"Frame range `{frame_range.value.strip()}` selects no frame."
         _all = _frames is not None and len(_frames) == len(frames)
+        _single = frame_slider.value if frame is None else frame
 
         if load_mode.value == "gk-transport":
             if not simprefix.value:
-                return None, "", "", "Choose a simulation prefix."
+                return None, "", "Choose a simulation prefix."
             if _frames is None:
-                _frame = str(frame_slider.value)
+                _frame = str(_single)
             else:
                 _frame = ":" if _all else ",".join(str(f) for f in _frames)
             # With 'collect', keep one profile per frame for a space-time diagram.
@@ -675,9 +688,9 @@ def _(
                 per_frame=bool(_frames is not None and collect_chk.value))
         elif load_mode.value == "gk-load-quantity":
             if not (quantity.value and simprefix.value):
-                return None, "", "", "Choose a quantity and a simulation prefix."
+                return None, "", "Choose a quantity and a simulation prefix."
             if _frames is None:
-                _frame = str(frame_slider.value)
+                _frame = str(_single)
             else:
                 _frame = ":" if _all else ",".join(str(f) for f in _frames)
             pg.gk_load_quantity(
@@ -687,11 +700,11 @@ def _(
                 extra=gk_extra(direction, extra))
         else:
             if not field_dropdown.value:
-                return None, "", "", "Select a data directory and field on the left."
+                return None, "", "Select a data directory and field on the left."
             if info["type"] != "series":
                 pg.load(info["path"])
             elif _frames is None:
-                pg.load(f"{info['stem']}_{frame_slider.value}.gkyl")
+                pg.load(f"{info['stem']}_{_single}.gkyl")
             elif _all:
                 pg.load(f"{info['stem']}_[0-9]*.gkyl")
             else:
@@ -701,7 +714,7 @@ def _(
         if fluct.value != "none" and load_mode.value != "gk-transport":
             _nd = [dat.get_num_dims() for dat in pg.data.iterator(None)]
             if any(nd != 3 for nd in _nd):
-                return None, "", "", ("Fluctuations about the y or (y,z) average need 3x "
+                return None, "", ("Fluctuations about the y or (y,z) average need 3x "
                                       "(x,y,z) configuration-space data.")
             pg.dg_fluct(z1=True, z2=fluct.value == "yz")
 
@@ -712,14 +725,14 @@ def _(
                         if sel_enables.value[i] and sel_modes.value[i] == "average"]
         if avg_dirs:
             if transform.value in ("gk-rz", "gk-fluxsurf"):
-                return None, "", "", (f"Averaging is not available with the **{transform.value}** "
+                return None, "", (f"Averaging is not available with the **{transform.value}** "
                                       "transform, which needs the full configuration space.")
             pg.dg_avg(**{f"z{i}": True for i in avg_dirs})
 
         # 3) transform ------------------------------------------------------
         # gk-transport profiles are already evaluated on radial nodes.
         if load_mode.value == "gk-transport" and transform.value != "none":
-            return None, "", "", (f"The **{transform.value}** transform does not apply to "
+            return None, "", (f"The **{transform.value}** transform does not apply to "
                                   "gk-transport profiles; set transform to 'none'.")
         if transform.value == "interpolate":
             pg.interpolate(interp=int(interp_pts.value) if interp_pts.value else None)
@@ -762,24 +775,41 @@ def _(
         max_dim = max(dims) if dims else 0
         status = f"{len(dims)} dataset(s) &middot; {max_dim}D after processing"
 
-        def _clean_cmd():
-            c = pg.get_cmd()
-            c = re.sub(r"\s--saveas \S+", "", c)
-            return re.sub(r"\s--no-show", "", c)
-
         if max_dim > 2:
             need = max_dim - 2
             hint = (
                 f"This data is **{max_dim}D**; pgkyl plots only 1D/2D. Enable "
                 f"**{need}** more dimension(s) on the left to select or average it down."
             )
-            return None, _clean_cmd(), status, hint
+            return pg, status, hint
+        return pg, status, None
 
-        # 6) plot -> PNG ----------------------------------------------------
-        png = os.path.join(tempfile.gettempdir(), "pgkyl_marimo.png")
+    def clean_cmd(pg):
+        c = pg.get_cmd()
+        c = re.sub(r"\s--saveas \S+", "", c)
+        return re.sub(r"\s--no-show", "", c)
+
+    def plotted_range(pg):
+        """(min, max, max dimensionality) of the values as plotted, i.e. after the
+        y (1D) or z (2D) shift and scale, over every active dataset."""
+        lo, hi, max_dim = np.inf, -np.inf, 0
+        for dat in pg.data.iterator(None):
+            nd = dat.get_num_dims(squeeze=True)
+            max_dim = max(max_dim, nd)
+            shift, scale = ((_num(zshift_t, 0.0), _num(zscale_t, 1.0)) if nd >= 2
+                            else (_num(yshift_t, 0.0), _num(yscale_t, 1.0)))
+            vals = (np.asarray(dat.get_values(), dtype=float) + shift)*scale
+            if np.isfinite(vals).any():
+                lo, hi = min(lo, np.nanmin(vals)), max(hi, np.nanmax(vals))
+        return lo, hi, max_dim
+
+    def plot_session(pg, png, **overrides):
+        """Plot the processed session into png with the current plot options.
+        overrides replace individual pgkyl plot options (e.g. title, ymin)."""
+        plt.close("all")
         if os.path.exists(png):
             os.remove(png)
-        pg.plot(
+        opts = dict(
             figure="0",
             surface=surface.value,
             contour=contour.value,
@@ -800,6 +830,7 @@ def _(
             xmin=_num(xmin_t), xmax=_num(xmax_t),
             ymin=_num(ymin_t), ymax=_num(ymax_t),
             zmin=_num(cmin_t), zmax=_num(cmax_t),
+            diverging=sym_chk.value,
             xshift=_num(xshift_t, 0.0), yshift=_num(yshift_t, 0.0),
             zshift=_num(zshift_t, 0.0),
             xscale=_num(xscale_t, 1.0), yscale=_num(yscale_t, 1.0),
@@ -807,8 +838,18 @@ def _(
             show=False,
             saveas=png,
         )
-        data = open(png, "rb").read() if os.path.exists(png) else None
-        return data, _clean_cmd(), status, None
+        opts.update({k: v for k, v in overrides.items() if v is not None})
+        pg.plot(**opts)
+        return open(png, "rb").read() if os.path.exists(png) else None
+
+    def _run():
+        _pg, _st, _e = process_frame()
+        _c = clean_cmd(_pg) if _pg is not None else ""
+        if _e or _pg is None:
+            return None, _c, _st, _e
+        _png = os.path.join(tempfile.gettempdir(), "pgkyl_marimo.png")
+        _data = plot_session(_pg, _png)
+        return _data, clean_cmd(_pg), _st, None
 
     try:
         _png_bytes, _cmd, _status, _err = _run()
@@ -850,7 +891,7 @@ def _(
         plot_view = mo.vstack([mo.md(f"_{_status}_"), _img, _cmd_md])
     else:
         plot_view = mo.md("_No figure produced._")
-    return (plot_view,)
+    return pick_frames, plot_session, plot_view, plotted_range, process_frame
 
 
 @app.cell
@@ -868,7 +909,6 @@ def _(
     mapc2p_file,
     mo,
     plot_view,
-    refresh,
     sel_enables,
     sel_modes,
     sel_sliders,
@@ -877,6 +917,12 @@ def _(
     save_button,
     save_msg,
     save_name,
+    movie_button,
+    movie_file,
+    movie_fixed,
+    movie_fps,
+    movie_frames,
+    movie_msg,
     direction,
     extra,
     fluct,
@@ -928,7 +974,6 @@ def _(
     _controls = mo.vstack([
         header,
         # mo.md("#### 1 · Data"),
-        refresh,
         dir_input,
         # mo.md("#### 2 · Load"),
         load_mode,
@@ -950,6 +995,14 @@ def _(
         save_name,
         save_button,
         save_msg,
+        mo.md("#### Movie"),
+        mo.md("_Replays the current figure over the frames selected below "
+              "(a slice of the available frames, like the frame range)._"),
+        mo.hstack([movie_frames, movie_fps], justify="start", gap=0.5, wrap=True),
+        movie_file,
+        movie_fixed,
+        movie_button,
+        movie_msg,
     ], gap=0.6)
 
     # Two-pane layout built as a raw flex row so the panes are resizable:
@@ -1003,6 +1056,133 @@ def _(dir_input, mo, os, save_button, save_name, shutil, tempfile):
     else:
         save_msg = mo.md("")
     return (save_msg,)
+
+
+@app.cell
+def _(mo):
+    # --- movie controls -----------------------------------------------------
+    movie_frames = mo.ui.text(value=":", label="movie frames", placeholder=": | -100: | ::2")
+    movie_fps = mo.ui.number(start=1, stop=60, value=10, label="fps")
+    movie_file = mo.ui.text(
+        value="", label="movie file", placeholder="movie.mp4 (or .gif)", full_width=True)
+    movie_fixed = mo.ui.checkbox(
+        value=True, label="same y / color range on every frame (blank limits only)")
+    movie_button = mo.ui.run_button(label="Make movie")
+    return movie_button, movie_file, movie_fixed, movie_fps, movie_frames
+
+
+@app.cell
+def _(
+    cmax_t, cmin_t, dir_input, mo, movie_button, movie_file, movie_fixed, movie_fps,
+    movie_frames, np, os, pick_frames, plot_session, plotted_range, process_frame, shutil,
+    sym_chk, tempfile, title, ymax_t, ymin_t,
+):
+    # --- movie action: replay the figure chain frame by frame ---------------
+    # Triggered only on click. Every frame goes through process_frame, the same
+    # chain as the figure; the plots are then drawn with shared axis limits
+    # (where the user left them blank) and assembled like 'pgkyl animate' does.
+    def _movie():
+        from types import SimpleNamespace
+        from postgkyl.commands.animate import _compile_movie, VIDEO_EXTS
+
+        sel = pick_frames(movie_frames.value, what="movie frames")
+        if not sel:
+            return mo.callout(mo.md("The movie frames select no frame."), kind="warn"), None
+
+        name = movie_file.value.strip() or (
+            "movie.mp4" if shutil.which("ffmpeg") else "movie.gif")
+        if not os.path.splitext(name)[1]:
+            name += ".mp4"
+        ext = os.path.splitext(name)[1].lower()
+        if ext in VIDEO_EXTS and shutil.which("ffmpeg") is None:
+            return mo.callout(mo.md(f"ffmpeg is not available to write a `{ext}` movie; "
+                                    "use a `.gif` file name instead."), kind="warn"), None
+        dest = os.path.expanduser(name)
+        if not os.path.isabs(dest):
+            dest = os.path.join(os.path.expanduser(dir_input.value.strip()) or ".", name)
+
+        # Pass 1: process every frame, keeping only the small plotted datasets.
+        sessions, lo, hi, max_dim = [], np.inf, -np.inf, 0
+        with mo.status.progress_bar(total=len(sel), title="Processing frames",
+                                    remove_on_exit=True) as bar:
+            for frame in sel:
+                pg, _, err = process_frame(frame)
+                if err or pg is None:
+                    return mo.callout(mo.md(f"Frame {frame}: {err}"), kind="warn"), None
+                active = list(pg.data.iterator(None))
+                pg.data.clean()  # Keep only the plotted datasets in memory.
+                for dat in active:
+                    pg.data.add(dat)
+                f_lo, f_hi, f_dim = plotted_range(pg)
+                lo, hi, max_dim = min(lo, f_lo), max(hi, f_hi), max(max_dim, f_dim)
+                time = active[0].ctx.get("time") if active else None
+                sessions.append((frame, time, pg))
+                bar.update()
+
+        # Shared range: y limits for 1D plots, the color range for 2D ones.
+        # Limits typed in the plot options always win, so only blank ones are set.
+        limits = {}
+        if movie_fixed.value and np.isfinite(lo) and hi > lo:
+            def _blank(widget):
+                return not (widget.value or "").strip()
+            if max_dim >= 2 and sym_chk.value:
+                # Symmetric: a typed cbar bound already fixes +-|bound| on every frame.
+                if _blank(cmin_t) and _blank(cmax_t):
+                    top = max(abs(lo), abs(hi))
+                    limits = {"zmin": -top, "zmax": top}
+            elif max_dim >= 2:
+                limits = {k: v for k, v, w in (("zmin", lo, cmin_t), ("zmax", hi, cmax_t))
+                          if _blank(w)}
+            else:
+                pad = 0.05*(hi - lo)
+                limits = {k: v for k, v, w in (("ymin", lo - pad, ymin_t),
+                                               ("ymax", hi + pad, ymax_t)) if _blank(w)}
+
+        # Pass 2: plot every frame with the same options, then assemble.
+        tmpdir = tempfile.mkdtemp(prefix="pgkyl_movie_")
+        try:
+            pngs, skipped = [], []
+            with mo.status.progress_bar(total=len(sessions), title="Plotting frames",
+                                        remove_on_exit=True) as bar:
+                for i, (frame, time, pg) in enumerate(sessions):
+                    stamp = f"frame {frame}" + (f",  t = {time:.4g}" if time is not None else "")
+                    user_title = (title.value or "").strip()
+                    png = os.path.join(tmpdir, f"frame_{i:05d}.png")
+                    # pgkyl draws nothing for some data (e.g. an identically zero
+                    # fluctuation at t = 0); leave such frames out of the movie.
+                    if plot_session(pg, png, title=f"{user_title}   {stamp}" if user_title
+                                    else stamp, **limits) is None:
+                        skipped.append(frame)
+                    else:
+                        pngs.append(png)
+                    bar.update()
+            if not pngs:
+                return mo.callout(mo.md("No frame produced a figure."), kind="warn"), None
+            _compile_movie(pngs, dest, fps=movie_fps.value, duration=1000.0/movie_fps.value,
+                           ctx=SimpleNamespace(obj={"verbose": False}))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+        note = (f" Skipped {len(skipped)} frame(s) with nothing to plot: {skipped}."
+                if skipped else "")
+        msg = mo.callout(mo.md(f"Saved {len(pngs)} frames to `{dest}`.{note}"), kind="success")
+        return msg, dest
+
+    movie_msg = mo.md("")
+    if movie_button.value:
+        try:
+            _msg, _dest = _movie()
+            _parts = [_msg]
+            # Preview the movie in place when it is small enough to embed.
+            if _dest and os.path.getsize(_dest) < 50e6:
+                if _dest.lower().endswith(".gif"):
+                    _parts.append(mo.image(src=_dest))
+                else:
+                    _parts.append(mo.video(src=_dest, controls=True, loop=True))
+            movie_msg = mo.vstack(_parts)
+        except Exception as exc:
+            movie_msg = mo.callout(mo.md(f"**{type(exc).__name__}:** {exc}"), kind="danger")
+    return (movie_msg,)
 
 
 if __name__ == "__main__":

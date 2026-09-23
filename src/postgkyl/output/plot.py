@@ -572,8 +572,10 @@ def plot(data: GData | Tuple[list, np.ndarray], args: list = (),
           x, y = x.transpose(), y.transpose()
         # end
         if diverging:
-          zmax = np.abs(z).max()
+          given = [abs(v) for v in (zmax, zmin) if v is not None]
+          zmax = max(given) if given else np.nanmax(np.abs(z))
           zmin = -zmax
+          extend = "both" if given else None
         # end
         vmax, vmin = zmax, zmin
         norm = None

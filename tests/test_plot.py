@@ -113,3 +113,28 @@ class TestPlot:
     assert img[0].get_color() == "red"
     assert len(fig.axes) == 1
     mpl.pyplot.close("all")
+
+class TestDivergingColorRange:
+  """The diverging option centres the color range on 0."""
+
+  @staticmethod
+  def _field(lo, hi):
+    data = pg.GData()
+    x, y = np.linspace(0.0, 1.0, 5), np.linspace(0.0, 1.0, 4)
+    data.push([x, y], np.linspace(lo, hi, 12).reshape(4, 3, 1))
+    return data
+
+  def test_range_is_the_max_abs_value(self):
+    img = pg.output.plot(self._field(-1.0, 3.0), diverging=True)
+    assert img.get_clim() == (-3.0, 3.0)
+    mpl.pyplot.close("all")
+
+  def test_given_zmax_sets_the_half_range(self):
+    img = pg.output.plot(self._field(-1.0, 3.0), diverging=True, zmax=2.0)
+    assert img.get_clim() == (-2.0, 2.0)
+    mpl.pyplot.close("all")
+
+  def test_given_zmin_alone_sets_the_half_range(self):
+    img = pg.output.plot(self._field(-1.0, 3.0), diverging=True, zmin=-5.0)
+    assert img.get_clim() == (-5.0, 5.0)
+    mpl.pyplot.close("all")

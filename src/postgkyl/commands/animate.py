@@ -68,7 +68,7 @@ def _compile_movie(frame_files, output_file, fps, duration, ctx):
       for frame_file in frame_files:
         ax.clear()
         ax.axis("off")
-        ax.imshow(Image.open(frame_file))
+        ax.imshow(Image.open(frame_file), origin="upper")
         writer.grab_frame()
       # end
     # end
