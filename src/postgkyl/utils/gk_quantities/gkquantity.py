@@ -132,6 +132,7 @@ class GkQuantity:
             break
           combo_idx = cidx
         else:
+          frames_avail = set()
           break
       else:
         # If all sources were geo files, frames_avail is still empty.

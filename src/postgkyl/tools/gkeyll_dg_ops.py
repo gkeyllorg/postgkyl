@@ -520,6 +520,9 @@ class GkeyllDGops:
       self._lib.gkyl_range_release(rng_ptr)
       self._lib.gkyl_range_release(rng_tar_ptr)
 
+    if ndim_tar == 0 and weight is None:
+      tar_buf *= np.sqrt(2.0)
+
     tar_grid = [ggrid[d] for d in keep_dirs] if ndim_tar > 0 else [np.array([0.0, 1.0])]
 
     out = GData(ctx=gdata.ctx, comp_grid=comp_grid)
@@ -530,6 +533,82 @@ class GkeyllDGops:
     out.ctx["num_cdim"]   = ndim_tar
     out.ctx["num_vdim"]   = 0
 
+    return out
+
+  @staticmethod
+  def _lift_matrix(ndim: int, avg_dirs: list, poly_order: int, basis_type: str) -> np.ndarray:
+    """
+    Matrix T mapping the modal coefficients of a field over the kept
+    directions (ndim - len(avg_dirs) dims) onto the modal coefficients of the
+    same field in the full ndim basis, constant along avg_dirs.
+    """
+    from postgkyl.data.computeInterpolationMatrices import createInterpMatrix
+
+    keep_dirs = [d for d in range(ndim) if d not in avg_dirs]
+    nnodes = poly_order + 1
+    mat_full = createInterpMatrix(ndim, poly_order, basis_type, nnodes, True)
+    if keep_dirs:
+      mat_red = createInterpMatrix(len(keep_dirs), poly_order, basis_type, nnodes, True)
+    else:
+      mat_red = np.ones((1, 1))  # A full average is a single constant.
+
+    # Node n of the full grid (dim 0 fastest) sits on reduced node lift_idx[n].
+    lift_idx = np.zeros(nnodes**ndim, dtype=int)
+    for n in range(nnodes**ndim):
+      multi = np.unravel_index(n, [nnodes]*ndim, order="F")
+      if keep_dirs:
+        lift_idx[n] = np.ravel_multi_index([multi[d] for d in keep_dirs],
+                                           [nnodes]*len(keep_dirs), order="F")
+    # end
+
+    return np.linalg.pinv(mat_full) @ mat_red[lift_idx, :]
+
+  def expand(self, reduced, like, avg_dirs: list) -> GData:
+    """
+    Lift a reduced DG field (e.g. the output of average(avg_dirs, like)) back
+    onto the grid and basis of 'like', constant along the directions avg_dirs.
+    """
+    ndim       = like.get_num_dims()
+    poly_order = int(like.ctx["poly_order"])
+    basis_type = like.ctx["basis_type"]
+    avg_dirs   = sorted(set(avg_dirs))
+    keep_dirs  = [d for d in range(ndim) if d not in avg_dirs]
+
+    lift = self._lift_matrix(ndim, avg_dirs, poly_order, basis_type)
+    nb_full, nb_red = lift.shape
+
+    full_vals = like.get_values()
+    cells = full_vals.shape[:-1]
+    num_comps = full_vals.shape[-1] // nb_full
+
+    red_vals = reduced.get_values()
+    if not keep_dirs:
+      # A full average is stored in a single 1D cell: keep the value of the
+      # constant mode (its basis function is 1/sqrt(2)) of each component.
+      nb_1d = red_vals.shape[-1] // num_comps
+      red_vals = red_vals.reshape(num_comps, nb_1d)[:, 0] / np.sqrt(2.0)
+
+    # Lift every component's coefficients, then broadcast along avg_dirs.
+    red_vals = red_vals.reshape(*red_vals.shape[:-1], num_comps, nb_red)
+    lifted = np.einsum("fr,...cr->...cf", lift, red_vals)
+    lifted = lifted.reshape(*lifted.shape[:-2], num_comps*nb_full)
+    for d in avg_dirs:
+      lifted = np.expand_dims(lifted, axis=d)
+    lifted = np.broadcast_to(lifted, full_vals.shape).copy()
+
+    out = GData(ctx=like.ctx)
+    out.push(like.get_grid(), lifted)
+    return out
+
+  def fluctuation(self, avg_dirs: list, gdata, weight=None) -> GData:
+    """
+    Fluctuation of a DG field about its (optionally weighted) average over
+    avg_dirs: gdata - <gdata>_{avg_dirs}. The output keeps the full grid.
+    """
+    mean = self.average(avg_dirs, gdata, weight=weight)
+    mean_full = self.expand(mean, gdata, avg_dirs)
+    out = GData(ctx=gdata.ctx)
+    out.push(gdata.get_grid(), gdata.get_values() - mean_full.get_values())
     return out
 
   def invert(self, c_oop: int, oop, c_iop: int, iop) -> None:

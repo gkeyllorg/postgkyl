@@ -12,6 +12,7 @@ from postgkyl.commands.collect import collect
 from postgkyl.commands.current import current
 from postgkyl.commands.dg_evproj import dg_evproj
 from postgkyl.commands.dg_avg import dg_avg
+from postgkyl.commands.dg_fluct import dg_fluct
 from postgkyl.commands.differentiate import differentiate
 from postgkyl.commands.energetics import energetics
 from postgkyl.commands.euler import euler
@@ -38,6 +39,7 @@ from postgkyl.commands.gk_distf import load_gk_distf
 from postgkyl.commands.gk_distf import gk_distf
 from postgkyl.commands.dg_local_poly import dg_local_poly
 from postgkyl.commands.gk_load_quantity import gk_load_quantity
+from postgkyl.commands.gk_transport import gk_transport
 from postgkyl.commands.gk_particle_balance import gk_particle_balance
 from postgkyl.commands.gk_rz import gk_rz
 from postgkyl.commands.gk_fluxsurf import gk_fluxsurf

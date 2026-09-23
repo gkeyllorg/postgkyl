@@ -297,6 +297,37 @@ def fetch_M1_from_H(gdatas, **kwargs):
   m1.set_values(m1.get_values() / mass)
   return m1
 
+def _make_fetch_M2_from_Max(par: bool, t_comp: int):
+  """
+  Return a fetch function for the second parallel (par=True) or perpendicular
+  moment from (Bi)Maxwellian moments.
+  """
+  def fetch(gdatas, **kwargs):
+    mom = gdatas[0]
+    nb = _get_num_basis_from_gdata(mom)
+    dgops = GkeyllDGops()
+
+    out = GData(ctx=mom.ctx)
+    out.push(mom.get_grid(), np.zeros_like(mom.get_values()[..., :nb]))
+    dgops.multiply(0, out, 0, mom, t_comp, mom)  # n*T/m.
+    if not par:
+      out.set_values(2.0*out.get_values())
+      return out
+
+    nu2 = _empty_gdata_from_gdata(out)
+    dgops.multiply(0, nu2, 0, mom, 1, mom)  # n*upar.
+    dgops.multiply(0, nu2, 0, nu2, 1, mom)  # n*upar^2.
+    out.set_values(out.get_values() + nu2.get_values())
+    return out
+  # end
+  fetch.__name__ = f"fetch_M2{'par' if par else 'perp'}_from_Max_c{t_comp}"
+  return fetch
+
+fetch_M2par_from_Max = _make_fetch_M2_from_Max(True, 2)
+fetch_M2perp_from_Max = _make_fetch_M2_from_Max(False, 2)
+fetch_M2par_from_BiMax = _make_fetch_M2_from_Max(True, 2)
+fetch_M2perp_from_BiMax = _make_fetch_M2_from_Max(False, 3)
+
 def fetch_Tpar_from_BiMax(gdatas, **kwargs):
   """
   Tpar from BiMaxwellian moments.
@@ -1196,6 +1227,180 @@ def fetch_B_tot_mag(gdatas, **kwargs):
     mag_sq.set_values(mag_sq.get_values() + buff.get_values())
 
   return _powsqrt_dg(mag_sq, 1.0)
+
+# --------------------
+# --- Radial fluxes ---
+# --------------------
+
+# Directions averaged over to define a fluctuation, for '--extra fluct=<key>'.
+_FLUCT_DIRS = {"y": [1], "yz": [1, 2]}
+
+def _require_3x(gdata, qname: str):
+  """Radial turbulent fluxes need the binormal direction, i.e. a 3x simulation."""
+  if gdata.get_num_dims() != 3:
+    raise ValueError(f"{qname}: radial fluxes need 3x (x,y,z) data, got "
+                     f"{gdata.get_num_dims()} dimensions.")
+
+def _maybe_fluct(gdata, jacobgeo, qname: str, **kwargs):
+  """
+  Return gdata, or its fluctuation about the Jacobian-weighted average over
+  the directions selected with '--extra fluct=y|yz' (fluct=none disables it).
+  """
+  key = str(kwargs.get("fluct", "none")).lower()
+  if key in ("none", "0", "false", ""):
+    return gdata
+  if key not in _FLUCT_DIRS:
+    raise ValueError(f"{qname}: unknown '--extra fluct={key}'. Use one of: "
+                     f"none, {', '.join(_FLUCT_DIRS)}.")
+  return GkeyllDGops().fluctuation(_FLUCT_DIRS[key], gdata, weight=jacobgeo)
+
+def _mul_scalar(lop, rop, factor: float = 1.0):
+  """Weak DG product factor*lop*rop of two single-component fields."""
+  out = _empty_gdata_from_gdata(lop)
+  GkeyllDGops().multiply(0, out, 0, lop, 0, rop)
+  if factor != 1.0:
+    out.set_values(factor*out.get_values())
+  return out
+
+def _radial_ExB_vel(phi, jacobtot_inv, b_i):
+  """Radial contravariant ExB velocity v_E^x = v_E.grad(x)."""
+  return _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, 0)
+
+def _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i):
+  """Radial contravariant magnetic flutter dB^x/B."""
+  dB_x = fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], dir=0)
+  bmag_inv = _empty_gdata_from_gdata(bmag)
+  GkeyllDGops().invert(0, bmag_inv, 0, bmag)
+  return _mul_scalar(dB_x, bmag_inv)
+
+def _flux_ExB(moment, phi, jacobgeo, jacobtot_inv, b_i, factor, qname, **kwargs):
+  """factor * moment * v_E^x, with both factors optionally replaced by fluctuations."""
+  _require_3x(moment, qname)
+  vE_x = _radial_ExB_vel(phi, jacobtot_inv, b_i)
+  moment = _maybe_fluct(moment, jacobgeo, qname, **kwargs)
+  vE_x = _maybe_fluct(vE_x, jacobgeo, qname, **kwargs)
+  return _mul_scalar(moment, vE_x, factor)
+
+def _flux_dB(moment, apar, bmag, jacobgeo, jacobgeo_inv, b_i, factor, qname, **kwargs):
+  """factor * moment * dB^x/B, with both factors optionally replaced by fluctuations."""
+  _require_3x(moment, qname)
+  dB_x = _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i)
+  moment = _maybe_fluct(moment, jacobgeo, qname, **kwargs)
+  dB_x = _maybe_fluct(dB_x, jacobgeo, qname, **kwargs)
+  return _mul_scalar(moment, dB_x, factor)
+
+def _warn_if_apar_dropped(qname: str, **kwargs):
+  """Warn when an electrostatic fallback is used although apar output exists."""
+  path, sim, frame = kwargs.get("path"), kwargs.get("name"), kwargs.get("frame")
+  if path is None or sim is None or frame is None:
+    return
+  import os
+  if os.path.isfile(os.path.join(path, f"{sim}-apar_{frame}.gkyl")):
+    print(f"Warning: {qname}: apar output found but the moments needed for the magnetic "
+          f"flutter flux are missing; only the ExB contribution is included.")
+
+def fetch_part_flux_ExB(gdatas, **kwargs):
+  """
+  Radial ExB particle flux, Gamma_E^x = n * v_E^x, where v_E^x = v_E.grad(x).
+  gdatas has (in this order):
+    M0: density.
+    phi: electrostatic potential.
+    J: configuration space Jacobian (jacobgeo), weight of the fluctuation average.
+    1/(J*B): inv. total Jacobian (jacobtot_inv).
+    b_i: covariant components of the magnetic field unit vector.
+  With '--extra fluct=y|yz' the turbulent part <dn dv_E^x> is computed instead.
+  """
+  m0, phi, jacobgeo, jacobtot_inv, b_i = gdatas
+  return _flux_ExB(m0, phi, jacobgeo, jacobtot_inv, b_i, 1.0, "fetch_part_flux_ExB", **kwargs)
+
+def fetch_energy_flux_ExB(gdatas, **kwargs):
+  """
+  Radial ExB energy flux, Q_E^x = (m/2) * M2 * v_E^x, where M2 = M2par + M2perp.
+  Exact for long-wavelength gyrokinetics, since v_E does not depend on velocity.
+  gdatas has (in this order):
+    M2: second velocity moment.
+    phi: electrostatic potential.
+    J: configuration space Jacobian (jacobgeo).
+    1/(J*B): inv. total Jacobian (jacobtot_inv).
+    b_i: covariant components of the magnetic field unit vector.
+  With '--extra fluct=y|yz' the turbulent part <dM2 dv_E^x> is computed instead.
+  """
+  m2, phi, jacobgeo, jacobtot_inv, b_i = gdatas
+  mass = _get_ctx_val(m2, "mass", **kwargs)
+  return _flux_ExB(m2, phi, jacobgeo, jacobtot_inv, b_i, 0.5*mass,
+                   "fetch_energy_flux_ExB", **kwargs)
+
+def fetch_part_flux_dB(gdatas, **kwargs):
+  """
+  Radial magnetic flutter particle flux, Gamma_dB^x = M1 * dB^x/B.
+  gdatas has (in this order):
+    M1: first velocity moment (n*upar).
+    Apar: parallel magnetic vector potential.
+    B: magnetic field magnitude (bmag).
+    J: configuration space Jacobian (jacobgeo).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+  With '--extra fluct=y|yz' the turbulent part <dM1 d(dB^x/B)> is computed instead.
+  """
+  m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i = gdatas
+  return _flux_dB(m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i, 1.0,
+                  "fetch_part_flux_dB", **kwargs)
+
+def fetch_energy_flux_dB(gdatas, **kwargs):
+  """
+  Radial magnetic flutter energy flux, Q_dB^x = (m/2) * M3 * dB^x/B, where
+  M3 = M3par + M3perp.
+  gdatas has (in this order):
+    M3: third velocity moment.
+    Apar: parallel magnetic vector potential.
+    B: magnetic field magnitude (bmag).
+    J: configuration space Jacobian (jacobgeo).
+    1/J: reciprocal configuration space Jacobian (jacobgeo_inv).
+    b_i: covariant components of the magnetic field unit vector.
+  With '--extra fluct=y|yz' the turbulent part <dM3 d(dB^x/B)> is computed instead.
+  """
+  m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i = gdatas
+  mass = _get_ctx_val(m3, "mass", **kwargs)
+  return _flux_dB(m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i, 0.5*mass,
+                  "fetch_energy_flux_dB", **kwargs)
+
+def fetch_part_flux_em(gdatas, **kwargs):
+  """
+  Total radial particle flux, Gamma^x = Gamma_E^x + Gamma_dB^x.
+  gdatas has (in this order): M0, M1, Apar, phi, B, J, 1/J, 1/(J*B), b_i.
+  """
+  m0, m1, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
+  out = fetch_part_flux_ExB([m0, phi, jacobgeo, jacobtot_inv, b_i], **kwargs)
+  flutter = fetch_part_flux_dB([m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs)
+  out.set_values(out.get_values() + flutter.get_values())
+  return out
+
+def fetch_part_flux_es(gdatas, **kwargs):
+  """
+  Total radial particle flux of an electrostatic simulation, Gamma^x = Gamma_E^x.
+  gdatas has (in this order): M0, phi, J, 1/(J*B), b_i.
+  """
+  _warn_if_apar_dropped("part_flux", **kwargs)
+  return fetch_part_flux_ExB(gdatas, **kwargs)
+
+def fetch_energy_flux_em(gdatas, **kwargs):
+  """
+  Total radial energy flux, Q^x = Q_E^x + Q_dB^x.
+  gdatas has (in this order): M2, M3, Apar, phi, B, J, 1/J, 1/(J*B), b_i.
+  """
+  m2, m3, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
+  out = fetch_energy_flux_ExB([m2, phi, jacobgeo, jacobtot_inv, b_i], **kwargs)
+  flutter = fetch_energy_flux_dB([m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs)
+  out.set_values(out.get_values() + flutter.get_values())
+  return out
+
+def fetch_energy_flux_es(gdatas, **kwargs):
+  """
+  Total radial energy flux of an electrostatic simulation, Q^x = Q_E^x.
+  gdatas has (in this order): M2, phi, J, 1/(J*B), b_i.
+  """
+  _warn_if_apar_dropped("energy_flux", **kwargs)
+  return fetch_energy_flux_ExB(gdatas, **kwargs)
 
 def load_distf(gdatas, **kwargs) -> GData:
   """

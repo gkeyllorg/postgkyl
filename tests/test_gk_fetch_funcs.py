@@ -260,6 +260,23 @@ class TestMaxwellianMomentSources:
     press = ff.fetch_press_from_BiMax([bimax])
     assert np.allclose(_cell_avg(press), _DENS*_TEMP, rtol=1e-12)
 
+  @_needs_dgops
+  def test_M2par_M2perp_from_Max(self):
+    maxmom = _const_gdata([_DENS, _UPAR, _VT_SQ])
+    assert np.allclose(_cell_avg(ff.fetch_M2par_from_Max([maxmom])), _cell_avg(_m2par()),
+                       rtol=1e-12)
+    assert np.allclose(_cell_avg(ff.fetch_M2perp_from_Max([maxmom])), _cell_avg(_m2perp()),
+                       rtol=1e-12)
+
+  @_needs_dgops
+  def test_M2par_M2perp_from_BiMax(self):
+    """Distinct Tpar and Tperp, so a swapped component shows up."""
+    bimax = _const_gdata([_DENS, _UPAR, 0.7*_VT_SQ, 1.9*_VT_SQ])
+    M2par = ff.fetch_M2par_from_BiMax([bimax])
+    M2perp = ff.fetch_M2perp_from_BiMax([bimax])
+    assert np.allclose(_cell_avg(M2par), _DENS*(_UPAR**2 + 0.7*_VT_SQ), rtol=1e-12)
+    assert np.allclose(_cell_avg(M2perp), _DENS*2.0*1.9*_VT_SQ, rtol=1e-12)
+
 
 class TestHeatFluxes:
   """Lab-frame energy fluxes and fluid-frame heat fluxes."""
@@ -1222,3 +1239,117 @@ class TestPerpMagneticFluctuationsOnRealData:
     assert np.all(np.isfinite(ratio))
     assert np.allclose(ratio, 1.0, atol=0.02)
     assert not np.allclose(ratio, 1.0, atol=1e-9), "the perturbation must move it a little"
+
+
+# ---------------------
+# --- Radial fluxes ---
+# ---------------------
+# phi = a*y + e*z and b_i = (0, b_y, b_z) give the closed form
+#   v_E^x = (b_y*d(phi)/dz - b_z*d(phi)/dy)/(J*B) = (b_y*e - b_z*a)*jacobtot_inv,
+# uniform in space, so every weak product below is exact.
+_PHI_SLOPE_Y = 3.7
+_PHI_SLOPE_Z = -1.9
+_B_Y, _B_Z = 0.4, 0.9
+_JACOBTOT_INV = 0.37
+_JACOBGEO = 1.6
+_BMAG_FLUX = 2.3
+_VE_X = (_B_Y*_PHI_SLOPE_Z - _B_Z*_PHI_SLOPE_Y)*_JACOBTOT_INV
+
+def _es_flux_sources(moment) -> list:
+  """The [moment, phi, J, 1/(J*B), b_i] sources of the ExB fluxes."""
+  phi = _linear_gdata_3d([(0.0, (0.0, _PHI_SLOPE_Y, _PHI_SLOPE_Z))])
+  return [moment, phi, _const_gdata_3d(_JACOBGEO), _const_gdata_3d(_JACOBTOT_INV),
+          _const_gdata_3d((0.0, _B_Y, _B_Z))]
+
+def _em_flux_sources(moment, apar_slopes) -> list:
+  """The [moment, Apar, B, J, 1/J, b_i] sources of the flutter fluxes, b along z."""
+  return [moment, _linear_apar(apar_slopes), _const_gdata_3d(_BMAG_FLUX),
+          _const_gdata_3d(_JACOBGEO), _const_gdata_3d(1.0/_JACOBGEO),
+          _const_gdata_3d((0.0, 0.0, 1.0))]
+
+def _random_gdata_3d(seed: int) -> GData:
+  return _gdata_3d(np.random.default_rng(seed).standard_normal((*_NUM_CELLS_3D, _NUM_BASIS_3D)))
+
+
+@_needs_dgops
+class TestRadialFluxes:
+  """Radial ExB and magnetic flutter fluxes of particles and energy."""
+
+  def test_ExB_particle_flux(self):
+    gamma = ff.fetch_part_flux_ExB(_es_flux_sources(_const_gdata_3d(_DENS)))
+    assert np.allclose(_cell_avg_3d(gamma), _DENS*_VE_X, rtol=1e-12)
+    assert _VE_X != 0.0
+
+  def test_ExB_energy_flux(self):
+    m2 = _const_gdata_3d(_DENS*3.0*_VT_SQ)
+    q = ff.fetch_energy_flux_ExB(_es_flux_sources(m2))
+    assert np.allclose(_cell_avg_3d(q), 0.5*_MASS*_DENS*3.0*_VT_SQ*_VE_X, rtol=1e-12)
+
+  def test_mass_from_extra_overrides_ctx(self):
+    m2 = _const_gdata_3d(1.0)
+    q = ff.fetch_energy_flux_ExB(_es_flux_sources(m2), mass=2.0)
+    assert np.allclose(_cell_avg_3d(q), _VE_X, rtol=1e-12)
+
+  def test_flutter_particle_flux(self):
+    """With b along z, dB^x = d(Apar)/dy / J."""
+    slope_y = 0.21
+    m1 = _const_gdata_3d(_DENS*_UPAR)
+    gamma = ff.fetch_part_flux_dB(_em_flux_sources(m1, (0.0, slope_y, 0.0)))
+    expected = _DENS*_UPAR*slope_y/_JACOBGEO/_BMAG_FLUX
+    assert np.allclose(_cell_avg_3d(gamma), expected, rtol=1e-12)
+
+  def test_flutter_energy_flux(self):
+    slope_y = -0.13
+    m3 = _const_gdata_3d(_DENS*_UPAR*5.0*_VT_SQ)
+    q = ff.fetch_energy_flux_dB(_em_flux_sources(m3, (0.0, slope_y, 0.0)))
+    expected = 0.5*_MASS*_DENS*_UPAR*5.0*_VT_SQ*slope_y/_JACOBGEO/_BMAG_FLUX
+    assert np.allclose(_cell_avg_3d(q), expected, rtol=1e-12)
+
+  def test_total_flux_is_ExB_plus_flutter(self):
+    m0, m1 = _random_gdata_3d(1), _random_gdata_3d(2)
+    es = _es_flux_sources(m0)
+    em = _em_flux_sources(m1, (0.3, -0.2, 0.1))
+    phi, jacobgeo, jacobtot_inv, b_i = es[1:]
+    apar, bmag, _, jacobgeo_inv, _ = em[1:]
+    total = ff.fetch_part_flux_em([m0, m1, apar, phi, bmag, jacobgeo, jacobgeo_inv,
+                                   jacobtot_inv, b_i])
+    expected = (ff.fetch_part_flux_ExB([m0, phi, jacobgeo, jacobtot_inv, b_i]).get_values()
+                + ff.fetch_part_flux_dB([m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i]).get_values())
+    assert np.allclose(total.get_values(), expected, rtol=1e-12, atol=1e-14)
+
+  def test_turbulent_flux_vanishes_without_fluctuations(self):
+    """A uniform n and v_E^x have no fluctuation, so no turbulent flux."""
+    gamma = ff.fetch_part_flux_ExB(_es_flux_sources(_const_gdata_3d(_DENS)), fluct="yz")
+    assert np.allclose(gamma.get_values(), 0.0, atol=1e-8*_DENS*abs(_VE_X))
+
+  @pytest.mark.parametrize("fluct, dirs", [("y", [1]), ("yz", [1, 2])])
+  def test_total_flux_splits_into_mean_and_turbulent_parts(self, fluct, dirs):
+    """<n v> = <n><v> + <dn dv>, with <.> the average that defines the fluctuation."""
+    dgops = GkeyllDGops()
+    m0 = _random_gdata_3d(3)
+    srcs = _es_flux_sources(m0)
+    srcs[1] = _random_gdata_3d(4)  # An arbitrary phi, so v_E^x varies everywhere.
+    jacobgeo = srcs[2]
+
+    total = ff.fetch_part_flux_ExB(srcs)
+    turb = ff.fetch_part_flux_ExB(srcs, fluct=fluct)
+    vE_x = ff._radial_ExB_vel(srcs[1], srcs[3], srcs[4])
+
+    mean_n = dgops.expand(dgops.average(dirs, m0, weight=jacobgeo), m0, dirs)
+    mean_v = dgops.expand(dgops.average(dirs, vE_x, weight=jacobgeo), m0, dirs)
+    mean_part = ff._mul_scalar(mean_n, mean_v)
+
+    lhs = dgops.average(dirs, total, weight=jacobgeo).get_values()
+    rhs = (dgops.average(dirs, mean_part, weight=jacobgeo).get_values()
+           + dgops.average(dirs, turb, weight=jacobgeo).get_values())
+    assert np.allclose(lhs, rhs, rtol=1e-10, atol=1e-12*np.abs(lhs).max())
+    assert not np.allclose(total.get_values(), turb.get_values())
+
+  def test_fluxes_need_3x(self):
+    with pytest.raises(ValueError, match="need 3x"):
+      ff.fetch_part_flux_ExB([_const_gdata(_DENS), _const_gdata(0.0), _const_gdata(1.0),
+                              _const_gdata(1.0), _const_gdata((0.0, 0.0, 1.0))])
+
+  def test_unknown_fluct_is_rejected(self):
+    with pytest.raises(ValueError, match="fluct"):
+      ff.fetch_part_flux_ExB(_es_flux_sources(_const_gdata_3d(_DENS)), fluct="x")

@@ -99,6 +99,17 @@ _geo_int_g_ij : GkQuantity = GkQuantity(
 )
 gk_quant_registry.register(_geo_int_g_ij)
 
+# Contravariant metric coefficients, in the order g^11,g^12,g^13,g^22,g^23,g^33 (interior).
+_geo_int_gij : GkQuantity = GkQuantity(
+  name = "geo_int_gij",
+  source = [["geo_int_gij"],],
+  fetch_func = [ff.fetch_s0cAll],
+  label = r"$g^{ij}$",
+  is_tensor = True,
+  is_geo = True
+)
+gk_quant_registry.register(_geo_int_gij)
+
 # --------------------------------------------
 # --- Field quantities (species-dependent) ---
 # --------------------------------------------
@@ -142,8 +153,10 @@ gk_quant_registry.register(_M1)
 # Second parallel velocity moment.
 _M2par : GkQuantity = GkQuantity(
   name = "M2par",
-  source = [["M2par"], ["M0M1M2parM2perp"], ["M2","M2perp"]],
-  fetch_func = [ff.fetch_s0c0, ff.fetch_s0c2, ff.fetch_s0c0_sub_s1c0],
+  source = [["M2par"], ["M0M1M2parM2perp"], ["M2","M2perp"], ["MaxwellianMoments"],
+            ["BiMaxwellianMoments"]],
+  fetch_func = [ff.fetch_s0c0, ff.fetch_s0c2, ff.fetch_s0c0_sub_s1c0, ff.fetch_M2par_from_Max,
+                ff.fetch_M2par_from_BiMax],
   label = r"$M_{2\parallel%s}$ (m$^{-1}$/s$^2$)",
   is_time_dep = True,
   is_species_dep = True,
@@ -153,8 +166,10 @@ gk_quant_registry.register(_M2par)
 # Second perpendicular velocity moment.
 _M2perp : GkQuantity = GkQuantity(
   name = "M2perp",
-  source = [["M2perp"], ["M0M1M2parM2perp"], ["M2","M2par"]],
-  fetch_func = [ff.fetch_s0c0, ff.fetch_s0c3, ff.fetch_s0c0_sub_s1c0],
+  source = [["M2perp"], ["M0M1M2parM2perp"], ["M2","M2par"], ["MaxwellianMoments"],
+            ["BiMaxwellianMoments"]],
+  fetch_func = [ff.fetch_s0c0, ff.fetch_s0c3, ff.fetch_s0c0_sub_s1c0, ff.fetch_M2perp_from_Max,
+                ff.fetch_M2perp_from_BiMax],
   label = r"$M_{2\perp%s}$ (m$^{-1}$/s$^2$)",
   is_time_dep = True,
   is_species_dep = True,
@@ -542,6 +557,85 @@ _B_tot_mag : GkQuantity = GkQuantity(
   is_time_dep = True,
 )
 gk_quant_registry.register(_B_tot_mag)
+
+# ---------------------
+# --- Radial fluxes ---
+# ---------------------
+# Contravariant radial components (.grad x) in 3x. Use '--extra fluct=y|yz' for
+# the turbulent part, the correlation of the fluctuations about the y or (y,z) average.
+
+_es_flux_geo = [_field, _geo_int_jacobgeo, _geo_int_jacobtot_inv, _geo_int_b_i]
+_em_flux_geo = [_apar, _geo_int_bmag, _geo_int_jacobgeo, _geo_int_jacobgeo_inv, _geo_int_b_i]
+
+# Radial ExB particle flux.
+_part_flux_ExB : GkQuantity = GkQuantity(
+  name = "part_flux_ExB",
+  source = [[_M0] + _es_flux_geo,],
+  fetch_func = [ff.fetch_part_flux_ExB],
+  label = r"$\Gamma^x_{E,%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_part_flux_ExB)
+
+# Radial ExB energy flux.
+_energy_flux_ExB : GkQuantity = GkQuantity(
+  name = "energy_flux_ExB",
+  source = [[_M2] + _es_flux_geo,],
+  fetch_func = [ff.fetch_energy_flux_ExB],
+  label = r"$Q^x_{E,%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_energy_flux_ExB)
+
+# Radial magnetic flutter particle flux.
+_part_flux_dB : GkQuantity = GkQuantity(
+  name = "part_flux_dB",
+  source = [[_M1] + _em_flux_geo,],
+  fetch_func = [ff.fetch_part_flux_dB],
+  label = r"$\Gamma^x_{\delta B,%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_part_flux_dB)
+
+# Radial magnetic flutter energy flux.
+_energy_flux_dB : GkQuantity = GkQuantity(
+  name = "energy_flux_dB",
+  source = [[_M3] + _em_flux_geo,],
+  fetch_func = [ff.fetch_energy_flux_dB],
+  label = r"$Q^x_{\delta B,%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_energy_flux_dB)
+
+# Total radial particle flux: ExB + flutter, or ExB only without apar output.
+_part_flux : GkQuantity = GkQuantity(
+  name = "part_flux",
+  source = [[_M0, _M1, _apar, _field, _geo_int_bmag, _geo_int_jacobgeo, _geo_int_jacobgeo_inv,
+             _geo_int_jacobtot_inv, _geo_int_b_i],
+            [_M0] + _es_flux_geo,],
+  fetch_func = [ff.fetch_part_flux_em, ff.fetch_part_flux_es],
+  label = r"$\Gamma^x_{%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_part_flux)
+
+# Total radial energy flux: ExB + flutter, or ExB only without apar output.
+_energy_flux : GkQuantity = GkQuantity(
+  name = "energy_flux",
+  source = [[_M2, _M3, _apar, _field, _geo_int_bmag, _geo_int_jacobgeo, _geo_int_jacobgeo_inv,
+             _geo_int_jacobtot_inv, _geo_int_b_i],
+            [_M2] + _es_flux_geo,],
+  fetch_func = [ff.fetch_energy_flux_em, ff.fetch_energy_flux_es],
+  label = r"$Q^x_{%s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_energy_flux)
 
 # ------------------------------
 # --- Phase space quantities ---

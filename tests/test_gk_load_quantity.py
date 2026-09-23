@@ -54,6 +54,10 @@ _EXTRA_OPTS = {
 # data does not carry; the command must report that rather than load them.
 _NEEDS_RADIAL_COORD = {"inv_L_n", "inv_L_T"}
 
+# Radial turbulent fluxes need the binormal direction y of a 3x simulation.
+_NEEDS_3X = {"part_flux_ExB", "energy_flux_ExB", "part_flux_dB", "energy_flux_dB",
+             "part_flux", "energy_flux"}
+
 # Species names used in the test. Multi-species quantities (e.g. the sound speed)
 # combine an electron species with one or more ion species, so they are requested
 # with the whole list; the electron species is identified by its negative charge.
@@ -167,8 +171,9 @@ class TestGkLoadQuantity:
 
     ctx = self._make_ctx()
     try:
-      if quantity in _NEEDS_RADIAL_COORD:
-        with pytest.raises(ValueError, match="no radial coordinate"):
+      if quantity in _NEEDS_RADIAL_COORD | _NEEDS_3X:
+        match = "no radial coordinate" if quantity in _NEEDS_RADIAL_COORD else "need 3x"
+        with pytest.raises(ValueError, match=match):
           ctx.invoke(cmd.gk_load_quantity, quantity=quantity, name=self.name, species=species,
                      frame=str(self.frame), path=path, extra=_extra_opts_for(quant))
         return

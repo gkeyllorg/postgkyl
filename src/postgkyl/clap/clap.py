@@ -372,6 +372,38 @@ class PgkylSession(_Session):
     """
     return self._run(_cmd("dg-evproj"), z0=z0, z1=z1, z2=z2, z3=z3, z4=z4, z5=z5, comp=comp, use=use, tag=tag, label=label)
 
+  def dg_fluct(self,
+      z0: bool = False,
+      z1: bool = False,
+      z2: bool = False,
+      z3: bool = False,
+      z4: bool = False,
+      z5: bool = False,
+      weight: str | None = None,
+      use: str | None = None,
+      tag: str | None = None,
+      label: str | None = None):
+    """
+    Fluctuation of a DG field about its average over specified directions.
+
+    Computes dA = A - <A>, where <A> is the average over the directions given
+    by the flags --z0, --z1, ... --z5, lifted back onto the full grid. The output
+    keeps the dimensionality of the input.
+
+    Args:
+      z0: (--z0) Subtract the average over direction 0.
+      z1: (--z1) Subtract the average over direction 1.
+      z2: (--z2) Subtract the average over direction 2.
+      z3: (--z3) Subtract the average over direction 3.
+      z4: (--z4) Subtract the average over direction 4.
+      z5: (--z5) Subtract the average over direction 5.
+      weight: (--weight, -w) Weight file for the average. Defaults to <prefix>-geo_int_jacobgeo.gkyl found next to the dataset; pass a path to override, or 'none' to disable.
+      use: (--use, -u) Tag to apply to. [default: all active]
+      tag: (--tag, -t) Tag for the output dataset.
+      label: (--label, -l) Label for the output dataset.
+    """
+    return self._run(_cmd("dg-fluct"), z0=z0, z1=z1, z2=z2, z3=z3, z4=z4, z5=z5, weight=weight, use=use, tag=tag, label=label)
+
   def dg_local_poly(self,
       use: str | None = None,
       npoints: int = 2):
@@ -687,12 +719,13 @@ class PgkylSession(_Session):
 
     
     Command line example:
-      pgkyl gk-load-quantity den -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
+      pgkyl gk-load-quantity -q M0 -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
 
     
     Script example:
-      from postgkyl.commands.gk_load_quantity import load_gk_quantity
-      gdat = load_gk_quantity("n", "ion", "gk_sheath_2x2v_p1", frame=9)
+      from postgkyl.clap import PgkylSession
+      pg = PgkylSession()
+      pg.gk_load_quantity(quantity="M0", species="ion", name="gk_sheath_2x2v_p1", frame=9)
 
     Args:
       quantity: (--quantity, -q) Quantity to plot.
@@ -883,6 +916,54 @@ class PgkylSession(_Session):
       nz_interp: (--nz-interp) Parallel (z) up-sampling factor used to smooth the projected 3D surfaces. Default 8.
     """
     return self._run(_cmd("gk-rz"), mapc2p=mapc2p, nodes=nodes, z_axis=z_axis, use=use, tag=tag, label=label, phi_tor=phi_tor, nz_interp=nz_interp)
+
+  def gk_transport(self,
+      name: str | None = None,
+      species: str | None = None,
+      frame: str | None = None,
+      path: str = './',
+      outputs: str = 'gamma,q,D,chi',
+      fluct: Literal['none', 'y', 'yz'] = 'none',
+      conv: float = 1.5,
+      grad_tol: float = 0.001,
+      per_frame: bool = False,
+      interp: int | None = None,
+      extra: str | None = None,
+      tag: str = 'transport',
+      label: str | None = None):
+    """
+    Gyrokinetics: radial turbulent transport of a 3x simulation.
+
+    
+    Flux-surface (y,z, Jacobian-weighted) and time averaged radial profiles of
+      gamma: particle flux <Gamma^x>, ExB plus magnetic flutter if apar exists,
+      Q:     energy flux <Q^x> = <(m/2) M2 v^x>,
+      q:     heat flux q = Q - conv*<T>*Gamma,
+      D:     particle diffusivity -Gamma/(<g^xx> d<n>/dx) (m^2/s),
+      chi:   heat diffusivity -q/(<n> <g^xx> d<T>/dx) (m^2/s),
+      n, T, gxx: the averaged density, temperature and <|grad x|^2>.
+    The fluxes are contravariant radial components (.grad x).
+
+    
+    Command line example:
+      pgkyl gk-transport -n gk_tcv_3x2v_p1 -s elc,ion -f 100:200 -o D,chi plot
+
+    Args:
+      name: (--name, -n) Simulation name prefix (e.g. gk_tcv_3x2v_p1).
+      species: (--species, -s) Species name, or a comma-separated list (e.g. elc,ion).
+      frame: (--frame, -f) Frames to average over: a frame, a comma-separated list, or a range 'start:stop[:step]'. Default: every available frame.
+      path: (--path, -p) Directory containing the simulation files.
+      outputs: (--outputs, -o) Comma-separated profiles to push to the stack, among: gamma, Q, q, D, chi, n, T, gxx.
+      fluct: (--fluct) 'none' for the total fluxes, 'y' or 'yz' for the turbulent part only, i.e. the correlation of the fluctuations about the y or (y,z) average.
+      conv: (--conv) Coefficient c of the convective energy flux c*<T>*Gamma removed from Q to form q (0, 3/2 or 5/2).
+      grad_tol: (--grad-tol) D (chi) is masked where |d<n>/dx| (|d<T>/dx|) is below grad-tol times its maximum.
+      per_frame: (--per-frame) Push the flux-surface averaged profiles of each frame instead of their time average (e.g. to 'collect' them into a space-time diagram).
+      interp: (--interp, -i) Number of radial nodes per cell (default poly_order+1).
+      extra: (--extra, -e) Extra key=value pairs for the fetch functions, e.g. mass=...,charge=... A key may be given one value per species, in the order of --species.
+      tag: (--tag, -t) Tag prefix for the output datasets: <tag>_<output>[_<species>].
+      label: (--label, -l) Label override for the output datasets.
+    """
+    return self._run(_cmd("gk-transport"), name=name, species=species, frame=frame, path=path, outputs=outputs, fluct=fluct, conv=conv, grad_tol=grad_tol, per_frame=per_frame, interp=interp, extra=extra, tag=tag, label=label)
 
   def grid(self,
       use: str | None = None,

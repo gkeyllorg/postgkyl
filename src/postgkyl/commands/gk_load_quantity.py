@@ -1,13 +1,37 @@
-import re
-
 import os
-
 import re
 
 import click
 
 from postgkyl.utils.gk_quantities.registry import gk_quant_registry
 from postgkyl.utils import verb_print
+
+def parse_extra(extra: str | None) -> dict:
+  """
+  Parse an '--extra' string 'k=v,k2=v1,v2' into a dict, auto-converting numeric
+  values. A single value stays a scalar and applies to every species; several
+  values become a list with one entry per species.
+  """
+  user_extra = {}
+  if not extra:
+    return user_extra
+  for pair in re.split(r"[,\s]+(?=[^\s,=]+=)", extra.strip()):
+    key, _, val = pair.partition("=")
+    vals = []
+    for v in val.split(","):
+      v = v.strip()
+      if not v:
+        continue
+      try:
+        v = int(v)
+      except ValueError:
+        try:
+          v = float(v)
+        except ValueError:
+          pass
+      vals.append(v)
+    user_extra[key.strip()] = vals[0] if len(vals) == 1 else vals
+  return user_extra
 
 @click.command(name="gk-load-quantity")
 @click.option("--quantity", "-q", required=False, type=click.STRING,
@@ -42,12 +66,13 @@ def gk_load_quantity(ctx, **kwargs):
 
   \b
   Command line example:
-    pgkyl gk-load-quantity den -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
+    pgkyl gk-load-quantity -q M0 -s ion -n gk_sheath_2x2v_p1 -f 9 interp plot
 
   \b
   Script example:
-    from postgkyl.commands.gk_load_quantity import load_gk_quantity
-    gdat = load_gk_quantity("n", "ion", "gk_sheath_2x2v_p1", frame=9)
+    from postgkyl.clap import PgkylSession
+    pg = PgkylSession()
+    pg.gk_load_quantity(quantity="M0", species="ion", name="gk_sheath_2x2v_p1", frame=9)
   """
 
   if kwargs['qlist']:
@@ -66,26 +91,7 @@ def gk_load_quantity(ctx, **kwargs):
 
   gkquant = gk_quant_registry.get(kwargs['quantity'])
 
-  # Parse --extra into a dict, auto-converting numeric values.
-  user_extra = {}
-  if kwargs.get('extra'):
-    for pair in re.split(r"[,\s]+(?=[^\s,=]+=)", kwargs['extra'].strip()):
-      key, _, val = pair.partition("=")
-      vals = []
-      for v in val.split(","):
-        v = v.strip()
-        if not v:
-          continue
-        try:
-          v = int(v)
-        except ValueError:
-          try:
-            v = float(v)
-          except ValueError:
-            pass
-        vals.append(v)
-      # A single value stays a scalar and applies to every species.
-      user_extra[key.strip()] = vals[0] if len(vals) == 1 else vals
+  user_extra = parse_extra(kwargs.get('extra'))
 
   path = kwargs['path'].rstrip("/") + "/"
 

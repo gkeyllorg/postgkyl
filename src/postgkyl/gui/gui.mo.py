@@ -142,8 +142,10 @@ def _():
     # --- gyrokinetic quantity registry + prefix discovery -------------------
     from postgkyl.utils.gk_quantities.registry import gk_quant_registry
     from postgkyl.commands.listoutputs import list_prefixes
+    from postgkyl.tools.gk_transport import TRANSPORT_OUTPUTS
 
     gk_quant_list = sorted(gk_quant_registry.list())
+    transport_outputs = list(TRANSPORT_OUTPUTS)
 
     def gk_extra(direction, extra):
         """Combine the direction + free-form extra fields into one `extra` arg
@@ -155,14 +157,14 @@ def _():
             parts.append(extra.value.strip())
         return ",".join(parts) or None
 
-    return gk_extra, gk_quant_list, gk_quant_registry, list_prefixes
+    return gk_extra, gk_quant_list, gk_quant_registry, list_prefixes, transport_outputs
 
 
 @app.cell
-def _(gk_quant_list, mo):
+def _(gk_quant_list, mo, transport_outputs):
     # --- load mode: static controls -----------------------------------------
     load_mode = mo.ui.dropdown(
-        options=["load", "gk-load-quantity"], value="load", label="load mode")
+        options=["load", "gk-load-quantity", "gk-transport"], value="load", label="load mode")
     quantity = mo.ui.dropdown(
         options=gk_quant_list,
         value=("M0" if "M0" in gk_quant_list else (gk_quant_list[0] if gk_quant_list else None)),
@@ -171,7 +173,13 @@ def _(gk_quant_list, mo):
     direction = mo.ui.text(value="", label="direction", placeholder="dir, e.g. 0/1/2")
     extra = mo.ui.text(
         value="", label="extra", placeholder="mass=...,charge=...", full_width=True)
-    return direction, extra, load_mode, quantity, species
+    # gk-transport: which flux-surface/time averaged radial profile to plot.
+    tr_output = mo.ui.dropdown(
+        options=transport_outputs, value="D", label="transport output")
+    # Fluctuation about the y (binormal) or (y,z) flux-surface average, 3x data.
+    # In gk-transport mode it selects the turbulent part of the fluxes instead.
+    fluct = mo.ui.dropdown(options=["none", "y", "yz"], value="none", label="fluctuation about")
+    return direction, extra, fluct, load_mode, quantity, species, tr_output
 
 
 @app.cell
@@ -222,12 +230,14 @@ def _(
     # --- frame selection: slider with limits from the detected frames -------
     # In gk-load-quantity mode the available frames come from the registry
     # (which combination of source files exists); otherwise from the field.
-    if load_mode.value == "gk-load-quantity":
+    # gk-transport needs the particle flux, so its frames are those of part_flux.
+    if load_mode.value in ("gk-load-quantity", "gk-transport"):
+        _qname = quantity.value if load_mode.value == "gk-load-quantity" else "part_flux"
         info = {"type": "gk", "frames": []}
         frames = []
-        if quantity.value and simprefix.value:
+        if _qname and simprefix.value:
             try:
-                frames = gk_quant_registry.get(quantity.value).get_avail_frames(
+                frames = gk_quant_registry.get(_qname).get_avail_frames(
                     dir_input.value.strip().rstrip("/") + "/", simprefix.value,
                     species.value.strip() or None)
             except Exception:
@@ -256,6 +266,9 @@ def _(
 ):
     # --- probe the RAW field's grid (for transform bounds like x_idx) -------
     def _probe_base_grid():
+        if load_mode.value == "gk-transport":
+            return {"ok": False, "msg": "gk-transport gives 1D radial profiles "
+                    "(flux-surface and time averaged): nothing to select."}
         try:
             plt.close("all")
             pg = PgkylSession()
@@ -297,6 +310,9 @@ def _(
 ):
     # --- probe the TRANSFORMED grid (for dynamic select sliders) ------------
     def _probe_transformed_grid():
+        if load_mode.value == "gk-transport":
+            return {"ok": False, "msg": "gk-transport gives 1D radial profiles "
+                    "(flux-surface and time averaged): nothing to select."}
         try:
             plt.close("all")
             pg = PgkylSession()
@@ -556,6 +572,7 @@ def _(
     dir_input,
     direction,
     extra,
+    fluct,
     gk_extra,
     html,
     comp_enable,
@@ -590,6 +607,7 @@ def _(
     surface,
     tempfile,
     title,
+    tr_output,
     traceback,
     transform,
     xlabel,
@@ -642,7 +660,20 @@ def _(
             return None, "", "", f"Frame range `{frame_range.value.strip()}` selects no frame."
         _all = _frames is not None and len(_frames) == len(frames)
 
-        if load_mode.value == "gk-load-quantity":
+        if load_mode.value == "gk-transport":
+            if not simprefix.value:
+                return None, "", "", "Choose a simulation prefix."
+            if _frames is None:
+                _frame = str(frame_slider.value)
+            else:
+                _frame = ":" if _all else ",".join(str(f) for f in _frames)
+            # With 'collect', keep one profile per frame for a space-time diagram.
+            pg.gk_transport(
+                name=simprefix.value, path=dir_input.value.strip(), frame=_frame,
+                species=species.value.strip() or "ion", outputs=tr_output.value,
+                fluct=fluct.value, extra=extra.value.strip() or None,
+                per_frame=bool(_frames is not None and collect_chk.value))
+        elif load_mode.value == "gk-load-quantity":
             if not (quantity.value and simprefix.value):
                 return None, "", "", "Choose a quantity and a simulation prefix."
             if _frames is None:
@@ -666,6 +697,14 @@ def _(
             else:
                 pg.load(*[f"{info['stem']}_{f}.gkyl" for f in _frames])
 
+        # 1b) fluctuation about the y or (y,z) average (dg-fluct, on DG data) --
+        if fluct.value != "none" and load_mode.value != "gk-transport":
+            _nd = [dat.get_num_dims() for dat in pg.data.iterator(None)]
+            if any(nd != 3 for nd in _nd):
+                return None, "", "", ("Fluctuations about the y or (y,z) average need 3x "
+                                      "(x,y,z) configuration-space data.")
+            pg.dg_fluct(z1=True, z2=fluct.value == "yz")
+
         # 2) average (dg-avg works on DG data, so it runs before any transform)
         avg_dirs = []
         if grid_info.get("ok"):
@@ -678,6 +717,10 @@ def _(
             pg.dg_avg(**{f"z{i}": True for i in avg_dirs})
 
         # 3) transform ------------------------------------------------------
+        # gk-transport profiles are already evaluated on radial nodes.
+        if load_mode.value == "gk-transport" and transform.value != "none":
+            return None, "", "", (f"The **{transform.value}** transform does not apply to "
+                                  "gk-transport profiles; set transform to 'none'.")
         if transform.value == "interpolate":
             pg.interpolate(interp=int(interp_pts.value) if interp_pts.value else None)
         elif transform.value == "dg-local-poly":
@@ -836,10 +879,12 @@ def _(
     save_name,
     direction,
     extra,
+    fluct,
     load_mode,
     quantity,
     simprefix,
     species,
+    tr_output,
 ):
     # --- assemble select rows (one per grid dimension) ----------------------
     if grid_info.get("ok"):
@@ -868,6 +913,14 @@ def _(
             mo.hstack([species, direction], justify="start", gap=0.5, wrap=True),
             extra,
         ], gap=0.4)
+    elif load_mode.value == "gk-transport":
+        _source_block = mo.vstack([
+            simprefix,
+            mo.hstack([species, tr_output], justify="start", gap=0.5, wrap=True),
+            extra,
+            mo.md("_Radial profiles averaged over the flux surface and the frames "
+                  "(frame range); tick **collect** for one profile per frame._"),
+        ], gap=0.4)
     else:
         _source_block = field_dropdown
 
@@ -883,6 +936,7 @@ def _(
         mo.hstack([frame_range, collect_chk], justify="start", align="center", gap=1),
         frame_slider,
         # mo.md("#### 3 · Processing"),
+        fluct,
         mo.hstack([transform, interp_pts], justify="start", gap=1),
         mapc2p_file,
         x_idx if transform.value == "gk-fluxsurf" else mo.md(""),
