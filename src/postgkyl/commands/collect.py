@@ -49,9 +49,9 @@ def collect(ctx, **kwargs):
         values.append([])
         grid.append([])
       # end
-      if dat.ctx["time"]:
+      if dat.ctx.get("time") is not None:
         time[-1].append(dat.ctx["time"])
-      elif dat.ctx["frame"]:
+      elif dat.ctx.get("frame") is not None:
         time[-1].append(dat.ctx["frame"])
       else:
         time[-1].append(i)

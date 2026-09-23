@@ -231,3 +231,28 @@ class TestCommands:
     assert values is not None
     assert values.shape[-1] == 1
     assert len(grid) == 2
+
+def test_collect_keeps_time_zero_on_the_time_axis():
+  """A dataset at t = 0 (frame 0) is stamped at 0, not at its stack index.
+
+  Both 0.0 and 0 are falsy, which used to send the initial frame to the end of
+  the time axis, at its position among the stacked datasets.
+  """
+  from postgkyl.data import GData
+  ctx = click.core.Context(cli)
+  ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
+  # Unrelated datasets first, so the stack index of frame 0 is not 0 either.
+  for _ in range(3):
+    other = GData(tag="other", ctx={"time": 9.0, "frame": 9})
+    other.push([np.array([0.0, 1.0])], np.array([[0.0]]))
+    ctx.obj["data"].add(other)
+  for frame, time in ((1, 1e-4), (0, 0.0), (2, 2e-4)):
+    dat = GData(tag="flux", ctx={"time": time, "frame": frame})
+    dat.push([np.array([0.0, 1.0])], np.array([[10.0*frame]]))
+    ctx.obj["data"].add(dat)
+
+  ctx.invoke(cmd.collect, use="flux")
+
+  out = next(ctx.obj["data"].iterator("flux"))
+  assert np.allclose(out.get_grid()[0], [0.0, 1e-4, 2e-4])
+  assert np.allclose(out.get_values().ravel(), [0.0, 10.0, 20.0])
