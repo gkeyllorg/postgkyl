@@ -1,0 +1,3 @@
+The last CI failed with an error 
+ERROR tests/test_operations_select.py::test_invalid_selection_does_not_mutate[kwargs7-IndexError] - FileNotFoundError: No such file: '/home/runner/work/postgkyl/postgkyl/tests/test_data/generated/select_2d_tensor_p2.gkyl'
+From the linux full suite and branch coverage workflow. Fix this error in the code so that CI will pass
