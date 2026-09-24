@@ -303,6 +303,16 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
 
+  # Selection tests need unit-width cells and two complete p2 tensor fields.
+  selection_nc = 2 * num_comps("tensor", 2, 2)
+  selection_values = np.arange(4 * 3 * selection_nc,
+                               dtype=float).reshape(4, 3, selection_nc)
+  write_gkyl_field(out_dir / "select_2d_tensor_p2.gkyl", [4, 3], [0.0, 0.0],
+                   [4.0, 3.0],
+                   selection_values,
+                   poly_order=2,
+                   basis_type="tensor")
+
   # Stationary shock-tube initial state: p0 modal coefficients are sqrt(2)
   # times the physical values in the orthonormal 1D basis.
   x = (np.arange(100) + 0.5) / 100

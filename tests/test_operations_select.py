@@ -7,14 +7,26 @@ import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
+from generate_test_data import generate_all
 
-pytestmark = pytest.mark.skipif(not gpython.available(), reason="needs Gkeyll")
+pytestmark = pytest.mark.skipif(not gpython.available(),
+                                reason="needs compiled Gkeyll")
 FIELD = Path(__file__).parent / "test_data/generated/select_2d_tensor_p2.gkyl"
 
 
 @pytest.fixture
 def data():
   return pg.load(FIELD)
+
+
+def test_selection_fixture_generated_from_scratch(tmp_path):
+  generate_all(tmp_path)
+  data = pg.load(tmp_path / FIELD.name)
+  assert data.values.shape == (4, 3, 18)
+  assert data.ctx["basis_type"] == "tensor"
+  assert data.ctx["poly_order"] == 2
+  np.testing.assert_array_equal(data.grid[0], np.arange(5))
+  np.testing.assert_array_equal(data.grid[1], np.arange(4))
 
 
 @pytest.mark.parametrize("selector,expected", [
