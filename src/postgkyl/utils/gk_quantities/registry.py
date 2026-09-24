@@ -389,17 +389,53 @@ _debye_length : GkQuantity = GkQuantity(
 )
 gk_quant_registry.register(_debye_length)
 
-# Sound speed.
-_c_s : GkQuantity = GkQuantity(
-  name = "c_s",
+# Cold-ion (ion-acoustic) sound speed, combining every species (-s elc,ion,...).
+_c_s_cold_i : GkQuantity = GkQuantity(
+  name = "c_s_cold_i",
   source = [[_M0, _temp],],
-  fetch_func = [ff.fetch_c_s],
+  fetch_func = [ff.fetch_c_s_cold_i],
   label = r"$c_{s}$ (m/s)",
   is_time_dep = True,
   is_species_dep = False,
   is_multi_species = True,
 )
-gk_quant_registry.register(_c_s)
+gk_quant_registry.register(_c_s_cold_i)
+
+# Hot-ion (thermodynamic) sound speed, combining every species (-s elc,ion,...).
+_c_s_hot_i : GkQuantity = GkQuantity(
+  name = "c_s_hot_i",
+  source = [[_M0, _temp],],
+  fetch_func = [ff.fetch_c_s_hot_i],
+  label = r"$c_{s}$ (m/s)",
+  is_time_dep = True,
+  is_species_dep = False,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_c_s_hot_i)
+
+# Parallel Mach number, upar/c_s_cold_i, of the first species in the list (-s s,...).
+_mach_cold_i : GkQuantity = GkQuantity(
+  name = "mach_cold_i",
+  source = [[_M0, _temp, _upar],],
+  fetch_func = [ff.fetch_mach_cold_i],
+  label = r"$u_{\parallel %s}/c_{s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_mach_cold_i)
+
+# Parallel Mach number, upar/c_s_hot_i, of the first species in the list (-s s,...).
+_mach_hot_i : GkQuantity = GkQuantity(
+  name = "mach_hot_i",
+  source = [[_M0, _temp, _upar],],
+  fetch_func = [ff.fetch_mach_hot_i],
+  label = r"$u_{\parallel %s}/c_{s}$",
+  is_time_dep = True,
+  is_species_dep = True,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_mach_hot_i)
 
 # Collision frequency of species s with species r (-s s,r).
 _collision_freq : GkQuantity = GkQuantity(

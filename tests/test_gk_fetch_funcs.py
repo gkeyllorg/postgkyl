@@ -374,7 +374,7 @@ _M_E = gkc.GKYL_ELECTRON_MASS
 
 
 def _species_srcs(dens: float, temp: float, mass: float, charge: float) -> list:
-  """The [M0, temp] source pair for one species, as fetch_c_s receives it."""
+  """The [M0, temp] source pair for one species, as the sound speeds receive it."""
   return [_const_gdata(dens, mass=mass, charge=charge),
           _const_gdata(temp, mass=mass, charge=charge)]
 
@@ -391,27 +391,27 @@ def _ion2_srcs():
 
 @_needs_dgops
 class TestSoundSpeed:
-  """The multi-species sound speeds, dispatched by '--extra kind='."""
+  """The multi-species cold-ion (c_s_cold_i) and hot-ion (c_s_hot_i) sound speeds."""
 
-  def test_ion_acoustic_single_ion_species(self):
+  def test_cold_i_single_ion_species(self):
     """With one Z=1 ion species the formula collapses to sqrt(Te/mi)."""
-    c_s = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                       species=["elc", "ion1"], kind="ion_acoustic")
+    c_s = ff.fetch_c_s_cold_i([_elc_srcs(), _ion1_srcs()],
+                              species=["elc", "ion1"])
     assert np.allclose(_cell_avg(c_s), np.sqrt(_T_E/_M_I1), rtol=1e-10)
 
-  def test_ion_acoustic_two_ion_species(self):
+  def test_cold_i_two_ion_species(self):
     """c_s = sqrt(Te*sum(n_j*Z_j^2/m_j)/sum(n_j*Z_j))."""
-    c_s = ff.fetch_c_s([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
-                       species=["elc", "ion1", "ion2"], kind="ion_acoustic")
+    c_s = ff.fetch_c_s_cold_i([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
+                              species=["elc", "ion1", "ion2"])
 
     numer = _N_I1*_Z_I1**2/_M_I1 + _N_I2*_Z_I2**2/_M_I2
     denom = _N_I1*_Z_I1 + _N_I2*_Z_I2
     assert np.allclose(_cell_avg(c_s), np.sqrt(_T_E*numer/denom), rtol=1e-10)
 
-  def test_thermo_single_ion_species(self):
+  def test_hot_i_single_ion_species(self):
     """With one Z=1 ion species: sqrt((gamma_e*Te + gamma_i*Ti)/mi)."""
-    c_s = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                       species=["elc", "ion1"], kind="thermo")
+    c_s = ff.fetch_c_s_hot_i([_elc_srcs(), _ion1_srcs()],
+                             species=["elc", "ion1"])
 
     # n_e = n_i1 here only if quasineutrality holds for a single species, so
     # use the general formula rather than the reduced one.
@@ -419,76 +419,84 @@ class TestSoundSpeed:
     denom = _N_I1*_M_I1
     assert np.allclose(_cell_avg(c_s), np.sqrt(numer/denom), rtol=1e-10)
 
-  def test_thermo_two_ion_species(self):
+  def test_hot_i_two_ion_species(self):
     """c_s = sqrt((gamma_e*n_e*Te + sum(gamma_j*n_j*Tj))/sum(n_j*m_j))."""
-    c_s = ff.fetch_c_s([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
-                       species=["elc", "ion1", "ion2"], kind="thermo")
+    c_s = ff.fetch_c_s_hot_i([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
+                             species=["elc", "ion1", "ion2"])
 
     numer = 1.0*_N_E*_T_E + 3.0*(_N_I1*_T_I1 + _N_I2*_T_I2)
     denom = _N_I1*_M_I1 + _N_I2*_M_I2
     assert np.allclose(_cell_avg(c_s), np.sqrt(numer/denom), rtol=1e-10)
 
-  def test_thermo_defaults_are_gamma_e_1_gamma_i_3(self):
+  def test_hot_i_defaults_are_gamma_e_1_gamma_i_3(self):
     """The documented defaults must be what an un-flagged call actually uses."""
-    default = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                           species=["elc", "ion1"], kind="thermo")
-    explicit = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                            species=["elc", "ion1"], kind="thermo",
-                            gamma_e=1.0, gamma_i=3.0)
+    default = ff.fetch_c_s_hot_i([_elc_srcs(), _ion1_srcs()],
+                                 species=["elc", "ion1"])
+    explicit = ff.fetch_c_s_hot_i([_elc_srcs(), _ion1_srcs()],
+                                  species=["elc", "ion1"],
+                                  gamma_e=1.0, gamma_i=3.0)
     assert np.allclose(_cell_avg(default), _cell_avg(explicit), rtol=1e-12)
 
-  def test_thermo_honours_the_gamma_overrides(self):
-    c_s = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                       species=["elc", "ion1"], kind="thermo",
-                       gamma_e=5.0/3.0, gamma_i=5.0/3.0)
+  def test_hot_i_honours_the_gamma_overrides(self):
+    c_s = ff.fetch_c_s_hot_i([_elc_srcs(), _ion1_srcs()],
+                             species=["elc", "ion1"],
+                             gamma_e=5.0/3.0, gamma_i=5.0/3.0)
 
     numer = (5.0/3.0)*(_N_E*_T_E + _N_I1*_T_I1)
     assert np.allclose(_cell_avg(c_s), np.sqrt(numer/(_N_I1*_M_I1)), rtol=1e-10)
 
-  def test_default_kind_is_thermo(self):
-    default = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()], species=["elc", "ion1"])
-    explicit = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                            species=["elc", "ion1"], kind="thermo")
-    assert np.allclose(_cell_avg(default), _cell_avg(explicit), rtol=1e-12)
-
   def test_species_order_does_not_matter(self):
     """Species are identified by charge sign, so the order is irrelevant."""
-    forward = ff.fetch_c_s([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
-                           species=["elc", "ion1", "ion2"], kind="ion_acoustic")
-    shuffled = ff.fetch_c_s([_ion2_srcs(), _elc_srcs(), _ion1_srcs()],
-                            species=["ion2", "elc", "ion1"], kind="ion_acoustic")
+    forward = ff.fetch_c_s_cold_i([_elc_srcs(), _ion1_srcs(), _ion2_srcs()],
+                                  species=["elc", "ion1", "ion2"])
+    shuffled = ff.fetch_c_s_cold_i([_ion2_srcs(), _elc_srcs(), _ion1_srcs()],
+                                   species=["ion2", "elc", "ion1"])
     assert np.allclose(_cell_avg(forward), _cell_avg(shuffled), rtol=1e-12)
 
   def test_electrons_are_found_by_charge_not_by_name(self):
     """A species called anything must still be treated as the electrons."""
-    named = ff.fetch_c_s([_elc_srcs(), _ion1_srcs()],
-                         species=["elc", "ion1"], kind="ion_acoustic")
-    odd = ff.fetch_c_s([_species_srcs(_N_E, _T_E, _M_E, -_E_CHARGE), _ion1_srcs()],
-                       species=["negatron", "deuterium"], kind="ion_acoustic")
+    named = ff.fetch_c_s_cold_i([_elc_srcs(), _ion1_srcs()],
+                                species=["elc", "ion1"])
+    odd = ff.fetch_c_s_cold_i([_species_srcs(_N_E, _T_E, _M_E, -_E_CHARGE), _ion1_srcs()],
+                              species=["negatron", "deuterium"])
     assert np.allclose(_cell_avg(named), _cell_avg(odd), rtol=1e-12)
 
-  def test_no_electron_species_is_an_error(self):
-    with pytest.raises(ValueError, match="exactly one negatively charged"):
-      ff.fetch_c_s([_ion1_srcs(), _ion2_srcs()], species=["ion1", "ion2"])
+  def test_ions_only_default_to_adiabatic_electrons_at_Ti(self):
+    """With no electron species, T_e = T_i of the first ion (Ti_over_Te=1)."""
+    c_s = ff.fetch_c_s_cold_i([_ion1_srcs()], species=["ion1"])
+    assert np.allclose(_cell_avg(c_s), np.sqrt(_T_I1/_M_I1), rtol=1e-10)
+
+  def test_ions_only_cold_i_honours_Ti_over_Te(self):
+    c_s = ff.fetch_c_s_cold_i([_ion1_srcs(), _ion2_srcs()], species=["ion1", "ion2"],
+                              Ti_over_Te=2.5)
+    numer = _N_I1*_Z_I1**2/_M_I1 + _N_I2*_Z_I2**2/_M_I2
+    denom = _N_I1*_Z_I1 + _N_I2*_Z_I2
+    T_e = _T_I1/2.5
+    assert np.allclose(_cell_avg(c_s), np.sqrt(T_e*numer/denom), rtol=1e-10)
+
+  def test_ions_only_hot_i_uses_quasineutral_electrons(self):
+    """The adiabatic electron density is sum_j(n_j*Z_j), as for a real species."""
+    ions = [_ion1_srcs(), _ion2_srcs()]
+    c_s = ff.fetch_c_s_hot_i(ions, species=["ion1", "ion2"], Ti_over_Te=0.5)
+    # Equivalent explicit electron species at n_e = sum_j(n_j*Z_j), T_e = 2*T_i1.
+    elc = _species_srcs(_N_E, 2.0*_T_I1, _M_E, -_E_CHARGE)
+    expected = ff.fetch_c_s_hot_i([elc] + ions, species=["elc", "ion1", "ion2"])
+    assert np.allclose(_cell_avg(c_s), _cell_avg(expected), rtol=1e-10)
 
   def test_two_electron_species_is_an_error(self):
-    with pytest.raises(ValueError, match="exactly one negatively charged"):
-      ff.fetch_c_s([_elc_srcs(), _elc_srcs(), _ion1_srcs()],
-                   species=["elc1", "elc2", "ion1"])
+    with pytest.raises(ValueError, match="at most one negatively charged"):
+      ff.fetch_c_s_hot_i([_elc_srcs(), _elc_srcs(), _ion1_srcs()],
+                         species=["elc1", "elc2", "ion1"])
 
   def test_no_ion_species_is_an_error(self):
     with pytest.raises(ValueError, match="no positively charged"):
-      ff.fetch_c_s([_elc_srcs()], species=["elc"])
-
-  def test_unknown_kind_is_an_error(self):
-    with pytest.raises(ValueError, match="unknown kind"):
-      ff.fetch_c_s([_elc_srcs(), _ion1_srcs()], species=["elc", "ion1"], kind="bogus")
+      ff.fetch_c_s_hot_i([_elc_srcs()], species=["elc"])
 
   def test_missing_charge_attribute_is_an_error(self):
     """Charge missing from both the file and --extra must be reported."""
     srcs = _strip_ctx(_ion1_srcs()[0], "charge"), _ion1_srcs()[1]
     with pytest.raises(KeyError, match="charge"):
-      ff.fetch_c_s([_elc_srcs(), list(srcs)], species=["elc", "ion1"])
+      ff.fetch_c_s_hot_i([_elc_srcs(), list(srcs)], species=["elc", "ion1"])
 
   def test_attributes_can_come_from_per_species_extra_arrays(self):
     """Species attributes absent from the files can be given per species.
@@ -500,10 +508,10 @@ class TestSoundSpeed:
       return [_strip_ctx(_const_gdata(dens), "mass", "charge"),
               _strip_ctx(_const_gdata(temp), "mass", "charge")]
 
-    c_s = ff.fetch_c_s([bare(_N_E, _T_E), bare(_N_I1, _T_I1), bare(_N_I2, _T_I2)],
-                       species=["elc", "ion1", "ion2"], kind="ion_acoustic",
-                       mass=[_M_E, _M_I1, _M_I2],
-                       charge=[-_E_CHARGE, _Z_I1*_E_CHARGE, _Z_I2*_E_CHARGE])
+    c_s = ff.fetch_c_s_cold_i([bare(_N_E, _T_E), bare(_N_I1, _T_I1), bare(_N_I2, _T_I2)],
+                              species=["elc", "ion1", "ion2"],
+                              mass=[_M_E, _M_I1, _M_I2],
+                              charge=[-_E_CHARGE, _Z_I1*_E_CHARGE, _Z_I2*_E_CHARGE])
 
     numer = _N_I1*_Z_I1**2/_M_I1 + _N_I2*_Z_I2**2/_M_I2
     denom = _N_I1*_Z_I1 + _N_I2*_Z_I2
@@ -516,10 +524,41 @@ class TestSoundSpeed:
               _strip_ctx(_const_gdata(temp), "mass", "charge")]
 
     with pytest.raises(ValueError, match="only 2 values"):
-      ff.fetch_c_s([bare(_N_E, _T_E), bare(_N_I1, _T_I1), bare(_N_I2, _T_I2)],
-                   species=["elc", "ion1", "ion2"],
-                   mass=[_M_E, _M_I1, _M_I2],
-                   charge=[-_E_CHARGE, _Z_I1*_E_CHARGE])
+      ff.fetch_c_s_hot_i([bare(_N_E, _T_E), bare(_N_I1, _T_I1), bare(_N_I2, _T_I2)],
+                         species=["elc", "ion1", "ion2"],
+                         mass=[_M_E, _M_I1, _M_I2],
+                         charge=[-_E_CHARGE, _Z_I1*_E_CHARGE])
+
+
+@_needs_dgops
+class TestMach:
+  """The parallel Mach number upar/c_s of the first requested species."""
+  _U_E, _U_I1 = -3.2e4, 1.7e4
+
+  def _with_upar(self, srcs, upar, mass, charge):
+    return srcs + [_const_gdata(upar, mass=mass, charge=charge)]
+
+  def _elc(self):
+    return self._with_upar(_elc_srcs(), self._U_E, _M_E, -_E_CHARGE)
+
+  def _ion1(self):
+    return self._with_upar(_ion1_srcs(), self._U_I1, _M_I1, _Z_I1*_E_CHARGE)
+
+  def test_hot_i_ion_mach_number(self):
+    """With -s ion,elc the ion upar is divided by the hot-ion c_s of both species."""
+    mach = ff.fetch_mach_hot_i([self._ion1(), self._elc()], species=["ion1", "elc"])
+    c_s = ff.fetch_c_s_hot_i([_ion1_srcs(), _elc_srcs()], species=["ion1", "elc"])
+    assert np.allclose(_cell_avg(mach), self._U_I1/_cell_avg(c_s), rtol=1e-10)
+
+  def test_cold_i_electron_mach_number(self):
+    """Listing the electrons first gives the electron Mach number."""
+    mach = ff.fetch_mach_cold_i([self._elc(), self._ion1()], species=["elc", "ion1"])
+    assert np.allclose(_cell_avg(mach), self._U_E/np.sqrt(_T_E/_M_I1), rtol=1e-10)
+
+  def test_ions_only_use_adiabatic_electrons(self):
+    """With only ions, c_s uses T_e = T_i/Ti_over_Te."""
+    mach = ff.fetch_mach_cold_i([self._ion1()], species=["ion1"], Ti_over_Te=2.0)
+    assert np.allclose(_cell_avg(mach), self._U_I1/np.sqrt(0.5*_T_I1/_M_I1), rtol=1e-10)
 
 def _linear_gdata(coeff0: float, coeff1: float) -> GData:
   """A single-component p1 field with the given two modal coefficients."""

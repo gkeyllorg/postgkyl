@@ -258,7 +258,7 @@ class TestGkLoadQuantity:
     species = f"{_ELC_SPECIES},{_ION_SPECIES}"
 
     ctx = self._make_ctx()
-    self._load(ctx, "c_s", str(tmp_path), species)
+    self._load(ctx, "c_s_hot_i", str(tmp_path), species)
     assert ctx.obj["data"].get_num_datasets() == 1, (
       "the sound speed must combine both species into one dataset")
 
@@ -267,6 +267,33 @@ class TestGkLoadQuantity:
     self._load(ctx, "temp", str(tmp_path), species)
     assert ctx.obj["data"].get_num_datasets() == 2, (
       "a per-species quantity must still produce one dataset per species")
+
+  def test_mach_number_is_labelled_with_its_species(self, tmp_path, monkeypatch):
+    """The Mach number combines every species but belongs to the first one."""
+    monkeypatch.setattr(gkquantity, "GData", _make_synthetic_gdata)
+
+    ctx = self._make_ctx()
+    self._load(ctx, "mach_hot_i", str(tmp_path), f"{_ION_SPECIES},{_ELC_SPECIES}")
+    assert ctx.obj["data"].get_num_datasets() == 1
+    out = ctx.obj["data"].get_dataset(0)
+    assert out.get_label() == gk_quant_registry.get("mach_hot_i").get_label(species=_ION_SPECIES)
+
+  def test_mach_number_with_only_ions(self, tmp_path, monkeypatch):
+    """Adiabatic electrons: '-s ion' alone, with the temperature ratio from --extra.
+
+    With the cold-ion c_s = sqrt(T_e/m_i), four times colder electrons
+    (Ti_over_Te=4) halve c_s and so double the Mach number.
+    """
+    monkeypatch.setattr(gkquantity, "GData", _make_synthetic_gdata)
+
+    machs = []
+    for ratio in (1, 4):
+      ctx = self._make_ctx()
+      self._load(ctx, "mach_cold_i", str(tmp_path), _ION_SPECIES, extra=f"Ti_over_Te={ratio}")
+      assert ctx.obj["data"].get_num_datasets() == 1
+      machs.append(ctx.obj["data"].get_dataset(0).get_values()[:, 0])
+    assert np.all(machs[0] > 0.0)
+    assert np.allclose(machs[1], 2.0*machs[0], rtol=1e-8, atol=0.0)
 
   def test_per_species_extra_array_reaches_each_species(self, tmp_path, monkeypatch):
     """'--extra mass=1,2' must give species #0 mass 1 and species #1 mass 2.
@@ -341,7 +368,7 @@ class TestGkLoadQuantity:
   def test_multi_species_extra_array_reaches_nested_sources(self, tmp_path, monkeypatch):
     """Every species' nested sources must use that species' own array entry.
 
-    c_s(kind=thermo) needs each species' temperature, and temp from the
+    c_s_hot_i needs each species' temperature, and temp from the
     Maxwellian moments is mass*<component 2>. So if the sources of every species
     were resolved with the same '--extra mass=' entry, the ion temperature would
     be built from the electron mass. Only pinning the expected value catches
@@ -352,8 +379,8 @@ class TestGkLoadQuantity:
 
     mass_e, mass_i = 1.0, 4.0
     ctx = self._make_ctx()
-    self._load(ctx, "c_s", str(tmp_path), f"{_ELC_SPECIES},{_ION_SPECIES}",
-               extra=f"kind=thermo,mass={mass_e},{mass_i},charge=-1,1")
+    self._load(ctx, "c_s_hot_i", str(tmp_path), f"{_ELC_SPECIES},{_ION_SPECIES}",
+               extra=f"mass={mass_e},{mass_i},charge=-1,1")
 
     # The synthetic data gives component c the cell average (c+2), so every
     # species has n = 2 (component 0) and temp = mass*4 (component 2).
@@ -372,7 +399,7 @@ class TestGkLoadQuantity:
     with pytest.raises(ValueError, match="needs a species list"):
       ctx.invoke(
         cmd.gk_load_quantity,
-        quantity="c_s",
+        quantity="c_s_hot_i",
         name=self.name,
         species=None,
         frame=str(self.frame),
@@ -380,19 +407,19 @@ class TestGkLoadQuantity:
         extra=None,
       )
 
-  def test_sound_speed_kinds_differ(self, tmp_path, monkeypatch):
-    """Both --extra kind= values must run and give genuinely different answers."""
+  def test_cold_and_hot_ion_sound_speeds_differ(self, tmp_path, monkeypatch):
+    """Both sound-speed definitions must run and give genuinely different answers."""
     monkeypatch.setattr(gkquantity, "GData", _make_synthetic_gdata)
     species = f"{_ELC_SPECIES},{_ION_SPECIES}"
 
     values = {}
-    for kind in ("ion_acoustic", "thermo"):
+    for quantity in ("c_s_cold_i", "c_s_hot_i"):
       ctx = self._make_ctx()
-      self._load(ctx, "c_s", str(tmp_path), species, extra=f"kind={kind}")
+      self._load(ctx, quantity, str(tmp_path), species)
       assert ctx.obj["data"].get_num_datasets() == 1
-      values[kind] = ctx.obj["data"].get_dataset(0).get_values().copy()
+      values[quantity] = ctx.obj["data"].get_dataset(0).get_values().copy()
 
-    assert not np.allclose(values["ion_acoustic"], values["thermo"]), (
+    assert not np.allclose(values["c_s_cold_i"], values["c_s_hot_i"]), (
       "the two sound-speed definitions should not coincide for this data")
 
   def _check_distf_real(self):

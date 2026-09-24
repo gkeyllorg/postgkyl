@@ -122,7 +122,7 @@ def gk_load_quantity(ctx, **kwargs):
       # Load required datasets (sources) for every species and compute the quantity.
       out = gkquant.fetch_multi(path, kwargs['name'], species_list, frame, src_combo_idx, **user_extra)
 
-      out_label = kwargs['label'] if kwargs['label'] is not None else gkquant.get_label()
+      out_label = kwargs['label'] if kwargs['label'] is not None else gkquant.get_label(species=species_list[0])
       if len(frames) > 1:
         out_label += f" f{frame}"
 

@@ -116,3 +116,30 @@ def test_dg_fluct_needs_a_direction():
   ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
   with pytest.raises(click.exceptions.UsageError):
     ctx.invoke(cmd.dg_fluct)
+
+
+def test_full_average_collects_into_a_time_trace():
+  """dg-avg over every direction, interpolate, collect gives a 1D time trace.
+
+  A full average is stored on a dummy single cell; interpolate must keep a
+  single value there, or collect builds a 2D (time x dummy) dataset.
+  """
+  ctx = click.core.Context(cli)
+  ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
+  for frame in range(3):
+    values = np.zeros((*_CELLS, _NUM_BASIS[1]))
+    values[..., 0] = np.sqrt(2.0)**3*(frame + 1)  # f = frame + 1
+    field = _gdata(values, 1)
+    field.ctx.update({"time": 0.1*frame, "frame": frame, "is_modal": True,
+                      "grid_type": "uniform"})
+    ctx.obj["data"].add(field)
+
+  ctx.invoke(cmd.dg_avg, z0=True, z1=True, z2=True, weight="none")
+  ctx.invoke(cmd.interpolate, interp=2)
+  ctx.invoke(cmd.collect)
+
+  out = list(ctx.obj["data"].iterator())
+  assert len(out) == 1
+  assert out[0].get_num_dims(squeeze=True) == 1
+  assert np.allclose(out[0].get_grid()[0], [0.0, 0.1, 0.2])
+  assert np.allclose(out[0].get_values().ravel(), [1.0, 2.0, 3.0])

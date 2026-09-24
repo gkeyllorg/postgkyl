@@ -637,14 +637,40 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
     }
     (elcs if entry["charge"] < 0.0 else ions).append(entry)
 
-  if len(elcs) != 1:
-    raise ValueError(f"{quantity}: expected exactly one negatively charged (electron) species "
-                     f"but found {len(elcs)} in {list(species_names)}.")
-    
   if not ions:
     raise ValueError(f"{quantity}: found no positively charged (ion) species in {list(species_names)}.")
 
+  if not elcs:
+    # Only ions (e.g. a simulation with adiabatic electrons).
+    return _adiabatic_elc(ions, **kwargs), ions
+
+  if len(elcs) != 1:
+    raise ValueError(f"{quantity}: expected at most one negatively charged (electron) species "
+                     f"but found {len(elcs)} in {list(species_names)}.")
+
   return elcs[0], ions
+
+def _adiabatic_elc(ions, **kwargs):
+  """
+  Electron entry for a multi-species quantity when only ions are requested
+  (e.g. adiabatic electrons), with sources [n_e, T_e]:
+    n_e = sum_j(n_j*Z_j), by quasineutrality,
+    T_e = T_i/Ti_over_Te, with T_i the temperature of the first ion species
+  and Ti_over_Te set via '--extra Ti_over_Te=<value>' (default 1).
+  """
+  e = gkc.GKYL_ELEMENTARY_CHARGE
+  ti_over_te = float(kwargs.get("Ti_over_Te", 1.0))
+
+  den = _weighted_sum(ions, [ion["charge"]/e for ion in ions], 0)
+  temp = _empty_gdata_from_gdata(ions[0]["srcs"][1])
+  temp.set_values(ions[0]["srcs"][1].get_values()/ti_over_te)
+
+  return {
+    "name": "adiabatic electrons",
+    "srcs": [den, temp],
+    "mass": gkc.GKYL_ELECTRON_MASS,
+    "charge": -e,
+  }
 
 def _weighted_sum(entries, weights, comp: int):
   """
@@ -655,14 +681,14 @@ def _weighted_sum(entries, weights, comp: int):
   out.set_values(total)
   return out
 
-def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
+def fetch_c_s_cold_i(gdatas, **kwargs):
   """
-  Ion-acoustic sound speed (wave perspective), for the Bohm criterion and
-  sheath/presheath matching:
+  Cold-ion (ion-acoustic) sound speed (m/s), the wave perspective, for the
+  Bohm criterion and sheath/presheath matching:
     c_s = sqrt( T_e * sum_j(n_j*Z_j^2/m_j) / sum_j(n_j*Z_j) )
   summing over the ion species j, with Z_j = q_j/e the ion charge state.
   """
-  elc, ions = _split_elc_ions(gdatas, "fetch_c_s(kind=ion_acoustic)", **kwargs)
+  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_cold_i", **kwargs)
 
   e = gkc.GKYL_ELEMENTARY_CHARGE
   charge_states = [ion["charge"]/e for ion in ions]
@@ -683,15 +709,15 @@ def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
 
   return _powsqrt_dg(c_s_sq, 1.0)
 
-def _fetch_c_s_thermo(gdatas, **kwargs):
+def fetch_c_s_hot_i(gdatas, **kwargs):
   """
-  Thermodynamic sound speed (bulk fluid perspective), for Mach numbers and
-  acoustic propagation in the core/SOL:
+  Hot-ion (thermodynamic) sound speed, the bulk fluid perspective, for
+  Mach numbers and acoustic propagation in the core/SOL:
     c_s = sqrt( (gamma_e*n_e*T_e + sum_j(gamma_j*n_j*T_j)) / sum_j(n_j*m_j) )
-  summing over the ion species j. 
+  summing over the ion species j.
   Default: gamma_e=1, gamma_i=3, but these can be set via '--extra'.
   """
-  elc, ions = _split_elc_ions(gdatas, "fetch_c_s(kind=thermo)", **kwargs)
+  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_hot_i", **kwargs)
 
   gamma_e = float(kwargs.get("gamma_e", 1.0))
   gamma_i = float(kwargs.get("gamma_i", 3.0))
@@ -719,31 +745,42 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
 
   return _powsqrt_dg(c_s_sq, 1.0)
 
-def fetch_c_s(gdatas, **kwargs):
+def _fetch_mach(gdatas, fetch_c_s, **kwargs):
   """
-  Sound speed (m/s), combining the electrons and every ion species. gdatas has
-  one [M0, temp] pair per species, in the order they were requested, e.g.
-    pgkyl gk-load-quantity -q c_s -s elc,ion1,ion2 ...
-  Electrons and ions are told apart by the sign of each species' charge
-  attribute, so the species may be named anything.
+  Parallel Mach number M = upar/c_s of the first requested species, with c_s
+  from fetch_c_s combining every listed species. gdatas has one
+  [M0, temp, upar] triplet per species, in the order they were requested.
+  """
+  c_s = fetch_c_s([srcs[:2] for srcs in gdatas], **kwargs)
+  upar = gdatas[0][2]
 
-  Two definitions are available through '--extra kind=<kind>':
-    ion_acoustic (default): the wave/Bohm-criterion sound speed,
-      c_s = sqrt(T_e*sum_j(n_j*Z_j^2/m_j)/sum_j(n_j*Z_j)).
-    thermo: the bulk-fluid sound speed,
-      c_s = sqrt((gamma_e*n_e*T_e + sum_j(gamma_j*n_j*T_j))/sum_j(n_j*m_j)),
-      with gamma_e and gamma_i settable via '--extra' (default 1 and 3).
+  dgops = GkeyllDGops()
+
+  c_s_inv = _empty_gdata_from_gdata(c_s)
+  dgops.invert(0, c_s_inv, 0, c_s)
+
+  mach = _empty_gdata_from_gdata(upar)
+  dgops.multiply(0, mach, 0, upar, 0, c_s_inv)
+
+  return mach
+
+def fetch_mach_cold_i(gdatas, **kwargs):
   """
-  c_s_kinds = {
-    "ion_acoustic": _fetch_c_s_ion_acoustic,
-    "thermo": _fetch_c_s_thermo,
-  }
-  kind = str(kwargs.get("kind", "thermo"))
-  if kind not in c_s_kinds:
-    raise ValueError(f"fetch_c_s: unknown kind '{kind}'. Select one with '--extra kind=<kind>' "
-                     f"from: {', '.join(sorted(c_s_kinds))}.")
-  # end
-  return c_s_kinds[kind](gdatas, **kwargs)
+  Parallel Mach number upar/c_s of the first requested species, with the
+  cold-ion sound speed (fetch_c_s_cold_i):
+    pgkyl gk-load-quantity -q mach_cold_i -s ion,elc ...  (ion Mach number)
+    pgkyl gk-load-quantity -q mach_cold_i -s elc,ion ...  (electron Mach number)
+    pgkyl gk-load-quantity -q mach_cold_i -s ion -e Ti_over_Te=1 ...  (adiabatic electrons)
+  """
+  return _fetch_mach(gdatas, fetch_c_s_cold_i, **kwargs)
+
+def fetch_mach_hot_i(gdatas, **kwargs):
+  """
+  Parallel Mach number upar/c_s of the first requested species, with the
+  hot-ion sound speed (fetch_c_s_hot_i); species are listed as for
+  fetch_mach_cold_i.
+  """
+  return _fetch_mach(gdatas, fetch_c_s_hot_i, **kwargs)
 
 def _gkyl_coulomb_log(ns, nr, ms, mr, Ts, Tr, qs, qr, bmag, eps0, hbar, eV):
   """

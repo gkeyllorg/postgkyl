@@ -1,4 +1,5 @@
 import click
+import numpy as np
 
 from postgkyl.data import GData
 from postgkyl.data import GInterpModal, GInterpNodal
@@ -68,14 +69,20 @@ def interpolate(ctx, **kwargs):
     num_nodes = dg.num_nodes
     num_comps = int(dat.get_num_comps() / num_nodes)
 
+    grid, values = dg.interpolate(tuple(range(num_comps)))
+    # Handle 0D field for having collect turns into a time trace.
+    if dat.ctx.get("num_cdim") == 0 and not dat.ctx.get("num_vdim"):
+      grid = [np.array([grid[0][0], grid[0][-1]])]
+      values = values.mean(axis=0, keepdims=True)
+    # end
+
     if kwargs["tag"]:
       out = GData(tag=kwargs["tag"], label=kwargs["label"],
           comp_grid=ctx.obj["compgrid"], ctx=dat.ctx)
-      grid, values = dg.interpolate(tuple(range(num_comps)))
       out.push(grid, values)
       data.add(out)
     else:
-      dg.interpolate(tuple(range(num_comps)), overwrite=True)
+      dat.push(grid, values)
     # end
   # end
   verb_print(ctx, "Finishing interpolate")
