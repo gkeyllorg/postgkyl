@@ -1,0 +1,1 @@
+I think there are some issues with the axes ranges on a multi-component animation. Each sub-figure should have adapted ranges to each component. So if you load a dataset with 4 components, then the axes ranges should be set in each of the subfigures by the data in that subfigure
