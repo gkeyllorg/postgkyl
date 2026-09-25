@@ -1,0 +1,23 @@
+How could postgkeyll use gkyl_proj_powsqrt_on_basis inside the arrithmatic and functionality?
+
+---
+
+Good. So why is this giving an error? It should be using the modal sqrt operation. pgkyl fsimple.gkyl info pr ev "f0 sqrt" pr
+(default#0)
+├─ Number of components: 2
+├─ Number of dimensions: 1
+├─ Grid: (uniform)
+│  └─ Dim 0: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+├─ Maximum: 5.656854e+00 at (0,) component 0
+├─ Minimum: 0.000000e+00 at (0,) component 1
+├─ DG: serendipity p1 (modal)
+└─ File: fsimple.gkyl
+
+[5.656854249492381 0.               ]
+/home/maxwell-rosen/miniforge3/lib/python3.13/site-packages/postgkyl/operations/evaluate.py:329: UserWarning: evaluate: 'sqrt' on native modal (raw DG coefficient) data: 'sqrt' has no weak-kernel form; falling back to plain math on the raw coefficient view -- exact only if coefficient 0 already IS the point value (e.g. p0 data, or a file whose 'modal' tag is wrong; see --value_form).
+  native_out = _native_kernel(token, tmp_grid, tmp_values, tmp_ctx, func)
+[2.378414230005442 0.
+
+---
+
+This ev operation should be performing weak arrithmatic, since this is a modal array
