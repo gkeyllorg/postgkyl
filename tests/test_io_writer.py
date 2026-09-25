@@ -1,9 +1,9 @@
-"""Tests for ``postgkyl.io.writer`` -- the vtk format and series-file behavior.
+"""Tests for dataset metadata round trips and VTK series-file behavior.
 
 npy/txt/gkyl round trips and error paths are covered in
 ``tests/test_coverage_io.py``; this file focuses on what layer 04 adds: the
-``vtk`` extension and its ParaView ``.series`` sidecar, plus a byte-exact
-gkyl round trip through ``io.read``.
+``vtk`` extension and its ParaView ``.series`` sidecar, plus gkyl round
+trips that preserve both values and their metadata.
 
 Run:  PYTHONPATH=src pytest tests/test_io_writer.py -v
 """
@@ -14,6 +14,7 @@ import sys
 
 import numpy as np
 import pytest
+from click.testing import CliRunner
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
@@ -24,7 +25,8 @@ import matplotlib
 matplotlib.use("Agg")
 
 import postgkyl as pg  # noqa: E402
-from postgkyl import io  # noqa: E402
+from postgkyl import gpython, io  # noqa: E402
+from postgkyl.cli.app import cli  # noqa: E402
 from postgkyl.io import writer  # noqa: E402
 from postgkyl.gdatastate.gdatastate import GDataState  # noqa: E402
 
@@ -171,12 +173,99 @@ def test_vtk_series_recovers_from_valid_json_with_the_wrong_shape(tmp_path):
 
 
 # ------------------------------------------------------------------- gkyl rt
+@pytest.mark.parametrize("reader", [
+    io.GkylReader,
+    pytest.param(io.GkylCReader,
+                 marks=pytest.mark.skipif(not gpython.available(),
+                                          reason="compiled Gkeyll unavailable"))
+])
+def test_gkyl_roundtrip_preserves_all_dataset_metadata(tmp_path, monkeypatch,
+                                                       reader):
+  data = pg.load(F2D).interpolate()
+  data.ctx.update({
+      "var_names": ["density"],
+      "units": "m^-3",
+      "description": "Interpolated density",
+      "custom": {
+          "mass": np.float64(2.0),
+          "limits": np.array([1.0, 3.0]),
+          "species": [{
+              "charge": np.int64(-1)
+          }],
+      },
+  })
+  out = data.save(str(tmp_path / "renamed-field_99.gkyl"))
+  monkeypatch.setattr(io, "_READERS", {"test": reader})
+  back = pg.load(out)
+
+  for key, value in data.ctx.items():
+    if key != "_load_metadata":
+      np.testing.assert_equal(back.ctx[key], value, err_msg=key)
+  raw = back.ctx["_load_metadata"]["file_metadata"]
+  assert "_load_metadata" not in raw
+  assert raw["custom"] == {
+      "mass": 2.0,
+      "limits": [1.0, 3.0],
+      "species": [{
+          "charge": -1
+      }],
+  }
+  assert back.backend == "numpy"
+  assert back.is_interpolated
+  np.testing.assert_array_equal(np.asarray(back), data.values)
+  np.testing.assert_allclose((back * back).values, data.values**2)
+
+
+@pytest.mark.skipif(not gpython.available(),
+                    reason="compiled Gkeyll unavailable")
+@pytest.mark.parametrize("reader", [io.GkylReader, io.GkylCReader])
+@pytest.mark.parametrize("value_form", ["modal", "nodal", "quad"])
+def test_gkyl_roundtrip_preserves_representation(tmp_path, monkeypatch, reader,
+                                                 value_form):
+  modal = pg.load(F2D)
+  data = {
+      "modal": lambda: modal,
+      "nodal": modal.to_nodal,
+      "quad": lambda: modal.to_quad(num_quad=3),
+  }[value_form]()
+  out = data.save(str(tmp_path / "represented.gkyl"))
+
+  monkeypatch.setattr(io, "_READERS", {"test": reader})
+  back = pg.load(out)
+  raw = back.ctx["_load_metadata"]["file_metadata"]
+  for key in ("value_form", "basis_type", "poly_order"):
+    assert back.ctx[key] == data.ctx[key]
+  assert raw["value_form"] == value_form
+  assert "_load_metadata" not in raw
+  if value_form == "quad":
+    assert raw["num_quad"] == back.ctx["num_quad"] == 3
+  np.testing.assert_array_equal(back.values, data.values)
+  for restored, original in zip(back.grid, data.grid):
+    np.testing.assert_array_equal(restored, original)
+  if back.backend == "gkyl":
+    np.testing.assert_allclose(back.to_modal().values, modal.values, atol=1e-14)
+
+
+@pytest.mark.skipif(not gpython.available(),
+                    reason="compiled Gkeyll unavailable")
+def test_cli_save_preserves_quadrature_representation(tmp_path):
+  out = str(tmp_path / "quad.gkyl")
+  result = CliRunner().invoke(cli, [
+      F2D, "represent", "--to", "quad", "--num_quad", "3", "save", "--out_name",
+      out
+  ])
+  assert result.exit_code == 0, result.output
+  back = pg.load(out)
+  assert back.ctx["value_form"] == "quad"
+  assert back.ctx["num_quad"] == 3
+  np.testing.assert_allclose(back.to_modal().values,
+                             pg.load(F2D).values,
+                             atol=1e-14)
+
+
 def test_gkyl_roundtrip_preserves_grid_and_values_exactly(tmp_path):
   """``io.read`` is exercised both directly (grid) and through ``pg.load``
-  (values, via the ``.values`` property that abstracts the gkyl/numpy
-  backend split -- see gdatastate/state.py) since a written already-interpolated
-  field still carries file_type == 1 and so is picked up again by whichever
-  reader is first compatible (GkylCReader when the FFI is available)."""
+  (values) using the default reader selection."""
   a = pg.load(F1).interpolate().select(comp=0)
   out = writer.save(a, out_name=str(tmp_path / "rt.gkyl"), extension="gkyl")
 

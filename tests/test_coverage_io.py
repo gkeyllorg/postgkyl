@@ -199,8 +199,7 @@ def test_write_gkyl_with_no_extra_ctx_writes_zero_meta_size(tmp_path):
                      ctx={
                          "cells": np.array([4]),
                          "lower": np.array([0.0]),
-                         "upper": np.array([4.0]),
-                         "grid_type": "uniform"
+                         "upper": np.array([4.0])
                      })
 
   meta_size = np.fromfile(out_name, dtype=np.dtype("i8"), count=1, offset=21)[0]
@@ -232,6 +231,11 @@ def test_build_meta_excludes_internal_keys_and_renames_dg_fields():
   assert meta == {
       "polyOrder": 2,
       "basisType": "serendipity",
+      "grid_type": "uniform",
+      "value_form": "modal",
+      "num_quad": 3,
+      "interpolated": True,
+      "var_names": ["f"],
       "time": 0.5,
       "frame": 3
   }
@@ -243,6 +247,7 @@ def test_to_msgpack_safe_converts_numpy_scalars_and_arrays():
   assert writer._to_msgpack_safe(np.int64(3)) == 3
   assert isinstance(writer._to_msgpack_safe(np.int64(3)), int)
   assert writer._to_msgpack_safe(np.array([1.0, 2.0])) == [1.0, 2.0]
+  assert writer._to_msgpack_safe((np.int64(1), np.array([2.0]))) == [1, [2.0]]
   assert writer._to_msgpack_safe("serendipity") == "serendipity"
 
 

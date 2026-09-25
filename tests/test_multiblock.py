@@ -124,17 +124,14 @@ class TestBlockIdentityIsStamped:
     data = pg.load(os.path.join(GEN, "mb_sim_b0-elc_M0_1.gkyl"))
     assert data.ctx["frame"] == 1
 
-  def test_identity_is_not_written_into_saved_files(self, tmp_path):
-    # The identity comes from the *path*, so it must never be stored in the
-    # file: saving block 1's data under another name and reloading it would
-    # otherwise find a stale block index in the header -- which, because
-    # header metadata wins over the parsed name, would silently stick.
+  def test_saved_metadata_preserves_identity_when_renamed(self, tmp_path):
+    # Saving under a new path preserves the dataset's simulation identity;
+    # stored metadata takes precedence over identity inferred from a name.
     data = pg.load(os.path.join(GEN, "mb_sim_b1-elc_M0_0.gkyl")).interpolate()
     out = pg.save(data, out_name=str(tmp_path / "plain-thing_0.gkyl"))
     reloaded = pg.load(out)
-    assert reloaded.ctx["block"] is None
-    assert reloaded.ctx["sim"] == "plain"
-    assert reloaded.ctx["quantity"] == "thing"
+    for key in ("block", "sim", "quantity", "frame"):
+      assert reloaded.ctx[key] == data.ctx[key]
 
   def test_info_reports_the_block(self):
     out = pg.load(os.path.join(GEN, "mb_sim_b1-elc_M0_0.gkyl")).info()

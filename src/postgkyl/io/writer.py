@@ -27,10 +27,9 @@ from postgkyl.cli_spec import (
 )
 from postgkyl.numerics import nodal_to_cell_centered_grid
 
-# ctx keys that are either structural (already carried by the binary header
-# itself, e.g. cells/lower/upper) or postgkyl's own session-only bookkeeping
-# (recomputed by the reader from the meta below) -- never part of the
-# msgpack meta blob Gkeyll writes.
+# Only the binary header's structural fields and the private load snapshot
+# are excluded. All other dataset metadata, including representation and
+# simulation identity, belongs to the saved data even when its name changes.
 _INTERNAL_CTX_KEYS = frozenset({
     "_load_metadata",
     "cells",
@@ -38,20 +37,6 @@ _INTERNAL_CTX_KEYS = frozenset({
     "upper",
     "num_comps",
     "num_dims",
-    "grid_type",
-    "value_form",
-    "num_quad",
-    "interpolated",
-    "var_names",
-    # The source file's parsed identity (see io.naming): derived from the
-    # *path*, never stored in the file. Writing it would be actively wrong --
-    # reloading the output under a different name would then find a stale
-    # sim/block in the header, and GDataState's setdefault lets header
-    # metadata win over the parsed name. "frame" is deliberately NOT here:
-    # Gkeyll itself writes that one.
-    "sim",
-    "block",
-    "quantity",
 })
 
 # ctx uses postgkyl's snake_case names; Gkeyll's own meta blob (and anything
@@ -80,6 +65,12 @@ def save(data: _WritableDataset,
          extension: Literal["gkyl", "txt", "npy", "vtk"] = "gkyl",
          var_name: str = "CartGridField") -> str:
   """Write ``data`` to ``out_name`` in the requested ``extension``.
+
+  The ``gkyl`` format preserves all dataset metadata, including
+  ``value_form``, ``num_quad``, and simulation identity. Structural fields
+  are stored in the binary header; the private load-history snapshot is
+  omitted. Current metadata takes precedence over the output filename
+  when reloading.
 
   Args:
     data: a dataset exposing ``num_dims``/``num_comps``/``num_cells``/
@@ -133,9 +124,13 @@ def _build_meta(ctx: dict) -> dict:
 
 def _to_msgpack_safe(val):
   if isinstance(val, np.generic):
-    return val.item()
+    return _to_msgpack_safe(val.item())
   if isinstance(val, np.ndarray):
-    return val.tolist()
+    return _to_msgpack_safe(val.tolist())
+  if isinstance(val, dict):
+    return {key: _to_msgpack_safe(value) for key, value in val.items()}
+  if isinstance(val, (list, tuple)):
+    return [_to_msgpack_safe(value) for value in val]
   return val
 
 

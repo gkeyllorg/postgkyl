@@ -561,6 +561,6 @@ class GkylReader(object):
                                      data.shape)
       grid = mapping.uniform_grid(self.lower, self.upper, self.cells)
       if self.ctx:
-        self.ctx["grid_type"] = "uniform"
+        self.ctx.setdefault("grid_type", "uniform")
 
     return grid, data

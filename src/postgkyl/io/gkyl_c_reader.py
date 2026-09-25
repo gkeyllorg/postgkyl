@@ -3,9 +3,10 @@
 ``GkylCReader`` delegates the whole read -- header, grid, allocation, payload,
 multi-range stitching -- to ``libg0core.so`` via :mod:`postgkyl.gpython.rio` and
 returns the data as a **native** :class:`~postgkyl.gpython.array.GkylArray`, so
-modal datasets start life in the modal domain. Python's only jobs are decoding
-the msgpack metadata blob into ``ctx`` (same key policy as the pure-Python
-reader) and building the NumPy edge grid.
+modal datasets start life in the modal domain. Python decodes the msgpack
+metadata blob into ``ctx`` (same key policy as the pure-Python reader) and
+builds the NumPy edge grid. Saved interpolated fields are returned as NumPy
+point values, preserving their arithmetic semantics.
 
 It declines (``is_compatible() -> False``) when the FFI is unavailable, the
 file is not a field file (types 1/3), or a partial load (``axes=``/``comp=``)
@@ -78,5 +79,8 @@ class GkylCReader:
           f"domain {tuple(cells)} (ghost-cell layout?) -- not supported by "
           "the Gkeyll read path yet")
     edges = mapping.uniform_grid(grid["lower"], grid["upper"], cells)
-    self.ctx["grid_type"] = "uniform"
+    self.ctx.setdefault("grid_type", "uniform")
+    if self.ctx.get("interpolated"):
+      # Saved evaluation meshes contain point values, not DG coefficients.
+      return edges, np.array(arr.view(cells), copy=True)
     return edges, arr
