@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3CRASHRQ557HJE9A9TKYZSV",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "examples/cli_tutorial.md",
+    "src/postgkyl/gdatastate/gdatastate.py",
+    "src/postgkyl/io/__init__.py",
+    "src/postgkyl/io/gkyl_c_reader.py",
+    "src/postgkyl/io/gkyl_reader.py",
+    "src/postgkyl/io/metadata.py",
+    "src/postgkyl/io/writer.py",
+    "src/postgkyl/operations/info.py",
+    "tests/generate_test_data.py",
+    "tests/test_coverage_io.py",
+    "tests/test_metadata_info.py",
+    "tests/test_multiblock.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 76025,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2229888,
+    "output_tokens": 12065,
+    "api_call_count": 36
+  }
+}
