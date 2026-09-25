@@ -73,6 +73,15 @@ def test_aliases_only_add_spellings():
   assert cli.get_command(None, "ev") is cli.get_command(None, "evaluate")
 
 
+@pytest.mark.skipif(not pg.gpython.available(), reason="requires native Gkeyll")
+def test_evaluate_modal_sqrt_cli():
+  result = _ok(DATA / "generated" / "fsimple.gkyl", "ev", "f0 sqrt", "pr")
+  coefficients = np.fromstring(result.output.strip().strip("[]"), sep=" ")
+  np.testing.assert_allclose(coefficients, [2 * np.sqrt(2), 0], atol=1e-14)
+  assert "DG: serendipity p1 (modal)" in _ok(
+      DATA / "generated" / "fsimple.gkyl", "ev", "f0 sqrt", "info").output
+
+
 def test_print_values_preserves_precision_and_pipeline():
   options = np.get_printoptions()
   expected = np.array2string(pg.load(ENERGY).values.squeeze(), precision=16)

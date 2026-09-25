@@ -305,6 +305,10 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
 
+  # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
+  write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],
+                   np.array([[4 * np.sqrt(2), 0.]]), 1, "serendipity")
+
   # The highest 1x1v hybrid mode vanishes at a 2x2 Gauss rule. Native
   # quadrature must retain it using Gkeyll's six-node rule.
   hybrid = np.zeros((1, 1, 6))

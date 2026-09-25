@@ -22,16 +22,10 @@ A data token referencing native (gkyl-backed) data is kept native, not
 forced through ``select()``'s point-value guard, regardless of
 value_form -- see ``_native_kernel``:
 
-- **modal** (raw DG coefficients): ``+ - * /`` and integer ``pow``/``sq``
-  route through Gkeyll's own weak DG kernels, the same math
-  ``operations.arithmetic`` uses for the ``GData`` operators. An operator
-  with no weak-kernel meaning (``sqrt``, ``sin``, reductions, ...) -- or one
-  Gkeyll's kernel itself refuses for this basis/order -- warns and falls
-  back to plain NumPy math on the raw coefficient view, rather than
-  hard-blocking: value_form/basis metadata is sometimes simply wrong (a
-  diagnostic file mistagged "modal" by its writer; see the load-time
-  ``--value_form`` override), and the raw view is exact whenever
-  coefficient 0 already *is* the point value (e.g. p0 data).
+- **modal** (DG coefficients): ``+ - * / pow sq sqrt`` use the same
+  arithmetic dispatcher as GData operators, including weak multiplication,
+  division, and projected fractional powers. Unsupported operations and
+  invalid operands raise; coefficients are never treated as point values.
 - **nodal/quad** (point values): every operator in ``_POINTWISE_TOKENS``
   (``+ - * / pow sq sqrt sin cos tan abs log log10 exp max2 min2
   scale_comp scale_zi_axis``) is exact regardless of packing, so it is
@@ -49,21 +43,26 @@ value_form -- see ``_native_kernel``:
 
 from __future__ import annotations
 
+import operator
 import re
-import warnings
-from typing import TYPE_CHECKING
 
 import numpy as np
 
 from postgkyl import dg
+from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.numerics import ev_cmds
+from postgkyl.operations.arithmetic import binary
 from postgkyl.operations.select import select
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
-
-# RPN tokens with an exact Gkeyll weak-kernel meaning on modal data.
-_MODAL_BINARY_OPS = {"+", "-", "*", "/", "pow"}
+# Use the same arithmetic dispatcher as GData's operators.
+_MODAL_BINARY_OPS = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+    "pow": operator.pow,
+}
+_MODAL_UNARY_POWERS = {"sq": 2, "sqrt": 0.5}
 
 # RPN tokens that are exact, shape-preserving pointwise math on nodal/quad
 # point values (elementwise, no cross-cell/cross-node access, no reduction)
@@ -108,18 +107,10 @@ def _compare(a, b) -> bool:
 
 
 def _modal_view(value, ctx: dict):
-  """Read-only NumPy view of a native modal operand, for the (warned)
-  pointwise fallback; anything else passes through unchanged."""
+  """Read-only NumPy view for point-value operations; other values pass through."""
   if dg.modal.is_native(value):
     return value.view(ctx.get("cells"))
   return value
-
-
-def _basis_of(ctx: dict):
-  basis_type, poly_order = ctx.get("basis_type"), ctx.get("poly_order")
-  if basis_type is None or poly_order is None:
-    raise ValueError("modal operand has no basis_type/poly_order metadata")
-  return str(basis_type), int(poly_order)
 
 
 def _as_scalar(value):
@@ -132,124 +123,53 @@ def _as_scalar(value):
 
 
 def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
-  """Try to compute ``token`` via Gkeyll's own weak DG kernels when a modal
-  (native, raw-DG-coefficient) operand is present.
+  """Lower RPN modal arithmetic to the canonical dataset arithmetic dispatcher.
 
-  Returns ``(out_grid, out_values)`` when the operator has an exact modal
-  meaning and Gkeyll's kernel accepts this basis/order (``+ - * /`` and
-  integer ``pow``/``sq``). Returns ``None`` when no operand is modal
-  (nothing to do here -- the caller runs the plain NumPy ``func`` as usual).
-
-  Deliberately never raises: basis/value_form metadata can be wrong
-  (a diagnostic file mistagged "modal" by its writer), so an operator with
-  no weak-kernel form, a basis/kernel Gkeyll itself refuses, or a
-  non-scalar second operand all warn and return ``None`` too -- the caller
-  then falls back to plain NumPy math on the raw coefficient view (exact
-  whenever coefficient 0 already *is* the point value, e.g. p0 data).
+  Wrap stack entries in state without copying their native buffers. This keeps
+  basis/grid validation and DG kernel selection owned by arithmetic.binary.
   """
-  is_modal = [dg.modal.is_native(v) for v in tmp_values]
-  if not any(is_modal):
+  if not any(dg.modal.is_native(v) for v in tmp_values):
     return None
 
-  try:
-    if len(tmp_values) == 1:
-      if token != "sq":
-        raise ValueError(f"'{token}' has no weak-kernel form")
-      basis_type, poly_order = _basis_of(tmp_ctx[0])
-      out = dg.modal.power(basis_type, len(tmp_grid[0]), poly_order,
-                           tmp_values[0], 2)
-      return [tmp_grid[0]], [out]
+  if token not in _MODAL_BINARY_OPS and token not in _MODAL_UNARY_POWERS:
+    raise ValueError(
+        f"evaluate: '{token}' is not defined for modal data; use .apply(...) "
+        "for a projected pointwise function or explicitly convert with "
+        ".represent(to='quad')/.interpolate() for point-value operations.")
 
-    if len(tmp_values) == 2:
-      if token not in _MODAL_BINARY_OPS:
-        raise ValueError(f"'{token}' has no weak-kernel form")
-      # RPN order: tmp_values[0] is "b" (top of stack), tmp_values[1] is "a".
-      a, b = tmp_values[1], tmp_values[0]
-      a_modal, b_modal = is_modal[1], is_modal[0]
-
-      if a_modal and b_modal:
-        grid = tmp_grid[1] if tmp_grid[1] is not None else tmp_grid[0]
-        basis_a, basis_b = _basis_of(tmp_ctx[1]), _basis_of(tmp_ctx[0])
-        if basis_a != basis_b:
-          raise ValueError(
-              f"operands have different DG bases ({basis_a} vs {basis_b})")
-        basis_type, poly_order = basis_a
-        ndim = len(grid)
-        if token == "+":
-          out = dg.modal.lincomb(1.0, a, 1.0, b)
-        elif token == "-":
-          out = dg.modal.lincomb(1.0, a, -1.0, b)
-        elif token in ("*", "/"):
-          fn = dg.modal.weak_mul if token == "*" else dg.modal.weak_div
-          out = fn(basis_type, ndim, poly_order, a, b)
-        else:
-          raise ValueError("'pow' is not defined between two modal datasets")
-        return [grid], [out]
-
-      # Exactly one operand is modal; the other must be a plain scalar.
-      modal_arr, modal_ctx, modal_grid = (a, tmp_ctx[1], tmp_grid[1]) if a_modal \
-          else (b, tmp_ctx[0], tmp_grid[0])
-      other = b if a_modal else a
-      scalar = _as_scalar(other)
+  operands = []
+  for grid, value, ctx in zip(tmp_grid, tmp_values, tmp_ctx):
+    if dg.modal.is_native(value):
+      operands.append(GDataState(ctx=ctx).push(grid, value))
+    else:
+      scalar = _as_scalar(value)
       if scalar is None:
         raise ValueError("cannot mix native modal data with a plain array")
-      basis_type, poly_order = _basis_of(modal_ctx)
-      ndim = len(modal_grid)
-      scalar_first = not a_modal  # the scalar came first in the expression
+      operands.append(scalar)
 
-      if token == "*":
-        out = dg.modal.scale(modal_arr, scalar)
-      elif token == "/":
-        out = (dg.modal.scale(
-            dg.modal.weak_inv(basis_type, ndim, poly_order, modal_arr), scalar)
-               if scalar_first else dg.modal.scale(modal_arr, 1.0 / scalar))
-      elif token == "+":
-        out = dg.modal.shift_mean(basis_type, ndim, poly_order, modal_arr,
-                                  scalar)
-      elif token == "-":
-        out = (dg.modal.shift_mean(basis_type, ndim, poly_order,
-                                   dg.modal.scale(modal_arr, -1.0), scalar)
-               if scalar_first else dg.modal.shift_mean(
-                   basis_type, ndim, poly_order, modal_arr, -scalar))
-      else:  # pow
-        if scalar_first or not float(scalar).is_integer() or scalar < 1:
-          raise ValueError(
-              f"modal 'pow' needs a modal base and a positive integer "
-              f"exponent, got exponent {scalar!r} (scalar_first={scalar_first})"
-          )
-        out = dg.modal.power(basis_type, ndim, poly_order, modal_arr,
-                             int(scalar))
-      return [modal_grid], [out]
-
-    raise ValueError(
-        f"'{token}' has no weak-kernel form for {len(tmp_values)} operands")
-  except Exception as err:
-    warnings.warn(
-        f"evaluate: '{token}' on native modal (raw DG coefficient) data: {err}; "
-        "falling back to plain math on the raw coefficient view -- exact only "
-        "if coefficient 0 already IS the point value (e.g. p0 data, or a file "
-        "whose 'modal' tag is wrong; see --value_form).",
-        stacklevel=3)
-    return None
+  if token in _MODAL_UNARY_POWERS:
+    result = binary(operator.pow, operands[0], _MODAL_UNARY_POWERS[token])
+  else:
+    # The top of the RPN stack is the right operand.
+    result = binary(_MODAL_BINARY_OPS[token], operands[1], operands[0])
+  return result
 
 
 def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
   """Dispatch a native (gkyl-backed) operand to the value_form-correct math.
 
-  Returns ``(out_grid, out_values)`` -- with ``out_values`` wrapped back into
-  native arrays whenever the result stays a per-point/per-coefficient field
-  -- or ``None`` when nothing here applies (the caller runs the plain NumPy
-  ``func`` on the raw view as usual, e.g. for reductions/derivatives).
+  Returns the arithmetic result state for modal data, ``(out_grid,
+  out_values)`` with native arrays for point-value transforms, or ``None``
+  when the caller should run the NumPy function on point values.
 
-  - Every native operand modal: delegates to :func:`_modal_kernel` (weak
-    DG kernels), unchanged.
+  - Every native operand modal: delegates to :func:`_modal_kernel` for
+    DG arithmetic; unsupported operations raise.
   - Every native operand the *same* nodal/quad value_form, and ``token``
     in :data:`_POINTWISE_TOKENS`: exact NumPy math on the raw view, wrapped
     back native -- mirrors ``operations.arithmetic``'s "compute on the view,
     wrap back native, stay in-value_form" pointwise dispatch.
-  - Native operands in *different* value_forms: warns and falls back
-    (the caller then runs ``func`` on plain views, same as a value_form
-    mismatch anywhere else in this module).
+  - Native operands in *different* value_forms: raises; callers must
+    convert representations explicitly before combining datasets.
   - Any other token (reductions, finite-difference derivatives): returns
     ``None`` so the caller's plain-NumPy path runs -- the result then
     genuinely leaves the native/value_form domain.
@@ -266,12 +186,10 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
     return _modal_kernel(token, tmp_grid, tmp_values, tmp_ctx)
 
   if len(reps) > 1:
-    warnings.warn(
+    raise ValueError(
         f"evaluate: '{token}' mixes native operands in different "
-        f"value_forms ({sorted(reps)}); falling back to plain math on "
-        "the raw views.",
-        stacklevel=3)
-    return None
+        f"value_forms ({sorted(reps)}); convert explicitly with .represent(to=...)."
+    )
 
   if token not in _POINTWISE_TOKENS:
     return None
@@ -287,8 +205,8 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
   Each stack entry is a list of "sets" (grids/values/ctx dicts); an operator
   pops ``num_in`` entries, applies its pure function from
   :data:`postgkyl.numerics.ev_cmds` over every set (broadcasting shorter
-  inputs), and pushes ``num_out`` results. The ctx of the output is the merge
-  of the inputs' ctx, dropping any key whose value disagrees between inputs.
+  inputs), and pushes ``num_out`` results. Modal arithmetic retains its result
+  state metadata; other operators merge inputs' ctx, dropping conflicts.
 
   Args:
     grid_stack, value_stack, ctx_stack: the parallel RPN stacks, mutated in
@@ -327,7 +245,9 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
       tmp_ctx.append(in_ctx[i][min(set_idx, num_sets[i] - 1)])
     try:
       native_out = _native_kernel(token, tmp_grid, tmp_values, tmp_ctx, func)
-      if native_out is not None:
+      if isinstance(native_out, GDataState):
+        out_grid, out_values = [native_out.grid], [native_out.native]
+      elif native_out is not None:
         out_grid, out_values = native_out
       else:
         view_values = [_modal_view(v, c) for v, c in zip(tmp_values, tmp_ctx)]
@@ -335,19 +255,24 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
     except Exception as err:
       raise ValueError(str(err)) from err
 
-    # Merge ctx of all inputs; drop keys that disagree between inputs.
-    out_ctx: dict = {}
-    remove_list = []
-    for i in range(num_in):
-      for key in tmp_ctx[i]:
-        if key in out_ctx and _compare(tmp_ctx[i][key], out_ctx[key]):
-          pass  # already copied and matches; nothing to do
-        elif key in out_ctx:
-          remove_list.append(key)  # discrepancy; mark for removal
-        else:
-          out_ctx[key] = tmp_ctx[i][key]
-    for key in dict.fromkeys(remove_list):
-      out_ctx.pop(key)
+    # Modal arithmetic owns the output layout and basis, including products
+    # between configuration-space and phase-space fields.
+    if isinstance(native_out, GDataState):
+      out_ctx = dict(native_out.ctx)
+    else:
+      # Merge ctx of all inputs; drop keys that disagree between inputs.
+      out_ctx: dict = {}
+      remove_list = []
+      for i in range(num_in):
+        for key in tmp_ctx[i]:
+          if key in out_ctx and _compare(tmp_ctx[i][key], out_ctx[key]):
+            pass  # already copied and matches; nothing to do
+          elif key in out_ctx:
+            remove_list.append(key)  # discrepancy; mark for removal
+          else:
+            out_ctx[key] = tmp_ctx[i][key]
+      for key in dict.fromkeys(remove_list):
+        out_ctx.pop(key)
 
     # A native nodal/quad operand whose result did *not* come back wrapped
     # native (a genuine reduction/derivative, per _native_kernel) has left
@@ -393,8 +318,8 @@ def _push_token(token: str, datasets, grid_stack, value_stack,
       # select()'s point-value guard), regardless of value_form: RPN
       # math routes through Gkeyll's own weak kernels for modal data, or
       # exact NumPy math wrapped back native for nodal/quad point values,
-      # when the operator supports it, or warns/falls back to the raw view
-      # otherwise -- see _native_kernel.
+      # when the operator supports it; unsupported modal operations raise
+      # -- see _native_kernel.
       grid, values = dat.grid, dat.native
     else:
       # select() carries the shared operability guard (raw modal coefficients
@@ -479,13 +404,12 @@ def evaluate(chain: str,
                                final_values,
                                tag=(tag or "default"),
                                label=(label if label is not None else chain))
-  # The result's ctx is the RPN merge (apply_operator already resolved every
-  # conflict), not datasets[0]'s ctx that '_result' copied as a starting
-  # point -- a key apply_operator dropped as conflicting must not survive
-  # just because it happened to be on datasets[0]. 'cells'/'num_comps'/
-  # 'lower'/'upper' are the shape/grid-derived facts '_result's push() just
-  # recomputed from the actual final_grid/final_values; keep those.
-  derived = {"cells", "num_comps", "lower", "upper"}
+  # Keep stack metadata, replacing only facts derived from the output buffers
+  # and grid. Native cell layout comes from the stack, not the flat array or
+  # datasets[0] (which can be the conf operand of a conf * phase product).
+  derived = {"num_comps", "lower", "upper"}
+  if result.backend == "numpy":
+    derived.add("cells")
   kept = {k: result.ctx[k] for k in derived if k in result.ctx}
   result.ctx = final_ctx
   result.ctx.update(kept)

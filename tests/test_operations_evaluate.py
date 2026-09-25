@@ -176,15 +176,59 @@ def test_modal_data_supported_ops_use_weak_kernels():
 
 
 @needs_gkeyll
-def test_modal_data_unsupported_op_warns_and_falls_back():
-  """sqrt has no weak-kernel form: rather than hard-blocking (basis/
-  value_form metadata can be wrong), evaluate warns and computes on the
-  raw coefficient view, which is exact only when coefficient 0 already IS
-  the point value."""
+@pytest.mark.parametrize("chain", ["f sqrt", "f 0.5 pow"])
+def test_modal_sqrt_preserves_constant_field_normalization(chain):
+  d = pg.load(os.path.join(DATA, "generated", "fsimple.gkyl"))
+  result = operations.evaluate(chain, d)
+  assert result.backend == "gkyl"
+  assert result.ctx["value_form"] == "modal"
+  np.testing.assert_allclose(result.values, [[2 * np.sqrt(2), 0]], atol=1e-14)
+  np.testing.assert_allclose(result.interpolate().values, 2.0, atol=1e-14)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("chain, exponent", [
+    ("f sqrt", 0.5),
+    ("f 0.5 pow", 0.5),
+    ("f -0.5 pow", -0.5),
+    ("f 0 pow", 0),
+    ("f -1 pow", -1),
+    ("f sq", 2),
+    ("f 3 pow", 3),
+])
+def test_modal_evaluate_powers_match_arithmetic_on_varying_fields(
+    chain, exponent):
+  # Two positive fields with nonzero slopes exercise projection of every field.
+  coeffs = np.array([[4 * np.sqrt(2), 0.2, 9 * np.sqrt(2), -0.3]])
+  d = pg.GData(ctx=dict(
+      cells=[1], basis_type="serendipity", poly_order=1, value_form="modal"))
+  d.push([np.array([-1., 1.])], gpython.GkylArray.from_numpy(coeffs))
+  result = operations.evaluate(chain, d)
+  assert result.backend == "gkyl"
+  assert result.ctx["value_form"] == "modal"
+  np.testing.assert_allclose(result.values, (d**exponent).values, atol=1e-14)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("chain",
+                         ["f sin", "f mean", "f0 f0 max2", "f 0 2 scale_comp"])
+def test_modal_data_unsupported_ops_raise(chain):
   d = pg.load(F1)
-  with pytest.warns(UserWarning, match="weak-kernel"):
-    result = operations.evaluate("f sqrt", d)
-  assert result.backend == "numpy"
+  with pytest.raises(ValueError, match="not defined for modal"):
+    operations.evaluate(chain, d)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("chain", ["f0 f1 * 2 /", "f1 f0 * 2 /"])
+def test_modal_evaluate_preserves_phase_layout_in_chained_arithmetic(chain):
+  conf = pg.load(os.path.join(DATA, "generated", "fsimple.gkyl"))
+  phase = pg.load(os.path.join(DATA, "generated", "fsimple_hyb.gkyl"))
+  result = operations.evaluate(chain, conf, phase)
+  assert result.backend == "gkyl"
+  assert result.ctx["value_form"] == "modal"
+  assert result.ctx["basis_type"] == "hybrid"
+  np.testing.assert_array_equal(result.num_cells, [1, 1])
+  np.testing.assert_allclose(result.values, (2 * phase).values, atol=1e-14)
 
 
 def test_available_operator_vocabulary_is_sorted_and_public():
@@ -200,13 +244,8 @@ def test_modal_dataset_binary_operators_cover_each_weak_kernel_dispatch():
     result = operations.evaluate(f"f0 f0 {token}", d, d)
     assert result.backend == "gkyl"
 
-  with pytest.warns(UserWarning, match="between two modal datasets"):
-    result = operations.evaluate("f0 f0 pow", d, d)
-  assert result.backend == "numpy"
-
-  with pytest.warns(UserWarning, match="no weak-kernel form"):
-    result = operations.evaluate("f0 f0 max2", d, d)
-  assert result.backend == "numpy"
+  with pytest.raises(ValueError, match="between two modal datasets"):
+    operations.evaluate("f0 f0 pow", d, d)
 
 
 @needs_gkeyll
@@ -216,35 +255,25 @@ def test_modal_dataset_scalar_operators_cover_operand_order_and_power():
     result = operations.evaluate(chain, d)
     assert result.backend == "gkyl"
 
-  for chain in ("f 0 pow", "2 f pow"):
-    with pytest.warns(UserWarning, match="positive integer"):
-      result = operations.evaluate(chain, d)
-    assert result.backend == "numpy"
+  with pytest.raises(ValueError, match="not defined for modal"):
+    operations.evaluate("2 f pow", d)
 
 
 @needs_gkeyll
-def test_modal_dispatch_warns_for_missing_or_mismatched_metadata():
+def test_modal_dispatch_rejects_missing_or_mismatched_metadata():
   d = _native_field(2.0, "modal")
   missing = d.clone()
   missing.ctx.pop("basis_type")
-  with pytest.warns(UserWarning, match="no basis_type/poly_order"):
+  with pytest.raises(ValueError, match="no basis_type/poly_order"):
     operations.evaluate("f sq", missing)
 
   mismatched = d.clone()
   mismatched.ctx["basis_type"] = "tensor"
-  with pytest.warns(UserWarning, match="different DG bases"):
+  with pytest.raises(ValueError, match="different DG bases"):
     operations.evaluate("f0 f1 +", d, mismatched)
 
-  with pytest.warns(UserWarning, match="plain array"):
+  with pytest.raises(ValueError, match="plain array"):
     operations.evaluate("f [1] +", d)
-
-
-@needs_gkeyll
-def test_modal_dispatch_rejects_operators_without_a_matching_arity():
-  d = _native_field(2.0, "modal")
-  with pytest.warns(UserWarning, match="3 operands"):
-    result = operations.evaluate("f 0 2 scale_comp", d)
-  assert result.backend == "numpy"
 
 
 def _native_field(value, value_form):
@@ -254,6 +283,7 @@ def _native_field(value, value_form):
                native,
                basis_type="serendipity",
                poly_order=0,
+               cells=[4],
                value_form=value_form)
 
 
@@ -277,13 +307,12 @@ def test_native_point_reduction_leaves_the_value_form_domain():
 
 
 @needs_gkeyll
-def test_mixed_native_point_value_forms_warn_and_fall_back():
+@pytest.mark.parametrize("value_form", ["modal", "quad"])
+def test_mixed_native_value_forms_raise(value_form):
   nodal = _native_field(2.0, "nodal")
-  quad = _native_field(3.0, "quad")
-  with pytest.warns(UserWarning, match="different value_forms"):
-    result = operations.evaluate("f0 f1 +", nodal, quad)
-  assert result.backend == "numpy"
-  np.testing.assert_allclose(result.values, 5.0)
+  other = _native_field(3.0, value_form)
+  with pytest.raises(ValueError, match="different value_forms"):
+    operations.evaluate("f0 f1 +", nodal, other)
 
 
 @needs_gkeyll
