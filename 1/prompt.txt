@@ -1,0 +1,5 @@
+Instead of using gkyll-quadrature.patch, make these changes inside gkeyll and gpython. It's okay to make a pull request into Gkeyll here
+
+---
+
+For now, just maket these modification is the /gkeyll that is linked with postgkeyll. Do not commit your changes. I will push later
