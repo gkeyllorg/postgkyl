@@ -1,0 +1,1 @@
+There is a different syntax for the CLI and the API with scripts. ``to_quad()`` (CLI: ``represent -t quad``). The script should also just use the represent() function. We do not need to_quad to_modal and to_nodal. This ensures that the CLI and the API script mode perfectly mirror eachother

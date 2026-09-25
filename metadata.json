@@ -3,7 +3,7 @@
   "checkpoint_id": "01M3D2RBPR8HW7ZJC0NS5CYC8C",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     ".agents/skills/data/SKILL.md",
     "docs/source/concepts.rst",
@@ -58,13 +58,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 226240,
+    "input_tokens": 308433,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 6291712,
-    "output_tokens": 35125,
-    "api_call_count": 78
+    "cache_read_tokens": 8962304,
+    "output_tokens": 44439,
+    "api_call_count": 118
   }
 }
