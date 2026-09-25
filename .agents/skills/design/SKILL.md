@@ -81,6 +81,16 @@ its outputs stay in its vocabulary, so uses compose.
 over docs, docs over comments. Invest in whichever layer catches the
 bug earliest with the least ongoing maintenance cost.
 
+## Arithmetic notation
+
+Prefer ordinary `+`, `-`, `*`, `/`, and `**` operators in physical formulas
+on `GData`. Use the existing operator dispatch instead of adding thin `_add`,
+`_mul`, `_divide`, or `_sqrt` wrappers. Keep intermediate fields and parentheses
+where they express the required DG projection order. Follow the
+[data skill's operator semantics](../data/SKILL.md#arithmetic-operators);
+mathematically equivalent pointwise expressions need not be equivalent weak DG
+calculations.
+
 ## Formatting
 
 Apply the repository's configured formatters before finishing code changes.

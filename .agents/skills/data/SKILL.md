@@ -41,3 +41,43 @@ modal silently; keep these two defaults distinct.
 Route results through `_result` and terminal native point-value consumers through
 `gdatastate.materialize_point_values`. Preserve native ownership and read-only
 coefficient views; use the existing representation tests to verify semantics.
+
+## Arithmetic operators
+
+Prefer `GData`'s ordinary arithmetic operators when composing diagnostics and
+physical formulas. They dispatch through `operations.arithmetic`; on native
+modal inputs, results stay native and modal:
+
+| Expression | Modal meaning |
+| --- | --- |
+| `f + g`, `f - g` | Linear combinations of the two fields' coefficients. |
+| `f * g` | Gkeyll weak multiplication, projected into the retained DG basis. |
+| `f / g` | Gkeyll weak division, using a per-cell solve. |
+| `f * s`, `f / s` | Scale all coefficients by a scalar `s` or its reciprocal. |
+| `f + s`, `f - s` | Shift the constant mode by the correctly normalized scalar; higher modes are unchanged. |
+| `1.0 / f` | Gkeyll weak inverse. |
+| `f ** n` for positive integer `n` | Repeated weak multiplication. |
+| `f ** 0.5` (equivalently `f ** (1 / 2)`) | Gkeyll quadrature projection of the square root onto the modal basis, retaining the native negative-value floor. |
+
+Here `f` and `g` are compatible datasets and `s` is a scalar. A projected square
+root is not generally an exact analytic square root. Zero, negative, and other
+fractional powers also use the projected-power path; use `1.0 / f` when a weak
+inverse is required, rather than substituting `f ** -1`.
+
+Preserve the intended sequence of weak operations. Weak products are generally
+not associative: `(f * g) * h` and `f * (g * h)` can differ. Likewise, `f / g`
+and `f * (1.0 / g)` invoke different kernels; retain inverse-then-multiply when
+that is the prescribed calculation, as in the GK quantity definitions. Do not
+silently replace unsupported modal operations with pointwise calculations.
+
+Use `density * temperature` and `(temperature / mass) ** 0.5` directly on the
+fields. Do not interpolate first, multiply `.values` coefficient arrays, or use
+`np.sqrt` on modal coefficients. Already nodal, quadrature, or interpolated
+inputs follow their point-value semantics instead. Modal arithmetic is the most
+exact manipulation on data. Prefer modal arithmetic.
+
+The operator interface belongs to `GData`, not the inert `GDataState`. Formula
+functions using operators should declare and receive `GData` (as the GK loader
+returns). Lower layers that accept `GDataState` should keep using their existing
+operation functions; do not import `GData` into those lower layers or duplicate
+the arithmetic dispatch in diagnostic helpers.
