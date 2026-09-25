@@ -5,13 +5,12 @@
 #
 # gkeyll/ is a plain, detached clone pinned by scripts/gkeyll-revision (zero
 # external deps: no MPI/CUDA/SuperLU/Lua, LAPACK replaced by the bundled
-# lapack-lite). Only core/ is needed to build libg0core.so, so moments/,
-# vlasov/, gyrokinetic/, and pkpm/ (~200MB combined) are excluded via
-# sparse-checkout and are never fetched, not merely deleted after the fact.
+# lapack-lite). Keep every root file and directory except vlasov/, pkpm/,
+# moments/, and gyrokinetic/ (~200MB combined). A blobless fetch plus
+# sparse-checkout avoids downloading their file contents.
 set -e
 
 REPO_URL="https://github.com/ammarhakim/gkeyll.git"
-SPARSE_DIRS="core gkeyll install-deps machines"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)
@@ -35,21 +34,24 @@ if [ "${#GKEYLL_REVISION}" -ne 40 ]; then
 fi
 
 if [ ! -e "${GKEYLL_DIR}/.git" ]; then
-    echo "# gkeyll/ not present -- fetching pinned ${GKEYLL_REVISION} (core-only, sparse + blobless)"
+    echo "# gkeyll/ not present -- fetching pinned ${GKEYLL_REVISION} (sparse + blobless)"
     rmdir "${GKEYLL_DIR}" 2>/dev/null || true
     mkdir "${GKEYLL_DIR}"
     git -C "${GKEYLL_DIR}" init
     git -C "${GKEYLL_DIR}" remote add origin "${REPO_URL}"
-    git -C "${GKEYLL_DIR}" sparse-checkout init --cone
-    git -C "${GKEYLL_DIR}" sparse-checkout set ${SPARSE_DIRS}
-    git -C "${GKEYLL_DIR}" fetch --depth 1 --filter=blob:none origin "${GKEYLL_REVISION}"
 else
     echo "# gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps"
-    (cd "${GKEYLL_DIR}" && git sparse-checkout init --cone >/dev/null 2>&1 || true
-     git -C "${GKEYLL_DIR}" sparse-checkout set ${SPARSE_DIRS})
-    if ! git -C "${GKEYLL_DIR}" cat-file -e "${GKEYLL_REVISION}^{commit}" 2>/dev/null; then
-        git -C "${GKEYLL_DIR}" fetch --depth 1 --filter=blob:none origin "${GKEYLL_REVISION}"
-    fi
+fi
+
+git -C "${GKEYLL_DIR}" sparse-checkout set --no-cone --stdin <<'EOF'
+/*
+!/vlasov/
+!/pkpm/
+!/moments/
+!/gyrokinetic/
+EOF
+if ! git -C "${GKEYLL_DIR}" cat-file -e "${GKEYLL_REVISION}^{commit}" 2>/dev/null; then
+    git -C "${GKEYLL_DIR}" fetch --depth 1 --filter=blob:none origin "${GKEYLL_REVISION}"
 fi
 
 # A dirty producer tree makes the native artifact's source unknowable even
