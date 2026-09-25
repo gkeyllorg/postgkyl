@@ -4,7 +4,7 @@ target basis for the survivors, via Gkeyll's ``gkyl_dg_eval_at_coord_proj``.
 
 Terminal-adjacent (like ``average``): produces a new, lower-dimensional
 dataset -- still modal and gkyl-native -- so it composes with further
-``.to_nodal()``/``.interpolate()``/``.eval_at_coord_proj()`` calls.
+``.represent(to='nodal')``/``.interpolate()``/``.eval_at_coord_proj()`` calls.
 """
 
 from __future__ import annotations
@@ -26,8 +26,9 @@ def _native_basis(data: "GDataState"):
         "native modal data; it is not available after .interpolate() or "
         "without the Gkeyll library.")
   if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError(f"eval_at_coord_proj expects the modal value_form, not "
-                     f"'{data.ctx['value_form']}'; call .to_modal() first.")
+    raise ValueError(
+        f"eval_at_coord_proj expects the modal value_form, not "
+        f"'{data.ctx['value_form']}'; call .represent(to='modal') first.")
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:

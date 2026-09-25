@@ -223,11 +223,8 @@ def test_gkyl_roundtrip_preserves_all_dataset_metadata(tmp_path, monkeypatch,
 def test_gkyl_roundtrip_preserves_representation(tmp_path, monkeypatch, reader,
                                                  value_form):
   modal = pg.load(F2D)
-  data = {
-      "modal": lambda: modal,
-      "nodal": modal.to_nodal,
-      "quad": lambda: modal.to_quad(num_quad=3),
-  }[value_form]()
+  data = modal.represent(to=value_form,
+                         num_quad=3 if value_form == "quad" else None)
   out = data.save(str(tmp_path / "represented.gkyl"))
 
   monkeypatch.setattr(io, "_READERS", {"test": reader})
@@ -243,7 +240,9 @@ def test_gkyl_roundtrip_preserves_representation(tmp_path, monkeypatch, reader,
   for restored, original in zip(back.grid, data.grid):
     np.testing.assert_array_equal(restored, original)
   if back.backend == "gkyl":
-    np.testing.assert_allclose(back.to_modal().values, modal.values, atol=1e-14)
+    np.testing.assert_allclose(back.represent(to="modal").values,
+                               modal.values,
+                               atol=1e-14)
 
 
 @pytest.mark.skipif(not gpython.available(),
@@ -258,7 +257,7 @@ def test_cli_save_preserves_quadrature_representation(tmp_path):
   back = pg.load(out)
   assert back.ctx["value_form"] == "quad"
   assert back.ctx["num_quad"] == 3
-  np.testing.assert_allclose(back.to_modal().values,
+  np.testing.assert_allclose(back.represent(to="modal").values,
                              pg.load(F2D).values,
                              atol=1e-14)
 

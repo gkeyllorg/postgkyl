@@ -6,10 +6,10 @@ quadrature points. Conversions are per-cell matrix applications built from
 Gkeyll's basis function pointers (:mod:`postgkyl.gpython.basis`); data enters and
 leaves as a native :class:`~postgkyl.gpython.array.GkylArray`, so the field never
 leaves the native domain. **Nothing here converts implicitly** -- these are the
-backends of the explicit ``.to_nodal()/.to_modal()/.to_quad()/.apply()`` verbs.
+backends of the explicit ``.represent()`` and ``.apply()`` verbs.
 
-Exactness: nodal↔modal is an exact N×N change of basis; a quad round-trip is
-exact for integrands of degree ≤ 2·num_quad−1 (default ``num_quad = p+1``).
+Exactness: nodal↔modal and modal→basis quadrature→modal preserve the expansion.
+An explicit Gauss rule must resolve the projection integrand in each direction.
 
 Note: this is the *cell-local* nodal value_form (N unshared values per
 cell). Grid-level shared-node nodal fields (``gkyl_nodal_ops``, used by the
@@ -54,9 +54,12 @@ def nodal_to_modal(basis_type: str, ndim: int, poly_order: int,
                                                    poly_order))
 
 
-def modal_to_quad(basis_type: str, ndim: int, poly_order: int, arr: GkylArray,
-                  num_quad: int) -> GkylArray:
-  """Coefficients -> values at the tensor Gauss–Legendre points."""
+def modal_to_quad(basis_type: str,
+                  ndim: int,
+                  poly_order: int,
+                  arr: GkylArray,
+                  num_quad: int | None = None) -> GkylArray:
+  """Coefficients -> Gkeyll quadrature values (or an explicit Gauss rule)."""
   nb = gpython_basis.num_basis(basis_type, ndim, poly_order)
   return _apply_per_field(
       arr, nb,
@@ -64,15 +67,15 @@ def modal_to_quad(basis_type: str, ndim: int, poly_order: int, arr: GkylArray,
                                          num_quad))
 
 
-def quad_to_modal(basis_type: str, ndim: int, poly_order: int, arr: GkylArray,
-                  num_quad: int) -> GkylArray:
-  """Quadrature values -> coefficients (projection; exact for degree
-  ≤ 2·num_quad−1)."""
-  nq = num_quad**ndim
-  return _apply_per_field(
-      arr, nq,
-      gpython_basis.quad_to_modal_matrix(basis_type, ndim, poly_order,
-                                         num_quad))
+def quad_to_modal(basis_type: str,
+                  ndim: int,
+                  poly_order: int,
+                  arr: GkylArray,
+                  num_quad: int | None = None) -> GkylArray:
+  """Quadrature values -> coefficients using the matching transform."""
+  mat = gpython_basis.quad_to_modal_matrix(basis_type, ndim, poly_order,
+                                           num_quad)
+  return _apply_per_field(arr, mat.shape[1], mat)
 
 
 def wrap(values: np.ndarray) -> GkylArray:
@@ -93,22 +96,29 @@ def _tensor_point_layout(basis_type: str, ndim: int, poly_order: int, rep: str,
   Quadrature points are a tensor product by construction; nodal sets are
   checked -- non-tensor node sets (e.g. serendipity p2 in 2-D+) raise.
   """
-  if rep == "quad":
-    nq = int(num_quad) if num_quad else poly_order + 1
-    pts_1d, _ = np.polynomial.legendre.leggauss(nq)
+  if rep == "quad" and num_quad is not None:
+    pts_1d, _ = np.polynomial.legendre.leggauss(num_quad)
     return [pts_1d] * ndim, None
-  coords = gpython_basis.node_coords(basis_type, ndim, poly_order)
+  coords = (gpython_basis.quad_node_coords(basis_type, ndim, poly_order)
+            if rep == "quad" else gpython_basis.node_coords(
+                basis_type, ndim, poly_order))
   nb = coords.shape[0]
-  uniq = [np.unique(coords[:, d]) for d in range(ndim)]
+  # Native coordinate transforms introduce roundoff. Group coordinates by
+  # distance, since decimal rounding can split a node across a bin boundary.
+  uniq = []
+  for d in range(ndim):
+    axis = np.sort(coords[:, d])
+    uniq.append(axis[np.r_[True, np.diff(axis) > 1e-12]])
   counts = [len(u) for u in uniq]
   if int(np.prod(counts)) != nb:
     raise ValueError(
         f"the {basis_type} p{poly_order} {ndim}D node set is not a tensor "
-        "product; use .to_quad() for point-value work in this basis.")
+        "product; use .represent(to='quad') for point-value work in this basis."
+    )
   lin = np.zeros(nb, dtype=np.int64)
   stride = 1
   for d in range(ndim):
-    k = np.searchsorted(uniq[d], coords[:, d])
+    k = np.argmin(np.abs(coords[:, d, None] - uniq[d]), axis=1)
     if not np.allclose(uniq[d][k], coords[:, d]):
       raise ValueError("node coordinates do not align on a tensor grid")
     lin += k * stride
@@ -116,18 +126,9 @@ def _tensor_point_layout(basis_type: str, ndim: int, poly_order: int, rep: str,
   if len(np.unique(lin)) != nb:
     raise ValueError(
         f"the {basis_type} p{poly_order} {ndim}D node set is not a tensor "
-        "product; use .to_quad() for point-value work in this basis.")
+        "product; use .represent(to='quad') for point-value work in this basis."
+    )
   return [uniq[d] for d in range(ndim)], np.argsort(lin)
-
-
-def _edges_from_points(pts: np.ndarray, lo: float, hi: float) -> np.ndarray:
-  """Edges such that cell centers coincide with ``pts`` (honest positions)."""
-  e = np.empty(len(pts) + 1)
-  e[0] = lo
-  for i in range(len(pts)):
-    e[i + 1] = 2.0 * pts[i] - e[i]
-  e[-1] = hi
-  return np.maximum.accumulate(e)  # degenerate (zero-width) cells allowed
 
 
 def materialize(basis_type: str,
@@ -137,7 +138,7 @@ def materialize(basis_type: str,
                 grid: list,
                 rep: str,
                 num_quad: int | None = None):
-  """Point-value data -> ``(nonuniform edge grid, ndarray)`` at the TRUE
+  """Point-value data -> ``(point coordinate grid, ndarray)`` at the TRUE
   physical point locations -- the render path for nodal/quad datasets.
 
   Unlike ``interpolate`` (which evaluates modal data on an equispaced mesh),
@@ -165,17 +166,21 @@ def materialize(basis_type: str,
         for d in range(ndim))
     out[idxs] = v[..., n]
 
-  edges = []
+  coordinates = []
   for d in range(ndim):
     g = np.asarray(grid[d], dtype=np.float64)
     centers, dxs = 0.5 * (g[:-1] + g[1:]), np.diff(g)
     pts = (centers[:, None] + 0.5 * dxs[:, None] * pts_1d[d][None, :]).ravel()
-    edges.append(_edges_from_points(pts, g[0], g[-1]))
-  return edges, out
+    coordinates.append(pts)
+  return coordinates, out
 
 
-def apply_pointwise(basis_type: str, ndim: int, poly_order: int, arr: GkylArray,
-                    fn, num_quad: int) -> GkylArray:
+def apply_pointwise(basis_type: str,
+                    ndim: int,
+                    poly_order: int,
+                    arr: GkylArray,
+                    fn,
+                    num_quad: int | None = None) -> GkylArray:
   """``fn`` applied pointwise via quadrature: modal → quad → fn → modal.
 
   The standard DG treatment of nonlinear operations. ``fn`` receives the

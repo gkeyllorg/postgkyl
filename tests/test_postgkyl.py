@@ -56,6 +56,15 @@ def test_golden_script_2d():
   assert g.plot(no_show=True) is not None
 
 
+def test_represent_has_one_canonical_callable():
+  from postgkyl import operations
+
+  assert pg.represent is operations.represent
+  assert pg.represent is pg.GData.represent
+  for name in ("to_modal", "to_nodal", "to_quad"):
+    assert not hasattr(pg.GData, name)
+
+
 def test_plot_has_one_canonical_callable():
   from postgkyl import operations, render
   from postgkyl.gdata import verbs
@@ -266,15 +275,16 @@ def _relerr(x, y):
 def test_value_form_round_trips():
   """modal <-> nodal is exact; modal <-> quad is exact for num_quad >= p+1."""
   a = pg.load(F1)
-  n = a.to_nodal()
+  n = a.represent(to="nodal")
   assert n.ctx["value_form"] == "nodal"
   assert n.backend == "gkyl"  # never leaves the native domain
-  assert _relerr(n.to_modal().values, a.values) < 1e-14
-  q = a.to_quad()
+  assert _relerr(n.represent(to="modal").values, a.values) < 1e-14
+  q = a.represent(to="quad")
   assert (q.ctx["value_form"], q.ctx["num_quad"]) == ("quad", 2)
-  assert _relerr(q.to_modal().values, a.values) < 1e-14
+  assert _relerr(q.represent(to="modal").values, a.values) < 1e-14
   # nodal -> quad composes through modal
-  assert _relerr(n.to_quad().to_modal().values, a.values) < 1e-14
+  assert _relerr(n.represent(to="quad").represent(to="modal").values,
+                 a.values) < 1e-14
   # nodal values are the field evaluated at the basis node_list points
   m2n = gpython.basis.modal_to_nodal_matrix("serendipity", 1, 1)
   manual = np.einsum("pk,cfk->cfp", m2n,
@@ -300,7 +310,7 @@ def test_apply_pointwise_via_quadrature():
 def test_conversions_are_always_explicit():
   """No implicit value_form change, ever (REFACTOR_GKEYLL_FFI.md §3b)."""
   a = pg.load(F1)
-  n, q = a.to_nodal(), a.to_quad()
+  n, q = a.represent(to="nodal"), a.represent(to="quad")
   with pytest.raises(ValueError):
     _ = a + n  # mixed value_forms
   with pytest.raises(ValueError):
@@ -329,18 +339,19 @@ def test_conversions_are_always_explicit():
 def test_pointwise_numpy_on_point_values():
   """NumPy math is exact on nodal/quad data and stays native, in-value_form."""
   a = pg.load(F1)
-  n, q = a.to_nodal(), a.to_quad()
+  n, q = a.represent(to="nodal"), a.represent(to="quad")
   s = np.sqrt(np.abs(n))  # ufunc on nodal
   assert (s.backend, s.ctx["value_form"]) == ("gkyl", "nodal")
   assert np.allclose(s.values, np.sqrt(np.abs(np.asarray(n.values))))
   assert np.allclose((n**2).values, np.asarray(n.values)**2)
   assert np.allclose((q * q).values, np.asarray(q.values)**2)
   # pointwise-at-quad then one projection == the weak kernel (p1 exactness)
-  assert _relerr((q * q).to_modal().values, (a * a).values) < 1e-13
+  assert _relerr((q * q).represent(to="modal").values, (a * a).values) < 1e-13
   # chain at the points, project once -- identical to the one-shot .apply()
   fn = lambda v: np.sqrt(np.abs(v))
-  assert _relerr(np.sqrt(np.abs(q)).to_modal().values,
-                 a.apply(fn).values) < 1e-15
+  assert _relerr(
+      np.sqrt(np.abs(q)).represent(to="modal").values,
+      a.apply(fn).values) < 1e-15
   assert np.asarray(n).shape == (24, 6)  # __array__ allowed on points
 
 
@@ -348,23 +359,26 @@ def test_pointwise_numpy_on_point_values():
 def test_plot_point_values_directly():
   """Nodal/quad datasets plot at their true point locations."""
   a = pg.load(F1)
-  assert a.to_nodal().plot(no_show=True) is not None
-  assert a.to_quad().plot(no_show=True) is not None
+  assert a.represent(to="nodal").plot(no_show=True) is not None
+  assert a.represent(to="quad").plot(no_show=True) is not None
   b = pg.load(F2D)
-  assert b.to_quad().plot(no_show=True) is not None
-  assert b.to_nodal().plot(no_show=True) is not None  # p1 corners: tensor set
+  assert b.represent(to="quad").plot(no_show=True) is not None
+  assert b.represent(to="nodal").plot(
+      no_show=True) is not None  # p1 corners: tensor set
   p2 = pg.load(os.path.join(DATA, "generated", "2d_ms_p2.gkyl"))
   with pytest.raises(ValueError):
-    p2.to_nodal().plot(no_show=True)  # non-tensor node set -> to_quad
+    p2.represent(to="nodal").plot(no_show=True)  # non-tensor nodes require quad
 
 
 @needs_gkeyll
 def test_linear_ops_valid_in_any_value_form():
   """+ - and scalar ops act pointwise in nodal/quad and agree with modal."""
   a = pg.load(F1)
-  n = a.to_nodal()
-  assert _relerr((2 * n - n + n).to_modal().values, (2 * a).values) < 1e-13
-  assert _relerr((n + 5.0e17).to_modal().values, (a + 5.0e17).values) < 1e-13
+  n = a.represent(to="nodal")
+  assert _relerr((2 * n - n + n).represent(to="modal").values,
+                 (2 * a).values) < 1e-13
+  assert _relerr((n + 5.0e17).represent(to="modal").values,
+                 (a + 5.0e17).values) < 1e-13
 
 
 @needs_gkeyll
@@ -374,7 +388,8 @@ def test_values_view_pins_native_memory():
   a = pg.load(F1)
   expected = a.values.copy()
   v = pg.load(F1).values  # dataset is garbage immediately
-  got = (2 * pg.load(F1).to_nodal()).to_modal().values  # temporaries galore
+  got = (2 * pg.load(F1).represent(to="nodal")).represent(
+      to="modal").values  # temporaries galore
   gc.collect()
   assert np.array_equal(v, expected)
   assert _relerr(got, 2 * expected) < 1e-13

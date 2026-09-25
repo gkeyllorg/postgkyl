@@ -119,6 +119,19 @@ def test_fluent_chain_uses_api_command_and_option_names():
   assert "Number of components: 1" in result.output
 
 
+@pytest.mark.parametrize("to, num_quad", [("modal", None), ("nodal", None),
+                                          ("quad", None), ("quad", 4)])
+@pytest.mark.parametrize("option", ["--to", "-t"])
+def test_represent_matches_fluent_api(to, num_quad, option):
+  data = pg.load(DISTF).represent(to=to, num_quad=num_quad)
+  options = [] if num_quad is None else ["--num_quad", num_quad]
+  result = _ok(DISTF, "represent", option, to, *options, "print")
+  assert result.output == np.array2string(data.values.squeeze(),
+                                          precision=16) + "\n"
+  model = next(model for model in MODELS if model.name == "represent")
+  assert model.callable is pg.GData.represent
+
+
 def test_select_prioritizes_the_first_option_for_each_initial():
   select = next(command for command in COMMANDS if command.name == "select")
   options = {option.name: option.opts for option in select.params}

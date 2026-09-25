@@ -376,7 +376,7 @@ def test_tensor_point_layout_rejects_misaligned_node_coordinates(monkeypatch):
   nan_coords = np.array([[0.0], [np.nan]])
   monkeypatch.setattr(rep.gpython_basis, "node_coords",
                       lambda *a, **k: nan_coords)
-  with pytest.raises(ValueError, match="do not align on a tensor grid"):
+  with pytest.raises(ValueError, match="tensor"):
     rep._tensor_point_layout("serendipity", 1, 1, "nodal", None)
 
 

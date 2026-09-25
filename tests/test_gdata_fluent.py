@@ -70,8 +70,8 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 INSTANCE_VERBS = [
     "load", "interpolate", "local_poly", "map_to_rz", "select", "plot",
     "plotly", "pyvista", "save", "mul", "div", "integrate", "average",
-    "eval_at_coord_proj", "to_modal", "to_nodal", "to_quad", "apply", "fft",
-    "magsq", "mask", "val2coord", "extract_input", "fit", "differentiate", "map"
+    "eval_at_coord_proj", "represent", "apply", "fft", "magsq", "mask",
+    "val2coord", "extract_input", "fit", "differentiate", "map"
 ]
 GROUP_VERBS = ["sort", "collect", "evaluate", "animate", "plotly_animate"]
 MODULE_VERBS = GROUP_VERBS + ["relchange"]
@@ -238,7 +238,7 @@ class TestSubclassPropagation:
     np.testing.assert_allclose(out.grid[0], target.grid[0], atol=1e-12)
 
   @needs_gkeyll
-  def test_mul_div_interpolate_to_modal_nodal_quad_apply_integrate(self):
+  def test_mul_div_interpolate_represent_apply_integrate(self):
     F1 = os.path.join(
         DATA,
         "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl")
@@ -247,9 +247,10 @@ class TestSubclassPropagation:
     a2, b2 = MyData(F1), MyData(F1)
     assert isinstance(a2.div(b2), MyData)
     assert isinstance(MyData(F1).interpolate(), MyData)
-    assert isinstance(MyData(F1).to_nodal(), MyData)
-    assert isinstance(MyData(F1).to_nodal().to_modal(), MyData)
-    assert isinstance(MyData(F1).to_quad(), MyData)
+    assert isinstance(MyData(F1).represent(to="nodal"), MyData)
+    assert isinstance(
+        MyData(F1).represent(to="nodal").represent(to="modal"), MyData)
+    assert isinstance(MyData(F1).represent(to="quad"), MyData)
     assert isinstance(MyData(F1).apply(np.abs), MyData)
     result = MyData(F1).integrate()
     assert result is not None

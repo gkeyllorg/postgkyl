@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from postgkyl import dg
+from postgkyl.gdatastate.guards import quadrature_order
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -41,15 +42,16 @@ def represent(data: "GDataState",
               label: str | None = None):
   """Convert a native dataset to the ``to`` value_form (explicitly).
 
-  ``modal`` <-> ``nodal`` is exact; ``modal`` -> ``quad`` evaluates at
-  ``num_quad`` (default ``p+1``) Gauss–Legendre points per dimension;
-  ``quad`` -> ``modal`` projects back with the rule the data was made with.
+  By default, ``quad`` uses Gkeyll's basis-owned quadrature nodes and
+  modal/quadrature transforms. A modal -> quad -> modal round trip preserves
+  the expansion. Explicit ``num_quad`` selects a uniform Gauss rule instead;
+  projection back uses the rule and ordering stored with the data.
   ``nodal`` <-> ``quad`` composes through modal.
 
   Args:
     data: Native dataset to convert.
     to: Target value representation.
-    num_quad: Gauss points per direction for quadrature representation.
+    num_quad: Optional Gauss points per direction; omitted uses Gkeyll's rule.
     inplace: Mutate and return ``data`` instead of creating a dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -60,21 +62,25 @@ def represent(data: "GDataState",
   basis_type, ndim, poly_order = _native_basis(data)
   cur = data.ctx.get("value_form", "modal")
   arr = data.native
+  same_quad = cur == to == "quad" and num_quad is None
+  nq = data.ctx.get("num_quad") if same_quad else None
+  rule = data.ctx.get("quad_rule", "gauss") if same_quad else None
 
-  if cur != to:
+  if cur != to or (cur == "quad" and num_quad is not None):
     if cur == "nodal":  # leave nodal (exact)
       arr = dg.rep.nodal_to_modal(basis_type, ndim, poly_order, arr)
     elif cur == "quad":  # leave quad (projection, with the data's own rule)
-      nq = data.ctx.get("num_quad")
-      if nq is None:
-        raise ValueError("quad-represented dataset lost its 'num_quad' ctx")
-      arr = dg.rep.quad_to_modal(basis_type, ndim, poly_order, arr, int(nq))
+      arr = dg.rep.quad_to_modal(basis_type, ndim, poly_order, arr,
+                                 quadrature_order(data))
     # arr is now modal
     if to == "nodal":
       arr = dg.rep.modal_to_nodal(basis_type, ndim, poly_order, arr)
     elif to == "quad":
-      nq = int(num_quad) if num_quad else poly_order + 1
-      arr = dg.rep.modal_to_quad(basis_type, ndim, poly_order, arr, nq)
+      modal_ncomp = arr.ncomp
+      arr = dg.rep.modal_to_quad(basis_type, ndim, poly_order, arr, num_quad)
+      nb = dg.num_basis(ndim, poly_order, basis_type)
+      nq = arr.ncomp // (modal_ncomp // nb) if num_quad is None else num_quad
+      rule = "gkeyll" if num_quad is None else "gauss"
   else:
     arr = arr.clone()
 
@@ -84,8 +90,8 @@ def represent(data: "GDataState",
                       tag=tag,
                       label=label,
                       value_form=to,
-                      num_quad=(int(num_quad) if num_quad else poly_order +
-                                1) if to == "quad" else None)
+                      num_quad=nq,
+                      quad_rule=rule)
 
 
 def apply(data: "GDataState",
@@ -98,15 +104,15 @@ def apply(data: "GDataState",
   """Apply ``fn`` pointwise via quadrature: modal -> quad -> fn -> modal.
 
   The explicit spelling of nonlinear pointwise operations on DG data (e.g.
-  ``d.apply(np.sqrt)``): evaluate at ``num_quad`` (default ``p+1``) Gauss
-  points, apply ``fn`` to the values, project back onto the basis. The result
-  stays modal and gkyl-native; the projection is exact when ``fn(f)·b_j`` has
-  degree ≤ 2·num_quad−1 -- raise ``num_quad`` to de-alias.
+  ``d.apply(np.sqrt)``): evaluate at Gkeyll's basis quadrature nodes, apply
+  ``fn`` to the values, and project back. The result stays modal and
+  gkyl-native. Explicit ``num_quad`` selects a uniform Gauss rule with that
+  many points per direction for de-aliasing.
 
   Args:
     data: Native modal dataset to transform.
     fn: Python callable applied to the quadrature-point values.
-    num_quad: Gauss points per dimension; defaults to ``poly_order + 1``.
+    num_quad: Optional Gauss points per direction; omitted uses Gkeyll's rule.
     inplace: Mutate and return ``data`` instead of creating a dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -119,14 +125,14 @@ def apply(data: "GDataState",
   """
   basis_type, ndim, poly_order = _native_basis(data)
   if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError("apply() expects modal data; call .to_modal() first.")
-  nq = int(num_quad) if num_quad else poly_order + 1
+    raise ValueError(
+        "apply() expects modal data; call .represent(to='modal') first.")
   out = dg.rep.apply_pointwise(basis_type, ndim, poly_order, data.native, fn,
-                               nq)
+                               num_quad)
   return data._result(data.grid,
                       out,
                       inplace=inplace,
                       tag=tag,
                       label=label,
                       applied=getattr(fn, "__name__", str(fn)),
-                      applied_num_quad=nq)
+                      applied_num_quad=num_quad)

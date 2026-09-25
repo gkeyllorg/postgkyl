@@ -31,16 +31,34 @@ Coefficients and point values
 
 Nodal and quadrature values support pointwise arithmetic, including native
 data. The native/NumPy backend and the value representation are separate
-facts. ``to_modal()``, ``to_nodal()``, and ``to_quad()`` explicitly change
-representation. ``interpolate()`` creates a new NumPy-backed field on a
+facts. ``represent(to=...)`` explicitly changes representation to ``'modal'``,
+``'nodal'``, or ``'quad'`` in both the functional and fluent Python APIs:
+``pg.represent(data, to='quad')`` or ``data.represent(to='quad')``.
+The CLI uses the same verb and parameter: ``represent --to quad`` (or
+``represent -t quad``). ``interpolate()`` creates a new NumPy-backed field on a
 refined mesh for selection, plotting, and general analysis.
 
 Plotting raw modal data draws the stored coefficients as separate channels
 on the cell grid, without changing the representation. For example,
 ``pgkyl file.gkyl pl`` plots coefficients. To plot the evaluated field, use
 ``pgkyl file.gkyl interpolate pl`` or ``pgkyl file.gkyl local_poly pl``.
-``to_nodal`` and ``to_quad`` also provide field values at basis nodes and
-quadrature points respectively.
+``represent(to='nodal')`` and ``represent(to='quad')`` also provide field values
+at basis nodes and quadrature points respectively.
+
+``represent(to='quad')`` (CLI: ``represent -t quad``) uses the quadrature count,
+ordering, and modal/quadrature transforms supplied by the Gkeyll basis.
+For example, a 1x1v hybrid p1 field has six quadrature values per cell
+(two configuration points and three velocity points), and converting back
+with ``represent(to='modal')`` preserves all six modal coefficients to roundoff.
+Some basis/order combinations lack native quadrature kernels and raise
+``NotImplementedError``. An explicit ``num_quad=N`` selects a custom uniform
+Gauss rule with N points per direction; it must resolve the projection
+integrand, including the quadratic velocity dependence of hybrid p1.
+
+Saved native quadrature data records ``quad_rule="gkeyll"`` and the total
+node count in ``num_quad``. Custom rules record ``quad_rule="gauss"`` and
+the per-direction order; files predating this marker retain their original
+custom-rule interpretation.
 
 For nonlinear operations on a modal field, ``apply(fn, num_quad=...)`` spells
 out evaluation at quadrature points followed by projection back to modal

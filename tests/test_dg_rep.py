@@ -104,3 +104,51 @@ def test_materialize_nodal_matches_modal_to_nodal_values():
   np.testing.assert_allclose(np.sort(out[:, 0].reshape(3, 2), axis=1),
                              np.sort(nodal.view(), axis=1),
                              atol=1e-13)
+
+
+@pytest.mark.parametrize("basis_type,ndim,p", [
+    ("serendipity", 2, 2),
+    ("tensor", 2, 2),
+    ("hybrid", 2, 1),
+    ("hybrid", 4, 1),
+    ("gkhybrid", 3, 1),
+])
+def test_native_quad_roundtrip_multiple_cells_and_fields(basis_type, ndim, p):
+  nb = gpython.basis.num_basis(basis_type, ndim, p)
+  coeffs = np.random.default_rng(17).normal(size=(4, 2 * nb))
+  arr = gpython.GkylArray.from_numpy(coeffs)
+  quad = dg.rep.modal_to_quad(basis_type, ndim, p, arr)
+  assert quad.ncomp == 2 * gpython.basis.get_basis(basis_type, ndim, p).num_quad
+  back = dg.rep.quad_to_modal(basis_type, ndim, p, quad)
+  np.testing.assert_allclose(back.view(), coeffs, atol=2e-13)
+
+
+def test_native_quad_materialization_places_values_at_correct_coordinates():
+  # f(x,v) = x + 2*v on [-1,1]^2, with different directional node counts.
+  coeffs = np.zeros((1, 6))
+  coeffs[0, 1:3] = np.array([1., 2.]) / (np.sqrt(3) / 2)
+  arr = gpython.GkylArray.from_numpy(coeffs)
+  quad = dg.rep.modal_to_quad("hybrid", 2, 1, arr)
+  grid, vals = dg.rep.materialize("hybrid", 2, 1, quad,
+                                  [np.array([-1., 1.])] * 2, "quad")
+  x, v = grid
+  np.testing.assert_allclose(x, [-1 / np.sqrt(3), 1 / np.sqrt(3)], atol=1e-13)
+  np.testing.assert_allclose(
+      v, [-np.sqrt(3 / 5), 0., np.sqrt(3 / 5)], atol=1e-13)
+  np.testing.assert_allclose(vals[..., 0],
+                             x[:, None] + 2 * v[None, :],
+                             atol=1e-13)
+
+
+@pytest.mark.parametrize("basis_type,counts", [
+    ("serendipity", [2, 2, 2, 2, 2]),
+    ("tensor", [2, 2, 2, 2, 2]),
+    ("gkhybrid", [2, 2, 2, 3, 2]),
+])
+def test_native_quad_layout_coalesces_coordinate_roundoff(basis_type, counts):
+  arr, _ = _linear_field(basis_type, 5, 1, [1] * 5)
+  quad = dg.rep.modal_to_quad(basis_type, 5, 1, arr)
+  grid, values = dg.rep.materialize(basis_type, 5, 1, quad,
+                                    [np.array([-1., 1.])] * 5, "quad")
+  assert [len(axis) for axis in grid] == counts
+  assert values.shape == (*counts, 1)

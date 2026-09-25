@@ -147,6 +147,6 @@ def test_modal_nonuniform_grid_raises():
 @pytest.mark.parametrize("representation", ["nodal", "quad"])
 def test_native_point_values_require_explicit_conversion(representation):
   data = pg.load(os.path.join(DATA, "generated", "gk_moments_p1.gkyl"))
-  data = data.to_nodal() if representation == "nodal" else data.to_quad()
-  with pytest.raises(ValueError, match="to_modal"):
+  data = data.represent(to=representation)
+  with pytest.raises(ValueError, match=r"represent\(to='modal'\)"):
     operations.differentiate(data)

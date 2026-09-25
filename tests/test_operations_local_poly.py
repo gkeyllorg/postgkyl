@@ -116,7 +116,7 @@ def test_missing_basis_type_raises():
 
 
 def test_rejects_non_modal_value_form():
-  d = pg.load(F1D).to_nodal()
+  d = pg.load(F1D).represent(to="nodal")
   with pytest.raises(ValueError, match="modal value_form"):
     d.local_poly()
 

@@ -3,8 +3,8 @@ over a subset of dimensions, via Gkeyll's ``gkyl_array_average``.
 
 Terminal-adjacent (like ``represent``): unlike ``integrate`` (whose whole-grid
 mode returns numbers), this produces a new, lower-dimensional dataset -- still
-modal and gkyl-native -- so it composes with ``.to_nodal()``/``.interpolate()``/
-further ``.average()`` calls.
+modal and gkyl-native -- so it composes with ``.represent(to='nodal')``,
+``.interpolate()``, and further ``.average()`` calls.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ def _native_basis(data: "GDataState", what: str):
         f"{what} is not available after .interpolate() or without the "
         "Gkeyll library.")
   if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError(
-        f"average expects the modal value_form, not "
-        f"'{data.ctx['value_form']}' ({what}); call .to_modal() first.")
+    raise ValueError(f"average expects the modal value_form, not "
+                     f"'{data.ctx['value_form']}' ({what}); "
+                     "call .represent(to='modal') first.")
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:

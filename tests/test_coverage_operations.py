@@ -87,7 +87,7 @@ def test_select_by_coordinate_on_a_non_matching_edge_grid():
 
 @needs_gkeyll
 def test_select_keeps_native_point_values_in_the_native_backend():
-  nodal = pg.load(F1).to_nodal()
+  nodal = pg.load(F1).represent(to="nodal")
   selected = nodal.select(comp=0)
   assert selected.backend == "gkyl"
   assert selected.ctx["value_form"] == "nodal"
@@ -172,7 +172,7 @@ def test_conf_phase_mul_requires_both_operands_modal():
       phase_edges,
       gpython.array.GkylArray.from_numpy(np.zeros((12, pbasis.num_basis))))
 
-  phase_nodal = phase.to_nodal()
+  phase_nodal = phase.represent(to="nodal")
   with pytest.raises(ValueError, match="modal DG coefficients only"):
     conf * phase_nodal
 
@@ -283,12 +283,12 @@ def test_interpolate_requires_poly_order_when_none_given():
 def test_represent_rejects_numpy_backed_and_missing_metadata():
   interpolated = pg.load(F1).interpolate()
   with pytest.raises(ValueError, match="NumPy-backed"):
-    interpolated.to_modal()
+    interpolated.represent(to="modal")
 
   a = pg.load(F1)
   del a.ctx["poly_order"]
   with pytest.raises(ValueError, match="no basis_type/poly_order"):
-    a.to_nodal()
+    a.represent(to="nodal")
 
 
 @needs_gkeyll
@@ -300,23 +300,24 @@ def test_represent_rejects_unknown_target():
 
 @needs_gkeyll
 def test_represent_rejects_quad_dataset_missing_num_quad():
-  q = pg.load(F1).to_quad()
+  q = pg.load(F1).represent(to="quad")
   del q.ctx["num_quad"]
   with pytest.raises(ValueError, match="lost its 'num_quad'"):
-    q.to_modal()
+    q.represent(to="modal")
 
 
 @needs_gkeyll
 def test_represent_same_representation_clones():
   a = pg.load(F1)
-  same = a.to_modal()  # already modal -> the "cur == to" clone branch
+  same = a.represent(
+      to="modal")  # already modal -> the "cur == to" clone branch
   np.testing.assert_allclose(same.values, a.values)
   assert same.native is not a.native
 
 
 @needs_gkeyll
 def test_apply_rejects_non_modal_data():
-  a = pg.load(F1).to_nodal()
+  a = pg.load(F1).represent(to="nodal")
   with pytest.raises(ValueError, match="expects modal data"):
     a.apply(np.sqrt)
 
@@ -417,7 +418,7 @@ def test_average_rejects_numpy_backed_and_non_modal():
   with pytest.raises(ValueError, match="native modal data"):
     interpolated.average([0])
 
-  nodal = pg.load(F1).to_nodal()
+  nodal = pg.load(F1).represent(to="nodal")
   with pytest.raises(ValueError, match="modal value_form"):
     nodal.average([0])
 
@@ -508,7 +509,7 @@ def test_integrate_point_default_is_a_full_terminal_integral():
 def test_integrate_partial_on_native_nodal_representation():
   # A gkyl-native nodal/quad dataset materializes to its true point grid
   # before integrating -- same bridge ``plot`` uses (Doctrine V: one home).
-  nodal = pg.load(F3).to_nodal()
+  nodal = pg.load(F3).represent(to="nodal")
   r = nodal.integrate(2)
   assert r.backend == "numpy"
   assert r.num_dims == 2
@@ -561,7 +562,7 @@ def test_native_integration_guard_reports_backend_before_basis():
 def test_native_integration_guard_rejects_point_value_forms():
   from importlib import import_module
   integrate_module = import_module("postgkyl.operations.integrate")
-  nodal = pg.load(F1).to_nodal()
+  nodal = pg.load(F1).represent(to="nodal")
   with pytest.raises(ValueError, match="expects the modal value_form"):
     integrate_module._native_basis(nodal)
 

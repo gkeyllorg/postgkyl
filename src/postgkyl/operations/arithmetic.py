@@ -29,6 +29,7 @@ import operator
 import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.guards import require_same_quadrature
 from postgkyl import dg, numerics
 
 
@@ -106,8 +107,10 @@ def _modal_dataset_pair(op, pa: GDataState, pb: GDataState):
   if rep != _rep_of(pb):
     raise ValueError(
         f"operands are in different value_forms ({rep} vs {_rep_of(pb)}); "
-        "convert one explicitly (.to_modal()/.to_nodal()/.to_quad()).")
+        "convert one explicitly with .represent(to=...).")
   A, B = pa.native, pb.native
+  if rep == "quad":
+    require_same_quadrature(pa, pb)
   if op is operator.add:  # linear: valid in any rep
     out = dg.modal.lincomb(1.0, A, 1.0, B)
   elif op is operator.sub:
@@ -122,7 +125,8 @@ def _modal_dataset_pair(op, pa: GDataState, pb: GDataState):
   else:
     raise ValueError(
         f"operation {getattr(op, '__name__', op)} is not defined between two "
-        "modal datasets; .to_nodal()/.to_quad() for pointwise math.")
+        "modal datasets; .represent(to='nodal')/.represent(to='quad') "
+        "for pointwise math.")
   return pa._result(pa.grid, out)
 
 
@@ -146,7 +150,7 @@ def _modal_conf_phase_mul(op, pa: GDataState, pb: GDataState):
     if _rep_of(d) != "modal":
       raise ValueError(
           "conf-space x phase-space multiplication is defined for modal DG "
-          "coefficients only; .to_modal() first.")
+          "coefficients only; .represent(to='modal') first.")
   if not numerics.grid_is_prefix(conf.grid, phase.grid):
     raise ValueError(
         "the lower-dimensional operand's grid is not the leading dimensions "
@@ -199,7 +203,8 @@ def _modal_scalar(op, data: GDataState, s: float, *, scalar_first: bool):
   else:
     raise ValueError(
         f"operation {getattr(op, '__name__', op)} is not defined for modal "
-        "data and a scalar; .to_nodal()/.to_quad() for pointwise math.")
+        "data and a scalar; .represent(to='nodal')/.represent(to='quad') "
+        "for pointwise math.")
   return data._result(data.grid, out)
 
 
@@ -236,10 +241,12 @@ def apply_ufunc(ufunc, method, *inputs, **kwargs):
       if x.backend == "gkyl" and _rep_of(x) != rep or (x.backend != "gkyl"
                                                        and rep is not None):
         raise ValueError("operands are in different value_forms; convert one "
-                         "explicitly (.to_modal()/.to_nodal()/.to_quad()).")
+                         "explicitly with .represent(to=...).")
       if x.values.shape != primary.values.shape:
         raise ValueError(
             f"incompatible shapes {x.values.shape} vs {primary.values.shape}")
+      if rep == "quad":
+        require_same_quadrature(primary, x)
       raw.append(np.asarray(x.values))
     elif isinstance(x, GDataState._HANDLED_TYPES):
       raw.append(x)

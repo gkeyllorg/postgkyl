@@ -46,7 +46,7 @@ def interpolate(data: "GDataState",
   value_form = data.ctx.get("value_form", "modal")
   if data.backend == "gkyl" and value_form != "modal":
     raise ValueError(f"interpolate expects the modal value_form, not "
-                     f"'{value_form}'; call .to_modal() first.")
+                     f"'{value_form}'; call .represent(to='modal') first.")
 
   grid, values = dg.interpolate(data.values,
                                 data.grid,

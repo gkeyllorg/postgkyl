@@ -23,11 +23,13 @@ from . import _lib
 class Basis:
   """A cached Gkeyll basis: opaque handle + the descriptors postgkyl reads."""
 
-  def __init__(self, cap, ndim: int, poly_order: int, num_basis: int, id: str):
+  def __init__(self, cap, ndim: int, poly_order: int, num_basis: int,
+               num_quad: int, id: str):
     self._cap = cap
     self.ndim = ndim
     self.poly_order = poly_order
     self.num_basis = num_basis
+    self.num_quad = num_quad
     self.id = id
 
   def __repr__(self) -> str:
@@ -147,8 +149,8 @@ def get_basis(basis_type: str, ndim: int, poly_order: int) -> Basis:
                        f"poly_order 0..{max_p}, got {poly_order}")
     cap = _lib.require().basis_new(basis_type, ndim, poly_order)
 
-  nd, p, nb, bid = _lib.require().basis_info(cap)
-  _basis_cache[key] = Basis(cap, nd, p, nb, bid)
+  nd, p, nb, nq, bid = _lib.require().basis_info(cap)
+  _basis_cache[key] = Basis(cap, nd, p, nb, nq, bid)
   return _basis_cache[key]
 
 
@@ -268,6 +270,8 @@ def modal_to_nodal_matrix(basis_type: str, ndim: int,
 def gauss_quad(ndim: int, num_quad: int):
   """Tensor-product Gauss–Legendre rule on [-1, 1]^ndim:
   ``(points (nq**ndim, ndim), weights (nq**ndim,))``, dimension 0 fastest."""
+  if num_quad < 1:
+    raise ValueError("num_quad must be >= 1")
   p1, w1 = np.polynomial.legendre.leggauss(num_quad)
   pts = tensor_points(p1, ndim)
   shape = (num_quad, ) * ndim
@@ -278,22 +282,51 @@ def gauss_quad(ndim: int, num_quad: int):
   return pts, w
 
 
-def modal_to_quad_matrix(basis_type: str, ndim: int, poly_order: int,
-                         num_quad: int) -> np.ndarray:
-  """``(nq**ndim, num_basis)`` -- evaluate the expansion at the Gauss points."""
+def _basis_quad_matrix(basis_type: str, ndim: int, poly_order: int,
+                       to_modal: bool) -> np.ndarray:
+  """Columns are images of unit vectors under Gkeyll's own transform."""
+  basis = get_basis(basis_type, ndim, poly_order)
+  g0 = _lib.require()
+  transform = g0.basis_quad_to_modal if to_modal else g0.basis_modal_to_quad
+  size = basis.num_quad if to_modal else basis.num_basis
+  if not basis.num_quad:
+    raise NotImplementedError(
+        f"Gkeyll has no quadrature transform for {basis_type} p{poly_order} "
+        f"in {ndim}D; specify num_quad for an explicit Gauss rule.")
+  return np.column_stack([transform(basis._cap, unit) for unit in np.eye(size)])
+
+
+def modal_to_quad_matrix(basis_type: str,
+                         ndim: int,
+                         poly_order: int,
+                         num_quad: int | None = None) -> np.ndarray:
+  """Gkeyll's modal-to-quadrature transform, or an explicit Gauss rule.
+
+  With no override, the count and ordering belong to the Gkeyll basis.
+  An explicit ``num_quad`` selects that many Gauss points per direction.
+  """
+  if num_quad is None:
+    return _cached(
+        ("m2q", basis_type, ndim, poly_order, None),
+        lambda: _basis_quad_matrix(basis_type, ndim, poly_order, False))
   return _cached(("m2q", basis_type, ndim, poly_order, num_quad),
                  lambda: eval_matrix(basis_type, ndim, poly_order,
                                      gauss_quad(ndim, num_quad)[0]))
 
 
-def quad_to_modal_matrix(basis_type: str, ndim: int, poly_order: int,
-                         num_quad: int) -> np.ndarray:
-  """``(num_basis, nq**ndim)`` quadrature projection ``c_j = sum_i w_i b_j(z_i) f_i``.
+def quad_to_modal_matrix(basis_type: str,
+                         ndim: int,
+                         poly_order: int,
+                         num_quad: int | None = None) -> np.ndarray:
+  """Gkeyll's quadrature-to-modal transform, or explicit Gauss projection.
 
-  Exact whenever the integrand ``f·b_j`` has degree ≤ 2·num_quad−1 (the bases
-  are orthonormal on the reference cell, so no mass-matrix solve is needed).
-  ``quad_to_modal @ modal_to_quad == I`` for ``num_quad >= p+1``.
+  Explicit rules must resolve ``f*b_j`` in every direction; hybrid p1
+  includes quadratic velocity dependence and needs at least three points.
   """
+  if num_quad is None:
+    return _cached(
+        ("q2m", basis_type, ndim, poly_order, None),
+        lambda: _basis_quad_matrix(basis_type, ndim, poly_order, True))
 
   def build():
     pts, w = gauss_quad(ndim, num_quad)
@@ -301,3 +334,19 @@ def quad_to_modal_matrix(basis_type: str, ndim: int, poly_order: int,
     return B.T * w  # (N, npts): rows b_j(z_i), scaled by the weights
 
   return _cached(("q2m", basis_type, ndim, poly_order, num_quad), build)
+
+
+def quad_node_coords(basis_type: str, ndim: int, poly_order: int) -> np.ndarray:
+  """Coordinates in Gkeyll's quadrature ordering, using its basis transforms.
+
+  Gkeyll has no volume quadrature node-list callback. Transforming the
+  coordinate fields from its nodal basis recovers those points without
+  duplicating basis-specific Gauss rules or their ordering.
+  """
+
+  def build():
+    m2q = modal_to_quad_matrix(basis_type, ndim, poly_order)
+    n2m = nodal_to_modal_matrix(basis_type, ndim, poly_order)
+    return m2q @ n2m @ node_coords(basis_type, ndim, poly_order)
+
+  return _cached(("quad_nodes", basis_type, ndim, poly_order), build)

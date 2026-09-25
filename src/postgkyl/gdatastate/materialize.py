@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from postgkyl.dg import rep
+from .guards import quadrature_order
 
 if TYPE_CHECKING:
   from .gdatastate import GDataState
@@ -24,12 +25,13 @@ def materialize_point_values(data: "GDataState") -> "GDataState":
     raise ValueError(
         "modal DG coefficients are not point values; evaluate explicitly: "
         ".interpolate() (uniform evaluation mesh), .local_poly() "
-        "(discontinuous plotting mesh), .to_nodal() or .to_quad() "
+        "(discontinuous plotting mesh), .represent(to='nodal') "
+        "or .represent(to='quad') "
         "(basis/quadrature points).")
-  grid, values = rep.materialize(str(data.ctx["basis_type"]), data.num_dims,
-                                 int(data.ctx["poly_order"]),
-                                 data.native, data.grid, value_form,
-                                 data.ctx.get("num_quad"))
+  grid, values = rep.materialize(
+      str(data.ctx["basis_type"]), data.num_dims, int(data.ctx["poly_order"]),
+      data.native, data.grid, value_form,
+      quadrature_order(data) if value_form == "quad" else None)
   return data._result(grid, values)
 
 

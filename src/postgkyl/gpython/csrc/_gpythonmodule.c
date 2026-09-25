@@ -320,9 +320,9 @@ py_basis_info(PyObject *self, PyObject *args)
   gpython_basis *b = basis_arg(cap);
   if (!b)
     return NULL;
-  return Py_BuildValue("(iiis)", gpython_basis_ndim(b),
+  return Py_BuildValue("(iiiis)", gpython_basis_ndim(b),
                        gpython_basis_poly_order(b), gpython_basis_num_basis(b),
-                       gpython_basis_id(b));
+                       gpython_basis_num_quad(b), gpython_basis_id(b));
 }
 
 static PyObject *
@@ -399,6 +399,58 @@ py_basis_nodal_to_modal(PyObject *self, PyObject *args)
                                PyArray_DATA((PyArrayObject *)out));
   Py_DECREF(fin);
   return out;
+}
+
+static PyObject *
+basis_quad_transform(PyObject *args, int to_modal)
+{
+  PyObject *cap, *fobj;
+  if (!PyArg_ParseTuple(args, "OO", &cap, &fobj))
+    return NULL;
+  gpython_basis *b = basis_arg(cap);
+  if (!b)
+    return NULL;
+  npy_intp nb = gpython_basis_num_basis(b), nq = gpython_basis_num_quad(b);
+  npy_intp nin = to_modal ? nq : nb, nout = to_modal ? nb : nq;
+  PyArrayObject *fin =
+      (PyArrayObject *)PyArray_FROM_OTF(fobj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  if (!fin)
+    return NULL;
+  if (PyArray_SIZE(fin) != nin) {
+    Py_DECREF(fin);
+    PyErr_SetString(PyExc_ValueError, "incorrect basis transform input size");
+    return NULL;
+  }
+  PyObject *out = PyArray_SimpleNew(1, &nout, NPY_DOUBLE);
+  if (!out) {
+    Py_DECREF(fin);
+    return NULL;
+  }
+  int status =
+      to_modal ? gpython_basis_quad_to_modal(b, PyArray_DATA(fin),
+                                             PyArray_DATA((PyArrayObject *)out))
+               : gpython_basis_modal_to_quad(
+                     b, PyArray_DATA(fin), PyArray_DATA((PyArrayObject *)out));
+  Py_DECREF(fin);
+  if (status) {
+    Py_DECREF(out);
+    PyErr_SetString(PyExc_NotImplementedError,
+                    "Gkeyll has no quadrature transform for this basis/order");
+    return NULL;
+  }
+  return out;
+}
+
+static PyObject *
+py_basis_modal_to_quad(PyObject *self, PyObject *args)
+{
+  return basis_quad_transform(args, 0);
+}
+
+static PyObject *
+py_basis_quad_to_modal(PyObject *self, PyObject *args)
+{
+  return basis_quad_transform(args, 1);
 }
 
 /* ------------------------------------------------------ weak DG algebra */
@@ -1021,7 +1073,11 @@ static PyMethodDef gpython_methods[] = {
     {"basis_new_hybrid", py_basis_new_hybrid, METH_VARARGS,
      "basis handle (hybrid/gkhybrid, by cdim/vdim)"},
     {"basis_info", py_basis_info, METH_VARARGS,
-     "(ndim, poly_order, num_basis, id)"},
+     "(ndim, poly_order, num_basis, num_quad, id)"},
+    {"basis_modal_to_quad", py_basis_modal_to_quad, METH_VARARGS,
+     "one-cell modal -> basis quadrature"},
+    {"basis_quad_to_modal", py_basis_quad_to_modal, METH_VARARGS,
+     "one-cell basis quadrature -> modal"},
     {"basis_eval", py_basis_eval, METH_VARARGS, "basis functions at a point"},
     {"basis_node_list", py_basis_node_list, METH_VARARGS,
      "(num_basis, ndim) node coordinates"},

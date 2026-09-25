@@ -111,6 +111,7 @@ class GData(GDataState):
   growth = operations.growth
   differentiate = operations.differentiate
   map = operations.map
+  represent = operations.represent
   apply = operations.apply
   save = io.save
   plot = operations.plot
@@ -129,21 +130,6 @@ class GData(GDataState):
   def div(self, other) -> "GData":
     """Weak (DG) divide -- runs inside Gkeyll on modal data."""
     return operations.arithmetic.binary(operator.truediv, self, other)
-
-  # --------------------------------------------- value_form changes (explicit)
-  # Conversions never happen implicitly -- these verbs are the only doorway
-  # between the modal / nodal / quadrature value_forms (all gkyl-native).
-  def to_modal(self, **kwargs) -> "GData":
-    """Convert to modal coefficients (exact from nodal; projection from quad)."""
-    return operations.represent(self, to="modal", **kwargs)
-
-  def to_nodal(self, **kwargs) -> "GData":
-    """Convert to values at the basis nodes (exact, invertible)."""
-    return operations.represent(self, to="nodal", **kwargs)
-
-  def to_quad(self, num_quad: int | None = None, **kwargs) -> "GData":
-    """Convert to values at Gauss–Legendre points (default ``p+1`` per dim)."""
-    return operations.represent(self, to="quad", num_quad=num_quad, **kwargs)
 
   # ------------------------------------------------- field-domain analysis
   def val2coord(self,
@@ -233,9 +219,6 @@ for _name, _reason in {
     "load": "the canonical loader is postgkyl.load",
     "mul": "Python operators are not stringly exposed as commands",
     "div": "Python operators are not stringly exposed as commands",
-    "to_modal": "representation shortcuts remain Python-only",
-    "to_nodal": "representation shortcuts remain Python-only",
-    "to_quad": "representation shortcuts remain Python-only",
     "val2coord": "the functional operation owns this exceptional group result",
 }.items():
   hidden(_reason)(GData.__dict__[_name])

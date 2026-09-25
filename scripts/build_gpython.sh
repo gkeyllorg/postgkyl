@@ -102,6 +102,10 @@ _git_log_field() {  # _git_log_field <repo-dir> <log-format>
 GKEYLL_COMMIT=$(_git_log_field "${GKEYLL_DIR}" "%H")
 GKEYLL_COMMIT_DATE=$(_git_log_field "${GKEYLL_DIR}" "%cI")
 GKEYLL_BRANCH=pinned
+if ! git -C "${GKEYLL_DIR}" diff --quiet || \
+   ! git -C "${GKEYLL_DIR}" diff --cached --quiet; then
+    GKEYLL_BRANCH="pinned (locally modified)"
+fi
 POSTGKYL_BUILD_COMMIT=$(_git_log_field "${ROOT_DIR}" "%H")
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 BUILD_ARCH_FLAGS="${ARCH_FLAGS:-}"

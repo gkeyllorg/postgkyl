@@ -178,8 +178,8 @@ def test_require_operable_raises_on_empty_dataset():
 @needs_gkeyll
 def test_info_reports_nodal_and_quad_representation():
   a = pg.load(F1)
-  assert "nodal" in a.to_nodal().info()
-  assert "quad" in a.to_quad().info()
+  assert "nodal" in a.represent(to="nodal").info()
+  assert "quad" in a.represent(to="quad").info()
 
 
 def test_output_identity_handles_an_unrecognized_name(monkeypatch):
@@ -291,8 +291,8 @@ def test_repr_handles_basis_without_poly_order():
 @needs_gkeyll
 def test_repr_on_nodal_and_quad_datasets():
   a = pg.load(F1)
-  assert "nodal" in repr(a.to_nodal())
-  assert "quad" in repr(a.to_quad())
+  assert "nodal" in repr(a.represent(to="nodal"))
+  assert "quad" in repr(a.represent(to="quad"))
 
 
 # ------------------------------------------------------------- collections

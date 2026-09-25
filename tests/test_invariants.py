@@ -130,10 +130,10 @@ def test_native_representation_roundtrip_preserves_coefficients_and_source(
   before = source.values.copy()
 
   if value_form == "nodal":
-    represented = source.to_nodal()
+    represented = source.represent(to="nodal")
   else:
-    represented = source.to_quad(num_quad=num_quad)
-  restored = represented.to_modal()
+    represented = source.represent(to="quad", num_quad=num_quad)
+  restored = represented.represent(to="modal")
 
   assert represented.ctx["value_form"] == value_form
   assert represented.backend == restored.backend == "gkyl"
@@ -147,12 +147,13 @@ def test_native_linear_arithmetic_commutes_with_representation(value_form):
   source = pg.load(GENERATED / "2d_ms_p1.gkyl")
   represented = {
       "modal": source,
-      "nodal": source.to_nodal(),
-      "quad": source.to_quad(),
+      "nodal": source.represent(to="nodal"),
+      "quad": source.represent(to="quad"),
   }[value_form]
 
   transformed = 2.5 * represented - represented + 0.75 * represented
-  restored = transformed if value_form == "modal" else transformed.to_modal()
+  restored = transformed if value_form == "modal" else transformed.represent(
+      to="modal")
   expected = 2.25 * source
 
   np.testing.assert_allclose(restored.values,

@@ -204,7 +204,7 @@ def test_ops_eval_at_coord_proj_rejects_numpy_backed_and_non_modal():
   with pytest.raises(ValueError, match="native modal data"):
     interpolated.eval_at_coord_proj([1], [0.0])
 
-  nodal = pg.load(GKHYB).to_nodal()
+  nodal = pg.load(GKHYB).represent(to="nodal")
   with pytest.raises(ValueError, match="modal value_form"):
     nodal.eval_at_coord_proj([1], [0.0])
 

@@ -352,7 +352,8 @@ class GDataState:
     if not self.is_interpolated:
       raise ValueError(
           "Cannot do NumPy math on modal DG coefficients. Convert explicitly: "
-          ".to_nodal()/.to_quad() (pointwise, stays native), .apply(fn) "
+          ".represent(to='nodal')/.represent(to='quad') "
+          "(pointwise, stays native), .apply(fn) "
           "(pointwise via quadrature, projects back to modal), or .interpolate() "
           "(leave for the NumPy field domain).")
 
@@ -372,8 +373,8 @@ class GDataState:
         return np.asarray(self.get_values(), dtype=dtype)
       raise ValueError(
           "This dataset holds modal DG coefficients in native Gkeyll storage; "
-          ".to_nodal()/.to_quad() for point values, or .interpolate() for NumPy."
-      )
+          ".represent(to='nodal')/.represent(to='quad') for point values, "
+          "or .interpolate() for NumPy.")
     return np.asarray(self._values, dtype=dtype)
 
   # -------------------------------------------------------------- reporting
@@ -420,7 +421,8 @@ class GDataState:
       if self.ctx.get("interpolated"):
         form = "interpolated"
       elif form == "quad" and self.ctx.get("num_quad"):
-        form = f"quad, num_quad={self.ctx['num_quad']}"
+        rule = ", Gkeyll nodes" if self.ctx.get("quad_rule") == "gkeyll" else ""
+        form = f"quad, num_quad={self.ctx['num_quad']}{rule}"
       out += f"├─ DG: {self.ctx['basis_type']} p{self.ctx.get('poly_order', '?')} ({form})\n"
     if "changeset" in self.ctx or "builddate" in self.ctx:
       out += "├─ Created with Gkeyll:\n"
@@ -502,6 +504,7 @@ class GDataState:
       "num_comps",
       "value_form",
       "num_quad",
+      "quad_rule",
       "interpolated",
       "changeset",
       "builddate",

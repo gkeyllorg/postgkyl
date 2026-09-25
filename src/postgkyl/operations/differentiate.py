@@ -104,7 +104,7 @@ def _differentiate_modal(data: "GDataState", direction: int | None):
   """Apply the local native derivative, retaining the modal representation."""
   if data.ctx.get("value_form", "modal") != "modal":
     raise ValueError("differentiate needs modal coefficients for native data; "
-                     "call .to_modal() first.")
+                     "call .represent(to='modal') first.")
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:

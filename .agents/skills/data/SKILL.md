@@ -15,14 +15,17 @@ add an `is_modal` flag or infer point-value capabilities from storage alone.
   and plotting must not treat coefficients as field values.
 - Nodal and quadrature values are fields at points. Pointwise NumPy operations
   are allowed; native results wrap back into native storage in the same value_form.
-  Plot true point locations; non-tensor node sets use explicit `.to_quad()`.
+  Plot true point locations; non-tensor node sets use explicit
+  `.represent(to='quad')`.
 - Reject mixed backends or mixed value_forms when combining datasets.
 - `.interpolate()` is the one-way bridge to a new, by-value NumPy field array.
   Interpolation matrices come from Gkeyll basis functions, applied per cell;
   nodal input first uses the exact nodal-to-modal transform.
-- Only explicit `.to_modal()`, `.to_nodal()`, and `.to_quad()` perform representation
-  conversions. `.apply(fn, num_quad=...)` spells modal → quad → fn → projection,
-  equivalent to `fn(d.to_quad()).to_modal()`. Respect quadrature exactness limits.
+- Only explicit `.represent(to=...)` performs representation conversions
+  between `modal`, `nodal`, and `quad`. `.apply(fn, num_quad=...)` spells
+  modal → quad → fn → projection, equivalent to
+  `fn(d.represent(to='quad')).represent(to='modal')`. Respect quadrature
+  exactness limits.
 - Full modal integration is terminal and native; partial integration uses native
   averaging with physical-volume scaling and returns lower-dimensional modal data.
   `.average()` and `.eval_at_coord_proj()` likewise stay modal/native and compose.

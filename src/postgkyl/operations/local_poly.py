@@ -51,7 +51,7 @@ def local_poly(data: "GDataState",
   value_form = data.ctx.get("value_form", "modal")
   if data.backend == "gkyl" and value_form != "modal":
     raise ValueError(f"local_poly expects the modal value_form, not "
-                     f"'{value_form}'; call .to_modal() first.")
+                     f"'{value_form}'; call .represent(to='modal') first.")
 
   grid, values = dg.local_poly(data.values,
                                data.grid,

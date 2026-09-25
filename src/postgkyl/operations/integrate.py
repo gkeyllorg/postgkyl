@@ -53,8 +53,9 @@ def _native_basis(data: "GDataState") -> tuple[str, int]:
         "exact DG integration needs native modal data and is not available "
         "without the Gkeyll library")
   if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError(f"exact DG integration expects the modal value_form, not "
-                     f"'{data.ctx['value_form']}'; call .to_modal() first")
+    raise ValueError(
+        f"exact DG integration expects the modal value_form, not "
+        f"'{data.ctx['value_form']}'; call .represent(to='modal') first")
   basis_type = data.ctx.get("basis_type")
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:

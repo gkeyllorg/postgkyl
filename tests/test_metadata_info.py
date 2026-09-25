@@ -141,7 +141,7 @@ def test_reload_discards_previous_source_snapshot(reader, source):
                     reason="compiled Gkeyll unavailable")
 def test_conversion_keeps_load_snapshot_but_save_does_not_write_it(
     source, tmp_path):
-  data = pg.load(source()).to_nodal()
+  data = pg.load(source()).represent(to="nodal")
   output = data.info()
   assert "DG: serendipity p1 (nodal)" in output
   assert "value_form: 'modal' (basis specified; value_form absent)" in output

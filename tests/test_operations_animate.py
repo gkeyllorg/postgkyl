@@ -46,8 +46,8 @@ class TestAnimateVerb:
   def test_nodal_frames_are_materialized_first(self):
     """Native nodal data is materialized at its true point locations."""
     from matplotlib.animation import FuncAnimation
-    a = pg.load(F1D).to_nodal()
-    b = pg.load(F1D).to_nodal()
+    a = pg.load(F1D).represent(to="nodal")
+    b = pg.load(F1D).represent(to="nodal")
     anim = operations.animate([a, b], no_show=True)
     assert isinstance(anim, FuncAnimation)
     assert anim._save_count == 2

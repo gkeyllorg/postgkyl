@@ -305,6 +305,13 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
 
+  # The highest 1x1v hybrid mode vanishes at a 2x2 Gauss rule. Native
+  # quadrature must retain it using Gkeyll's six-node rule.
+  hybrid = np.zeros((1, 1, 6))
+  hybrid[..., 5] = 1.0
+  write_gkyl_field(out_dir / "fsimple_hyb.gkyl", [1, 1], [-1., -1.], [1., 1.],
+                   hybrid, 1, "hybrid")
+
   # Named GK sources for the load_quantity example, in SI units. Piecewise
   # constant profiles in a p1 basis give exact cellwise nonlinear quantities.
   x = (np.arange(64) + 0.5) / 64

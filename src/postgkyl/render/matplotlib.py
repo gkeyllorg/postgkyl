@@ -440,8 +440,9 @@ def plot(
 
   Modal DG data plots each stored coefficient as a separate channel on the
   cell grid. To plot the evaluated field, first use ``interpolate`` (uniform
-  mesh), ``local_poly`` (preserves cell jumps), ``to_nodal`` (basis nodes),
-  or ``to_quad`` (quadrature points). The input dataset is unchanged.
+  mesh), ``local_poly`` (preserves cell jumps), ``represent(to='nodal')``
+  (basis nodes), or ``represent(to='quad')`` (quadrature points).
+  The input dataset is unchanged.
 
   For 1-D data, passing ``cmap`` together with ``cval`` colors the line by
   mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the

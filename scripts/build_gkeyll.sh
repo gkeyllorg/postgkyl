@@ -77,8 +77,10 @@ ARCH_FLAGS="${ARCH_FLAGS:-}"
 export ARCH_FLAGS
 
 echo "# Building libg0core.so (ARCH_FLAGS=${ARCH_FLAGS:-<none -- compiler default>})"
+BUILD_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+BUILD_JOBS=$((BUILD_JOBS > 1 ? BUILD_JOBS / 2 : 1))
 (cd "${GKEYLL_DIR}" && make core "ARCH_FLAGS=${ARCH_FLAGS}" \
-    -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)")
+    -j"${BUILD_JOBS}")
 
 SO_PATH="${GKEYLL_DIR}/build/core/libg0core.so"
 if [ ! -f "${SO_PATH}" ]; then

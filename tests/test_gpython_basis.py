@@ -262,3 +262,53 @@ def test_hybrid_nodal_to_modal_and_modal_to_nodal_are_exact_inverses(
   nb = fb.num_basis(basis_type, ndim, 1)
   np.testing.assert_allclose(n2m @ m2n, np.eye(nb), atol=1e-12)
   np.testing.assert_allclose(m2n @ n2m, np.eye(nb), atol=1e-12)
+
+
+@pytest.mark.parametrize("basis_type,ndim,p,nq", [
+    ("serendipity", 1, 1, 2),
+    ("serendipity", 2, 2, 9),
+    ("serendipity", 3, 2, 27),
+    ("tensor", 2, 2, 9),
+    ("tensor", 3, 2, 27),
+    ("hybrid", 2, 1, 6),
+    ("hybrid", 3, 1, 12),
+    ("hybrid", 4, 1, 24),
+    ("gkhybrid", 2, 1, 6),
+    ("gkhybrid", 3, 1, 12),
+    ("gkhybrid", 4, 1, 24),
+    ("gkhybrid", 5, 1, 48),
+])
+def test_native_quadrature_preserves_every_mode_and_node_order(
+    basis_type, ndim, p, nq):
+  basis = fb.get_basis(basis_type, ndim, p)
+  assert basis.num_quad == nq
+  m2q = fb.modal_to_quad_matrix(basis_type, ndim, p)
+  q2m = fb.quad_to_modal_matrix(basis_type, ndim, p)
+  assert m2q.shape == (nq, basis.num_basis)
+  np.testing.assert_allclose(q2m @ m2q, np.eye(basis.num_basis), atol=3e-13)
+  coords = fb.quad_node_coords(basis_type, ndim, p)
+  np.testing.assert_allclose(m2q,
+                             fb.eval_matrix(basis_type, ndim, p, coords),
+                             atol=3e-13)
+
+
+def test_native_hybrid_quadrature_nodes_are_two_by_three_gauss_points():
+  coords = fb.quad_node_coords("hybrid", 2, 1)
+  x = [-1 / np.sqrt(3), 1 / np.sqrt(3)]
+  v = [-np.sqrt(3 / 5), 0, np.sqrt(3 / 5)]
+  np.testing.assert_allclose(coords, [(a, b) for a in x for b in v], atol=1e-14)
+
+
+@pytest.mark.parametrize("p", [0, 3])
+def test_native_quadrature_missing_kernels_raise(p):
+  with pytest.raises(NotImplementedError, match="no quadrature transform"):
+    fb.modal_to_quad_matrix("serendipity", 1, p)
+
+
+def test_native_quadrature_bridge_checks_buffer_lengths():
+  from postgkyl.gpython import _lib
+  basis = fb.get_basis("hybrid", 2, 1)
+  for transform in (_lib.require().basis_modal_to_quad,
+                    _lib.require().basis_quad_to_modal):
+    with pytest.raises(ValueError, match="input size"):
+      transform(basis._cap, np.zeros(5))
