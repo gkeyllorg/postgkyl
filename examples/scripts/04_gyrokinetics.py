@@ -11,8 +11,8 @@ name and the loader resolves which files it needs:
 * ``pg.gk.available_quantities()`` lists the registered quantity names.
 * ``pg.gk.load_quantity(quantity, species, name, frame, path=...)`` resolves
   the source file(s) for that quantity, computes it, and returns one
-  ``GData`` per requested species -- already interpolated, ready to
-  ``.select()``/``.plot()`` like anything else.
+  ``GData`` per requested species and frame, preserving modal DG data.
+  Use ``.interpolate()`` when point samples are needed.
 * ``pg.gk.load_distf(name=..., species=..., frame=..., ...)`` reconstructs a
   full distribution function from the saved ``Jf``-times-Jacobian(s) files
   (what the CLI's ``gk_load_distf`` command wraps).
@@ -45,8 +45,8 @@ GK_NAME = "rt_gk_tcv_iwl_1x2v_p1"  # wrote elc distf + geometry
 print("registered quantities:", pg.gk.available_quantities())
 
 # 1. A moment quantity ("M0", the density) resolved straight from the
-#    HamiltonianMoments file the registry knows how to read; already
-#    interpolated, so it's a regular one-component field.
+#    HamiltonianMoments file the registry knows how to read, retaining
+#    its modal representation. Plotting evaluates the field for display.
 m0, = pg.gk.load_quantity("M0", "ion", HMOM_NAME, "250", path=str(TEST_DATA))
 print("M0:", repr(m0), " label:", m0.get_label())
 

@@ -22,6 +22,7 @@ from pathlib import Path
 
 import msgpack
 import numpy as np
+from scipy import constants
 
 _RNG = np.random.default_rng(42)
 _SQRT3 = np.sqrt(3)
@@ -302,6 +303,32 @@ def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
+
+  # Named GK sources for the load_quantity example, in SI units. Piecewise
+  # constant profiles in a p1 basis give exact cellwise nonlinear quantities.
+  x = (np.arange(64) + 0.5) / 64
+  temperature = constants.elementary_charge * (20.0 + 10.0 * x)
+  maxwellian = np.stack([
+      np.full_like(x, 1e19),
+      np.zeros_like(x), temperature / constants.electron_mass
+  ],
+                        axis=-1)
+  for suffix, samples, metadata in (
+      ("elc_MaxwellianMoments_0", maxwellian, {
+          "mass": constants.electron_mass,
+          "charge": -constants.elementary_charge
+      }),
+      ("field_0", (5.0 * np.sin(2 * np.pi * x))[:, None], {}),
+      ("geo_int_bmag", (1.0 + 0.5 * x)[:, None], {}),
+  ):
+    coefficients = np.zeros((64, samples.shape[-1], 2))
+    coefficients[..., 0] = np.sqrt(2.0) * samples
+    write_gkyl_field(out_dir / f"gk_quantity_1d_p1-{suffix}.gkyl", [64], [0.0],
+                     [1.0],
+                     coefficients.reshape(64, -1),
+                     poly_order=1,
+                     basis_type="serendipity",
+                     metadata=metadata)
 
   # Packed GK moments with nonzero slopes and jumps between unit-width cells.
   # Each field is a + b*xi in its cell, xi in [-1, 1].

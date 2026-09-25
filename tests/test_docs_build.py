@@ -114,6 +114,18 @@ def test_downloaded_examples_run_outside_repository(documentation, tmp_path):
                  check=True)
   assert (tmp_path / "figures/06_growth.png").stat().st_size > 0
   assert (tmp_path / "figures/05_map_to_rz.png").stat().st_size > 0
+  for quantity in ("vt", "phi_norm", "larmor_radius"):
+    assert (tmp_path /
+            f"figures/12_gk_load_quantity_{quantity}.png").stat().st_size > 0
+
+
+def test_gyrokinetic_quantities_page_has_python_and_cli(documentation):
+  page = (documentation / "html/gyrokinetic-quantities.html").read_text()
+  assert "gk_load_quantity" in page
+  for quantity in ("vt", "phi_norm", "larmor_radius"):
+    assert quantity in page
+    for interface in ("Python", "CLI"):
+      assert f"{interface} output for 12_gk_load_quantity_{quantity}.png" in page
 
 
 def test_comparison_rejects_changed_pixels(tmp_path):

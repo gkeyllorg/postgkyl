@@ -16,6 +16,7 @@ resolve correctly.
    profile-comparison
    fluid-pressure
    gyrokinetic-distribution
+   gyrokinetic-quantities
    physical-rz
    exponential-growth
    arithmetic-representation

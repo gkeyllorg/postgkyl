@@ -42,5 +42,10 @@
   },
   "02_arithmetic_and_numpy.py": {
     "02_arithmetic.png": "pgkyl tests/test_data/generated/2d_c2p_stretch_ms_p1.gkyl interpolate evaluate 'f sq 2 * sqrt' plot --title 'Componentwise magnitude' --no_show --dpi 100 --saveas '{output}/02_arithmetic.png'"
+  },
+  "12_gk_load_quantity.py": {
+    "12_gk_load_quantity_vt.png": "pgkyl gk_load_quantity --quantity vt --species elc --name gk_quantity_1d_p1 --frame 0 --path tests/test_data/generated interpolate --num_interp 1 plot --title 'Electron vt' --xlabel 'x [m]' --ylabel '$v_{t,e}$ (m/s)' --no_show --dpi 100 --saveas '{output}/12_gk_load_quantity_vt.png'",
+    "12_gk_load_quantity_phi_norm.png": "pgkyl gk_load_quantity --quantity phi_norm --species elc --name gk_quantity_1d_p1 --frame 0 --path tests/test_data/generated --label '$e\\phi/T_e$' interpolate --num_interp 1 plot --title 'Electron phi_norm' --xlabel 'x [m]' --ylabel '$e\\phi/T_e$' --no_show --dpi 100 --saveas '{output}/12_gk_load_quantity_phi_norm.png'",
+    "12_gk_load_quantity_larmor_radius.png": "pgkyl gk_load_quantity --quantity larmor_radius --species elc --name gk_quantity_1d_p1 --frame 0 --path tests/test_data/generated interpolate --num_interp 1 plot --title 'Electron larmor_radius' --xlabel 'x [m]' --ylabel '$\\rho_{e}$ (m)' --no_show --dpi 100 --saveas '{output}/12_gk_load_quantity_larmor_radius.png'"
   }
 }

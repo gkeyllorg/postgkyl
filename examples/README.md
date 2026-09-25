@@ -27,6 +27,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`09_pyvista.py`](scripts/09_pyvista.py) | Off-screen VTK isosurface and volume screenshots |
 | [`10_manual_arrays.py`](scripts/10_manual_arrays.py) | Copy grids/values, manipulate NumPy arrays, and wrap the result |
 | [`11_multiblock.py`](scripts/11_multiblock.py) | Plot all blocks of one field and frame on one figure with a shared color scale |
+| [`12_gk_load_quantity.py`](scripts/12_gk_load_quantity.py) | Load and check `vt`, `phi_norm`, and `larmor_radius` on generated electron moments, potential, and magnetic geometry |
 | [`mirror_comparison.py`](scripts/mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |
 
 Run one directly:
