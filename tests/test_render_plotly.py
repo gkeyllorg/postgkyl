@@ -23,6 +23,7 @@ import plotly.graph_objects as go
 import pytest
 
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.operations import select
 from postgkyl.render import _ffmpeg
 from postgkyl.render.plotly import (
     plotly,
@@ -97,6 +98,11 @@ def _surface_2d(n=4, m=5):
 
 
 class TestPlotlySurface2D:
+
+  def test_selected_axis_keeps_original_coordinate_labels(self):
+    fig = plotly(select(_volume_3d(), z1=1))
+    assert fig.layout.scene.xaxis.title.text == "z<sub>0</sub>"
+    assert fig.layout.scene.yaxis.title.text == "z<sub>2</sub>"
 
   def test_returns_a_surface_trace(self):
     fig = plotly(_surface_2d())

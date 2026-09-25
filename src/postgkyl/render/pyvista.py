@@ -149,7 +149,7 @@ def pyvista(data: GDataState,
         "Unsupported file format for saving. Supported formats are: "
         ".html, .png, .jpg, .jpeg, .pdf, .svg, .gltf, .vtksz")
 
-  grid, values = squeeze_collapsed_axes(list(data.grid), data.values)
+  grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
   num_dims = len(grid)
   if num_dims != 3:
     raise ValueError(f"pyvista renders 3D scalar fields only, got {num_dims}D")
@@ -157,7 +157,7 @@ def pyvista(data: GDataState,
                                                        ylabel=ylabel,
                                                        zlabel=zlabel,
                                                        clabel=clabel,
-                                                       num_dims=num_dims,
+                                                       axes=axes,
                                                        xshift=xshift,
                                                        yshift=yshift,
                                                        zshift=zshift,

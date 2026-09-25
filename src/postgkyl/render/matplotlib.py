@@ -37,11 +37,10 @@ from postgkyl.gdatastate import (
     group_blocks,
 )
 
-from ._prep import materialize_plot_data, subplot_grid
+from ._prep import (default_axis_labels, materialize_plot_data, remaining_axes,
+                    squeeze_collapsed_axes, subplot_grid)
 from .style import apply_style
 
-_AXES_LABELS = [rf"$z_{i}$" for i in range(6)]
-_INDEX_AXES_LABELS = [rf"$i_{i}$" for i in range(6)]
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
                | dict[int, tuple[float, float]])
@@ -637,7 +636,8 @@ def plot(
       # ---- Phase 1: figure/axes layout, from the first dataset ----
       ref = states[0]
       ref_cells = ref.num_cells
-      ref_num_dims = len(ref_cells) - int(np.sum(ref_cells <= 1))
+      ref_axes = remaining_axes(ref_cells)
+      ref_num_dims = len(ref_axes)
       if ref_num_dims > 2:
         raise ValueError("Only 1D and 2D plots are currently supported")
       if line_colors is not None and ref_num_dims != 1:
@@ -706,14 +706,14 @@ def plot(
       use_3d = bool(surface) and ref_num_dims == 2
       subplot_kw = {"projection": "3d"} if use_3d else {}
 
-      coordinate_labels = _INDEX_AXES_LABELS if grid_indices else _AXES_LABELS
-      default_xlabel, default_ylabel = coordinate_labels[0], coordinate_labels[
-          1]
+      coordinate_labels = default_axis_labels(ref_axes,
+                                              grid_indices=grid_indices)
       if transpose and ref_num_dims == 2:
         # The data axes are swapped before drawing, so the default label base
         # names swap too; the shift/scale annotations below keep their
         # screen-axis meaning (xshift still shifts the horizontal axis).
-        default_xlabel, default_ylabel = default_ylabel, default_xlabel
+        coordinate_labels.reverse()
+      default_xlabel, default_ylabel = (coordinate_labels + ["", ""])[:2]
       layout_xlabel = xlabel
       layout_ylabel = ylabel
       layout_clabel = clabel
@@ -897,30 +897,17 @@ def plot(
           label_prefix = ""
           explicit_legend_label = False
 
-        cells = data.num_cells
-        grid = list(data.grid)
-        values = data.values
-        num_dims = len(cells) - int(np.sum(cells <= 1))
+        grid, values, axes = squeeze_collapsed_axes(list(data.grid),
+                                                    data.values)
+        cells = np.array(values.shape[:-1])
+        num_dims = len(axes)
         if num_dims > 2:
           raise ValueError("Only 1D and 2D plots are currently supported")
         if split_linear_log and num_dims != 1:
           raise ValueError(
               "every dataset must be 1D when 'split_linear_log' is set")
 
-        axes_labels = list(coordinate_labels)
-        if len(grid) > num_dims:
-          idx = [d for d in range(len(grid)) if cells[d] <= 1]
-          grid = [g.squeeze() for g in grid]
-          if idx:
-            for d in reversed(idx):
-              grid.pop(d)
-            cells = np.delete(cells, idx)
-            axes_labels = list(np.delete(np.array(axes_labels), idx))
-            values = np.squeeze(values, tuple(idx))
-            if grid and grid[0].ndim > 1:  # curvilinear (mapped) coordinates
-              for d in range(num_dims):
-                for i in reversed(idx):
-                  grid[d] = np.mean(grid[d], axis=i)
+        axes_labels = default_axis_labels(axes, grid_indices=grid_indices)
 
         if transpose and num_dims == 2:  # swap the horizontal and vertical axes
           values = np.swapaxes(values, 0, 1)

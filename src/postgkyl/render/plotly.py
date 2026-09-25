@@ -605,7 +605,7 @@ def plotly(data: GDataState,
                                    background=background,
                                    invert_cmap=invert_cmap)
 
-  grid, values = squeeze_collapsed_axes(list(data.grid), data.values)
+  grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
   num_dims = len(grid)
   surface_mode = (num_dims == 2)
   if num_dims not in (2, 3):
@@ -622,7 +622,7 @@ def plotly(data: GDataState,
                                                        ylabel=ylabel,
                                                        zlabel=zlabel,
                                                        clabel=clabel or "",
-                                                       num_dims=num_dims,
+                                                       axes=axes,
                                                        xshift=xshift,
                                                        yshift=yshift,
                                                        zshift=zshift,

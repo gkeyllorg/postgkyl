@@ -23,11 +23,11 @@ from postgkyl.render._prep import (
 class TestDefaultAxisLabels:
 
   def test_returns_one_label_per_dim(self):
-    labels = default_axis_labels(3)
+    labels = default_axis_labels((0, 1, 2))
     assert labels == [r"$z_0$", r"$z_1$", r"$z_2$"]
 
   def test_zero_dims_is_empty(self):
-    assert default_axis_labels(0) == []
+    assert default_axis_labels(()) == []
 
 
 class TestFormatAxisLabel:
@@ -60,7 +60,7 @@ class TestResolveAxisLabels:
                                          ylabel=None,
                                          zlabel=None,
                                          clabel="",
-                                         num_dims=2)
+                                         axes=(0, 1))
     assert xl == r"$z_0$"
     assert yl == r"$z_1$"
 
@@ -69,7 +69,7 @@ class TestResolveAxisLabels:
                                          ylabel=None,
                                          zlabel=None,
                                          clabel="",
-                                         num_dims=1)
+                                         axes=(0, ))
     assert xl == r"$z_0$"
     assert yl == ""
 
@@ -78,7 +78,7 @@ class TestResolveAxisLabels:
                                          ylabel="myY",
                                          zlabel="myZ",
                                          clabel="myC",
-                                         num_dims=2,
+                                         axes=(0, 1),
                                          zscale=2.0)
     assert xl == "myX"
     assert yl == "myY"
@@ -89,7 +89,7 @@ class TestResolveAxisLabels:
                                          ylabel=None,
                                          zlabel=None,
                                          clabel="",
-                                         num_dims=3)
+                                         axes=(0, 1, 2))
     assert zl == r"$z_2$"
 
   def test_clabel_annotated_with_zscale(self):
@@ -97,7 +97,7 @@ class TestResolveAxisLabels:
                                       ylabel=None,
                                       zlabel=None,
                                       clabel="density",
-                                      num_dims=2,
+                                      axes=(0, 1),
                                       zscale=3.0)
     assert cl == r"density $\times$ 3.000e+00"
 
@@ -106,7 +106,7 @@ class TestResolveAxisLabels:
                                       ylabel=None,
                                       zlabel=None,
                                       clabel="",
-                                      num_dims=2,
+                                      axes=(0, 1),
                                       zscale=3.0)
     assert cl == r"$\times$ 3.000e+00"
 
@@ -121,7 +121,8 @@ class TestSqueezeCollapsedAxes:
   def test_no_collapsed_axes_is_a_passthrough(self):
     grid = [np.linspace(0.0, 1.0, 5), np.linspace(0.0, 2.0, 4)]
     values = np.ones((4, 3, 2))
-    out_grid, out_values = squeeze_collapsed_axes(grid, values)
+    out_grid, out_values, axes = squeeze_collapsed_axes(grid, values)
+    assert axes == (0, 1)
     assert len(out_grid) == 2
     assert out_values.shape == (4, 3, 2)
 
@@ -130,7 +131,8 @@ class TestSqueezeCollapsedAxes:
     y = np.array([0.5, 0.6])  # 1-cell axis (select()-ed)
     z = np.linspace(-1.0, 1.0, 5)
     values = np.zeros((3, 1, 4, 2))
-    grid, out_values = squeeze_collapsed_axes([x, y, z], values)
+    grid, out_values, axes = squeeze_collapsed_axes([x, y, z], values)
+    assert axes == (0, 2)
     assert len(grid) == 2
     assert out_values.shape == (3, 4, 2)
 
@@ -139,7 +141,8 @@ class TestSqueezeCollapsedAxes:
     y = np.array([0.0])
     z = np.array([0.0])
     values = np.zeros((3, 1, 1, 2))
-    grid, out_values = squeeze_collapsed_axes([x, y, z], values)
+    grid, out_values, axes = squeeze_collapsed_axes([x, y, z], values)
+    assert axes == (0, )
     assert len(grid) == 1
     assert out_values.shape == (3, 2)
 
@@ -149,7 +152,8 @@ class TestSqueezeCollapsedAxes:
     x2d = np.arange(12.0).reshape(4, 3)  # (dim0=4 edges, dim1=3 edges)
     y2d = np.arange(12.0).reshape(4, 3) * 2.0
     values = np.zeros((3, 1, 2))  # 3 cells in dim0, 1 cell in dim1
-    grid, out_values = squeeze_collapsed_axes([x2d, y2d], values)
+    grid, out_values, axes = squeeze_collapsed_axes([x2d, y2d], values)
+    assert axes == (0, )
     assert len(grid) == 1
     assert grid[0].shape == (4, )
     np.testing.assert_allclose(grid[0], np.mean(x2d, axis=1))
@@ -223,6 +227,20 @@ class TestPrepPlotData:
     panel = prep_plot_data(_make_state([x, y], values))
     assert panel.num_dims == 1
     assert panel.values.shape == (3, 2)
+
+  def test_labels_skip_selected_middle_axis(self):
+    grid = [np.linspace(0, 1, 4), np.array([0.4, 0.6]), np.linspace(0, 2, 5)]
+    panel = prep_plot_data(_make_state(grid, np.zeros((3, 1, 4, 1))))
+    assert panel.xlabel == r"$z_0$"
+    assert panel.ylabel == r"$z_2$"
+
+  def test_volume_labels_skip_selected_axis(self):
+    labels = resolve_axis_labels(xlabel=None,
+                                 ylabel=None,
+                                 zlabel=None,
+                                 clabel="",
+                                 axes=(0, 2, 3))
+    assert labels[:3] == (r"$z_0$", r"$z_2$", r"$z_3$")
 
   def test_custom_xlabel_overrides_default(self):
     grid = [np.linspace(0.0, 1.0, 5)]

@@ -56,6 +56,70 @@ def _close_figs():
   plt.close("all")
 
 
+@pytest.fixture
+def field_3d():
+  data = GDataState()
+  data.push([np.linspace(0, d + 1, d + 4) for d in range(3)],
+            np.arange(60.0).reshape(3, 4, 5, 1))
+  return data
+
+
+class TestSelectedAxisLabels:
+
+  @pytest.mark.parametrize("axis, surviving", [(0, (1, 2)), (1, (0, 2)),
+                                               (2, (0, 1))])
+  @pytest.mark.parametrize("transpose", [False, True])
+  @pytest.mark.parametrize("grid_indices", [False, True])
+  def test_labels_follow_surviving_coordinates(self, field_3d, axis, surviving,
+                                               transpose, grid_indices):
+    selected = operations.select(field_3d, **{f"z{axis}": 1})
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=transpose,
+                       grid_indices=grid_indices)
+    x, y = surviving[::-1] if transpose else surviving
+    symbol = "i" if grid_indices else "z"
+    assert fig.get_supxlabel() == rf"${symbol}_{x}$"
+    assert fig.get_supylabel() == rf"${symbol}_{y}$"
+    if not grid_indices:
+      np.testing.assert_allclose(fig.axes[0].get_xlim(), (0, x + 1))
+      np.testing.assert_allclose(fig.axes[0].get_ylim(), (0, y + 1))
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_repeated_selection_preserves_last_coordinate(self, field_3d,
+                                                        transpose):
+    selected = operations.select(operations.select(field_3d, z0=1), z1=2)
+    fig = backend.plot(selected, no_show=True, transpose=transpose)
+    assert (fig.get_supylabel()
+            if transpose else fig.get_supxlabel()) == r"$z_2$"
+    line = fig.axes[0].lines[0]
+    coordinate = line.get_ydata() if transpose else line.get_xdata()
+    np.testing.assert_allclose(coordinate, np.linspace(0.3, 2.7, 5))
+
+  def test_explicit_labels_override_selected_defaults(self, field_3d):
+    selected = operations.select(field_3d, z1=1)
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=True,
+                       xlabel="height",
+                       ylabel="radius")
+    assert fig.get_supxlabel() == "height"
+    assert fig.get_supylabel() == "radius"
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  @pytest.mark.parametrize("lineouts", [0, 1])
+  def test_lineout_labels_follow_selected_coordinates(self, field_3d, transpose,
+                                                      lineouts):
+    selected = operations.select(field_3d, z1=1)
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=transpose,
+                       lineouts=lineouts)
+    axes = (2, 0) if transpose else (0, 2)
+    assert fig.get_supxlabel() == rf"$z_{axes[lineouts]}$"
+    assert fig.axes[1].get_ylabel() == rf"$z_{axes[1 - lineouts]}$"
+
+
 # --------------------------------------------------------------------------
 # Multi-panel (multi-component) layout
 # --------------------------------------------------------------------------

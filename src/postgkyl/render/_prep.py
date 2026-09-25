@@ -33,9 +33,17 @@ def materialize_plot_data(data: "GDataState") -> "GDataState":
   return materialize_point_values(data)
 
 
-def default_axis_labels(num_dims: int) -> list[str]:
-  """Default per-axis labels ``$z_0$``, ``$z_1$``, ... (mathtext)."""
-  return [rf"$z_{i}$" for i in range(num_dims)]
+def remaining_axes(cells) -> tuple[int, ...]:
+  """Coordinate indices that remain after collapsing singleton axes."""
+  return tuple(d for d, size in enumerate(cells) if size > 1)
+
+
+def default_axis_labels(axes: tuple[int, ...],
+                        *,
+                        grid_indices: bool = False) -> list[str]:
+  """Label surviving coordinates by their original dataset indices."""
+  symbol = "i" if grid_indices else "z"
+  return [rf"${symbol}_{i}$" for i in axes]
 
 
 def format_axis_label(label: str, shift: float, scale: float) -> str:
@@ -51,7 +59,7 @@ def format_axis_label(label: str, shift: float, scale: float) -> str:
 
 def squeeze_collapsed_axes(
     grid: list[np.ndarray],
-    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
+    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray, tuple[int, ...]]:
   """Drop grid axes with exactly one cell (e.g. a ``select()``-ed coordinate).
 
   Curvilinear (multi-dimensional, ``.map()``-produced) coordinate arrays
@@ -65,13 +73,15 @@ def squeeze_collapsed_axes(
     values: Cell values, shape ``(*cells, num_comps)``.
 
   Returns:
-    ``(grid, values)`` with every size-1 axis removed.
+    ``(grid, values, axes)`` with every size-1 axis removed and ``axes``
+    identifying the surviving coordinate indices in the input dataset.
   """
   num_dims = len(grid)
   cells = values.shape[:num_dims]
-  drop = [d for d in range(num_dims) if cells[d] <= 1]
+  axes = remaining_axes(cells)
+  drop = [d for d in range(num_dims) if d not in axes]
   if not drop:
-    return list(grid), values
+    return list(grid), values, axes
 
   grid = [np.asarray(g) for g in grid]
   if any(g.ndim > 1 for g in grid):
@@ -81,7 +91,7 @@ def squeeze_collapsed_axes(
   for i in reversed(drop):
     grid.pop(i)
   values = np.squeeze(values, tuple(drop))
-  return grid, values
+  return grid, values, axes
 
 
 def subplot_grid(num_comps: int,
@@ -117,7 +127,7 @@ def resolve_axis_labels(*,
                         ylabel: str | None,
                         zlabel: str | None,
                         clabel: str,
-                        num_dims: int,
+                        axes: tuple[int, ...],
                         xshift: float = 0.0,
                         yshift: float = 0.0,
                         zshift: float = 0.0,
@@ -127,17 +137,17 @@ def resolve_axis_labels(*,
   """Infer default ``$z_i$`` labels and apply shift/scale annotations.
 
   Shared by the 2-D (``matplotlib``, no real ``z`` axis) and 3-D
-  (``plotly``, ``z`` is a genuine coordinate) backends: with ``num_dims``
-  dimensions, defaults are ``z_0..z_{num_dims-1}`` distributed across
-  ``xlabel``/``ylabel``/``zlabel`` in that order (only as many as apply).
+  (``plotly``, ``z`` is a genuine coordinate) backends. ``axes`` preserves
+  the input dataset's coordinate indices after singleton axes are removed.
   """
-  labels = default_axis_labels(max(num_dims, 3))
+  labels = default_axis_labels(axes)
+  num_dims = len(axes)
   if xlabel is None:
     xlabel = labels[0] if num_dims > 0 else ""
   if ylabel is None:
     ylabel = labels[1] if num_dims > 1 else ""
   if zlabel is None:
-    zlabel = labels[2] if num_dims > 2 else labels[-1]
+    zlabel = labels[2] if num_dims > 2 else r"$z_2$"
   xlabel = format_axis_label(xlabel, xshift, xscale)
   ylabel = format_axis_label(ylabel, yshift, yscale)
   zlabel = format_axis_label(zlabel, zshift, zscale)
@@ -163,9 +173,9 @@ def prep_plot_data(data: "GDataState",
   Args:
     data: The dataset to prepare, with modal coefficients on the cell grid
       or point values materialized on their sampling grid.
-    xlabel: Explicit x-axis label; auto-derived (``$z_0$``) when ``None``.
-    ylabel: Explicit y-axis label; auto-derived (``$z_1$``) when ``None``
-      and the (squeezed) dataset is 2-D, else empty.
+    xlabel: Explicit x-axis label; defaults to the first surviving coordinate.
+    ylabel: Explicit y-axis label; defaults to the second surviving coordinate
+      when the (squeezed) dataset is 2-D, else empty.
     clabel: Colorbar label base text; annotated with ``zscale`` when it is
       not 1.
     xshift, yshift, zshift: Additive shifts recorded in the axis labels
@@ -176,13 +186,13 @@ def prep_plot_data(data: "GDataState",
   Returns:
     A :class:`PlotPanel` with the squeezed grid/values and resolved labels.
   """
-  grid, values = squeeze_collapsed_axes(list(data.grid), data.values)
+  grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
   num_dims = len(grid)
   xlabel, ylabel, _zlabel, clabel = resolve_axis_labels(xlabel=xlabel,
                                                         ylabel=ylabel,
                                                         zlabel="",
                                                         clabel=clabel,
-                                                        num_dims=num_dims,
+                                                        axes=axes,
                                                         xshift=xshift,
                                                         yshift=yshift,
                                                         zshift=zshift,
