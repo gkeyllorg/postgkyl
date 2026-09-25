@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3CJE02S6NFC9KEQFW21NN2Q",
+  "session_id": "01a0d921-b53e-7e40-8229-2616607392b1",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T15:20:09.038462016Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/examples.rst",
+    "examples/README.md",
+    "examples/figure_commands.json",
+    "examples/scripts/04_gyrokinetics.py",
+    "tests/generate_test_data.py",
+    "tests/test_docs_build.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "f5278f6486c2",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 10718,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 36096,
+    "output_tokens": 368,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T15:20:09.022188842Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 4,
+    "total_committed": 0,
+    "total_lines_changed": 4,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 178,
+      "user_lines_removed": 4,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/source/examples.rst": 1,
+        "docs/source/gyrokinetic-quantities.rst": 46,
+        "examples/README.md": 1,
+        "examples/figure_commands.json": 5,
+        "examples/scripts/04_gyrokinetics.py": 4,
+        "examples/scripts/12_gk_load_quantity.py": 82,
+        "tests/generate_test_data.py": 27,
+        "tests/test_docs_build.py": 12
+      },
+      "user_removed_per_file": {
+        "examples/scripts/04_gyrokinetics.py": 4
+      }
+    }
+  ]
+}
