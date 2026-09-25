@@ -1,0 +1,50 @@
+Here is some feedback about defaults. Only display the relevant information. It's currently displaying some redundant information
+
+this is kinda messed up though
+[1:55 PM]pgkyl fsimple.gkyl info
+(default#0)
+├─ Number of components: 2
+├─ Number of dimensions: 1
+├─ Grid: (uniform)
+│  └─ Dim 0: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+├─ Maximum: 8.164966e-01 at (0,) component 1
+├─ Minimum: 0.000000e+00 at (0,) component 0
+├─ DG: serendipity p1 (modal)
+├─ Metadata sources (at load; summary above is current state):
+│  ├─ File header (stored grid and array layout):
+│  │  ├─ cells: array([1])
+│  │  ├─ lower: array([-1.])
+│  │  ├─ upper: array([1.])
+│  │  ├─ num_comps: 2
+│  ├─ File metadata (verbatim keys):
+│  │  ├─ basisType: 'serendipity'
+│  │  ├─ polyOrder: 1
+│  ├─ Inferred/defaulted:
+│  │  ├─ value_form: 'modal' (basis specified; value_form absent)
+│  ├─ Inferred from filename:
+│  │  ├─ sim: 'fsimple'
+│  │  ├─ block: None
+│  │  ├─ quantity: ''
+└─ File: fsimple.gkyl[1:55 PM]there's some repeated data
+[1:56 PM]─ File header (stored grid and array layout):
+│  │  ├─ cells: array([1])
+│  │  ├─ lower: array([-1.])
+│  │  ├─ upper: array([1.])
+│  │  ├─ num_comps: 2
+│  ├─ File metadata (verbatim keys):
+│  │  ├─ basisType: 'serendipity'
+│  │  ├─ polyOrder: 1is repeated
+Maxwell Rosen  [1:56 PM]
+It's storing the pure metadata at the bottom so that you know exactly what's in the file. I'll put this as an option like info --all
+Mana  [1:56 PM]
+we don't want this
+[1:56 PM]it's too much and repeated
+Maxwell Rosen  [1:57 PM]
+I think we do want to know if the loader is setting a default and metadata is not supplied
+Mana  [1:57 PM]
+sure, but we don't want it to display repeated meta
+[1:58 PM]at least
+pgkyl fsimple_quad.gkyl infodisplays
+...
+├─ DG: serendipity p1 (quad, num_quad=2)
+...so that's better
