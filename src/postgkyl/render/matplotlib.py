@@ -45,6 +45,7 @@ _INDEX_AXES_LABELS = [rf"$i_{i}$" for i in range(6)]
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
                | dict[int, tuple[float, float]])
+_AxisBound = Annotated[float | dict[int, float] | None, CliType(float | None)]
 
 
 def _indexed_saveas(saveas, index: int, indexed: bool):
@@ -258,6 +259,11 @@ def _shared_component_range(states, zshift: float, zscale: float) -> list:
   return ranges
 
 
+def _axis_bound(bound: _AxisBound, panel: int) -> float | None:
+  """Resolve a shared bound or a bound indexed by logical panel."""
+  return bound.get(panel) if isinstance(bound, dict) else bound
+
+
 def _split_ylim_for_component(limits, comp: int):
   """Resolve a split-axis y-limit specification for one component.
 
@@ -321,16 +327,16 @@ def plot(
     alpha: float | None = None,
     diverging: bool = False,
     lineouts: int | None = None,
-    xmin: float | None = None,
-    xmax: float | None = None,
+    xmin: _AxisBound = None,
+    xmax: _AxisBound = None,
     xscale: float = 1.0,
     xshift: float = 0.0,
-    ymin: float | None = None,
-    ymax: float | None = None,
+    ymin: _AxisBound = None,
+    ymax: _AxisBound = None,
     yscale: float = 1.0,
     yshift: float = 0.0,
-    zmin: float | None = None,
-    zmax: float | None = None,
+    zmin: _AxisBound = None,
+    zmax: _AxisBound = None,
     zscale: float = 1.0,
     zshift: float = 0.0,
     relax: bool = False,
@@ -411,6 +417,10 @@ def plot(
   (computed across the whole call) and one colorbar per panel, so the
   colorbar describes every dataset on the axes rather than whichever was
   drawn last.
+
+  Bounds such as ``ymin`` and ``zmax`` accept a shared number or a mapping
+  from zero-based logical panel index to bound. Unspecified panels use their
+  data limits. Coordinate axes shared by the layout keep common bounds.
 
   Most of the keyword arguments mirror main's ``output.plot``/CLI ``plot``
   1:1 (contour/quiver/streamline/lineouts, shifts/scales, limits, labels,
@@ -499,16 +509,16 @@ def plot(
     alpha: Surface or comparison transparency.
     diverging: Use a diverging colormap.
     lineouts: Draw this many lineouts from two-dimensional data.
-    xmin: Lower horizontal-axis bound.
-    xmax: Upper horizontal-axis bound.
+    xmin: Lower horizontal-axis bound, shared or mapped by panel index.
+    xmax: Upper horizontal-axis bound, shared or mapped by panel index.
     xscale: Horizontal-coordinate scale factor.
     xshift: Horizontal-coordinate shift.
-    ymin: Lower vertical-axis bound.
-    ymax: Upper vertical-axis bound.
+    ymin: Lower vertical-axis bound, shared or mapped by panel index.
+    ymax: Upper vertical-axis bound, shared or mapped by panel index.
     yscale: Vertical-coordinate scale factor.
     yshift: Vertical-coordinate shift.
-    zmin: Lower value or color bound.
-    zmax: Upper value or color bound.
+    zmin: Lower value or color bound, shared or mapped by panel index.
+    zmax: Upper value or color bound, shared or mapped by panel index.
     zscale: Value scale factor.
     zshift: Value shift.
     relax: Allow relaxed layout behavior for reused figures.
@@ -827,7 +837,8 @@ def plot(
           if ref_num_dims == 1 or lineouts is not None:
             mpl_fig.subplots(num_rows,
                              num_cols,
-                             sharex=True,
+                             sharex=not (transpose and ref_num_dims == 1),
+                             sharey=transpose and ref_num_dims == 1,
                              subplot_kw=subplot_kw)
           elif use_3d:  # 3D axes cannot share x/y with each other
             mpl_fig.subplots(num_rows, num_cols, subplot_kw=subplot_kw)
@@ -857,16 +868,8 @@ def plot(
             if sub_title:
               ax[ax_idx].set_title(sub_title, y=1.08)
 
-      # One color scale for every dataset drawn here (see
-      # _shared_component_range). Only the plain 2-D pcolormesh path consumes
-      # it: surface/contour/quiver/streamline/lineouts each own their own
-      # normalization, and an explicit zmin/zmax always wins.
+      # Lazily computed for pcolormesh panels without explicit value bounds.
       shared_z = None
-      if (len(states) > 1 and ref_num_dims == 2 and zmin is None
-          and zmax is None
-          and not (surface or contour or quiver or streamline or diverging)
-          and lineouts is None):
-        shared_z = _shared_component_range(states, zshift, zscale)
 
       if legend_subplot is not None:
         num_legend_subplots = 1 if squeeze else layout_num_comps
@@ -936,6 +939,12 @@ def plot(
 
         for comp in idx_comps:
           logical_ax_idx = 0 if squeeze else comp + cur_start_axes
+          comp_xmin = _axis_bound(xmin, logical_ax_idx)
+          comp_xmax = _axis_bound(xmax, logical_ax_idx)
+          comp_ymin = _axis_bound(ymin, logical_ax_idx)
+          comp_ymax = _axis_bound(ymax, logical_ax_idx)
+          comp_zmin = _axis_bound(zmin, logical_ax_idx)
+          comp_zmax = _axis_bound(zmax, logical_ax_idx)
           if split_linear_log:
             component_axes = ax[2 * logical_ax_idx:2 * logical_ax_idx + 2]
             cax = component_axes[0]
@@ -1046,8 +1055,8 @@ def plot(
                                    pad=0.1)
               if layout_clabel:
                 cax.set_zlabel(layout_clabel)
-              if zmin is not None or zmax is not None:
-                cax.set_zlim(zmin, zmax)
+              if comp_zmin is not None or comp_zmax is not None:
+                cax.set_zlim(comp_zmin, comp_zmax)
               comp_colorbar = False
 
             elif contour:  # ------------------------------------------------------
@@ -1161,11 +1170,11 @@ def plot(
               comp_legend = False
 
             else:  # ------------------------------------------------------------
-              if zmin is not None and zmax is not None:
+              if comp_zmin is not None and comp_zmax is not None:
                 extend = "both"
-              elif zmax is not None:
+              elif comp_zmax is not None:
                 extend = "max"
-              elif zmin is not None:
+              elif comp_zmin is not None:
                 extend = "min"
               x = (grid[0] + xshift) * xscale
               y = (grid[1] + yshift) * yscale
@@ -1176,12 +1185,14 @@ def plot(
                 y = (nodal_grid[1] + yshift) * yscale
               if x.ndim > 1:
                 x, y = x.transpose(), y.transpose()
-              comp_zmin, comp_zmax = zmin, zmax
               if diverging:
                 extent = np.abs(z).max()
-                comp_zmax = zmax if zmax is not None else extent
-                comp_zmin = zmin if zmin is not None else -extent
-              elif shared_z is not None and comp < len(shared_z):
+                comp_zmax = comp_zmax if comp_zmax is not None else extent
+                comp_zmin = comp_zmin if comp_zmin is not None else -extent
+              elif (len(states) > 1 and comp_zmin is None
+                    and comp_zmax is None):
+                if shared_z is None:
+                  shared_z = _shared_component_range(states, zshift, zscale)
                 comp_zmin, comp_zmax = shared_z[comp]
               vmax, vmin = comp_zmax, comp_zmin
               norm = None
@@ -1292,9 +1303,9 @@ def plot(
               side_ax.autoscale(enable=True, axis="y")
             if split_linear_log:
               if side_idx == 0:
-                side_ax.set_xlim(xmin, split_point)
+                side_ax.set_xlim(comp_xmin, split_point)
               else:
-                side_ax.set_xlim(split_point, xmax)
+                side_ax.set_xlim(split_point, comp_xmax)
               if not logx:
                 prune = None
                 if ((split_seam_ticklabels == "left" and side_idx == 1)
@@ -1303,17 +1314,17 @@ def plot(
                   prune = "upper" if side_idx == 0 else "lower"
                 if prune is not None:
                   side_ax.xaxis.get_major_locator().set_params(prune=prune)
-            elif xmin is not None or xmax is not None:
-              side_ax.set_xlim(xmin, xmax)
-            if ymin is not None or ymax is not None:
-              side_ax.set_ylim(ymin, ymax)
+            elif comp_xmin is not None or comp_xmax is not None:
+              side_ax.set_xlim(comp_xmin, comp_xmax)
+            if comp_ymin is not None or comp_ymax is not None:
+              side_ax.set_ylim(comp_ymin, comp_ymax)
             if side_ylim is not None:
               side_ax.set_ylim(*side_ylim)
             if fixaspect and not (surface and num_dims == 2):
               plt.setp(side_ax, aspect=aspect)
 
         if num_axes and not overlay_axes:
-          cur_start_axes += num_comps
+          cur_start_axes += len(idx_comps)
 
       mpl_fig.tight_layout()
       for output_path in _output_paths(save, family_saveas, states):

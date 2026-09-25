@@ -82,23 +82,23 @@ class TestNormalizeFrames:
 class TestFrameValueRange:
 
   def test_spans_every_frame(self):
-    frames = anim_mod._normalize_frames(_three_frames())
-    vmin, vmax = anim_mod._frame_value_range(frames)
+    values = [dat.values for dat in _three_frames()]
+    vmin, vmax = anim_mod._frame_value_range(values)
     assert vmin == 0.0
     assert vmax == 9.0  # last frame: arange(8) + 2.0 -> max 9.0
 
   def test_cutoff_clips_the_range(self):
-    frames = anim_mod._normalize_frames(_three_frames())
-    vmin_full, vmax_full = anim_mod._frame_value_range(frames)
-    vmin_cut, vmax_cut = anim_mod._frame_value_range(frames, cutoff=0.5)
+    values = [dat.values for dat in _three_frames()]
+    vmin_full, vmax_full = anim_mod._frame_value_range(values)
+    vmin_cut, vmax_cut = anim_mod._frame_value_range(values, cutoff=0.5)
     assert vmin_cut >= vmin_full
     assert vmax_cut <= vmax_full
 
   def test_scale_is_applied_before_taking_extrema(self):
     # A fixed range computed on unscaled values would not match what
     # matplotlib.plot actually draws once yscale/zscale is applied.
-    frames = anim_mod._normalize_frames(_three_frames())
-    vmin, vmax = anim_mod._frame_value_range(frames, yscale=2.0)
+    values = [dat.values for dat in _three_frames()]
+    vmin, vmax = anim_mod._frame_value_range(values, scale=2.0)
     assert vmin == 0.0
     assert vmax == 18.0  # last frame: (arange(8) + 2.0).max() * 2.0
 
@@ -250,7 +250,7 @@ class TestSaveFrames:
 
   def test_nproc_parallel_writes_the_same_frames(self, tmp_path):
     prefix = str(tmp_path / "frame")
-    paths = anim_mod.animate(_three_frames(),
+    paths = anim_mod.animate([_component_frame(offset) for offset in (0, 1, 2)],
                              saveframes=prefix,
                              nproc=2,
                              no_show=True)
@@ -446,6 +446,180 @@ def _field_frame(offset=0):
       [np.linspace(10, 20, 9), np.linspace(30, 40, 9)],
       np.arange(64, dtype=float).reshape(8, 8, 1) + offset)
   return dat
+
+
+def _component_frame(offset=0, num_dims=1, scales=(1, 10, 100, 1000)):
+  dat = GDataState()
+  values = np.linspace(1, 2, 8**num_dims).reshape((8, ) * num_dims)
+  dat.push([np.linspace(0, 1, 9) for _ in range(num_dims)],
+           (values[..., None] + offset) * np.array(scales))
+  return dat
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+@pytest.mark.parametrize("transpose", [False, True])
+def test_component_ranges_are_independent_and_fixed(num_dims, transpose):
+  animation = _draw_animation(
+      [_component_frame(0, num_dims),
+       _component_frame(3, num_dims)],
+      transpose=transpose)
+  for frame in (0, 1):
+    animation._func(frame, *animation._args)
+    for ax, scale in zip(animation._fig.axes[:4], (1, 10, 100, 1000)):
+      if num_dims == 1:
+        limits = ax.get_xlim() if transpose else ax.get_ylim()
+      else:
+        limits = ax.collections[0].get_clim()
+        assert ax.get_xlim() == (0, 1)
+        assert ax.get_ylim() == (0, 1)
+      assert limits == (scale, 5 * scale)
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+@pytest.mark.parametrize("subplots", [False, True])
+def test_component_ranges_follow_dataset_panels(num_dims, subplots):
+  frames = [[
+      _component_frame(offset, num_dims, scales=(1, 10)),
+      _component_frame(offset + 100, num_dims, scales=(1, 10))
+  ] for offset in (0, 3)]
+  animation = _draw_animation(frames, subplots=subplots, no_colorbar=True)
+  expected = ([(1, 5), (10, 50), (101, 105),
+               (1010, 1050)] if subplots else [(1, 105), (10, 1050)])
+  assert len(animation._fig.axes) == len(expected)
+  for ax, limits in zip(animation._fig.axes, expected):
+    if num_dims == 1:
+      assert ax.get_ylim() == limits
+    else:
+      assert all(mesh.get_clim() == limits for mesh in ax.collections)
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+def test_variable_component_ranges_preserve_explicit_bound(num_dims):
+  bound = {"ymin" if num_dims == 1 else "zmin": -1}
+  animation = _draw_animation(
+      [_component_frame(0, num_dims),
+       _component_frame(3, num_dims)],
+      variable_range=True,
+      no_colorbar=True,
+      **bound)
+  for frame, upper in enumerate((2, 5)):
+    animation._func(frame, *animation._args)
+    for ax, scale in zip(animation._fig.axes, (1, 10, 100, 1000)):
+      limits = (ax.get_ylim()
+                if num_dims == 1 else ax.collections[0].get_clim())
+      assert limits == (-1, upper * scale)
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+def test_squeezed_components_share_one_range(num_dims):
+  animation = _draw_animation(
+      [_component_frame(0, num_dims),
+       _component_frame(3, num_dims)],
+      squeeze=True,
+      no_colorbar=True)
+  assert len(animation._fig.axes) == 1
+  ax = animation._fig.axes[0]
+  if num_dims == 1:
+    assert ax.get_ylim() == (1, 5000)
+  else:
+    assert all(mesh.get_clim() == (1, 5000) for mesh in ax.collections)
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+def test_constant_and_empty_components_have_usable_ranges(num_dims):
+  frames = [_component_frame(0, num_dims), _component_frame(3, num_dims)]
+  for frame in frames:
+    frame.values[..., 1] = 0
+    frame.values[..., 2] = 10
+    frame.values[..., 3] = np.nan
+  animation = _draw_animation(frames)
+  for frame in (0, 1):
+    animation._func(frame, *animation._args)
+    limits = [
+        ax.get_ylim() if num_dims == 1 else ax.collections[0].get_clim()
+        for ax in animation._fig.axes[:4]
+    ]
+    assert limits[0] == (1, 5)
+    assert limits[1][0] < 0 < limits[1][1]
+    assert limits[2][0] < 10 < limits[2][1]
+    assert all(
+        np.isfinite(lower) and np.isfinite(upper) and lower < upper
+        for lower, upper in limits)
+
+
+@pytest.mark.parametrize("num_dims", [1, 2])
+def test_component_ranges_include_transforms_and_cutoff(num_dims):
+  transform = "y" if num_dims == 1 else "z"
+  animation = _draw_animation(
+      [_component_frame(0, num_dims),
+       _component_frame(3, num_dims)],
+      cutoffglobalrange=0.5,
+      no_colorbar=True,
+      **{
+          transform + "shift": 2,
+          transform + "scale": -3
+      })
+  for ax, scale in zip(animation._fig.axes, (1, 10, 100, 1000)):
+    limits = ax.get_ylim() if num_dims == 1 else ax.collections[0].get_clim()
+    assert limits == (-3 * (4.25 * scale + 2), -3 * (1.75 * scale + 2))
+
+
+def test_diverging_component_ranges_are_symmetric_and_fixed():
+  frames = [
+      _component_frame(offset, 2, scales=(-1, 10, -100, 1000))
+      for offset in (0, 3)
+  ]
+  animation = _draw_animation(frames, diverging=True, no_colorbar=True)
+  for frame in (0, 1):
+    animation._func(frame, *animation._args)
+    for ax, scale in zip(animation._fig.axes, (1, 10, 100, 1000)):
+      assert ax.collections[0].get_clim() == (-5 * scale, 5 * scale)
+
+
+def test_component_ranges_use_squeezed_spatial_dimensions():
+  frames = [_component_frame(), _component_frame(3)]
+  for frame in frames:
+    frame.push(list(frame.grid) + [np.array([0, 1])], frame.values[:, None])
+  animation = _draw_animation(frames, yscale=2)
+  for ax, scale in zip(animation._fig.axes, (1, 10, 100, 1000)):
+    assert ax.get_ylim() == (2 * scale, 10 * scale)
+
+
+@pytest.mark.parametrize("group", [0, 1])
+def test_lineout_components_use_their_value_axis(group):
+  animation = _draw_animation(
+      [_component_frame(0, 2), _component_frame(3, 2)], group=group, yscale=2)
+  for ax, scale in zip(animation._fig.axes[:4], (1, 10, 100, 1000)):
+    assert ax.get_ylim() == (2 * scale, 10 * scale)
+
+
+def test_vector_subplots_use_one_panel_per_component_pair():
+  animation = _draw_animation(
+      [[_component_frame(0, 2), _component_frame(3, 2)]],
+      subplots=True,
+      quiver=True,
+      no_colorbar=True)
+  assert len(animation._fig.axes) == 4
+  assert all(len(ax.collections) == 1 for ax in animation._fig.axes)
+
+
+def test_saved_frames_keep_component_ranges(tmp_path, monkeypatch):
+  from matplotlib.figure import Figure
+
+  saved_limits = []
+  savefig = Figure.savefig
+
+  def record_limits(figure, *args, **kwargs):
+    saved_limits.append([ax.get_ylim() for ax in figure.axes])
+    return savefig(figure, *args, **kwargs)
+
+  monkeypatch.setattr(Figure, "savefig", record_limits)
+  paths = anim_mod.animate(
+      [_component_frame(), _component_frame(3)],
+      saveframes=str(tmp_path / "components"),
+      no_show=True)
+  assert all(os.path.isfile(path) for path in paths)
+  assert saved_limits == [[(1, 5), (10, 50), (100, 500), (1000, 5000)]] * 2
 
 
 def test_line_controls_and_explicit_limits():

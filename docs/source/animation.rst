@@ -39,10 +39,13 @@ frame its own panels; ``squeeze=True`` overlays components in one panel.
 ``group=0`` or ``group=1`` draws field lineouts along that coordinate.
 
 ``xlim``, ``ylim``, and ``zlim`` accept pairs (or comma-separated strings) and
-supersede individual minimum/maximum bounds. Fixed ranges include value shifts
-and scaling. ``variable_range=True`` recomputes the range over all blocks of
-each frame, while respecting explicit bounds. ``cutoffglobalrange`` selects a
-central fraction of the dataset extrema, between zero and one.
+supersede individual minimum/maximum bounds. Each component panel has its own
+fixed value or color range spanning all frames, including value shifts and
+scaling. Datasets drawn in the same panel share a range; ``subplots=True``
+keeps their ranges separate, and ``squeeze=True`` combines the components'
+ranges. ``variable_range=True`` recomputes each panel's range over the blocks
+in that frame, while respecting explicit bounds. ``cutoffglobalrange`` selects
+a central fraction of each panel's dataset extrema, between zero and one.
 
 The generated CLI uses the public API's names: the former ``--float`` control
 is ``--variable_range``, ``--nsubplotrow`` / ``--nsubplotcol`` are

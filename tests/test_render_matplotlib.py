@@ -81,6 +81,41 @@ class TestMultiPanel:
     fig = backend.plot(_field_2d(ncomp=1), no_show=True)
     assert fig.axes[0].get_title() == ""
 
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_value_bounds_can_target_one_panel(self, transpose):
+    dat = _line()
+    dat.values = np.column_stack((dat.values[:, 0], dat.values[:, 0] + 100))
+    axis = "x" if transpose else "y"
+    fig = backend.plot(dat,
+                       transpose=transpose,
+                       no_show=True,
+                       **{
+                           axis + "min": {
+                               0: -1
+                           },
+                           axis + "max": {
+                               0: 10
+                           }
+                       })
+    limits = [ax.get_xlim() if transpose else ax.get_ylim() for ax in fig.axes]
+    assert limits[0] == (-1, 10)
+    assert 90 < limits[1][0] <= 100
+    assert 107 <= limits[1][1] < 120
+
+  def test_color_bounds_can_target_one_panel_of_overlaid_fields(self):
+    first, second = _field_2d(ncomp=2), _field_2d(ncomp=2)
+    second.values = second.values + 100
+    fig = backend.plot(first,
+                       second,
+                       figure=plt.figure(),
+                       zmin={1: -5},
+                       zmax={1: 200},
+                       no_colorbar=True,
+                       no_show=True)
+    for ax, limits in zip(fig.axes, [(0, 163), (-5, 200)]):
+      assert len(ax.collections) == 2
+      assert all(mesh.get_clim() == limits for mesh in ax.collections)
+
   def test_legend_can_be_limited_to_one_subplot_and_relocated(self):
     a = _line()
     b = _line(offset=3.0)

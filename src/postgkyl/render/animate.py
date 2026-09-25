@@ -60,38 +60,42 @@ def _normalize_frames(data,
   return frames
 
 
-def _frame_value_range(frames: list[list["GDataState"]],
+def _frame_value_range(values: Iterable[np.ndarray],
                        cutoff: float | None = None,
                        *,
-                       yscale: float = 1.0,
-                       zscale: float = 1.0,
-                       yshift: float = 0.0,
-                       zshift: float = 0.0) -> tuple[float, float]:
-  """Value range spanning every dataset in every frame.
+                       scale: float = 1.0,
+                       shift: float = 0.0) -> tuple[float, float] | None:
+  """Value range spanning the arrays drawn in one panel across frames.
 
-  Each dataset is scaled by ``yscale`` (1-D) or ``zscale`` (2-D) before its
-  extrema are taken, matching the scale ``matplotlib.plot`` applies when it
-  actually draws the values -- otherwise a fixed range computed here would
-  not match the plotted (scaled) data.
+  Shift and scale values before taking extrema, matching the transformation
+  applied by ``matplotlib.plot``.
 
   With ``cutoff`` (a central fraction in ``(0, 1]``), the range is clipped
   to that percentile band of the per-dataset extrema instead of the true
   min/max -- useful when a few outlier frames would otherwise wash out the
   color/y-axis scale for the rest of the animation.
+
+  Ignore nonfinite values, return ``None`` for an empty panel, and pad
+  constant values so their axis has a nonzero span.
   """
   extrema = []
-  for frame in frames:
-    for dat in frame:
-      scaled = ((dat.values + yshift) * yscale if dat.num_dims == 1 else
-                (dat.values + zshift) * zscale)
-      extrema.append(np.nanmin(scaled))
-      extrema.append(np.nanmax(scaled))
+  for array in values:
+    scaled = (array + shift) * scale
+    finite = scaled[np.isfinite(scaled)]
+    if finite.size:
+      extrema.append(finite.min())
+      extrema.append(finite.max())
+  if not extrema:
+    return None
   extrema = np.array(extrema)
   vmin, vmax = float(extrema.min()), float(extrema.max())
   if cutoff:
     boundary = 100.0 * (1.0 - cutoff) / 2.0
     vmax = float(np.percentile(extrema, 100.0 - boundary))
     vmin = float(np.percentile(extrema, boundary))
+  if vmin == vmax:
+    padding = 0.05 * abs(vmin) or 0.05
+    vmin, vmax = vmin - padding, vmax + padding
   return vmin, vmax
 
 
@@ -345,6 +349,9 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             tmpdir: str | None = None):
   """Animate a sequence of frames, one frame per dataset (or dataset group).
 
+  Each panel uses its own value range across all frames. Datasets overlaid
+  in a panel share that range; explicit bounds override the computed limits.
+
   Args:
     data: a flat iterable of datasets (each becomes a single-dataset frame),
       or an iterable of frames where each frame is itself a list of
@@ -403,8 +410,8 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     multiblock: Force datasets with the same frame index into one frame.
     grouptags: Build a separate animation for each dataset tag.
     interval: live-animation delay between frames, in milliseconds.
-    variable_range: Recompute the value/color scale for every frame instead
-      of holding ``ymin``/``ymax``/``zmin``/``zmax`` constant.
+    variable_range: Recompute each panel's value/color scale for every frame
+      instead of holding it constant across the animation.
     cutoffglobalrange: clip the fixed range to this central percentile band
       (see ``_frame_value_range``); ``None`` uses the true min/max.
     notitle: suppress the per-frame frame/time title.
@@ -575,26 +582,47 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
 
 
 def _apply_value_range(frames, kwargs):
-  """Fill unspecified value bounds without constraining spatial coordinates."""
-  for dimension in (1, 2):
-    selected = [[dat for dat in frame if dat.num_dims == dimension]
-                for frame in frames]
-    selected = [frame for frame in selected if frame]
-    if not selected:
+  """Fill unspecified value bounds from the data drawn in each panel."""
+  panel_values = {}
+  step = 2 if kwargs.get("quiver") or kwargs.get("streamline") else 1
+  for frame in frames:
+    start_axes = 0
+    for dat in frame:
+      dimension = np.count_nonzero(dat.num_cells > 1)
+      if dimension not in (1, 2):
+        continue
+      if dimension == 1:
+        axis = "x" if kwargs.get("transpose") else "y"
+      else:
+        axis = "y" if kwargs.get("lineouts") is not None else "z"
+      num_panels = dat.num_comps // step
+      if kwargs.get("squeeze"):
+        panel_values.setdefault((axis, 0), []).append(dat.values)
+      else:
+        for comp in range(num_panels):
+          index = slice(step * comp, step * (comp + 1))
+          panel_values.setdefault((axis, start_axes + comp),
+                                  []).append(dat.values[..., index])
+      if kwargs.get("subplots"):
+        start_axes += num_panels
+
+  bounds = {}
+  for (axis, panel), values in panel_values.items():
+    transform = "z" if axis == "z" else "y"
+    limits = _frame_value_range(values,
+                                kwargs.get("cutoffglobalrange"),
+                                scale=kwargs.get(transform + "scale", 1.0),
+                                shift=kwargs.get(transform + "shift", 0.0))
+    if limits is None:
       continue
-    low, high = _frame_value_range(selected,
-                                   kwargs.get("cutoffglobalrange"),
-                                   yscale=kwargs.get("yscale", 1.0),
-                                   zscale=kwargs.get("zscale", 1.0),
-                                   yshift=kwargs.get("yshift", 0.0),
-                                   zshift=kwargs.get("zshift", 0.0))
-    if dimension == 2 and kwargs.get("diverging"):
+    low, high = limits
+    if axis == "z" and kwargs.get("diverging"):
       high = max(abs(low), abs(high))
       low = -high
-    axis = ("x" if kwargs.get("transpose") else "y") if dimension == 1 else "z"
     for bound, value in (("min", low), ("max", high)):
       if kwargs.get(axis + bound) is None:
-        kwargs[axis + bound] = value
+        bounds.setdefault(axis + bound, {})[panel] = value
+  kwargs.update(bounds)
 
 
 def _animate_frames(frames, *, plot_kwargs, interval, save, saveas, fps, codec,
