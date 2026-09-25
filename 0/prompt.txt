@@ -1,0 +1,9 @@
+The command pgkyl tests/test_data/generated/3d_ms_p1.gkyl interp sel --z1 3 pl --saveas "example.png"
+
+Returns [Image #1] 
+
+The y axis is z1, but would have expected it to be z2 becuase I selected a component of z1. Explain this. Propose a fix and solution
+
+---
+
+Implelement your proposed fix

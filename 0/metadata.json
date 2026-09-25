@@ -1,0 +1,54 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3DFX8C7YRV4M44KBC4E6JTA",
+  "session_id": "01a0daf2-4d9d-7a60-8a10-795247d50302",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T23:55:16.600264822Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "src/postgkyl/render/_prep.py",
+    "src/postgkyl/render/matplotlib.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/test_render_matplotlib.py",
+    "tests/test_render_plotly.py",
+    "tests/test_render_prep.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "7f293ae699f9",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 67141,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1787008,
+    "output_tokens": 8960,
+    "api_call_count": 32
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T23:55:16.551293976Z",
+    "agent_lines": 146,
+    "agent_removed": 61,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 146,
+    "total_lines_changed": 207,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3DFX8C7YRV4M44KBC4E6JTA",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/postgkyl/render/_prep.py",
+    "src/postgkyl/render/matplotlib.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/test_render_matplotlib.py",
+    "tests/test_render_plotly.py",
+    "tests/test_render_prep.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 67141,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1787008,
+    "output_tokens": 8960,
+    "api_call_count": 32
+  }
+}
