@@ -1,5 +1,5 @@
 ---
-name: postgkyl-api-cli
+name: api-cli
 description: Add or change public Postgkyl verbs, signatures, fluent aliases, or generated CLI behavior while preserving API/CLI parity.
 ---
 

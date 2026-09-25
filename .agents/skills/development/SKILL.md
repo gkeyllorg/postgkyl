@@ -1,6 +1,6 @@
 ---
-name: postgkyl-development
-description: Set up Postgkyl development, choose verification commands, or maintain shared agent configuration and Entire hooks.
+name: development
+description: Set up Postgkyl development, format code, choose verification commands, or maintain shared agent configuration and Entire hooks.
 ---
 
 # Develop and verify
@@ -52,3 +52,27 @@ ignored, while new skill entry points must be visible to Git.
 For instruction/configuration-only changes, validate skill frontmatter, relative
 links, Git visibility, and hook preservation; running scientific tests is not
 necessary unless application behavior changes.
+
+## Formatting
+
+Run formatting and lint hooks from the repository root after edits. For a focused
+check, pass every changed or new file explicitly:
+
+```bash
+pre-commit run --files path/to/changed_file.py path/to/changed_file.c
+```
+
+For the same full check as CI, run:
+
+```bash
+pre-commit validate-config
+pre-commit run --all-files --show-diff-on-failure
+```
+
+`.pre-commit-config.yaml` pins the tool versions. YAPF formats Python using
+`.style.yapf` (two-space indentation, 80 columns); clang-format formats C/C++
+using `.clang-format`. Ruff checks lint rules from `pyproject.toml`.
+The hooks also check TOML/YAML, merge conflicts, trailing whitespace, and final
+newlines. If hooks rewrite files, review the diff and rerun until they pass.
+`--all-files` covers tracked files; pass new files with `--files` until Git tracks
+them.

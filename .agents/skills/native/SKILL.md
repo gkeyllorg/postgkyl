@@ -1,5 +1,5 @@
 ---
-name: postgkyl-native
+name: native
 description: Change or troubleshoot the Gkeyll native bridge, basis matrices, readers, memory ownership, or native builds in Postgkyl.
 ---
 

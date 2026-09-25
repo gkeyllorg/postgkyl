@@ -1,5 +1,5 @@
 ---
-name: postgkyl-testing
+name: testing
 description: Design and best practices for testing Postgkyl code, including unit tests and examples.
 ---
 

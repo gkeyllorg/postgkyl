@@ -1,5 +1,5 @@
 ---
-name: postgkyl-design
+name: design
 description: Apply Postgkyl coding doctrine when designing, implementing, or reviewing Python changes.
 ---
 
@@ -80,3 +80,9 @@ its outputs stay in its vocabulary, so uses compose.
 **X. Trust the most formal thing first.** Types over tests, tests
 over docs, docs over comments. Invest in whichever layer catches the
 bug earliest with the least ongoing maintenance cost.
+
+## Formatting
+
+Apply the repository's configured formatters before finishing code changes.
+Follow the [development formatting workflow](../development/SKILL.md#formatting);
+keep formatter options in their existing configuration files.

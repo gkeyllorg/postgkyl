@@ -1,5 +1,5 @@
 ---
-name: postgkyl-architecture
+name: architecture
 description: Place modules and enforce import boundaries when adding or refactoring Postgkyl operations, diagnostics, rendering, or public surfaces.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: postgkyl-data
+name: data
 description: Preserve DG representation and backend semantics when changing loading, arithmetic, conversions, integration, or terminal data consumers.
 ---
 

@@ -298,9 +298,9 @@ python -m build --no-isolation
 scripts/smoke_wheel.sh dist/*.whl
 ```
 
-## Authors
+## Contributors
 
-The full list of authors can be found [here](AUTHORS.md).
+See the [contributors on GitHub](https://github.com/ammarhakim/postgkyl/graphs/contributors).
 
 ## License
 
