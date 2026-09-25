@@ -1,0 +1,5 @@
+Delete AUTHORS.md. If you want to have a "contributors" section in README, fine, but don't mention names, simply point to the URL of contributors on github (we did that for gkeyll too)
+rename the skill file folders so they don't start with postgkyl-, it's redundant
+make sure formatting is mentioned in some skill files, so agents format things correctly
+there's a .style.yapf file. Why is that needed? if not, delete
+there's a MANIFEST.in file, why is that needed? if not, delete

@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3AY09XYXV5P5KNT4WA5QB33",
+  "session_id": "01a0d5db-62d3-7702-bb2d-23ca9d786645",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T00:03:53.502481461Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    ".agents/skills/api-cli/SKILL.md",
+    ".agents/skills/architecture/SKILL.md",
+    ".agents/skills/data/SKILL.md",
+    ".agents/skills/design/SKILL.md",
+    ".agents/skills/development/SKILL.md",
+    ".agents/skills/native/SKILL.md",
+    ".agents/skills/postgkyl-api-cli/SKILL.md",
+    ".agents/skills/postgkyl-architecture/SKILL.md",
+    ".agents/skills/postgkyl-data/SKILL.md",
+    ".agents/skills/postgkyl-design/SKILL.md",
+    ".agents/skills/postgkyl-development/SKILL.md",
+    ".agents/skills/postgkyl-native/SKILL.md",
+    ".agents/skills/postgkyl-testing/SKILL.md",
+    ".agents/skills/testing/SKILL.md",
+    "AGENTS.md",
+    "AUTHORS.md",
+    "README.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "0dbffc59153d",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 39568,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 333056,
+    "output_tokens": 8215,
+    "api_call_count": 10
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T00:03:53.434553949Z",
+    "agent_lines": 344,
+    "agent_removed": 335,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 344,
+    "total_lines_changed": 679,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

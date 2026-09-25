@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3AY09XYXV5P5KNT4WA5QB33",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".agents/skills/api-cli/SKILL.md",
+    ".agents/skills/architecture/SKILL.md",
+    ".agents/skills/data/SKILL.md",
+    ".agents/skills/design/SKILL.md",
+    ".agents/skills/development/SKILL.md",
+    ".agents/skills/native/SKILL.md",
+    ".agents/skills/postgkyl-api-cli/SKILL.md",
+    ".agents/skills/postgkyl-architecture/SKILL.md",
+    ".agents/skills/postgkyl-data/SKILL.md",
+    ".agents/skills/postgkyl-design/SKILL.md",
+    ".agents/skills/postgkyl-development/SKILL.md",
+    ".agents/skills/postgkyl-native/SKILL.md",
+    ".agents/skills/postgkyl-testing/SKILL.md",
+    ".agents/skills/testing/SKILL.md",
+    "AGENTS.md",
+    "AUTHORS.md",
+    "README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 39568,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 333056,
+    "output_tokens": 8215,
+    "api_call_count": 10
+  }
+}
