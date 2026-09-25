@@ -1,0 +1,5 @@
+Make sure the clone of gkeyll includes the folders .agents .claude .codex ci and .github
+
+---
+
+In fact, change it to simply drop the folders of vlasov, pkpm, moments, and gyrokinetic. These folders should be excluded from the clone. Every other folder should be included, as well as every file in the root
