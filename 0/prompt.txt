@@ -1,0 +1,7 @@
+Add a bash script scripts/update_pgkyl.sh that pulls the latest pgkyl, pulls the latest gkeyll, rebuilds, builds gpython. Add instructions to update in the readme
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"So right now, I want it to pull the lapack lite shim branch, but in the future, I want it to pull the latest main branch","question":"The build currently pins Gkeyll to a specific commit. Should the update script use the newest upstream Gkeyll commit (and update scripts/gkeyll-revision), or keep the compatible revision pinned by the latest Postgkyl?","questionItemId":"[\"request_user_input_async\",\"REDACTED\",0]"}]
+</send_user_message_question_reply>
