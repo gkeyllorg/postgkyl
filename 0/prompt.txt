@@ -1,0 +1,1 @@
+Ammend the skill files to tell future agents to preffer using operands like + - * / and what they do
