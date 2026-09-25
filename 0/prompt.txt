@@ -1,0 +1,34 @@
+Can you explain what's going on here? I would have expected the hybrid basis to have 6 quadrature points. In gkyl_cart_modal_gkhybrid_priv.h, we do set it to be 6 quadrature points. 
+
+
+GKYL_CU_D static struct {
+  int count[4];
+} num_quad_list[] = {{0, 0, 0, 0},  {0, 0, 0, 0},  {0, 6, 0, 0},
+                     {0, 12, 0, 0}, {0, 24, 0, 0}, {0, 48, 0, 0}};
+
+pgkyl fsimple_hyb.gkyl info represent -t quad info
+(default#0)
+├─ Number of components: 6
+├─ Number of dimensions: 2
+├─ Grid: (uniform)
+│  ├─ Dim 0: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+│  └─ Dim 1: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+├─ Maximum: 1.000000e+00 at (0, 0) component 5
+├─ Minimum: 0.000000e+00 at (0, 0) component 0
+├─ DG: hybrid p1 (modal)
+└─ File: fsimple_hyb.gkyl
+
+(default#0)
+├─ Number of components: 4
+├─ Number of dimensions: 2
+├─ Grid: (uniform)
+│  ├─ Dim 0: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+│  └─ Dim 1: Num. cells: 1; Lower: -1.000000e+00; Upper: 1.000000e+00
+├─ Maximum: 6.409876e-17 at (0, 0) component 0
+├─ Minimum: -6.409876e-17 at (0, 0) component 1
+├─ DG: hybrid p1 (quad, num_quad=2)
+└─ File: fsimple_hyb.gkyl
+
+---
+
+The represent quad should use the gkeyll function modal_to_quad, returning the array at it's quadrature nodes. This should be invertable using quad_to_modal. Use the appropriate gkeyll basis and the number of quad nodes that are given INSIDE gkeyll. The interpolation routines should use as many of Gkeyll's basis operations as possible. Validating using the example provided of pgkyl fsimple_hyb.gkyl info represent -t quad info represent -t modal info pr
