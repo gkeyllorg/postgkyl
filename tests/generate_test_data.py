@@ -303,6 +303,35 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
 
+  # Packed GK moments with nonzero slopes and jumps between unit-width cells.
+  # Each field is a + b*xi in its cell, xi in [-1, 1].
+  gk_mean = np.array([[3., 1., 6., 4.], [5., 2., 8., 7.]])
+  gk_slope = np.array([[0.7, -0.4, 1.2, 0.5], [-0.6, 0.3, -0.8, 1.1]])
+  gk_coeffs = np.stack([np.sqrt(2.) * gk_mean,
+                        np.sqrt(2. / 3.) * gk_slope],
+                       axis=-1).reshape(2, 8)
+  write_gkyl_field(out_dir / "gk_moments_p1.gkyl", [2], [0.], [2.],
+                   gk_coeffs,
+                   1,
+                   "serendipity",
+                   metadata={
+                       "mass": 2.,
+                       "charge": 3.
+                   })
+
+  # Local derivatives see affine slopes, not jumps in the cell means.
+  for ndim in (1, 2, 3):
+    cells = (2, ) * ndim
+    nb = 2**ndim
+    drift = np.zeros((*cells, 5, nb))
+    norm = np.sqrt(nb)
+    drift[..., 0, 0] = norm * np.arange(2**ndim).reshape(cells)
+    drift[..., 0, 1:ndim + 1] = norm / np.sqrt(3.) * np.arange(1, ndim + 1)
+    drift[..., 1:, 0] = norm * np.array([2., 3., 4., 5.])
+    write_gkyl_field(out_dir / f"gk_drift_{ndim}d_p1.gkyl",
+                     list(cells), [0.] * ndim, [2.] * ndim,
+                     drift.reshape(*cells, 5 * nb), 1, "serendipity")
+
   # Selection tests need unit-width cells and two complete p2 tensor fields.
   selection_nc = 2 * num_comps("tensor", 2, 2)
   selection_values = np.arange(4 * 3 * selection_nc,

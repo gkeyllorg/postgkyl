@@ -42,6 +42,10 @@ def load_quantity(
 ) -> list:
   """Load and compute a pre-named gyrokinetic quantity.
 
+  Modal source files retain their DG representation through the calculation:
+  products, inverses, square roots, and derivatives use native DG operations.
+  Call ``interpolate()`` on the returned datasets when point samples are needed.
+
   Args:
     quantity: Registered quantity name (see :func:`available_quantities`).
     species: Species name, or a comma-separated list of them; ``None`` for

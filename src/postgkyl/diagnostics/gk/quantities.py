@@ -1,24 +1,16 @@
 """Gyrokinetic derived-quantity physics -- the ``fetch_*`` functions behind the
 quantity registry.
 
-Ported from ``src_bak/postgkyl/gk/gk_quantities/fetch_funcs.py``. Every
-``fetch_*`` there computed through ``GkeyllDGops`` -- a ``ctypes`` binding
-that is dead in this tree (rule #2). Rewired here onto the new surface:
-every fetch function **interpolates its inputs first**
-(:meth:`~postgkyl.gdata.gdata.GData.interpolate`, the sanctioned "evaluation"
-bridge -- REFACTOR_GKEYLL_FFI.md's field domain) and then computes with
-plain NumPy on the interpolated values, exactly like every sibling equation
-module (``five_moment``, ``ten_moment``, ``mhd``, ...). This is a deliberate
-divergence from a literal "stay modal and call the weak kernels" port:
-extracting one physical field's coefficients out of a *packed* multi-field
-source file (``M0M1M2``, ``BiMaxwellianMoments``, ``HamiltonianMoments``, ...)
-has no primitive reachable from this layer's allowed imports (``gdatastate``,
-``operations``, ``numerics``, ``api`` -- not ``dg``/``gpython``; only ``operations.select``
-could slice a component, and it unconditionally refuses gkyl-backed data).
-Interpolating first sidesteps that gap entirely and matches the one
-established working pattern in this codebase; see the layer-12 report for
-the full trade-off discussion. Physical constants come from
-``scipy.constants`` (rule #13), not a re-typed ``gk/gkeyll_const.py`` table.
+All formulas preserve their inputs' representation. Modal sources stay native:
+products and inverses use Gkeyll weak kernels, square roots use its quadrature
+projection, and derivatives act on each cell's polynomial. Interpolation is
+an explicit downstream operation, after the quantity has been computed.
+
+Weak products are not associative. Keep the intermediate projections and the
+inverse-then-multiply order of the original GK quantity definitions: ``a * (1/b)``
+uses a weak inverse and product, whereas ``a/b`` solves a weak division directly.
+``**0.5`` uses Gkeyll's quadrature projection, including its negative-value floor.
+Inputs are the operator-enabled ``GData`` objects returned by the GK loader.
 
 Naming keys (matching ``src_bak`` so the registry mapping in ``registry.py``
 stays recognizable):
@@ -31,16 +23,15 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING
 
-import numpy as np
 from scipy import constants
 
 from postgkyl import operations
 
 if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+  from postgkyl.gdata import GData
 
 
-def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
+def _get_ctx_val(gdata: "GData", key: str, **kwargs):
   """A value (or one value per species) for ``key``: ``kwargs[key]``
   (an explicit ``--extra`` override) wins over ``gdata.ctx[key]`` (the
   file's own attribute), which wins over raising.
@@ -77,31 +68,16 @@ def _get_ctx_val(gdata: "GDataState", key: str, **kwargs):
       f"with '--extra {key}=<value1>,<value2>,...'.")
 
 
-def _ensure_interpolated(d: "GDataState") -> "GDataState":
-  """Interpolate ``d`` onto the field domain unless it already is.
-
-  Uses the ``operations.interpolate`` verb directly (rather than the fluent
-  ``GData.interpolate()``) so this works on any ``GDataState``, not just the
-  fluent subclass -- these functions receive whatever
-  ``GkQuantity.get_src_gdata`` hands them.
-  """
-  if d.ctx.get("interpolated"):
-    return d
-  return operations.interpolate(d)
-
-
-def _component(d: "GDataState", comp: int | None) -> "GDataState":
-  """Interpolate ``d`` and select physical component ``comp`` (all if None)."""
-  interpolated = _ensure_interpolated(d)
-  return interpolated if comp is None else operations.select(interpolated,
-                                                             comp=comp)
+def _component(d: "GData", comp: int | None) -> "GData":
+  """Select a physical field while retaining its complete DG expansion."""
+  return d.clone() if comp is None else operations.select(d, comp=comp)
 
 
 # --------------------------------------------------- generic fetch factories
 def _make_fetch_comp(icomp: int | None):
   """A fetch function that extracts the ``icomp``-th physical component."""
 
-  def fetch(gdatas, **kwargs):
+  def fetch(gdatas: list["GData"], **kwargs):
     return _component(gdatas[0], icomp)
 
   fetch.__name__ = f"fetch_comp{icomp}" if icomp is not None else "fetch_compAll"
@@ -110,12 +86,12 @@ def _make_fetch_comp(icomp: int | None):
 
 def _make_fetch_binop(si: int, ci: int, sj: int, cj: int, op):
   """A fetch function combining component ``ci`` of source ``si`` with
-  component ``cj`` of source ``sj`` via ``op`` (both interpolated first)."""
+  component ``cj`` of source ``sj`` via a representation-aware operation."""
 
-  def fetch(gdatas, **kwargs):
+  def fetch(gdatas: list["GData"], **kwargs):
     a = _component(gdatas[si], ci)
     b = _component(gdatas[sj], cj)
-    return a._result(a.grid, op(a.values, b.values))
+    return a * (1.0 / b) if op is operator.truediv else op(a, b)
 
   fetch.__name__ = f"fetch_s{si}c{ci}_{op.__name__}_s{sj}c{cj}"
   return fetch
@@ -138,82 +114,76 @@ fetch_s1c0_div_s0c0 = _make_fetch_binop(1, 0, 0, 0, operator.truediv)
 
 
 # ------------------------------------------------------------------ moments
-def fetch_M1_from_H(gdatas, **kwargs):
+def fetch_M1_from_H(gdatas: list["GData"], **kwargs):
   """M1 from the Hamiltonian moments: ``mass**-1 * (comp0 * comp1)``."""
-  hmom = _ensure_interpolated(gdatas[0])
+  hmom = gdatas[0]
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  values = hmom.values[..., 0, np.newaxis] * hmom.values[..., 1, np.newaxis]
-  return hmom._result(hmom.grid, values / mass)
+  return _component(hmom, 0) * _component(hmom, 1) / mass
 
 
-def fetch_Tpar_from_BiMax(gdatas, **kwargs):
+def fetch_Tpar_from_BiMax(gdatas: list["GData"], **kwargs):
   """Tpar from BiMaxwellian moments: ``mass * comp2``."""
   Tpar = fetch_s0c2(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  return Tpar._result(Tpar.grid, mass * Tpar.values)
+  return Tpar * mass
 
 
-def fetch_Tpar_from_M0_M1_M2par(gdatas, **kwargs):
+def fetch_Tpar_from_M0_M1_M2par(gdatas: list["GData"], **kwargs):
   """``upar*M1 + M0*Tpar/m = M2par`` => ``Tpar = m*(M2par - upar*M1)/M0``."""
-  m0, m1, m2par = (_ensure_interpolated(g) for g in gdatas)
+  m0, m1, m2par = gdatas
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  upar = m1.values / m0.values
-  values = mass * (m2par.values - upar * m1.values) / m0.values
-  return m0._result(m0.grid, values)
+  m0_inv = 1.0 / m0
+  upar = m1 * m0_inv
+  thermal = (m2par - upar * m1) * mass
+  return thermal * m0_inv
 
 
-def fetch_Tperp_from_BiMax(gdatas, **kwargs):
+def fetch_Tperp_from_BiMax(gdatas: list["GData"], **kwargs):
   """Tperp from BiMaxwellian moments: ``mass * comp3``."""
   Tperp = fetch_s0c3(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  return Tperp._result(Tperp.grid, mass * Tperp.values)
+  return Tperp * mass
 
 
-def fetch_Tperp_from_M0_M2perp(gdatas, **kwargs):
+def fetch_Tperp_from_M0_M2perp(gdatas: list["GData"], **kwargs):
   """``Tperp = 0.5 * mass * (M2perp / M0)``."""
   Tperp = fetch_s1c0_div_s0c0(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  return Tperp._result(Tperp.grid, 0.5 * mass * Tperp.values)
+  return Tperp * (0.5 * mass)
 
 
-def fetch_temp_from_Max(gdatas, **kwargs):
+def fetch_temp_from_Max(gdatas: list["GData"], **kwargs):
   """temp from Maxwellian moments: ``mass * comp2``."""
   temp = fetch_s0c2(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  return temp._result(temp.grid, mass * temp.values)
+  return temp * mass
 
 
-def fetch_temp_from_Tpar_Tperp(gdatas, **kwargs):
+def fetch_temp_from_Tpar_Tperp(gdatas: list["GData"], **kwargs):
   """``temp = (Tpar + 2*Tperp) / 3``."""
-  Tpar, Tperp = (_ensure_interpolated(g) for g in gdatas)
-  values = (Tpar.values + 2.0 * Tperp.values) / 3.0
-  return Tpar._result(Tpar.grid, values)
+  Tpar, Tperp = gdatas
+  return (Tpar + 2.0 * Tperp) / 3.0
 
 
-def fetch_press_from_Max(gdatas, **kwargs):
+def fetch_press_from_Max(gdatas: list["GData"], **kwargs):
   """Pressure from Maxwellian moments: ``press = mass * comp0 * comp2``."""
-  maxmom = _ensure_interpolated(gdatas[0])
+  maxmom = gdatas[0]
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  values = mass * maxmom.values[..., 0, np.newaxis] * maxmom.values[..., 2,
-                                                                    np.newaxis]
-  return maxmom._result(maxmom.grid, values)
+  return _component(maxmom, 0) * _component(maxmom, 2) * mass
 
 
-def fetch_press_from_BiMax(gdatas, **kwargs):
+def fetch_press_from_BiMax(gdatas: list["GData"], **kwargs):
   """Pressure from BiMaxwellian moments: ``press = comp0 * mass*(Tpar+2Tperp)/3``."""
-  bimax = _ensure_interpolated(gdatas[0])
+  bimax = gdatas[0]
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  Tpar_vals = bimax.values[..., 2, np.newaxis]
-  Tperp_vals = bimax.values[..., 3, np.newaxis]
-  temp_vals = mass * (Tpar_vals + 2.0 * Tperp_vals) / 3.0
-  values = bimax.values[..., 0, np.newaxis] * temp_vals
-  return bimax._result(bimax.grid, values)
+  temp = (_component(bimax, 2) + _component(bimax, 3) * 2.0) * (mass / 3.0)
+  return _component(bimax, 0) * temp
 
 
-def fetch_press_p(gdatas, **kwargs):
+def fetch_press_p(gdatas: list["GData"], **kwargs):
   """Perpendicular/parallel pressure in J/m^3: ``p_p = n * T_p``."""
-  m0, Tp = (_ensure_interpolated(g) for g in gdatas)
-  return m0._result(m0.grid, m0.values * Tp.values)
+  m0, Tp = gdatas
+  return m0 * Tp
 
 
 def _make_fetch_q(name: str):
@@ -229,10 +199,10 @@ def _make_fetch_q(name: str):
   ``[M3perp]``.
   """
 
-  def fetch(gdatas, **kwargs):
-    m3 = _ensure_interpolated(gdatas[0])
+  def fetch(gdatas: list["GData"], **kwargs):
+    m3 = gdatas[0]
     mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-    return m3._result(m3.grid, 0.5 * mass * m3.values)
+    return m3 * (0.5 * mass)
 
   fetch.__name__ = f"fetch_q{name}"
   return fetch
@@ -258,19 +228,21 @@ def _make_fetch_q_fluid(name: str):
   """
   is_par = name == "par"
 
-  def fetch(gdatas, **kwargs):
-    m0, m1, m2, m3 = (_ensure_interpolated(g) for g in gdatas)
+  def fetch(gdatas: list["GData"], **kwargs):
+    m0, m1, m2, m3 = gdatas
     mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
 
-    upar = m1.values / m0.values
-    u_m2 = upar * m2.values
+    upar = m1 * (1.0 / m0)
+    u_m2 = upar * m2
 
     if is_par:
-      values = m3.values - 3.0 * u_m2 + 2.0 * upar**2 * m1.values
+      u_sq = upar**2
+      u_sq_m1 = u_sq * m1
+      out = m3 - u_m2 * 3.0 + u_sq_m1 * 2.0
     else:
-      values = m3.values - u_m2
+      out = m3 - u_m2
 
-    return m0._result(m0.grid, 0.5 * mass * values)
+    return out * (0.5 * mass)
 
   fetch.__name__ = f"fetch_q{name}_fluid"
   return fetch
@@ -280,31 +252,29 @@ fetch_qpar_fluid = _make_fetch_q_fluid("par")
 fetch_qperp_fluid = _make_fetch_q_fluid("perp")
 
 
-def fetch_vt(gdatas, **kwargs):
+def fetch_vt(gdatas: list["GData"], **kwargs):
   """Thermal speed ``vt = sqrt(T/m)`` (m/s), ``m`` the requested species'
   mass. ``gdatas``: ``[temp]`` (temperature, in Joules)."""
-  temp = _ensure_interpolated(gdatas[0])
+  temp = gdatas[0]
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
-  return temp._result(temp.grid, np.sqrt(temp.values / mass))
+  return (temp / mass)**0.5
 
 
-def fetch_larmor_radius(gdatas, **kwargs):
+def fetch_larmor_radius(gdatas: list["GData"], **kwargs):
   """Species Larmor (gyro-)radius: ``rho = sqrt(m*T)/(|q|*B)``. ``gdatas``:
   ``[temp, bmag]``."""
-  temp, bmag = (_ensure_interpolated(g) for g in gdatas)
+  temp, bmag = gdatas
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   charge = abs(_get_ctx_val(gdatas[0], "charge", **kwargs))
-  values = np.sqrt(mass * temp.values) / (charge * bmag.values)
-  return temp._result(temp.grid, values)
+  return (temp * mass)**0.5 * (1.0 / (bmag * charge))
 
 
-def fetch_debye_length(gdatas, **kwargs):
+def fetch_debye_length(gdatas: list["GData"], **kwargs):
   """Species-wise Debye length: ``lambda_D = sqrt(eps0*T/(n*q^2))``.
   ``gdatas``: ``[temp, M0]``."""
-  temp, m0 = (_ensure_interpolated(g) for g in gdatas)
+  temp, m0 = gdatas
   charge = _get_ctx_val(gdatas[0], "charge", **kwargs)
-  values = np.sqrt(constants.epsilon_0 * temp.values / (m0.values * charge**2))
-  return temp._result(temp.grid, values)
+  return (temp * constants.epsilon_0 * (1.0 / (m0 * charge**2)))**0.5
 
 
 def _split_elc_ions(gdatas, quantity: str, **kwargs):
@@ -326,7 +296,7 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
     species_kwargs = dict(kwargs, species_idx=species_idx, species=name)
     entry = {
         "name": name,
-        "srcs": [_ensure_interpolated(s) for s in srcs],
+        "srcs": srcs,
         "mass": _get_ctx_val(srcs[0], "mass", **species_kwargs),
         "charge": _get_ctx_val(srcs[0], "charge", **species_kwargs),
     }
@@ -343,12 +313,14 @@ def _split_elc_ions(gdatas, quantity: str, **kwargs):
   return elcs[0], ions
 
 
-def _weighted_sum(entries, weights, comp: int) -> "GDataState":
-  """Sum the ``comp``-th (already-interpolated) source of each species,
+def _weighted_sum(entries, weights, comp: int) -> "GData":
+  """Sum the ``comp``-th source of each species,
   each scaled by a scalar weight."""
-  base = entries[0]["srcs"][comp]
-  total = sum(w * e["srcs"][comp].values for e, w in zip(entries, weights))
-  return base._result(base.grid, total)
+  terms = iter(e["srcs"][comp] * w for e, w in zip(entries, weights))
+  total = next(terms)
+  for term in terms:
+    total = total + term
+  return total
 
 
 def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
@@ -370,8 +342,7 @@ def _fetch_c_s_ion_acoustic(gdatas, **kwargs):
   denom = _weighted_sum(ions, charge_states, 0)
 
   temp_e = elc["srcs"][1]
-  values = np.sqrt(temp_e.values * numer.values / denom.values)
-  return temp_e._result(temp_e.grid, values)
+  return (numer * (1.0 / denom) * temp_e)**0.5
 
 
 def _fetch_c_s_thermo(gdatas, **kwargs):
@@ -389,17 +360,16 @@ def _fetch_c_s_thermo(gdatas, **kwargs):
   gamma_i = float(kwargs.get("gamma_i", 3.0))
 
   m0_e, temp_e = elc["srcs"]
-  numer_vals = gamma_e * m0_e.values * temp_e.values
+  numer = m0_e * temp_e * gamma_e
   for ion in ions:
     m0_i, temp_i = ion["srcs"]
-    numer_vals = numer_vals + gamma_i * m0_i.values * temp_i.values
+    numer = numer + m0_i * temp_i * gamma_i
 
   denom = _weighted_sum(ions, [ion["mass"] for ion in ions], 0)
-  values = np.sqrt(numer_vals / denom.values)
-  return temp_e._result(temp_e.grid, values)
+  return (numer * (1.0 / denom))**0.5
 
 
-def fetch_c_s(gdatas, **kwargs):
+def fetch_c_s(gdatas: list[list["GData"]], **kwargs):
   """Sound speed (m/s), combining the electrons and every ion species.
   ``gdatas`` has one ``[M0, temp]`` source list per species, in the order
   requested, e.g. ``pgkyl gk_load_quantity --quantity c_s
@@ -426,28 +396,24 @@ def fetch_c_s(gdatas, **kwargs):
   return c_s_kinds[kind](gdatas, **kwargs)
 
 
-def fetch_beta_from_bmag_press(gdatas, **kwargs):
+def fetch_beta_from_bmag_press(gdatas: list["GData"], **kwargs):
   """``beta = 2*mu_0*press / bmag**2``."""
-  bmag, press = (_ensure_interpolated(g) for g in gdatas)
-  values = 2.0 * constants.mu_0 * press.values / bmag.values**2
-  return bmag._result(bmag.grid, values)
+  bmag, press = gdatas
+  return press * (1.0 / bmag**2) * (2.0 * constants.mu_0)
 
 
 # ------------------------------------------------------------ drift speeds
-def _b_cross_grad_div_b_component(scalar: "GDataState",
-                                  jacobtot_inv: "GDataState", b_i: "GDataState",
-                                  comp: int) -> "GDataState":
+def _b_cross_grad_div_b_component(scalar: "GData", jacobtot_inv: "GData",
+                                  b_i: "GData", comp: int) -> "GData":
   """The ``comp``-th component of ``b x grad(f) / (J B)``.
 
   ``(b x grad f)_k / B = epsilon_{ijk} * b_i * d(f)/dx^j / (J B)``, where
   ``epsilon_{ijk}`` is the Levi-Civita tensor, ``f`` a scalar field, ``b_i``
-  the covariant components of a vector field. The gradient is the numerical
-  (post-``interpolate()``) one (``operations.differentiate``); see
-  ``differentiate-decision.md`` -- an exact modal derivative needs a shim
-  addition out of scope for this layer.
+  the covariant components of a vector field. Modal derivatives are local
+  to each cell, followed by weak products with the geometry fields.
 
   Args:
-    scalar: Scalar field ``f`` to differentiate; interpolated internally.
+    scalar: Scalar field ``f`` to differentiate in its current representation.
     jacobtot_inv: Inverse of the total-coordinate-transformation Jacobian.
     b_i: Covariant components of the unit vector field ``b``.
     comp: 0-based component ``k`` of the cross product (``< 3``).
@@ -455,7 +421,7 @@ def _b_cross_grad_div_b_component(scalar: "GDataState",
   Raises:
     KeyError: if ``comp`` is not 0, 1, or 2.
   """
-  f = _ensure_interpolated(scalar)
+  f = scalar
   cdim = f.num_dims
 
   diff_dir_pos = bi_c_pos = 0
@@ -481,23 +447,19 @@ def _b_cross_grad_div_b_component(scalar: "GDataState",
   else:
     raise KeyError("comp must be 0, 1, or 2.")
 
-  b_i_i = _ensure_interpolated(b_i)
-  jacobtot_inv_i = _ensure_interpolated(jacobtot_inv)
-
-  pos_term = np.zeros_like(f.values)
-  neg_term = np.zeros_like(f.values)
+  pos_term = f * 0.0
+  neg_term = f * 0.0
   if calc_term[0]:
     d_pos = operations.differentiate(f, direction=diff_dir_pos)
-    pos_term = d_pos.values * b_i_i.values[..., bi_c_pos, np.newaxis]
+    pos_term = _component(b_i, bi_c_pos) * d_pos
   if calc_term[1]:
     d_neg = operations.differentiate(f, direction=diff_dir_neg)
-    neg_term = -d_neg.values * b_i_i.values[..., bi_c_neg, np.newaxis]
+    neg_term = _component(b_i, bi_c_neg) * (-d_neg)
 
-  values = (pos_term + neg_term) * jacobtot_inv_i.values
-  return f._result(f.grid, values)
+  return (pos_term + neg_term) * jacobtot_inv
 
 
-def fetch_ExB_vel(gdatas, **kwargs):
+def fetch_ExB_vel(gdatas: list["GData"], **kwargs):
   """``v_{E,k} = epsilon_{ijk}/(J B) * b_i * d(phi)/dx^j`` (``dir`` selects k).
 
   ``gdatas``: ``(jacobtot_inv, bmag, b_i, phi)``.
@@ -508,7 +470,7 @@ def fetch_ExB_vel(gdatas, **kwargs):
   return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, kwargs["dir"])
 
 
-def fetch_gradB_vel(gdatas, **kwargs):
+def fetch_gradB_vel(gdatas: list["GData"], **kwargs):
   """``v_gradB,k = Tperp/(q B) * epsilon_{ijk} * b_i * d(B)/dx^j / (J B)``.
 
   ``gdatas``: ``(jacobtot_inv, bmag, b_i, Tperp)``.
@@ -517,14 +479,11 @@ def fetch_gradB_vel(gdatas, **kwargs):
     raise KeyError("fetch_gradB_vel: select the k-th component with dir=<int>.")
   jacobtot_inv, bmag, b_i, Tperp = gdatas
   out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, kwargs["dir"])
-  bmag_i = _ensure_interpolated(bmag)
-  Tperp_i = _ensure_interpolated(Tperp)
   charge = _get_ctx_val(Tperp, "charge", **kwargs)
-  values = out.values * Tperp_i.values / bmag_i.values / charge
-  return out._result(out.grid, values)
+  return Tperp * out * (1.0 / bmag) / charge
 
 
-def fetch_diamag_vel(gdatas, **kwargs):
+def fetch_diamag_vel(gdatas: list["GData"], **kwargs):
   """``v_diamag,k = 1/(q n) epsilon_{ijk} b_i * d(pperp)/dx^j / (J B)``.
 
   ``gdatas``: ``(jacobtot_inv, bmag, b_i, m0, pressperp)``.
@@ -535,10 +494,8 @@ def fetch_diamag_vel(gdatas, **kwargs):
   jacobtot_inv, bmag, b_i, m0, pressperp = gdatas
   out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i,
                                       kwargs["dir"])
-  m0_i = _ensure_interpolated(m0)
   charge = _get_ctx_val(pressperp, "charge", **kwargs)
-  values = out.values / m0_i.values / charge
-  return out._result(out.grid, values)
+  return out * (1.0 / m0) / charge
 
 
 # --------------------------------------------------------- phase space (f)
@@ -581,10 +538,9 @@ def _make_fetch_q_norm(name: str):
   ``gdatas`` (in this order): ``[q, M0, temp, c_s]``.
   """
 
-  def fetch(gdatas, **kwargs):
-    q, m0, temp, c_s = (_ensure_interpolated(g) for g in gdatas)
-    values = q.values / (m0.values * temp.values * c_s.values)
-    return q._result(q.grid, values)
+  def fetch(gdatas: list["GData"], **kwargs):
+    q, m0, temp, c_s = gdatas
+    return q * (1.0 / (m0 * temp * c_s))
 
   fetch.__name__ = f"fetch_q{name}_norm"
   return fetch
@@ -594,16 +550,15 @@ fetch_qpar_norm = _make_fetch_q_norm("par")
 fetch_qperp_norm = _make_fetch_q_norm("perp")
 
 
-def fetch_rho_over_lambda(gdatas, **kwargs):
+def fetch_rho_over_lambda(gdatas: list["GData"], **kwargs):
   """Ratio of the species Larmor radius to its Debye length:
   ``rho/lambda_D``. ``gdatas``: ``[rho, lambda_D]``."""
-  rho, lambda_d = (_ensure_interpolated(g) for g in gdatas)
-  return rho._result(rho.grid, rho.values / lambda_d.values)
+  rho, lambda_d = gdatas
+  return rho * (1.0 / lambda_d)
 
 
-def fetch_phi_norm(gdatas, **kwargs):
+def fetch_phi_norm(gdatas: list["GData"], **kwargs):
   """Normalized electrostatic potential: ``phi_norm = e*phi/T_e``.
   ``gdatas``: ``[phi, temp]``."""
-  phi, temp = (_ensure_interpolated(g) for g in gdatas)
-  values = constants.elementary_charge * phi.values / temp.values
-  return phi._result(phi.grid, values)
+  phi, temp = gdatas
+  return phi * (1.0 / temp) * constants.elementary_charge

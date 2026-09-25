@@ -1,16 +1,9 @@
-"""The ``differentiate`` verb -- numerical gradient of field-domain data.
+"""The ``differentiate`` verb -- local DG derivatives or field gradients.
 
-Per ``.claude/migration/notes/differentiate-decision.md`` (layer 03): an
-*exact* modal derivative would need a ``gpython_basis_eval_grad`` addition to the
-compiled shim (``gkeyll/core/zero/gkyl_gpython.h``/``gpython.c`` +
-``gpython/csrc/_gpythonmodule.c``), out of scope for every layer above
-``gpython``. This
-verb instead differentiates *after* ``.interpolate()``, with ``np.gradient`` on the
-plain NumPy field values -- a numerical (second-order accurate, cell-centered), not
-exact, derivative. Exactness on the modal polynomial is unnecessary here precisely
-because the data have already been interpolated to a uniform mesh.
+Native modal data uses Gkeyll's exact derivative of the polynomial within
+each cell, with no inter-cell stencil. NumPy point values use ``np.gradient``.
 
-On a separable axis (the ordinary case, including a nonuniform/stretched
+For NumPy point values on a separable axis (including a nonuniform/stretched
 grid), this is a plain per-axis ``np.gradient`` against that axis' own 1-D
 coordinate array. On a curvilinear axis -- part of a joint, non-separable
 ``.map(space="conf")`` block, whose grid arrays are multi-dimensional and
@@ -26,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from postgkyl import dg
 from postgkyl.numerics import curvilinear
 
 from ._curvilinear import block_for_axis, curvilinear_blocks
@@ -40,7 +34,11 @@ def differentiate(data: "GDataState",
                   inplace: bool = False,
                   tag: str | None = None,
                   label: str | None = None):
-  """Numerical gradient of field-domain data.
+  """Differentiate within DG cells or take a numerical gradient of point values.
+
+  Native modal inputs stay modal and use local polynomial derivatives on a
+  uniform Cartesian grid. This does not include jumps between DG cells.
+  Interpolated inputs use a finite-difference gradient across sample points.
 
   With ``direction=None``, differentiates along every spatial axis and
   stacks the results in the component axis (``num_comps`` becomes
@@ -54,8 +52,7 @@ def differentiate(data: "GDataState",
   grid arrays carry it instead.
 
   Args:
-    data: the dataset to differentiate; must be NumPy-backed (call
-      ``.interpolate()`` first on native modal data).
+    data: Native modal data or NumPy point values to differentiate.
     direction: 0-based axis to differentiate along; None differentiates
       along every axis.
     inplace: mutate and return ``data`` instead of a new dataset.
@@ -66,13 +63,12 @@ def differentiate(data: "GDataState",
     A dataset of the gradient, on ``data``'s (unchanged) grid.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if native data is non-modal or lacks uniform cell edges.
   """
   if data.backend == "gkyl":
-    raise ValueError(
-        "differentiate operates on interpolated (NumPy) values; call "
-        ".interpolate() first -- np.gradient has no basis-space meaning for raw "
-        "DG coefficients.")
+    out = _differentiate_modal(data, direction)
+    return data._result(data.grid, out, inplace=inplace, tag=tag, label=label)
+  data._require_operable()
   grid = data.grid
   values = data.values
   num_dims = data.num_dims
@@ -102,3 +98,33 @@ def differentiate(data: "GDataState",
   else:
     out_values = grad_along(int(direction))
   return data._result(grid, out_values, inplace=inplace, tag=tag, label=label)
+
+
+def _differentiate_modal(data: "GDataState", direction: int | None):
+  """Apply the local native derivative, retaining the modal representation."""
+  if data.ctx.get("value_form", "modal") != "modal":
+    raise ValueError("differentiate needs modal coefficients for native data; "
+                     "call .to_modal() first.")
+  basis_type = data.ctx.get("basis_type")
+  poly_order = data.ctx.get("poly_order")
+  if basis_type is None or poly_order is None:
+    raise ValueError("differentiate needs basis_type/poly_order metadata")
+  directions = range(data.num_dims) if direction is None else [int(direction)]
+  results = []
+  for d in directions:
+    if not 0 <= d < data.num_dims:
+      raise ValueError(f"differentiate direction {d} out of range")
+    edges = data.grid[d]
+    if edges.ndim != 1 or len(edges) != data.num_cells[d] + 1:
+      raise ValueError(
+          "modal differentiate requires uniform Cartesian cell edges")
+    widths = np.diff(edges)
+    if widths[0] <= 0 or not np.allclose(widths, widths[0], rtol=1e-12, atol=0):
+      raise ValueError(
+          "modal differentiate requires uniform Cartesian cell edges")
+    results.append(
+        dg.modal.differentiate(str(basis_type), data.num_dims, int(poly_order),
+                               data.native, d, 1, float(widths[0])))
+  if len(results) == 1:
+    return results[0]
+  return dg.rep.wrap(np.concatenate([out.view() for out in results], axis=-1))

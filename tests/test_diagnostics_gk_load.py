@@ -21,7 +21,6 @@ import pytest
 
 from postgkyl import gpython
 from postgkyl.gdata import GData, GDataGroup
-from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.diagnostics.gk import distf, quantities as ff, quantity as qmod, utils
 from postgkyl.diagnostics.gk.load_quantity import (available_quantities,
                                                    load_quantity)
@@ -39,7 +38,7 @@ HMOM_NAME = "rt_gk_tcv_iwl_adapt_source_1x2v_p1"
 def _field(values, grid=None, **ctx):
   """A pre-interpolated (field-domain) dataset for unit-testing the
   ``fetch_*`` combinators without needing the compiled shim."""
-  d = GDataState(ctx=dict(ctx, interpolated=True))
+  d = GData(ctx=dict(ctx, interpolated=True))
   values = np.asarray(values, dtype=np.float64)
   if grid is None:
     grid = [
@@ -786,7 +785,8 @@ class TestLoadQuantity:
     out = load_quantity("M0", "ion", HMOM_NAME, "250", path=DATA)
     assert len(out) == 1
     assert out[0].get_label() == r"$M_{0i}$ (m$^{-3}$)"
-    assert out[0].values.shape[-1] == 1
+    assert out[0].backend == "gkyl"
+    assert out[0].values.shape[-1] == 2
 
   @needs_gkeyll
   def test_M1_from_hamiltonian_moments_real(self):
@@ -824,7 +824,7 @@ class _SyntheticSource:
   """Serves a small, self-consistent constant-valued synthetic DG dataset
   for every source file a quantity asks for -- ported from
   tests_bak/test_gk_load_quantity.py's ``_make_synthetic_gdata``, adapted to
-  push through the new ``GDataState``/``.interpolate()`` (no ``ctypes``).
+  use native modal storage (no ``ctypes``).
 
   Every source is served the same synthetic values; only the charge is read
   back out of the file name (negative for an ``elc`` species, per
@@ -845,14 +845,16 @@ class _SyntheticSource:
     file_name = str(args[0]) if args else ""
     charge = -1.0 if f"-{_ELC_SPECIES}_" in file_name else 1.0
     grid = [np.linspace(0.0, 1.0, self.NUM_CELLS + 1)]
-    d = GDataState(
+    d = GData(
         ctx={
             "poly_order": self.POLY_ORDER,
             "basis_type": self.BASIS_TYPE,
             "mass": 1.0,
-            "charge": charge
+            "charge": charge,
+            "value_form": "modal",
+            "cells": [self.NUM_CELLS],
         })
-    d.push(grid, values)
+    d.push(grid, gpython.GkylArray.from_numpy(values))
     return d
 
 
@@ -917,7 +919,9 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
                       path=path,
                       **_extra_for(quant))
   assert len(out) >= 1
-  assert isinstance(out[0], GDataState)
+  assert isinstance(out[0], GData)
+  assert out[0].backend == "gkyl"
+  assert out[0].ctx["value_form"] == "modal"
 
 
 class TestGkQuantityGetAvailSource:

@@ -1,9 +1,4 @@
-"""Tests for the ``differentiate`` verb -- numerical gradient of field data.
-
-Per the layer-03 differentiate-decision note, this is a post-``.interpolate()``
-verb: it takes NumPy field values and refuses native modal (gkyl-backed)
-data, exactly like ``select``.
-"""
+"""Numerical point-value gradients and exact cell-local DG derivatives."""
 
 from __future__ import annotations
 
@@ -99,7 +94,59 @@ def test_mismatched_grid_length_raises():
 
 
 @needs_gkeyll
-def test_rejects_modal_data():
-  d = pg.load(F1)
-  with pytest.raises(ValueError, match=r"\.interpolate\(\)"):
-    operations.differentiate(d)
+@pytest.mark.parametrize("poly_order", [1, 2])
+def test_modal_derivative_preserves_higher_modes(poly_order):
+  data = pg.load(os.path.join(DATA, "generated", f"1d_ms_p{poly_order}.gkyl"))
+  before = data.values.copy()
+  dx = data.grid[0][1] - data.grid[0][0]
+  expected = np.zeros_like(before)
+  expected[:, 0] = 2 * np.sqrt(3.) * before[:, 1] / dx
+  if poly_order == 2:
+    expected[:, 1] = 2 * np.sqrt(15.) * before[:, 2] / dx
+  out = operations.differentiate(data, direction=0)
+  assert out.backend == "gkyl"
+  assert out.ctx["value_form"] == "modal"
+  np.testing.assert_allclose(out.values, expected, atol=1e-12)
+  np.testing.assert_array_equal(data.values, before)
+
+
+@needs_gkeyll
+def test_modal_full_gradient_stacks_packed_fields_and_supports_inplace():
+  data = pg.load(os.path.join(DATA, "generated", "gk_drift_2d_p1.gkyl"))
+  expected = np.zeros((*data.num_cells, 2 * data.num_comps))
+  expected[..., 0] = 4.  # d(phi)/dx = 2, normalized constant basis = 1/2
+  expected[..., data.num_comps] = 8.  # d(phi)/dy = 4
+  out = operations.differentiate(data,
+                                 inplace=True,
+                                 tag="grad",
+                                 label="gradient")
+  assert out is data
+  assert out.tag == "grad"
+  assert out.label == "gradient"
+  assert out.backend == "gkyl"
+  np.testing.assert_allclose(out.values, expected, atol=1e-13)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_modal_invalid_direction_raises(direction):
+  data = pg.load(os.path.join(DATA, "generated", "gk_moments_p1.gkyl"))
+  with pytest.raises(ValueError, match="out of range"):
+    operations.differentiate(data, direction=direction)
+
+
+@needs_gkeyll
+def test_modal_nonuniform_grid_raises():
+  data = pg.load(os.path.join(DATA, "generated", "gk_moments_p1.gkyl"))
+  data.grid = [np.array([0., 1., 3.])]
+  with pytest.raises(ValueError, match="uniform Cartesian cell edges"):
+    operations.differentiate(data)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("representation", ["nodal", "quad"])
+def test_native_point_values_require_explicit_conversion(representation):
+  data = pg.load(os.path.join(DATA, "generated", "gk_moments_p1.gkyl"))
+  data = data.to_nodal() if representation == "nodal" else data.to_quad()
+  with pytest.raises(ValueError, match="to_modal"):
+    operations.differentiate(data)
