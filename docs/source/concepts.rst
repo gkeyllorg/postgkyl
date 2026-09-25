@@ -14,6 +14,11 @@ They are read from the file or supplied once to ``load`` when missing.
 Downstream operations use that metadata. Do not guess a higher-order basis
 for a file whose header lacks this information.
 
+``pgkyl file.gkyl info`` shows the current data summary and any assumptions made
+by the loader. Use ``info --all`` to also inspect the original file header,
+verbatim metadata, explicit load options, and identity inferred from the filename.
+The Python equivalents are ``data.info(all=True)`` and ``pg.info(data, all=True)``.
+
 Coefficients and point values
 -------------------------------
 

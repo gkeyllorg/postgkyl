@@ -132,9 +132,9 @@ class GDataGroup(GDataStateGroup):
     return type(self)(result) if isinstance(index, slice) else result
 
   # ------------------------------------------------------- terminal (typed)
-  def info(self, *, no_header: bool = False) -> list:
+  def info(self, *, no_header: bool = False, all: bool = False) -> list:
     """Summarize every member (see ``operations.info``); returns a list of strings."""
-    return operations.info(*self._datasets, no_header=no_header)
+    return operations.info(*self._datasets, no_header=no_header, all=all)
 
   # Binding the canonical variadic function passes this iterable group as its
   # first input; render.plot flattens it and keeps group calls on one figure.

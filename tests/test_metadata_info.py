@@ -35,15 +35,19 @@ def source(tmp_path):
   return write
 
 
-def test_info_separates_file_metadata_and_modal_assumption(reader, source):
-  result = CliRunner().invoke(cli, [source(), "info"])
+@pytest.mark.parametrize("options, verbose", [([], False), (["--all"], True),
+                                              (["--all", "False"], False)])
+def test_info_separates_file_metadata_and_modal_assumption(
+    reader, source, options, verbose):
+  result = CliRunner().invoke(cli, [source(), "info", *options])
   assert result.exit_code == 0, result.output
-  assert "File metadata (verbatim keys)" in result.output
-  assert "basisType: 'serendipity'" in result.output
-  assert "polyOrder: 1" in result.output
+  assert "DG: serendipity p1 (modal)" in result.output
+  for detail in ("Metadata sources", "File header", "cells: array",
+                 "File metadata (verbatim keys)", "basisType: 'serendipity'",
+                 "polyOrder: 1", "Inferred from filename"):
+    assert (detail in result.output) == verbose
   assert "Inferred/defaulted" in result.output
   assert "value_form: 'modal' (basis specified; value_form absent)" in result.output
-  assert "Inferred from filename" in result.output
   assert "frame: 7" not in result.output  # header's frame=0 wins
 
 
@@ -51,12 +55,14 @@ def test_missing_metadata_reports_each_fallback(reader, source):
   with pytest.warns(UserWarning, match="not resolvable"):
     data = pg.load(source(no_metadata=True))
   output = data.info()
-  assert "File metadata (verbatim keys): <none>" in output
+  assert "File metadata" not in output
+  assert "File metadata (verbatim keys): <none>" in data.info(all=True)
   for setting in ("basis_type: 'serendipity'", "poly_order: 0",
                   "value_form: 'nodal'"):
     assert setting + " (not specified; spatial data fallback)" in output
   assert data.ctx["frame"] == 7
-  assert "frame: 7" in output
+  assert "Frame: 7" in output
+  assert "frame: 7" not in output
 
 
 def test_overrides_preserve_original_metadata(reader, source):
@@ -64,7 +70,7 @@ def test_overrides_preserve_original_metadata(reader, source):
                  basis_type="tensor",
                  poly_order=0,
                  value_form="nodal")
-  output = data.info()
+  output = data.info(all=True)
   raw = data.ctx["_load_metadata"]["file_metadata"]
   assert raw["basisType"] == "serendipity"
   assert raw["polyOrder"] == 1
@@ -78,17 +84,40 @@ def test_overrides_preserve_original_metadata(reader, source):
 def test_explicit_representation_is_not_reported_as_default(reader, source):
   data = pg.load(source(metadata={"value_form": "nodal"}))
   output = data.info()
-  assert "value_form: 'nodal'" in output
+  assert "DG: serendipity p1 (nodal)" in output
+  assert "value_form:" not in output
+  assert "Metadata sources" not in output
   assert "Inferred/defaulted" not in output
   assert "Explicit load overrides" not in output
 
 
 def test_context_is_separate_from_file_and_defaults(reader, source):
   data = pg.load(source(), ctx={"value_form": "nodal", "custom": 3})
-  output = data.info()
+  output = data.info(all=True)
   assert "Explicit initial context" in output
   assert "Inferred/defaulted" not in output
   assert "value_form" not in data.ctx["_load_metadata"]["file_metadata"]
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_info_option_reaches_each_dataset_through_public_api(source, verbose):
+  data = pg.load(source())
+  expected = data.info(all=verbose, no_header=True)
+  assert pg.info(data, data, all=verbose,
+                 no_header=True) == [expected, expected]
+  group = pg.GDataGroup([data, data])
+  assert group.info(all=verbose, no_header=True) == [expected, expected]
+  assert "default#0" not in expected
+  assert ("File metadata" in expected) == verbose
+
+
+def test_quad_summary_does_not_repeat_explicit_metadata(reader, source):
+  data = pg.load(source(metadata={"value_form": "quad", "num_quad": 2}))
+  output = data.info()
+  assert "DG: serendipity p1 (quad, num_quad=2)" in output
+  for detail in ("Metadata sources", "Inferred/defaulted", "basisType",
+                 "polyOrder", "value_form:", "num_quad:"):
+    assert detail not in output
 
 
 def test_partial_load_preserves_original_domain(source):
@@ -116,7 +145,7 @@ def test_conversion_keeps_load_snapshot_but_save_does_not_write_it(
   output = data.info()
   assert "DG: serendipity p1 (nodal)" in output
   assert "value_form: 'modal' (basis specified; value_form absent)" in output
-  assert "at load; summary above is current state" in output
+  assert "at load (summary above is current state)" in output
   path = data.save(str(tmp_path / "saved.gkyl"))
   raw = pg.load(path).ctx["_load_metadata"]["file_metadata"]
   assert "_load_metadata" not in raw
