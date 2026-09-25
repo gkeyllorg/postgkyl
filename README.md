@@ -117,6 +117,27 @@ commands. Each time you open a new terminal, activate your environment again:
 run `source .venv/bin/activate` from the `postgkyl` folder for pyenv/venv, or
 `mamba activate pgkyl` (or `conda activate pgkyl`) for mamba/conda.
 
+## Updating
+
+After installing from source, activate the same Python environment and run
+this from your `postgkyl` folder:
+
+```bash
+bash scripts/update_pgkyl.sh
+```
+
+The script pulls the current Postgkyl branch's upstream with `--ff-only`,
+fetches the latest commit on Gkeyll's `lapack_lite_shim` branch, rebuilds Gkeyll and
+the `gpython` extension, and reinstalls Postgkyl. It uses the active `python`;
+set `PYTHON=/path/to/python` to choose another interpreter. Keep NumPy and
+the build tools installed as described above.
+
+For an editable developer installation, use:
+
+```bash
+bash scripts/update_pgkyl.sh --editable
+```
+
 ## Documentation
 
 Full documentation of the Gkeyll project, including Postgkyl, is available at
