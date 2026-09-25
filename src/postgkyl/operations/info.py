@@ -11,6 +11,8 @@ def info(*datasets: GDataState, no_header: bool = False) -> list:
 
   Accepts ``info(a, b)`` or ``info([a, b])``. Each dataset's own ``info`` method
   (a pure state reader on the container) does the formatting.
+  Summaries distinguish current state from original Gkeyll file metadata,
+  explicit load options, defaults, and identity inferred from the filename.
 
   Args:
     datasets: Datasets whose summaries are returned.

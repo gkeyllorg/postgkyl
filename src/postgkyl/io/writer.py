@@ -32,6 +32,7 @@ from postgkyl.numerics import nodal_to_cell_centered_grid
 # (recomputed by the reader from the meta below) -- never part of the
 # msgpack meta blob Gkeyll writes.
 _INTERNAL_CTX_KEYS = frozenset({
+    "_load_metadata",
     "cells",
     "lower",
     "upper",

@@ -70,12 +70,13 @@ def write_gkyl_field(
     time: float = 0.0,
     frame: int = 0,
     metadata: dict | None = None,
+    no_metadata: bool = False,
 ) -> None:
-  """Write a minimal valid .gkyl v1 binary field file with msgpack metadata."""
+  """Write a .gkyl v1 field, optionally omitting its msgpack metadata."""
   ndim = len(cells)
   nc = values.shape[-1]
 
-  meta = msgpack.packb({
+  meta = b"" if no_metadata else msgpack.packb({
       "polyOrder": poly_order,
       "basisType": basis_type,
       "time": time,

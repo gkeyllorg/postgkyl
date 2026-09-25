@@ -15,8 +15,13 @@ tests/generate_test_data.py`.
 
 ## 1. Inspect a file
 
-`info` is the "what is this?" command -- dimensions, components, grid,
-value range, and the DG basis/order it was written with.
+`info` shows the current dimensions, components, grid, value range, and
+effective DG basis/order. Its metadata sources section separates the original
+`.gkyl` file header and metadata (with original key names) from explicit load
+overrides, inferred defaults, and identity parsed from the filename. For example,
+a file with `basisType` and `polyOrder` but no `value_form` is assumed to contain
+modal coefficients; `info` labels that assumption as inferred. Source metadata
+describes the file at load time, even after transformations change the dataset.
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl info

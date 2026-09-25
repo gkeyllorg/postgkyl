@@ -140,8 +140,8 @@ class TestBlockIdentityIsStamped:
     out = pg.load(os.path.join(GEN, "mb_sim_b1-elc_M0_0.gkyl")).info()
     assert "Block: 1" in out
     # The identity keys must not also fall through to info's generic ctx dump.
-    assert "├─ block:" not in out
-    assert "├─ sim:" not in out
+    assert "\n├─ block:" not in out
+    assert "\n├─ sim:" not in out
 
 
 # ========================================================== the partition

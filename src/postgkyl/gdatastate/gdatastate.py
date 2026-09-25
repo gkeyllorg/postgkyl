@@ -77,12 +77,18 @@ class GDataState:
           self.ctx["value_form"] = "nodal"
           defaulted.append("value_form")
         if defaulted:
+          defaults = self.ctx.setdefault("_load_metadata",
+                                         {}).setdefault("defaults", {})
+          for key in defaulted:
+            defaults[key] = (self.ctx[key],
+                             "not specified; spatial data fallback")
+          assignments = ", ".join(f"{key}={self.ctx[key]!r}"
+                                  for key in defaulted)
           warnings.warn(
               f"{self._file_name}:\n"
               f"{', '.join(defaulted)} not resolvable (not present in the "
               "file header, and not given explicitly); defaulting to "
-              "basis_type='serendipity', poly_order=0, value_form='nodal' "
-              "(p0 -- one point per cell, at the cell center). Pass "
+              f"{assignments}. Pass "
               "basis_type=/poly_order=/value_form=... explicitly if this "
               "is wrong.",
               stacklevel=2)
@@ -92,8 +98,8 @@ class GDataState:
     """Record the file's Gkeyll *identity* (sim, block, quantity, frame) in
     ``ctx``, parsed once from its path by :mod:`postgkyl.io.naming`.
 
-    Header metadata wins: ``setdefault`` never overwrites a ``frame`` (or
-    anything else) a reader already read out of the file itself. Because
+    Header metadata wins: only missing keys are filled from the filename,
+    preserving any ``frame`` (or other identity) read from the file. Because
     ``clone`` copies ``ctx``, the identity survives every verb, so a
     multiblock family is still recognizable after ``interpolate``/``map_to_rz``
     -- which is what lets terminal verbs draw one field's blocks together
@@ -102,11 +108,15 @@ class GDataState:
     name = io.parse_output_name(self._file_name)
     if name is None:
       return
-    self.ctx.setdefault("sim", name.sim)
-    self.ctx.setdefault("block", name.block)
-    self.ctx.setdefault("quantity", name.quantity)
+    identity = {"sim": name.sim, "block": name.block, "quantity": name.quantity}
     if name.frame is not None:
-      self.ctx.setdefault("frame", name.frame)
+      identity["frame"] = name.frame
+    inferred = {
+        key: val
+        for key, val in identity.items() if key not in self.ctx
+    }
+    self.ctx.update(inferred)
+    self.ctx.setdefault("_load_metadata", {})["filename"] = inferred
 
   @property
   def output_name(self):
@@ -368,7 +378,7 @@ class GDataState:
 
   # -------------------------------------------------------------- reporting
   def info(self, index: int = 0, no_header: bool = False) -> str:
-    """Build and print a summary; optionally omit its descriptive heading."""
+    """Print current state and original file metadata with load assumptions."""
     values, num_comps = self.get_values(), self.num_comps
     num_dims, num_cells = self.num_dims, self.num_cells
     lo, up = self.bounds
@@ -433,13 +443,40 @@ class GDataState:
     for key, val in self.ctx.items():
       if key not in self._INFO_HANDLED_CTX_KEYS:
         out += f"├─ {key}: {val}\n"
+    if provenance := self.ctx.get("_load_metadata"):
+      out += "├─ Metadata sources (at load; summary above is current state):\n"
+      for key, title in (
+          ("file_header", "File header (stored grid and array layout)"),
+          ("file_metadata", "File metadata (verbatim keys)"),
+          ("context", "Explicit initial context"),
+          ("overrides", "Explicit load overrides"),
+          ("defaults", "Inferred/defaulted"),
+          ("filename", "Inferred from filename"),
+      ):
+        entries = provenance.get(key, {})
+        if not entries and key != "file_metadata":
+          continue
+        if key == "file_metadata" and key not in provenance:
+          continue
+        out += f"│  ├─ {title}:"
+        if not isinstance(entries, dict):
+          out += f" {entries!r}\n"
+        elif not entries:
+          out += " <none>\n"
+        else:
+          out += "\n"
+          for name, value in entries.items():
+            if key == "defaults":
+              value, reason = value
+              out += f"│  │  ├─ {name}: {value!r} ({reason})\n"
+            else:
+              out += f"│  │  ├─ {name}: {value!r}\n"
     out += "└─ File: " + (self._file_name or "<no file>") + "\n"
     print(out)
     return out
 
-  # Keys already rendered by a dedicated branch above; anything else in ctx
-  # is file/reader-native metadata (e.g. a .gkyl file's msgpack meta) that
-  # still deserves to surface, so it falls through to the generic dump.
+  # Keys already rendered above; remaining context is shown in the current
+  # summary without claiming that it came directly from a file.
   _INFO_HANDLED_CTX_KEYS = frozenset({
       "time",
       "frame",
@@ -464,6 +501,7 @@ class GDataState:
       "charge",
       "gas_gamma",
       "vdim",
+      "_load_metadata",
   })
 
   # --------------------------------------------------------------- summary

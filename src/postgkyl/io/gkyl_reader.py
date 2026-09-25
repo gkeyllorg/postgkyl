@@ -6,6 +6,7 @@ import numpy as np
 import os.path
 
 from . import mapping
+from .metadata import resolve_gkyl_metadata
 
 # Format description for raw Gkeyll output file from
 # gkyl_array_rio_format_desc.h
@@ -200,39 +201,18 @@ class GkylReader(object):
       self.offset += 8
 
       # read meta
-      has_basis = False
+      metadata = {}
       if meta_size > 0:
-        fh = open(self.file_name, "rb")
-        fh.seek(self.offset)
-        unp = mp.unpackb(fh.read(meta_size))
-        if isinstance(unp, dict) and self.ctx is not None:
-          for key in unp:
-            if key == "polyOrder" or key == "poly_order":
-              self.ctx["poly_order"] = unp[key]
-            elif key == "basisType" or key == "basis_type":
-              self.ctx["basis_type"] = unp[key]
-              has_basis = True
-            else:
-              # Covers "value_form" too, if the writer stamped one
-              # directly: a file's own metadata is the next-best source of
-              # truth once no explicit override was given (see below).
-              self.ctx[key] = unp[key]
+        with open(self.file_name, "rb") as fh:
+          fh.seek(self.offset)
+          metadata = mp.unpackb(fh.read(meta_size))
         self.offset += meta_size
-        fh.close()
-      if self._basis_type_override is not None:
-        # Wins over the file's own metadata (or its absence): lets a caller
-        # correct a missing/mislabeled basis_type so downstream verbs
-        # (interpolate, average, integrate, ...) resolve the right basis.
-        self.ctx["basis_type"] = self._basis_type_override
-        has_basis = True
-      if self._poly_order_override is not None:
-        # Independent of basis_type/value_form: corrects only the polynomial
-        # order, asserting nothing about modality.
-        self.ctx["poly_order"] = self._poly_order_override
-      if has_basis and "value_form" not in self.ctx:
-        self.ctx["value_form"] = "modal"
-    if self._value_form_override is not None:
-      # Wins over both the file's own metadata and the "modal" default.
+      resolve_gkyl_metadata(self.ctx,
+                            metadata,
+                            basis_type=self._basis_type_override,
+                            poly_order=self._poly_order_override,
+                            value_form=self._value_form_override)
+    elif self._value_form_override is not None:
       self.ctx["value_form"] = self._value_form_override
 
     # read real-type
@@ -288,6 +268,14 @@ class GkylReader(object):
                              count=1,
                              offset=self.offset)[0]
     self.offset += 8
+
+    # Capture the original domain before partial loading adjusts it.
+    self.ctx.setdefault("_load_metadata", {})["file_header"] = {
+        "cells": self.cells.copy(),
+        "lower": self.lower.copy(),
+        "upper": self.upper.copy(),
+        "num_comps": self.num_comps,
+    }
 
     # prep for partial loading
     self.orig_size_array = np.zeros(self.num_dims + 1, dtype=self.dti)

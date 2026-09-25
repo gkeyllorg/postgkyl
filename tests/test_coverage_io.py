@@ -497,10 +497,10 @@ def test_preload_and_field_load_allow_an_empty_context(tmp_path):
   reader = GkylReader(path, ctx={})
   reader.ctx = {}
   reader.preload()
-  assert reader.ctx == {}
+  assert reader.ctx["_load_metadata"]["file_metadata"] == {}
   _, values = reader.load()
   np.testing.assert_allclose(values, data)
-  assert reader.ctx == {}
+  assert reader.ctx["grid_type"] == "uniform"
 
 
 def test_dynvector_load_allows_an_empty_context():

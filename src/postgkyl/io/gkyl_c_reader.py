@@ -19,6 +19,7 @@ import msgpack
 
 from postgkyl import gpython
 from . import mapping
+from .metadata import resolve_gkyl_metadata
 
 
 class GkylCReader:
@@ -52,39 +53,17 @@ class GkylCReader:
 
   def preload(self) -> None:
     grid, _, meta, esznc, _ = gpython.rio.read_header(self.file_name)
-    has_basis = False
-    if meta:
-      for key, val in msgpack.unpackb(meta).items():
-        if key in ("polyOrder", "poly_order"):
-          self.ctx["poly_order"] = val
-        elif key in ("basisType", "basis_type"):
-          self.ctx["basis_type"] = val
-          has_basis = True
-        else:
-          # Covers "value_form" too, if the writer stamped one directly:
-          # a file's own metadata is the next-best source of truth once no
-          # explicit override was given.
-          self.ctx[key] = val
-    if self._basis_type_override is not None:
-      # The writer stamps modal metadata itself; this lets a caller correct
-      # a missing/mistagged basis_type (e.g. a file with no header metadata
-      # at all, or one written by a version that mislabeled it) so downstream
-      # verbs (interpolate, average, integrate, ...) resolve the right basis.
-      self.ctx["basis_type"] = self._basis_type_override
-      has_basis = True
-    if self._poly_order_override is not None:
-      # Independent of basis_type/value_form: lets a caller correct just the
-      # polynomial order (e.g. a file with no header metadata at all) without
-      # asserting anything about modality.
-      self.ctx["poly_order"] = self._poly_order_override
-    if has_basis and "value_form" not in self.ctx:
-      self.ctx["value_form"] = "modal"
-    if self._value_form_override is not None:
-      # The writer stamps every field with basis/order metadata, even
-      # non-DG diagnostic outputs (e.g. a per-cell CFL rate); this lets a
-      # caller correct a mistagged file to what its values actually are.
-      # Wins over both the file's own metadata and the "modal" default.
-      self.ctx["value_form"] = self._value_form_override
+    resolve_gkyl_metadata(self.ctx,
+                          msgpack.unpackb(meta) if meta else {},
+                          basis_type=self._basis_type_override,
+                          poly_order=self._poly_order_override,
+                          value_form=self._value_form_override)
+    self.ctx["_load_metadata"]["file_header"] = {
+        "cells": grid["cells"].copy(),
+        "lower": grid["lower"].copy(),
+        "upper": grid["upper"].copy(),
+        "num_comps": esznc // 8,
+    }
     self.ctx["cells"] = grid["cells"]
     self.ctx["lower"] = grid["lower"]
     self.ctx["upper"] = grid["upper"]

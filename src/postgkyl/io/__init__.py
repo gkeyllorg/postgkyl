@@ -8,6 +8,7 @@ dict and return ``(grid, values)`` so the container can construct itself on top.
 from __future__ import annotations
 
 import os.path
+from copy import deepcopy
 
 from . import geometry, mapping
 from .naming import OutputName, parse_output_name
@@ -54,6 +55,9 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
     ctx = {}
   if not os.path.exists(file_name):
     raise FileNotFoundError(f"No such file: '{file_name}'")
+  # Start a fresh source snapshot even when ctx came from another dataset.
+  context = {k: v for k, v in ctx.items() if k != "_load_metadata"}
+  ctx["_load_metadata"] = {"context": deepcopy(context)}
   for reader_cls in _READERS.values():
     reader = reader_cls(file_name=file_name, ctx=ctx, **kwargs)
     if reader.is_compatible():
