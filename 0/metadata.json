@@ -1,0 +1,69 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3CV1860WE3EQA0ZF1G5SNXG",
+  "session_id": "01a0d985-785d-7761-9b77-f35b9968570e",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T17:50:27.279482009Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "src/postgkyl/io/gkyl_c_reader.py",
+    "src/postgkyl/io/gkyl_reader.py",
+    "src/postgkyl/io/writer.py",
+    "tests/test_coverage_io.py",
+    "tests/test_io_writer.py",
+    "tests/test_multiblock.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "78dcd6a4f700",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 91180,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2788352,
+    "output_tokens": 11536,
+    "api_call_count": 41
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T17:50:27.218696849Z",
+    "agent_lines": 19,
+    "agent_removed": 10,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 33,
+    "total_committed": 19,
+    "total_lines_changed": 62,
+    "agent_percentage": 46.774193548387096,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 81,
+      "user_lines_removed": 33,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/postgkyl/io/gkyl_c_reader.py": 4,
+        "src/postgkyl/io/gkyl_reader.py": 1,
+        "src/postgkyl/io/writer.py": 15,
+        "tests/test_coverage_io.py": 6,
+        "tests/test_io_writer.py": 50,
+        "tests/test_multiblock.py": 5
+      },
+      "user_removed_per_file": {
+        "src/postgkyl/io/gkyl_c_reader.py": 1,
+        "src/postgkyl/io/gkyl_reader.py": 1,
+        "src/postgkyl/io/writer.py": 20,
+        "tests/test_coverage_io.py": 2,
+        "tests/test_io_writer.py": 1,
+        "tests/test_multiblock.py": 8
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+Does pgkyl write save the value_form? This is an essential piece of metadata and this must be kept track of, loaded, and stored correctly.
+
+---
+
+When a file is written, it should preserve the entirity of its metadata, especially when written to a .gkyl file
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Limit this change to .gkyl","question":"For `.txt`, `.npy`, and `.vtk` exports, should I preserve the full metadata in a companion `.metadata.json` file? I’m making `.gkyl` preserve it inside the file.","questionItemId":"[\"request_user_input_async\",\"call_8oie6gOWlnuuShXf8tyUD85y\",0]"}]
+</send_user_message_question_reply>
