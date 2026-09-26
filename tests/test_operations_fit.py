@@ -63,12 +63,14 @@ def test_explicit_guess_is_used():
   np.testing.assert_allclose(out.ctx["fit_params"][0], [2.0, 1.0], atol=1e-6)
 
 
-def test_explicit_guess_as_string_matches_sequence():
+def test_explicit_guess_formats_recover_linear_parameters():
   d, _ = _linear_dataset(a=2.0, b=1.0)
   out_str = operations.fit(d, "linear", guess="1.0,0.0")
   out_seq = operations.fit(d, "linear", guess=[1.0, 0.0])
-  np.testing.assert_allclose(out_str.ctx["fit_params"][0],
-                             out_seq.ctx["fit_params"][0])
+  for out in (out_str, out_seq):
+    np.testing.assert_allclose(out.ctx["fit_params"][0], [2., 1.],
+                               rtol=1e-9,
+                               atol=1e-9)
 
 
 def test_gaussian_fit_rpn_and_multi_component():
@@ -78,9 +80,16 @@ def test_gaussian_fit_rpn_and_multi_component():
   y1 = 5.0 * np.exp(-0.5 * ((centers - 1.0) / 2.0)**2)
   d = _make([edges], np.stack([y0, y1], axis=-1))
   out = operations.fit(d, "gaussian")
-  assert len(out.ctx["fit_params"]) == 2
-  np.testing.assert_allclose(out.ctx["fit_params"][0][:2], [3.0, 0.0],
-                             atol=1e-3)
+  params = np.array(out.ctx["fit_params"])
+  # sigma and -sigma describe the same Gaussian, so either fit is valid.
+  params[:, 2] = np.abs(params[:, 2])
+  np.testing.assert_allclose(params, [[3., 0., 1.], [5., 1., 2.]],
+                             rtol=1e-7,
+                             atol=1e-7)
+  np.testing.assert_allclose(out.values,
+                             np.stack([y0, y1], axis=-1),
+                             rtol=1e-7,
+                             atol=1e-9)
 
 
 def test_wrong_dimensionality_raises():
@@ -206,12 +215,14 @@ def test_window_output_shape_matches_full_grid():
   assert out.get_values().shape[0] == len(centers)
 
 
-def test_window_explicit_guess_string_and_sequence_agree():
+def test_window_guess_formats_recover_exponential_parameters():
   d, _ = _growth_series(a=1.0, b=0.8)
   out_str = operations.fit(d, "exp2", window=True, guess="1,1")
   out_seq = operations.fit(d, "exp2", window=True, guess=(1.0, 1.0))
-  np.testing.assert_allclose(out_str.ctx["fit_params"][0],
-                             out_seq.ctx["fit_params"][0])
+  for out in (out_str, out_seq):
+    np.testing.assert_allclose(out.ctx["fit_params"][0], [1., 0.8],
+                               rtol=1e-7,
+                               atol=1e-9)
 
 
 def test_window_min_n_controls_minimum_window():

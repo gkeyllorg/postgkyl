@@ -168,11 +168,12 @@ class TestPressureScalar:
     np.testing.assert_allclose(out.values[0, 0], _P_THERMAL, rtol=1e-9)
     np.testing.assert_allclose(out.values[1, 0], 2.0 * _P_THERMAL, rtol=1e-9)
 
-  def test_gas_gamma_is_forwarded(self):
+  def test_gas_gamma_scales_internal_energy(self):
     d = _make(_G1D, _MOM5)
     out = fm.pressure(d, gas_gamma=1.4)
-    _, expected = fm._get_p(d.grid, d.values, gas_gamma=1.4, num_moms=5)
-    np.testing.assert_allclose(out.values, expected)
+    # The stored internal energy is p/(5/3-1)=0.9. Changing gamma to
+    # 1.4 gives p=(1.4-1)*0.9=0.36, independently of the pressure helper.
+    np.testing.assert_allclose(out.values, [[0.36]], rtol=0, atol=2e-15)
 
   @needs_gkeyll
   def test_rejects_modal_data(self):

@@ -38,15 +38,20 @@ def test_full_gradient_matches_analytic_derivative_1d():
   out = operations.differentiate(d)
   np.testing.assert_allclose(out.get_values().flatten(),
                              2.0 * centers,
-                             atol=1e-2)
+                             rtol=1e-12,
+                             atol=1e-12)
   assert out.get_num_comps() == 1  # 1 comp * 1 dim = 1
 
 
-def test_direction_matches_full_gradient_in_1d():
-  d, _ = _quadratic_1d()
+def test_direction_and_full_gradient_recover_analytic_derivative():
+  d, centers = _quadratic_1d()
   full = operations.differentiate(d)
   by_dir = operations.differentiate(d, direction=0)
-  np.testing.assert_allclose(full.get_values(), by_dir.get_values())
+  for out in (full, by_dir):
+    np.testing.assert_allclose(out.values[:, 0],
+                               2 * centers,
+                               rtol=1e-12,
+                               atol=1e-12)
 
 
 def test_grid_unchanged():
@@ -65,15 +70,20 @@ def test_2d_full_gradient_stacks_components():
   d = _make([e0, e1], values)
   out = operations.differentiate(d)
   assert out.get_num_comps() == 2
-  np.testing.assert_allclose(out.get_values()[..., 0], 2 * X, atol=1e-2)
+  np.testing.assert_allclose(out.get_values()[..., 0],
+                             2 * X,
+                             rtol=1e-12,
+                             atol=1e-12)
   np.testing.assert_allclose(out.get_values()[..., 1],
                              np.ones_like(Y),
-                             atol=1e-2)
+                             rtol=1e-12,
+                             atol=1e-12)
 
   single = operations.differentiate(d, direction=1)
   np.testing.assert_allclose(single.get_values()[..., 0],
                              np.ones_like(Y),
-                             atol=1e-2)
+                             rtol=1e-12,
+                             atol=1e-12)
 
 
 def test_inplace_and_tag_label():

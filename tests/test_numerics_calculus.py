@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from postgkyl.numerics import calculus
+
+GEN = Path(__file__).parent / "test_data" / "generated"
 
 
 class TestIntegrate1D:
@@ -16,22 +20,24 @@ class TestIntegrate1D:
     np.testing.assert_allclose(out.flat[0], 1.0, rtol=1e-12)
 
   def test_linear_function_exact_integral(self):
-    # integral of x from 0 to 1 = 0.5 (analytic, hand-computed)
-    N = 100
-    grid = [np.linspace(0.0, 1.0, N + 1)]
-    x_cc = 0.5 * (grid[0][:-1] + grid[0][1:])
-    values = x_cc[:, np.newaxis]
-    _, out = calculus.integrate(grid, values, axis=0)
-    np.testing.assert_allclose(out.flat[0], 0.5, rtol=1e-3)
+    # Midpoint integration is exact for affine functions, even on 8 cells.
+    with np.load(GEN / "midpoint_polynomials_8.npz") as data:
+      _, out = calculus.integrate([data["edges"]],
+                                  data["values"][:, 1:],
+                                  axis=0)
+    np.testing.assert_allclose(out, [[7.5]], rtol=0, atol=2e-14)
 
-  def test_quadratic_function_exact_integral(self):
-    # integral of x^2 from 0 to 1 = 1/3 (analytic, hand-computed)
-    N = 4000
-    grid = [np.linspace(0.0, 1.0, N + 1)]
-    x_cc = 0.5 * (grid[0][:-1] + grid[0][1:])
-    values = (x_cc**2)[:, np.newaxis]
-    _, out = calculus.integrate(grid, values, axis=0)
-    np.testing.assert_allclose(out.flat[0], 1.0 / 3.0, rtol=1e-3)
+  @pytest.mark.parametrize("n", [8, 16, 32])
+  def test_quadratic_midpoint_error_has_exact_size_and_sign(self, n):
+    # Integral_{-1}^2 x^2 dx = 3. For uniform midpoint samples,
+    # Q - I = -L*h^2/12 = -27/(12*n^2), exactly, since f''=2.
+    with np.load(GEN / f"midpoint_polynomials_{n}.npz") as data:
+      _, out = calculus.integrate([data["edges"]],
+                                  data["values"][:, :1],
+                                  axis=0)
+    np.testing.assert_allclose(out - 3., [[-27 / (12 * n * n)]],
+                               rtol=0,
+                               atol=2e-14)
 
   def test_integer_axis(self):
     grid = [np.linspace(0.0, 2.0, 5)]  # 4 cells, dx=0.5
@@ -127,3 +133,22 @@ class TestIntegrateCellCentered:
     grid = [np.array([0.5]), np.linspace(0.0, 1.0, 4)]
     _, out = calculus.integrate(grid, np.ones((1, 3, 1)), axis=0)
     assert out.shape[0] == 1
+
+
+@pytest.mark.parametrize("axis", [None, 0, 1])
+def test_nonuniform_cell_averages_obey_analytic_integrals(axis):
+  with np.load(GEN / "nonuniform_polynomials.npz") as data:
+    x, y, values = data["x"], data["y"], data["values"]
+  _, result = calculus.integrate([x, y], values, axis=axis)
+  # f=2+3x-4y+5xy; g=(1+x^2)(2-y), on [-1,2] x [1/4,9/4].
+  if axis is None:
+    expected = np.array([[[9.75, 9.]]])
+  elif axis == 0:
+    c = (y[:-1] + y[1:]) / 2
+    expected = np.stack([10.5 - 4.5 * c, 6 * (2 - c)], axis=-1)[None, ...]
+  else:
+    c = (x[:-1] + x[1:]) / 2
+    mean_x2 = (x[1:]**3 - x[:-1]**3) / (3 * np.diff(x))
+    expected = np.stack([-6 + 18.5 * c, 1.5 * (1 + mean_x2)], axis=-1)[:,
+                                                                       None, :]
+  np.testing.assert_allclose(result, expected, rtol=2e-14, atol=2e-14)

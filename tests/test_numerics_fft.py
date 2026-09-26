@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from postgkyl.numerics.fft import fft, init_polar, polar_isotropic
+
+GEN = Path(__file__).parent / "test_data" / "generated"
 
 
 class TestFft1D:
@@ -179,41 +183,39 @@ class TestFftIsotropic:
     assert np.all(finite_vals >= 0)
 
   def test_iso_preserves_total_power_end_to_end(self):
-    """Physically meaningful invariant that line coverage alone cannot see:
-    shell-averaging redistributes power onto k-shells but must not lose or
-    gain any of it. Reconstruct the Cartesian PSD independently
-    (iso=False) and check that weighting each isotropic bin by its shell's
-    cell count (``nbin``) reconstructs the same total."""
-    Nx, Ny, Nz = 8, 8, 8
-    grid = [
-        np.linspace(0.0, 1.0, Nx + 1),
-        np.linspace(0.0, 1.0, Ny + 1),
-        np.linspace(0.0, 1.0, Nz + 1)
-    ]
-    rng = np.random.default_rng(4)
-    values = rng.random((Nx, Ny, Nz, 1))
-
-    freq_cart, ft_cartesian = fft(grid, values, psd=True, iso=False)
-    kx, ky, kz = freq_cart[0], freq_cart[1], freq_cart[2]
-    nkx, nky, nkz = len(kx), len(ky), len(kz)
-    # fft() derives nkpolar from the *nodal* grid lengths (Nx+1 here), not
-    # from the cell counts -- match that exactly to reproduce its binning.
-    N = np.array([len(grid[0]), len(grid[1]), len(grid[2])])
-    nkpolar = int(np.sqrt(np.sum(N**2)))
-    _, nbin, polar_index, _ = init_polar(nkx, nky, nkz, kx, ky, kz, nkpolar)
-    expected_iso = polar_isotropic(nkpolar, nkx, nky, nkz, polar_index, nbin,
-                                   ft_cartesian[..., 0], kx, ky, kz)
-
-    _, ft_iso = fft(grid, values, psd=True, iso=True)
-
-    # fft(iso=True) must agree with a direct call to the same binning helpers.
-    np.testing.assert_allclose(ft_iso[:, 0], expected_iso)
-
-    mask = nbin > 0
-    total_from_shells = np.sum(ft_iso[mask, 0] * nbin[mask])
-    np.testing.assert_allclose(total_from_shells,
-                               np.sum(ft_cartesian[..., 0]),
-                               rtol=1e-10)
+    # cos(x)+2*cos(2y)+3*cos(z) has positive-octant powers N^2/4,
+    # N^2, 9*N^2/4 at (1,0,0), (0,2,0), (0,0,1), respectively.
+    # This oracle never calls the Cartesian FFT or either binning helper.
+    with np.load(GEN / "fourier_modes.npz") as data:
+      grid = [data[d] for d in ("x", "y", "z")]
+      freq, spectrum = fft(grid, data["values"], psd=True, iso=True)
+    modes = np.stack(np.meshgrid(np.arange(4),
+                                 np.arange(5),
+                                 np.arange(3),
+                                 indexing="ij"),
+                     axis=-1)
+    radius = np.sqrt(np.sum(modes**2, axis=-1))
+    # Uniform unit-radius shells centered at k=1,2,... in lattice units;
+    # DC lies outside these shells and this field has zero mean.
+    counts, _ = np.histogram(radius, bins=np.arange(15) + 0.5)
+    np.testing.assert_array_equal(counts[:2], [6, 13])
+    expected = np.zeros(14)
+    expected[:2] = np.array([10., 4.]) * (480**2 / 4) / counts[:2]
+    occupied = counts > 0
+    np.testing.assert_allclose(freq[0],
+                               np.arange(1, 15) / (2 * np.pi),
+                               rtol=2e-14,
+                               atol=2e-14)
+    np.testing.assert_allclose(spectrum[occupied, 0],
+                               expected[occupied],
+                               rtol=2e-13,
+                               atol=1e-18)
+    assert np.isnan(spectrum[~occupied, 0]).all()  # empty shell mean undefined
+    # Positive-octant cropping keeps one member of each conjugate pair.
+    np.testing.assert_allclose(np.sum(spectrum[occupied, 0] * counts[occupied]),
+                               3.5 * 480**2,
+                               rtol=2e-13,
+                               atol=1e-8)
 
   def test_iso_on_2d_data_treats_z_as_degenerate(self):
     """iso doesn't check num_dims itself -- for 2D data the (dummy, unset)

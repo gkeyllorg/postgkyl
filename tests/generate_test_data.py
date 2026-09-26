@@ -12,6 +12,10 @@ and generation_method metadata. Inspect them with ``pgkyl FILE info --all`` or
 ``pg.load(FILE).info(all=True)``. Random coefficient fixtures explicitly state
 that they have no prescribed analytic function.
 
+NumPy-only calculus and Fourier fixtures are small .npz archives in the same
+generated directory. They contain coordinate arrays, values, and descriptions
+of their analytic functions and sampling rules; they require no native library.
+
 C2P mapping files store modal DG coefficients for analytical coordinate
 transformations.  The basis is inferred by GData from num_comps/ndim via
 _get_basis_p().  Two mapping types are provided:
@@ -390,6 +394,144 @@ def _generate_analytic_fields(out_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Independent analytic fixtures
+# ---------------------------------------------------------------------------
+
+POLYNOMIAL_CASES = [
+    ("polynomial_1d_ms_p1", 1, "serendipity", 1),
+    ("polynomial_1d_ms_p2", 1, "serendipity", 2),
+    ("polynomial_2d_ms_p1", 2, "serendipity", 1),
+    ("polynomial_2d_ms_p2", 2, "serendipity", 2),
+    ("polynomial_2d_mt_p1", 2, "tensor", 1),
+    ("polynomial_2d_mt_p2", 2, "tensor", 2),
+    ("polynomial_3d_ms_p1", 3, "serendipity", 1),
+]
+
+
+def polynomial_grid(ndim):
+  """Unequal cell counts, offsets, and widths expose axis and volume errors."""
+  return [
+      np.linspace(lo, hi, n + 1)
+      for lo, hi, n in zip((-1., 0.25, 1.), (2., 2.25, 5.), (3, 4, 2))
+  ][:ndim]
+
+
+def polynomial_factors(ndim, basis, order):
+  """Return ascending monomial coefficients with shape (field, axis, power).
+
+  f(x) = product_d (2 + (d+1)*x_d + q_d*(d+1)*x_d^2/4).
+  g(x) = product_d (4 - (d+1)*x_d/4 + q_d*(d+1)*x_d^2/8).
+  q_d=0 for p1; for p2, q_d=1 on every tensor axis, but only axis 0
+  for serendipity (keeping the superlinear degree at most two).
+  """
+  factors = np.zeros((2, ndim, 3))
+  factors[:, :, 0] = np.array([2., 4.])[:, None]
+  factors[:, :, 1] = np.array([1., -0.25])[:, None] * np.arange(1, ndim + 1)
+  if order == 2:
+    quadratic_axes = ndim if basis == "tensor" else 1
+    factors[:, :quadratic_axes, 2] = (np.array([0.25, 0.125])[:, None] *
+                                      np.arange(1, quadratic_axes + 1))
+  return factors
+
+
+def _generate_polynomial_fields(out_dir: Path) -> None:
+  """Write exact p1/p2 coefficients without calling a production DG kernel.
+
+  On a cell x=c+h*xi, a+b*x+q*x^2 has orthonormal Legendre coefficients
+  sqrt(2)*(a+b*c+q*(c^2+h^2/3)), sqrt(2/3)*h*(b+2*q*c),
+  sqrt(8/45)*q*h^2. Multidimensional separable coefficients are products
+  of these one-dimensional integrals, in Gkeyll's documented mode order.
+  """
+  for stem, ndim, basis, order in POLYNOMIAL_CASES:
+    grid = polynomial_grid(ndim)
+    factors = polynomial_factors(ndim, basis, order)
+    if ndim == 1:
+      modes = [(p, ) for p in range(order + 1)]
+    elif ndim == 2:
+      modes = [(0, 0), (1, 0), (0, 1), (1, 1)]
+      if order == 2:
+        modes += [(2, 0), (0, 2), (2, 1), (1, 2)]
+        if basis == "tensor":
+          modes += [(2, 2)]
+    else:
+      modes = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1),
+               (0, 1, 1), (1, 1, 1)]
+    cells = [len(edges) - 1 for edges in grid]
+    centers = np.meshgrid(*[(e[:-1] + e[1:]) / 2 for e in grid], indexing="ij")
+    coefficients = np.ones((*cells, 2, len(modes)))
+    for d, center in enumerate(centers):
+      h = (grid[d][1] - grid[d][0]) / 2
+      for field, (a, b, q) in enumerate(factors[:, d]):
+        local = [
+            np.sqrt(2) * (a + b * center + q * (center**2 + h**2 / 3)),
+            np.sqrt(2 / 3) * h * (b + 2 * q * center),
+            np.full_like(center,
+                         np.sqrt(8 / 45) * q * h**2)
+        ]
+        for m, powers in enumerate(modes):
+          coefficients[..., field, m] *= local[powers[d]]
+    write_gkyl_field(
+        out_dir / f"{stem}.gkyl",
+        cells, [e[0] for e in grid], [e[-1] for e in grid],
+        coefficients.reshape(*cells, -1),
+        order,
+        basis,
+        metadata={
+            "description":
+            "Two separable polynomials on an anisotropic grid.",
+            "analytic_function":
+            polynomial_factors.__doc__,
+            "generation_method":
+            "Closed-form Legendre integrals, independent of Postgkyl "
+            "and Gkeyll; field-blocked exact modal coefficients.",
+        })
+
+
+def _generate_calculus_samples(out_dir: Path) -> None:
+  """Store point samples separately from true cell averages."""
+  for n in (8, 16, 32):
+    edges = np.linspace(-1., 2., n + 1)
+    x = (edges[:-1] + edges[1:]) / 2
+    np.savez(
+        out_dir / f"midpoint_polynomials_{n}.npz",
+        edges=edges,
+        values=np.stack([x**2, 3 * x + 1], axis=-1),
+        description="Affine and quadratic fields for midpoint integration.",
+        analytic_function="f=x^2; g=3*x+1 on [-1,2]",
+        generation_method="Point samples at uniform cell centers.")
+  x = np.array([-1., -0.8, -0.1, 0.7, 2.])
+  y = np.array([0.25, 0.5, 1.25, 2.25])
+  cx, cy = np.meshgrid((x[:-1] + x[1:]) / 2, (y[:-1] + y[1:]) / 2,
+                       indexing="ij")
+  mean_x2 = cx**2 + np.diff(x)[:, None]**2 / 12
+  np.savez(
+      out_dir / "nonuniform_polynomials.npz",
+      x=x,
+      y=y,
+      values=np.stack(
+          [2 + 3 * cx - 4 * cy + 5 * cx * cy, (1 + mean_x2) * (2 - cy)],
+          axis=-1),
+      description="Bilinear and quadratic cell averages on nonuniform edges.",
+      analytic_function="f=2+3*x-4*y+5*x*y; g=(1+x^2)*(2-y)",
+      generation_method="Exact cell averages on nonuniform edges.")
+
+
+def _generate_fourier_samples(out_dir: Path) -> None:
+  """Three resolved periodic modes on a rectangular sample lattice."""
+  axes = [2 * np.pi * np.arange(n) / n for n in (8, 10, 6)]
+  x, y, z = np.meshgrid(*axes, indexing="ij")
+  np.savez(
+      out_dir / "fourier_modes.npz",
+      x=axes[0],
+      y=axes[1],
+      z=axes[2],
+      values=(np.cos(x) + 2 * np.cos(2 * y) + 3 * np.cos(z))[..., None],
+      description="Three resolved Fourier modes with known spectral powers.",
+      analytic_function="f=cos(x)+2*cos(2*y)+3*cos(z) on [0,2*pi)^3",
+      generation_method="Periodic point samples on an 8x10x6 lattice.")
+
+
+# ---------------------------------------------------------------------------
 # Configuration tables
 # ---------------------------------------------------------------------------
 
@@ -427,6 +569,9 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
   _generate_analytic_fields(out_dir)
+  _generate_polynomial_fields(out_dir)
+  _generate_calculus_samples(out_dir)
+  _generate_fourier_samples(out_dir)
 
   # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
   write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],
