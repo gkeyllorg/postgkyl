@@ -1,0 +1,1 @@
+I want to have postgkeyll build against the branch lapack_lite_shim_bugs. We should not pin a specific commit number. It should be on this branch

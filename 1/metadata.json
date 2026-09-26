@@ -1,9 +1,12 @@
 {
   "cli_version": "0.11.3",
   "checkpoint_id": "01M3F5QY3FEVFF3AQ24RAS41V8",
+  "session_id": "01a0dbb1-70c5-72e1-a9cc-67c46cb93ce8",
   "strategy": "manual-commit",
+  "created_at": "2026-09-26T15:36:06.097145267Z",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 2,
+  "checkpoints_count": 1,
+  "save_step_count": 1,
   "files_touched": [
     "scripts/gkeyll-revision",
     "src/postgkyl/dg/interpolate.py",
@@ -31,33 +34,46 @@
     "tests/test_diagnostics_multispecies.py",
     "tests/test_diagnostics_programs_enstrophy.py",
     "tests/test_diagnostics_programs_ke_dke.py",
-    "tests/test_docs_build.py",
     "tests/test_documentation.py",
     "tests/test_numerics_ev_ops.py",
     "tests/test_numerics_grid_centering.py"
   ],
-  "sessions": [
-    {
-      "metadata": "/0/metadata.json",
-      "transcript": "/0/full.jsonl",
-      "compact_transcript": "/0/transcript.jsonl",
-      "content_hash": "/0/content_hash.txt",
-      "prompt": "/0/prompt.txt"
-    },
-    {
-      "metadata": "/1/metadata.json",
-      "transcript": "/1/full.jsonl",
-      "compact_transcript": "/1/transcript.jsonl",
-      "content_hash": "/1/content_hash.txt",
-      "prompt": "/1/prompt.txt"
-    }
-  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "73079ade7540",
+  "checkpoint_transcript_start": 162,
+  "transcript_lines_at_start": 162,
+  "compact_transcript_start": 19,
   "token_usage": {
-    "input_tokens": 135044,
+    "input_tokens": 19681,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 2739712,
-    "output_tokens": 17491,
-    "api_call_count": 36,
+    "cache_read_tokens": 584704,
+    "output_tokens": 4223,
+    "api_call_count": 8,
     "subagent_tokens_complete": false
-  }
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-26T15:36:06.06728814Z",
+    "agent_lines": 5892,
+    "agent_removed": 0,
+    "human_added": 2356,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 8248,
+    "total_lines_changed": 8935,
+    "agent_percentage": 65.9429210968103,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
 }
