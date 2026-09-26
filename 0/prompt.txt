@@ -1,0 +1,150 @@
+This unit test is failing on the python 3.10 build. The other versions of python are fine. Explain why this test is failing and fix it
+
+=================================== FAILURES ===================================
+_______________ test_concrete_annotated_alias_is_not_reprocessed _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f27c1398c40>
+
+    def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
+      """Keep runtime CLI metadata authoritative over resolved string hints."""
+      original = compiler.get_type_hints
+      annotations = dict(average.__annotations__)
+      annotations["weight"] = original(average, include_extras=True)["weight"]
+      monkeypatch.setattr(average, "__annotations__", annotations)
+      evaluated = None
+    
+      def track_evaluated(source, **kwargs):
+        nonlocal evaluated
+        evaluated = source.__annotations__
+        return original(source, **kwargs)
+    
+      monkeypatch.setattr(compiler, "get_type_hints", track_evaluated)
+    
+>     model = compile_callable(average)
+
+tests/test_cli_generator.py:372: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/postgkyl/cli/compiler.py:453: in compile_callable
+    optional=not required) if is_dataset_ref else _codec(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+fn = <function average at 0x7f27c2ebe560>, name = 'weight'
+annotation = typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+markers = ()
+
+    def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
+      providers = [
+          marker for marker in markers if isinstance(marker, ChoiceProvider)
+      ]
+      key_values = [marker for marker in markers if isinstance(marker, KeyValue)]
+      cli_types = [marker for marker in markers if isinstance(marker, CliType)]
+      unknown = [
+          marker for marker in markers
+          if not isinstance(marker, (ChoiceProvider, CliArgument, CliType, KeyValue,
+                                     DatasetRef, PipelineInput))
+      ]
+      if unknown:
+        raise _error(fn, name, f"unsupported Annotated marker {unknown[0]!r}")
+      if len(providers) > 1 or len(key_values) > 1 or len(cli_types) > 1:
+        raise _error(fn, name, "duplicate Annotated codec marker")
+      if providers and key_values:
+        raise _error(fn, name, "ChoiceProvider and KeyValue cannot be combined")
+      if cli_types:
+        annotation = cli_types[0].annotation
+      annotation, optional = _optional(annotation)
+      if annotation in (Any, inspect.Parameter.empty):
+        raise _error(fn, name, "missing or Any annotation")
+    
+      if providers:
+        try:
+          provided = providers[0].provider()
+          if isinstance(provided, (str, bytes)):
+            raise TypeError("provider returned text instead of a choice collection")
+          values = tuple(provided)
+        except Exception as exc:
+          raise _error(fn, name, f"choice provider failed: {exc}") from exc
+        if not values:
+          raise _error(fn, name, "choice provider returned no choices")
+        if annotation not in _SCALARS:
+          raise _error(fn, name, "choice provider requires a scalar annotation")
+        if not all(
+            isinstance(value, annotation)
+            and not (annotation is int and isinstance(value, bool))
+            for value in values):
+          raise _error(
+              fn, name,
+              "choice provider values do not match the annotated scalar type")
+        if len(set(values)) != len(values):
+          raise _error(fn, name, "choice provider returned duplicate choices")
+        return TypeCodec(CodecKind.CHOICE, annotation, optional, choices=values)
+      if key_values and get_origin(annotation) not in (dict, Mapping):
+        raise _error(fn, name, "KeyValue requires a mapping annotation")
+      if annotation in _SCALARS:
+        return TypeCodec(_SCALARS[annotation], annotation, optional)
+      if inspect.isclass(annotation) and issubclass(annotation, Enum):
+        values = tuple(member.value for member in annotation)
+        if not all(isinstance(value, (str, int, float)) for value in values):
+          raise _error(fn, name, "Enum values must be CLI scalars")
+        return TypeCodec(CodecKind.ENUM, annotation, optional, choices=values)
+      origin = get_origin(annotation)
+      args = get_args(annotation)
+      if origin is Literal:
+        if not args or not all(
+            isinstance(value, (str, int, float)) for value in args):
+          raise _error(fn, name, "Literal choices must be strings or numbers")
+        return TypeCodec(CodecKind.CHOICE,
+                         annotation,
+                         optional,
+                         choices=tuple(args))
+      if origin is list:
+        if len(args) != 1:
+          raise _error(fn, name, "list must have exactly one item type")
+        item = _codec(fn, name, args[0], ())
+        return TypeCodec(CodecKind.SEQUENCE,
+                         annotation,
+                         optional,
+                         items=(item, ),
+                         multiple=True)
+      if origin is tuple:
+        if not args:
+          raise _error(fn, name, "tuple must declare its item type(s)")
+        if len(args) == 2 and args[1] is Ellipsis:
+          item = _codec(fn, name, args[0], ())
+          return TypeCodec(CodecKind.SEQUENCE,
+                           annotation,
+                           optional,
+                           items=(item, ),
+                           multiple=True)
+        items = tuple(_codec(fn, name, arg, ()) for arg in args)
+        return TypeCodec(CodecKind.TUPLE,
+                         annotation,
+                         optional,
+                         items=items,
+                         nargs=len(items))
+      if origin in (dict, Mapping):
+        if not key_values:
+          raise _error(fn, name, "mapping needs Annotated[..., KeyValue()]")
+        if len(args) != 2:
+          raise _error(fn, name, "mapping must declare key and value types")
+        key = _codec(fn, name, args[0], ())
+        value = _codec(fn, name, args[1], ())
+        composite = {CodecKind.SEQUENCE, CodecKind.TUPLE, CodecKind.MAPPING}
+        if key.kind in composite or value.kind in composite:
+          raise _error(fn, name, "mapping keys and values must be CLI scalars")
+        return TypeCodec(CodecKind.MAPPING,
+                         annotation,
+                         optional,
+                         items=(key, value),
+                         multiple=True)
+      if get_origin(annotation) in (Union, types.UnionType):
+        raise _error(
+            fn, name,
+            f"unsupported union {annotation!r}; only T | None is lossless")
+>     raise _error(fn, name, f"unsupported annotation {annotation!r}")
+E     postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+
+src/postgkyl/cli/compiler.py:341: CommandCompilationError
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_docs_build.py:19: install the docs extra for website tests
+FAILED tests/test_cli_generator.py::test_concrete_annotated_alias_is_not_reprocessed - postgkyl.cli.compiler.CommandCompilationError: postgkyl.operations.average.average: parameter 'weight': unsupported annotation typing.Annotated[postgkyl.gdatastate.gdatastate.GDataState | None, DatasetRef(default_tag=None)]
+========== 1 failed, 388 passed, 1 skipped, 2609 deselected in 4.17s ===========
