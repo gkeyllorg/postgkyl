@@ -1,0 +1,7 @@
+I'm seeing issues where the exponential plateau option for the fit does not get a good initial guess and cannot fit data when the x-range is significantly offset. My data decays from 1.4 to 1.2 over
+    x range = [0.511174580254, 0.51122]
+What is the best strategy to fix this? Can we automatically normalize the grid under the hood for the curve fitting?
+
+---
+
+Fit it like this under the hood, then rescale so the user doesn't know that it's doing this rescaling. The results should be returned on the original grid
