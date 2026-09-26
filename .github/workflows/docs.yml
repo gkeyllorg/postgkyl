@@ -19,6 +19,11 @@ jobs:
     timeout-minutes: 30
     env:
       MPLBACKEND: Agg
+      # Use one pytest worker per runner vCPU.
+      PYTEST_ADDOPTS: "-n logical"
+      # Keep numerical libraries from multiplying threads in every worker.
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
       POSTGKYL_REQUIRE_GKEYLL: "1"
       VTK_DEFAULT_OPENGL_WINDOW: vtkEGLRenderWindow
       LIBGL_ALWAYS_SOFTWARE: "1"
@@ -38,7 +43,10 @@ jobs:
           python -m pip install --upgrade numpy setuptools wheel
           python -m pip install --no-build-isolation -e '.[docs,test]'
       - name: Test documentation contracts and downloadable examples
-        run: python -m pytest tests/test_documentation.py tests/test_examples.py tests/test_docs_build.py
+        # Keep tests sharing the expensive documentation fixture on one worker.
+        run: >-
+          python -m pytest --dist=loadscope
+          tests/test_documentation.py tests/test_examples.py tests/test_docs_build.py
       - name: Build a reviewable website
         run: |
           python scripts/build_docs.py

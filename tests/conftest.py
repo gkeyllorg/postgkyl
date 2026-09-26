@@ -25,12 +25,10 @@ Test data generation
 ``pytest_configure`` writes synthetic .gkyl files to
 ``tests/test_data/generated/`` (gitignored -- every test that reads from
 that directory depends on this running first). It is a hook, not a
-session-scoped autouse fixture, specifically so it runs exactly once in the
-true parent process before collection or any forking begins -- see its own
-comment for why a fixture is the wrong tool once macOS CI's --forked is in
-play. Without it, a clean checkout (e.g. CI) has no fixtures to read; only a
-machine where someone has run ``python tests/generate_test_data.py`` (or a
-prior pytest session) before would happen to have them already on disk.
+session-scoped autouse fixture, so the controller generates the files before
+xdist workers start or macOS CI's --forked forks test processes. Workers skip
+generation because they share the controller's files. A clean checkout
+therefore needs no separate ``python tests/generate_test_data.py`` step.
 """
 from __future__ import annotations
 
@@ -151,15 +149,11 @@ def _close_matplotlib_figures():
 def pytest_configure(config: pytest.Config) -> None:
   _require_gkeyll_when_requested()
 
-  # A session-scoped autouse *fixture* only actually runs on first request,
-  # which lands inside whichever test forks first under macOS CI's --forked
-  # (see test.yml) -- pytest's "already cached" bookkeeping then lives in
-  # that child's forked copy of the session, never propagating back to the
-  # parent, so every subsequent forked test re-triggers it too (measured:
-  # 40 re-generations for 40 tests instead of one). pytest_configure runs
-  # exactly once, in the true parent process, before collection or any
-  # forking begins, so this is immune to that regardless of --forked.
-  generate_all(GEN_DIR)
+  # Generate shared files before xdist starts workers; concurrent writes from
+  # workers could corrupt them. Keep this in a hook: under --forked, a session
+  # fixture runs in each test's child and cannot cache setup in the parent.
+  if not hasattr(config, "workerinput"):
+    generate_all(GEN_DIR)
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

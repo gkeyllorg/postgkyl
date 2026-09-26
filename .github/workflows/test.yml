@@ -27,6 +27,11 @@ env:
   FORCE_COLOR: "1"
   PYTHONFAULTHANDLER: "1"
   PYTHONUNBUFFERED: "1"
+  # Use one pytest worker per runner vCPU.
+  PYTEST_ADDOPTS: "-n logical"
+  # Keep numerical libraries from multiplying threads in every worker.
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
 
 jobs:
   quality:
