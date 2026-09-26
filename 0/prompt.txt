@@ -1,0 +1,7 @@
+Please add a unit test about integrating some of the test data at quadrature nodes. So it loads, represents -t quad, then integrates. The weak integration should be exact and so should the quadrature point integration. Include some tests using the high-dimensional generated data
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Add tests and fix integration. Add warnings and throw an error when there is no kernel on the Gkeyll side. Do not write more kernels, but ensure that the kernel integration is correct","question":"The requested tests expose incorrect quadrature integration and unsupported 4D–6D modal integration. Should I also fix those implementations, or keep this change limited to regression tests documenting the failures?","questionItemId":"[\"request_user_input_async\",\"call_lqUM9nXdXBkn45iJAmdX3JAY\",0]"}]
+</send_user_message_question_reply>
