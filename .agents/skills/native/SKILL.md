@@ -22,7 +22,7 @@ under the Postgkyl workspace. This producer tree owns the C implementation even
 though Postgkyl ignores it. Do not substitute Postgkyl-managed patch files,
 build-time patch application, or Python workarounds for changes that belong
 there. Do not commit changes in either repository; leave the diffs for the user.
-Do not change the dependency pin merely to capture local development work.
+Do not change the dependency branch merely to capture local development work.
 
 Inspect `git status` in both repositories before editing, preserve existing
 changes, and report the native diff separately from the Postgkyl diff. Follow
@@ -38,8 +38,9 @@ cd ..
 sh scripts/build_gpython.sh
 ```
 
-`scripts/build_gkeyll.sh` is the clean, pinned installation path: it checks out
-`scripts/gkeyll-revision` and refuses tracked modifications. Do not use it to
+`scripts/build_gkeyll.sh` is the clean installation path: it fetches and
+fast-forwards the branch named in `scripts/gkeyll-branch` and refuses tracked
+modifications or commits ahead of the remote branch. Do not use it to
 build ongoing native edits or clear those edits to satisfy it. The distinction
 between release installation and local producer development is intentional.
 

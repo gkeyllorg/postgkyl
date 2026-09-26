@@ -3,7 +3,7 @@
 # libg0core.so, for the gpython/ layer to bind against. Invoked automatically
 # by `pip install`/`pip install -e` via setup.py, and safe to re-run by hand.
 #
-# gkeyll/ is a plain, detached clone pinned by scripts/gkeyll-revision (zero
+# gkeyll/ tracks the branch named by scripts/gkeyll-branch (zero
 # external deps: no MPI/CUDA/SuperLU/Lua, LAPACK replaced by the bundled
 # lapack-lite). Keep every root file and directory except vlasov/, pkpm/,
 # moments/, and gyrokinetic/ (~200MB combined). A blobless fetch plus
@@ -15,32 +15,33 @@ REPO_URL="https://github.com/ammarhakim/gkeyll.git"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)
 GKEYLL_DIR="${ROOT_DIR}/gkeyll"
-REVISION_FILE="${SCRIPT_DIR}/gkeyll-revision"
+BRANCH_FILE="${SCRIPT_DIR}/gkeyll-branch"
 
-if [ ! -f "${REVISION_FILE}" ]; then
-    echo "error: pinned Gkeyll revision file is missing: ${REVISION_FILE}" >&2
+if [ ! -f "${BRANCH_FILE}" ]; then
+    echo "error: Gkeyll branch file is missing: ${BRANCH_FILE}" >&2
     exit 1
 fi
-IFS= read -r GKEYLL_REVISION < "${REVISION_FILE}"
-case "${GKEYLL_REVISION}" in
-    *[!0-9a-f]*|'')
-        echo "error: ${REVISION_FILE} must contain one lowercase commit SHA" >&2
-        exit 1
-        ;;
-esac
-if [ "${#GKEYLL_REVISION}" -ne 40 ]; then
-    echo "error: ${REVISION_FILE} must contain a full 40-character commit SHA" >&2
+IFS= read -r GKEYLL_BRANCH < "${BRANCH_FILE}"
+if ! git check-ref-format --branch "${GKEYLL_BRANCH}" >/dev/null 2>&1; then
+    echo "error: ${BRANCH_FILE} must contain a valid Git branch name" >&2
     exit 1
 fi
 
 if [ ! -e "${GKEYLL_DIR}/.git" ]; then
-    echo "# gkeyll/ not present -- fetching pinned ${GKEYLL_REVISION} (sparse + blobless)"
-    rmdir "${GKEYLL_DIR}" 2>/dev/null || true
-    mkdir "${GKEYLL_DIR}"
-    git -C "${GKEYLL_DIR}" init
-    git -C "${GKEYLL_DIR}" remote add origin "${REPO_URL}"
+    echo "# gkeyll/ not present -- fetching ${GKEYLL_BRANCH} (sparse + blobless)"
+    git clone --depth 1 --filter=blob:none --no-checkout \
+        --branch "${GKEYLL_BRANCH}" "${REPO_URL}" "${GKEYLL_DIR}"
 else
-    echo "# gkeyll/ already present -- ensuring sparse-checkout excludes heavy apps"
+    # Refuse local source edits before fetching or changing the checkout.
+    if ! git -C "${GKEYLL_DIR}" diff --quiet || \
+       ! git -C "${GKEYLL_DIR}" diff --cached --quiet; then
+        echo "error: ${GKEYLL_DIR} has tracked modifications; cannot update Gkeyll" >&2
+        exit 1
+    fi
+    echo "# Fetching the latest Gkeyll ${GKEYLL_BRANCH}"
+    # Keep intervening commits so an existing shallow clone can fast-forward.
+    git -C "${GKEYLL_DIR}" fetch --filter=blob:none origin \
+        "+refs/heads/${GKEYLL_BRANCH}:refs/remotes/origin/${GKEYLL_BRANCH}"
 fi
 
 git -C "${GKEYLL_DIR}" sparse-checkout set --no-cone --stdin <<'EOF'
@@ -50,24 +51,19 @@ git -C "${GKEYLL_DIR}" sparse-checkout set --no-cone --stdin <<'EOF'
 !/moments/
 !/gyrokinetic/
 EOF
-if ! git -C "${GKEYLL_DIR}" cat-file -e "${GKEYLL_REVISION}^{commit}" 2>/dev/null; then
-    git -C "${GKEYLL_DIR}" fetch --depth 1 --filter=blob:none origin "${GKEYLL_REVISION}"
+if git -C "${GKEYLL_DIR}" show-ref --verify --quiet "refs/heads/${GKEYLL_BRANCH}"; then
+    git -C "${GKEYLL_DIR}" checkout "${GKEYLL_BRANCH}"
+else
+    git -C "${GKEYLL_DIR}" checkout --track -b "${GKEYLL_BRANCH}" "origin/${GKEYLL_BRANCH}"
 fi
-
-# A dirty producer tree makes the native artifact's source unknowable even
-# when HEAD is pinned.  Refuse it instead of recording misleading build info.
-if ! git -C "${GKEYLL_DIR}" diff --quiet || \
-   ! git -C "${GKEYLL_DIR}" diff --cached --quiet; then
-    echo "error: ${GKEYLL_DIR} has tracked modifications; cannot build the pinned Gkeyll source" >&2
-    exit 1
-fi
-git -C "${GKEYLL_DIR}" checkout --detach "${GKEYLL_REVISION}"
+git -C "${GKEYLL_DIR}" merge --ff-only "refs/remotes/origin/${GKEYLL_BRANCH}"
+REMOTE_REVISION=$(git -C "${GKEYLL_DIR}" rev-parse "refs/remotes/origin/${GKEYLL_BRANCH}")
 ACTUAL_REVISION=$(git -C "${GKEYLL_DIR}" rev-parse HEAD)
-if [ "${ACTUAL_REVISION}" != "${GKEYLL_REVISION}" ]; then
-    echo "error: expected Gkeyll ${GKEYLL_REVISION}, checked out ${ACTUAL_REVISION}" >&2
+if [ "${ACTUAL_REVISION}" != "${REMOTE_REVISION}" ]; then
+    echo "error: Gkeyll ${GKEYLL_BRANCH} has local commits; cannot build the remote branch tip" >&2
     exit 1
 fi
-echo "# Using pinned Gkeyll revision ${GKEYLL_REVISION}"
+echo "# Using Gkeyll ${GKEYLL_BRANCH} (${ACTUAL_REVISION})"
 
 CC="${CC:-cc}"
 echo "# Configuring gkeyll core (CC=${CC}, lapack-lite, app=core)"

@@ -184,16 +184,18 @@ the bridge already.
 
 During a source build, `setup.py` runs `scripts/build_gkeyll.sh`, which:
 
-1. Downloads the [Gkeyll](https://github.com/ammarhakim/gkeyll) revision
-   recorded in `scripts/gkeyll-revision` into `gkeyll/`.
+1. Fetches the latest commit from the [Gkeyll](https://github.com/ammarhakim/gkeyll)
+   branch named in `scripts/gkeyll-branch` and checks it out in `gkeyll/`.
 2. Builds its core library with the bundled LAPACK implementation. No
    separate MPI, CUDA, SuperLU, Lua, or system LAPACK installation is needed.
 3. Builds the Python extension and bundles the core library beside it, so
    the installed package can run without the Gkeyll source folder.
 
-The pinned revision currently comes from `lapack_lite_shim_bugs`, which
-contains the Gkeyll changes required by Postgkyl. The update script advances
-the pin to the latest commit on that branch.
+The configured branch is `lapack_lite_shim_bugs`, which contains the Gkeyll
+changes required by Postgkyl. Each source build fetches its latest commit and
+fast-forwards the local branch. Builds refuse tracked local modifications or
+local commits that differ from the remote branch. `pgkyl --version` reports
+the branch and commit used for the installed build.
 
 The build needs Git, Make, a C compiler, and network access. It uses `cc` by
 default. To select another installed compiler, for example GCC, run:
@@ -258,20 +260,38 @@ installs the testing, formatting, and packaging tools listed in
 python -m pytest tests/
 ```
 
-Add `-v` to see a separate result for each test.
+The default run excludes `slow` and `external_tool` integrations and enforces
+a five-second timeout per unit test, including fixture setup and teardown.
+Add `-v` to see a separate result for each test, or `--durations=20` to identify
+the slowest setup, call, and teardown phases.
+
+The integration tests retain crash-isolated native polynomial checks,
+complete tutorial scripts, documentation builds, and Chrome/ffmpeg exports.
+Run them separately, or include everything:
+
+```bash
+python -m pytest -m "slow or external_tool" --timeout=600
+python -m pytest -m "" --timeout=600
+```
+
+An explicit `-m` replaces the default marker selection. Give integration runs
+a longer timeout; building the documentation executes the entire figure
+gallery through both Python and the CLI.
 
 The default suite treats unexpected warnings as errors and uses strict marker
 and configuration validation. Useful CI-equivalent subsets are:
 
 ```bash
 POSTGKYL_SKIP_GKEYLL_BUILD=1 pytest -m compatibility
-POSTGKYL_REQUIRE_GKEYLL=1 pytest -m native
+POSTGKYL_REQUIRE_GKEYLL=1 pytest -m native --timeout=120
 pytest -m "render and not external_tool"
-pytest -m external_tool  # invokes Chrome and/or ffmpeg
-pytest -m "not external_tool" --cov=postgkyl --cov-branch --cov-fail-under=93
+pytest -m external_tool --timeout=180  # invokes Chrome and/or ffmpeg
+pytest -m "not external_tool" --timeout=600 --cov=postgkyl --cov-branch --cov-fail-under=99
 ```
 
-The external-tool lane has explicit timeouts in CI. Native lanes set
+CI runs unit tests with the same five-second budget, then appends integration
+coverage before enforcing the combined 99% threshold. The external-tool lane
+has its own timeout. Native lanes set
 `POSTGKYL_REQUIRE_GKEYLL=1`, turning a missing bridge into a session failure
 instead of allowing the native test inventory to skip silently.
 

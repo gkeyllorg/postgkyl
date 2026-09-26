@@ -13,7 +13,7 @@ pip install --no-build-isolation -e '.[test]'
 ```
 
 For native source changes, follow the [local Gkeyll development workflow](../native/SKILL.md#local-gkeyll-development)
-instead of the clean pinned installation commands above. It covers direct
+instead of the clean installation commands above. It covers direct
 producer edits, in-place builds, and leaving changes uncommitted.
 
 Run focused tests for the change, then the required broader checks:
