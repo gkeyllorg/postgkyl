@@ -3,12 +3,15 @@
   "checkpoint_id": "01M3DVNR53YH2FHB5ZRXR9S25A",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "MANIFEST.in",
     "README.md",
     "scripts/build_gkeyll.sh",
-    "scripts/build_gpython.sh"
+    "scripts/build_gpython.sh",
+    "scripts/gkeyll-branch",
+    "scripts/gkeyll-revision",
+    "scripts/update_pgkyl.sh"
   ],
   "sessions": [
     {
@@ -24,13 +27,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 347452,
+    "input_tokens": 404940,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 12675456,
-    "output_tokens": 57652,
-    "api_call_count": 100
+    "cache_read_tokens": 13525248,
+    "output_tokens": 73115,
+    "api_call_count": 118
   }
 }
