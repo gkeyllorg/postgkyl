@@ -4,6 +4,7 @@ wrappers, and the leading-window search used for growth-rate-style fits."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -230,34 +231,69 @@ FIT_NDIM: dict[str, int] = {
 }
 
 
+@dataclass(frozen=True)
+class FitResult:
+  """Optimizer coefficients and covariance, with their coordinate transform.
+
+  Evaluate with :func:`fit_evaluate`; :func:`fit_coefficients` converts these
+  coefficients and their covariance to the original coordinate system.
+  """
+
+  params: np.ndarray
+  cov: np.ndarray
+  R2: float
+  x_offset: float = 0.0
+  x_scale: float = 1.0
+
+
 def fit_evaluate(xdata: np.ndarray, fit_type: str,
-                 params: np.ndarray) -> np.ndarray:
-  """Evaluate a fitted model at ``xdata`` given the optimized parameters."""
+                 params: np.ndarray | FitResult) -> np.ndarray:
+  """Evaluate on the original grid, using coefficients or a stable fit result."""
+  if isinstance(params, FitResult):
+    xdata = (np.asarray(xdata) - params.x_offset) / params.x_scale
+    params = params.params
   if fit_type in FIT_FUNCTIONS:
     return FIT_FUNCTIONS[fit_type](xdata, *params)
   return _rpn_make_func(fit_type)(xdata, *params)
 
 
-def fit(xdata: np.ndarray,
-        ydata: np.ndarray,
-        fit_type: str = "linear",
-        p0: list | None = None) -> tuple[np.ndarray, np.ndarray, float]:
-  """Fit data using ``scipy.optimize.curve_fit`` with the specified model.
+def fit_coefficients(result: FitResult,
+                     fit_type: str) -> tuple[np.ndarray, np.ndarray]:
+  """Return original-coordinate coefficients and covariance.
 
-  Args:
-    xdata: For 1D fits, shape ``(N,)``. For 2D fits, shape ``(2, N)`` where
-      rows are the two independent variables flattened.
-    ydata: Dependent variable, shape ``(N,)``.
-    fit_type: A key in :data:`FIT_FUNCTIONS`, or an RPN expression string
-      (e.g. ``"a x * b +"``).
-    p0: Initial guess for the fit parameters; defaults to all ones.
+  An exponential amplitude at x=0 can exceed floating-point range even when
+  the fitted curve is finite. Its coefficient is then infinite and its
+  covariance row/column unavailable (NaN); underflow gives zero with the same
+  unavailable covariance. Use the FitResult for evaluation.
+  """
+  if fit_type != "exp_plateau":
+    return result.params, result.cov
+  A, k, C = result.params
+  offset, scale = result.x_offset, result.x_scale
+  with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+    factor = np.exp(-k * offset / scale)
+    amplitude = (np.sign(A) *
+                 np.exp(np.log(abs(A)) - k * offset / scale) if A != 0 else 0.)
+    jacobian = np.array([[factor, -amplitude * offset / scale, 0.],
+                         [0., 1. / scale, 0.], [0., 0., 1.]])
+    cov = jacobian @ result.cov @ jacobian.T
+  # An unrepresentable amplitude must not corrupt the rate/plateau errors.
+  cov[1:, 1:] = result.cov[1:, 1:] / np.outer([scale, 1.], [scale, 1.])
+  if not np.isfinite(amplitude) or (A != 0 and amplitude == 0):
+    cov[0, :] = np.nan
+    cov[:, 0] = np.nan
+  return np.array([amplitude, k / scale, C]), cov
 
-  Returns:
-    ``(params, cov, R2)``.
 
-  Raises:
-    ValueError: If ``fit_type`` is neither a known model name nor a
-      recognizable RPN expression.
+def fit_model(xdata: np.ndarray,
+              ydata: np.ndarray,
+              fit_type: str = "linear",
+              p0: list | None = None) -> FitResult:
+  """Fit a model, retaining stable coordinates for subsequent evaluation.
+
+  Exponential plateau fits use u=(x-min(x))/ptp(x) internally. Explicit p0
+  always uses original-coordinate coefficients. Other models retain their
+  existing coordinates and initialization.
   """
   if fit_type in FIT_FUNCTIONS:
     func = FIT_FUNCTIONS[fit_type]
@@ -271,17 +307,50 @@ def fit(xdata: np.ndarray,
     func = _rpn_make_func(fit_type)
     n_params = len(rpn_param_names(fit_type))
 
+  xdata = np.asarray(xdata, dtype=float)
+  ydata = np.asarray(ydata, dtype=float)
+  offset, scale = 0., 1.
+  if fit_type == "exp_plateau":
+    offset, scale = float(xdata.min()), float(np.ptp(xdata))
+    if not np.isfinite(scale) or scale <= 0:
+      raise ValueError("exp_plateau requires a finite, nonzero x range")
+    xdata = (xdata - offset) / scale
+    if p0 is None:
+      p0 = auto_guess(fit_type, xdata, ydata)
+    else:
+      A, b, C = p0
+      # Combine exponents before exponentiation to avoid intermediate overflow.
+      amplitude = (np.sign(A) *
+                   np.exp(np.log(abs(A)) + b * offset) if A != 0 else 0.)
+      p0 = [amplitude, b * scale, C]
   if p0 is None:
     p0 = np.ones(n_params)
 
   params, cov = opt.curve_fit(func, xdata, ydata, p0=p0)
-
   residual = ydata - func(xdata, *params)
   ss_res = np.sum(residual**2)
   ss_tot = np.sum((ydata - np.mean(ydata))**2)
   R2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0
+  return FitResult(params, cov, R2, offset, scale)
 
-  return params, cov, R2
+
+def fit(xdata: np.ndarray,
+        ydata: np.ndarray,
+        fit_type: str = "linear",
+        p0: list | None = None) -> tuple[np.ndarray, np.ndarray, float]:
+  """Return original-coordinate (params, covariance, R2) from curve fitting.
+
+  ``fit_type`` is a built-in name or an RPN expression. ``p0`` contains
+  original-coordinate coefficients; None uses a data-driven guess for
+  exp_plateau and ones otherwise. For 1D fits xdata has shape (N,); for
+  2D fits it has shape (2, N). ydata has shape (N,). Plateau fits normalize
+  x internally. Unknown model names raise ValueError.
+  For extreme offsets, the amplitude at x=0 may overflow or underflow;
+  use :func:`fit_model` and :func:`fit_evaluate` for stable evaluation.
+  """
+  result = fit_model(xdata, ydata, fit_type, p0)
+  params, cov = fit_coefficients(result, fit_type)
+  return params, cov, result.R2
 
 
 def auto_guess(fit_type: str, xdata: np.ndarray,
@@ -291,8 +360,9 @@ def auto_guess(fit_type: str, xdata: np.ndarray,
   Produces a sensible ``p0`` for :func:`fit` by inspecting the data (e.g. a
   least-squares seed for linear/polynomial models, peak location and FWHM
   for a gaussian, the dominant FFT frequency for a sinusoid). Returns
-  ``None`` for RPN expressions or when the data has no finite values, in
-  which case :func:`fit` falls back to its default (ones).
+  ``None`` for RPN expressions, when the data has no finite values, or when
+  a plateau amplitude at x=0 cannot represent the seed. :func:`fit` uses
+  its default initialization in that case.
 
   Args:
     fit_type: A built-in model name (an RPN expression yields ``None``).
@@ -343,10 +413,14 @@ def auto_guess(fit_type: str, xdata: np.ndarray,
     x = np.asarray(xdata)
     n_tail = max(1, len(x) // 10)
     C = float(y[np.argsort(x)[-n_tail:]].mean())
-    A = float(y_max - C) or 1.0
+    A = float(y[np.argmin(x)] - C) or 1.0
     x_span = x.max() - x.min()
     b = -1.0 / x_span if x_span > 0 else -1.0
-    return [A, b, C]
+    with np.errstate(over="ignore", under="ignore"):
+      A = float(np.sign(A) * np.exp(np.log(abs(A)) - b * x.min()))
+    # Let fit_model initialize in normalized coordinates when a physical
+    # amplitude cannot represent the seed.
+    return [A, b, C] if np.isfinite(A) and A != 0 else None
 
   if fit_type == "gaussian":
     x = np.asarray(xdata)
@@ -399,18 +473,18 @@ def auto_guess(fit_type: str, xdata: np.ndarray,
   return None
 
 
-def fit_best_window(
-    xdata: np.ndarray,
-    ydata: np.ndarray,
-    fit_type: str = "exp2",
-    min_n: int | None = None,
-    p0: list | None = None) -> tuple[np.ndarray, np.ndarray, float, int]:
+def fit_best_model(xdata: np.ndarray,
+                   ydata: np.ndarray,
+                   fit_type: str = "exp2",
+                   min_n: int | None = None,
+                   p0: list | None = None) -> tuple[FitResult, int]:
   """Fit ``fit_type`` to the best-scoring leading window of a 1D series.
 
   Scans windows ``xdata[:n]`` for ``n`` from ``min_n`` up to ``len(xdata)``,
-  keeping the window with the best coefficient of determination (R^2). Each
-  window is warm-started from the previous window's fitted parameters (or
-  ``p0``/:func:`auto_guess` for the first), so this generalizes a single
+  keeping the window with the best coefficient of determination (R^2).
+  Plateau windows initialize independently in normalized coordinates; other
+  models warm-start from the previous fit (or ``p0``/:func:`auto_guess`
+  for the first). This generalizes a single
   full-domain :func:`fit` call to the common case of a time series whose
   early or late region should be excluded (e.g. growth-rate fits, which are
   only valid while the signal grows/decays continuously).
@@ -421,10 +495,11 @@ def fit_best_window(
     fit_type: passed to :func:`fit`.
     min_n: minimum number of points in the fitted window. Defaults to
       ``len(xdata) // 10``.
-    p0: initial guess for the first window; ``None`` uses :func:`auto_guess`.
+    p0: initial guess for the first window (every window for exp_plateau);
+      ``None`` uses data-driven initialization.
 
   Returns:
-    ``(params, cov, R2, N)`` for the best-scoring window.
+    ``(result, N)`` for the best-scoring window, retaining stable coordinates.
 
   Raises:
     RuntimeError: if ``curve_fit`` fails to converge for every window in
@@ -433,7 +508,7 @@ def fit_best_window(
   xdata = np.asarray(xdata, dtype=float)
   ydata = np.asarray(ydata, dtype=float)
   if min_n is None:
-    min_n = max(2, len(xdata) // 10)
+    min_n = max(3 if fit_type == "exp_plateau" else 2, len(xdata) // 10)
 
   best_R2 = -np.inf
   best = None
@@ -441,18 +516,36 @@ def fit_best_window(
   for n in range(min_n, len(xdata) + 1):
     xn, yn = xdata[:n], ydata[:n]
     try:
-      params, cov, R2 = fit(
+      result = fit_model(
           xn,
           yn,
           fit_type,
-          p0=guess if guess is not None else auto_guess(fit_type, xn, yn))
+          p0=guess if guess is not None else
+          (None if fit_type == "exp_plateau" else auto_guess(fit_type, xn, yn)))
     except RuntimeError:
       continue
-    guess = list(params)
-    if R2 > best_R2:
-      best_R2, best = R2, (params, cov, R2, n)
+    # Reinitialize plateau windows in their own normalized coordinates;
+    # their physical amplitudes may be unrepresentable.
+    guess = p0 if fit_type == "exp_plateau" else list(result.params)
+    if result.R2 > best_R2:
+      best_R2, best = result.R2, (result, n)
   if best is None:
     raise RuntimeError(
         "fit_best_window: curve_fit failed to converge for every window in "
         f"[{min_n:d}, {len(xdata):d}]")
   return best
+
+
+def fit_best_window(
+    xdata: np.ndarray,
+    ydata: np.ndarray,
+    fit_type: str = "exp2",
+    min_n: int | None = None,
+    p0: list | None = None) -> tuple[np.ndarray, np.ndarray, float, int]:
+  """Return original-coordinate (params, covariance, R2, N) for the best window.
+
+  See :func:`fit_best_model` for window selection and stable evaluation.
+  """
+  result, n = fit_best_model(xdata, ydata, fit_type, min_n, p0)
+  params, cov = fit_coefficients(result, fit_type)
+  return params, cov, result.R2, n

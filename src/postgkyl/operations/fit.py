@@ -61,7 +61,7 @@ def fit(data: "GDataState",
     guess: initial guess for the fit parameters -- a comma-separated string
       (e.g. ``'1,0,2'``) or a sequence of floats. None derives a
       data-driven guess per component via ``numerics.auto_guess`` (for the
-      first window, if ``window=True``).
+      first window, if ``window=True``, or each window for exp_plateau).
     window: fit only the best-scoring leading window of the data (1D only)
       instead of the full domain -- see ``numerics.fit_best_window``.
     min_n: minimum window length when ``window=True``; ``None`` defaults to
@@ -81,8 +81,12 @@ def fit(data: "GDataState",
     label: optional label for the returned dataset.
 
   Returns:
-    A dataset holding the fitted curve on the active grid, with
+    A dataset holding the fitted curve on the original active grid, with
     ``ctx['fit_params']``, ``ctx['fit_std']``, and ``ctx['fit_R2']`` set.
+    Coefficients and uncertainties use the original coordinate units.
+    Exponential plateau fits normalize x internally; an amplitude at x=0
+    outside floating-point range does not affect the returned curve.
+    ``ctx['fit_models']`` retains stable results for ``numerics.fit_evaluate``.
 
   Raises:
     ValueError: if ``data`` is unevaluated modal coefficients, if ``fit_type``
@@ -134,21 +138,25 @@ def fit(data: "GDataState",
 
   active_shape = tuple(cg.shape[0] for cg in cc_grid)
   fit_values_list, all_params, all_std, all_r2 = [], [], [], []
-  all_n = []
+  all_n, all_models = [], []
   for comp in range(values.shape[-1]):
     ydata = values[..., comp].flatten()
     if window:
-      params, cov, r2, n = numerics.fit_best_window(xdata,
-                                                    ydata,
-                                                    fit_type,
-                                                    min_n=min_n,
-                                                    p0=guess_list)
+      model, n = numerics.fit_best_model(xdata,
+                                         ydata,
+                                         fit_type,
+                                         min_n=min_n,
+                                         p0=guess_list)
     else:
       n = ydata.size
-      p0 = guess_list if guess_list is not None else numerics.auto_guess(
-          fit_type, xdata, ydata)
-      params, cov, r2 = numerics.fit(xdata, ydata, fit_type, p0=p0)
-    y_fit = numerics.fit_evaluate(xdata, fit_type, params)
+      p0 = guess_list
+      if p0 is None and fit_type != "exp_plateau":
+        p0 = numerics.auto_guess(fit_type, xdata, ydata)
+      model = numerics.fit_model(xdata, ydata, fit_type, p0=p0)
+    params, cov = numerics.fit_coefficients(model, fit_type)
+    r2 = model.R2
+    y_fit = numerics.fit_evaluate(xdata, fit_type, model)
+    all_models.append(model)
     fit_values_list.append(y_fit.reshape(active_shape + (1, )))
     all_params.append(params)
     all_std.append(np.sqrt(np.diag(cov)))
@@ -176,7 +184,13 @@ def fit(data: "GDataState",
     for comp, params in enumerate(all_params):
       print(f"  component {comp}:")
       for name, value, std in zip(param_names, params, all_std[comp]):
-        if np.isfinite(std):
+        amplitude_out_of_range = (
+            fit_type == "exp_plateau" and name == "A"
+            and (not np.isfinite(value) or
+                 (value == 0 and all_models[comp].params[0] != 0)))
+        if amplitude_out_of_range:
+          print(f"    {name} = outside floating-point range at x=0")
+        elif np.isfinite(std):
           print(f"    {name} = {value:.12g} +/- {std:.12g} (1-sigma)")
         else:
           print(f"    {name} = {value:.12g} (1-sigma uncertainty unavailable)")
@@ -211,6 +225,7 @@ def fit(data: "GDataState",
                       inplace=inplace,
                       tag=tag,
                       label=label,
+                      fit_models=all_models,
                       fit_params=all_params,
                       fit_std=all_std,
                       fit_R2=all_r2)

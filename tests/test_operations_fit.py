@@ -285,3 +285,33 @@ def test_growth_is_the_declared_leading_window_composition(monkeypatch):
       "tag": "fit",
       "label": "growth",
   })]
+
+
+@pytest.mark.parametrize("window", [False, True])
+def test_offset_plateau_returns_original_grid_and_physical_rate(window, capsys):
+  samples = np.load(os.path.join(DATA, "generated", "offset_plateau.npz"))
+  x, y = samples["x"], samples["y"]
+  d = _make([x], np.stack([y, 2. * y], axis=-1))
+  out = operations.fit(d,
+                       "exp_plateau",
+                       window=window,
+                       min_n=30,
+                       print_coeffs=True)
+  np.testing.assert_array_equal(out.grid[0], x)
+  # Nonlinear least-squares tolerance, including extrapolation from a window.
+  np.testing.assert_allclose(out.values, d.values, rtol=1e-8, atol=1e-10)
+  np.testing.assert_allclose(np.array(out.ctx["fit_params"])[:, 1],
+                             samples["rate"],
+                             rtol=1e-7,
+                             atol=1e-7)
+  np.testing.assert_allclose(np.array(out.ctx["fit_params"])[:, 2], [1.1, 2.2],
+                             rtol=1e-8,
+                             atol=1e-10)
+  assert np.all(np.isfinite(np.array(out.ctx["fit_std"])[:, 1:]))
+  assert "outside floating-point range at x=0" in capsys.readouterr().out
+  for comp, model in enumerate(out.ctx["fit_models"]):
+    np.testing.assert_allclose(import_module("postgkyl.numerics").fit_evaluate(
+        x, "exp_plateau", model),
+                               d.values[:, comp],
+                               rtol=1e-8,
+                               atol=1e-10)

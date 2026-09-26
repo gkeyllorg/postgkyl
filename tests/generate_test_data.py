@@ -714,6 +714,19 @@ def generate_all(out_dir: Path | str) -> None:
   _generate_fourier_samples(out_dir)
   _generate_representation_fields(out_dir)
 
+  # Point samples of a plateau decay, 1.4 -> 1.2, on a narrow offset grid.
+  fit_x = np.linspace(0.511174580254, 0.51122, 81)
+  fit_span = fit_x[-1] - fit_x[0]
+  fit_rate = -np.log(3.) / fit_span
+  fit_y = 1.1 + 0.3 * np.exp(fit_rate * (fit_x - fit_x[0]))
+  np.savez(out_dir / "offset_plateau.npz",
+           x=fit_x,
+           y=fit_y,
+           rate=fit_rate,
+           description="Point samples; one component, no DG representation.",
+           analytic_function="f(x)=1.1+0.3*exp(-log(3)*(x-xmin)/(xmax-xmin))",
+           generation_method="81 uniform point samples including endpoints.")
+
   # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
   write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],
                    np.array([[4 * np.sqrt(2), 0.]]),

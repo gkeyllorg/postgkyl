@@ -564,3 +564,71 @@ class TestFitBestWindow:
     params, _, R2, _ = fitmod.fit_best_window(x, y, "linear", p0=[1.0, 1.0])
     assert R2 > 0.99
     np.testing.assert_allclose(params, [2.0, 1.0], rtol=1e-6)
+
+
+@pytest.mark.parametrize("offset, scale", [(0., 1.), (2., .1), (-2., .1),
+                                           (.511174580254, .000045419746),
+                                           (-.511174580254, .000045419746)])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_plateau_normalization_preserves_physical_coefficients(
+    offset, scale, reverse):
+  from pathlib import Path
+  samples = np.load(
+      Path(__file__).parent / "test_data/generated/offset_plateau.npz")
+  u = (samples["x"] - samples["x"][0]) / np.ptp(samples["x"])
+  x, y = offset + scale * u, samples["y"]
+  if reverse:
+    x, y = x[::-1], y[::-1]
+  model = fitmod.fit_model(x, y, "exp_plateau")
+  params, cov = fitmod.fit_coefficients(model, "exp_plateau")
+  np.testing.assert_allclose(fitmod.fit_evaluate(x, "exp_plateau", model),
+                             y,
+                             rtol=1e-9,
+                             atol=1e-11)
+  np.testing.assert_allclose(params[1:], [-np.log(3.) / scale, 1.1],
+                             rtol=1e-8,
+                             atol=1e-10)
+  assert np.all(np.isfinite(cov[1:, 1:]))
+  exponent = np.log(3.) * offset / scale
+  if abs(exponent) < 700:
+    np.testing.assert_allclose(params[0],
+                               .3 * np.exp(exponent),
+                               rtol=1e-7,
+                               atol=0.)
+    np.testing.assert_allclose(fitmod.fit_evaluate(x, "exp_plateau", params),
+                               y,
+                               rtol=1e-9,
+                               atol=1e-11)
+
+
+def test_plateau_covariance_transformed_to_physical_units():
+  # Independent covariance propagation for A=a*exp(-k*x0/s), b=k/s, C=c.
+  result = fitmod.FitResult(np.array([.3, -1., 1.1]), np.diag([.04, .09, .01]),
+                            1., .2, .1)
+  params, cov = fitmod.fit_coefficients(result, "exp_plateau")
+  amplitude = .3 * np.exp(2.)
+  expected = np.array([[
+      np.exp(4.) * .04 + (2. * amplitude)**2 * .09, -20. * amplitude * .09, 0.
+  ], [-20. * amplitude * .09, 9., 0.], [0., 0., .01]])
+  np.testing.assert_allclose(params, [amplitude, -10., 1.1],
+                             rtol=1e-14,
+                             atol=0.)
+  np.testing.assert_allclose(cov, expected, rtol=1e-14, atol=0.)
+
+
+def test_plateau_explicit_guess_uses_original_units():
+  x = np.linspace(2., 2.1, 80)
+  y = 1.1 + .3 * np.exp(-10. * (x - 2.))
+  params, _, r2 = fitmod.fit(x,
+                             y,
+                             "exp_plateau",
+                             p0=[.25 * np.exp(18.), -9., 1.])
+  np.testing.assert_allclose(params, [.3 * np.exp(20.), -10., 1.1],
+                             rtol=1e-7,
+                             atol=1e-10)
+  assert r2 > .999999
+
+
+def test_plateau_rejects_zero_grid_span():
+  with pytest.raises(ValueError, match="nonzero x range"):
+    fitmod.fit(np.ones(10), np.ones(10), "exp_plateau")
