@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3DVNR53YH2FHB5ZRXR9S25A",
+  "session_id": "01a0db43-9eec-7951-b8f7-1be44199c18c",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-26T03:20:53.475280597Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "ff9c9b677ea3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 115363,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2155008,
+    "output_tokens": 13268,
+    "api_call_count": 28
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-26T03:20:53.432866868Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 59,
+    "human_modified": 10,
+    "human_removed": 0,
+    "total_committed": 59,
+    "total_lines_changed": 119,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 214,
+      "user_lines_removed": 56,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/postgkyl/operations/arithmetic.py": 52,
+        "src/postgkyl/operations/evaluate.py": 14,
+        "tests/test_diagnostics_gk_modal.py": 1,
+        "tests/test_operations_arithmetic.py": 147
+      },
+      "user_removed_per_file": {
+        "src/postgkyl/operations/arithmetic.py": 42,
+        "src/postgkyl/operations/evaluate.py": 13,
+        "tests/test_diagnostics_gk_modal.py": 1
+      }
+    }
+  ]
+}
