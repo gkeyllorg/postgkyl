@@ -1,0 +1,136 @@
+CI failed because unit testing coverage is too low. Improve the unit testing coverage. Here is the result. You may use pytest --cov -n 6 to paralellize over 6 cores
+
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.14-final-0 _______________
+
+Name                                              Stmts   Miss Branch BrPart   Cover   Missing
+----------------------------------------------------------------------------------------------
+src/postgkyl/__init__.py                             12      0      0      0 100.00%
+src/postgkyl/_version.py                             48      0     12      0 100.00%
+src/postgkyl/cli/__init__.py                          2      0      0      0 100.00%
+src/postgkyl/cli/app.py                              62      0     28      0 100.00%
+src/postgkyl/cli/compiler.py                        532      1    284      4  99.39%   165->exit, 634, 650->652, 736->739
+src/postgkyl/cli/discovery.py                        83      2     44      1  97.64%   106-107
+src/postgkyl/cli/docstrings.py                       73      0     36      1  99.08%   90->79
+src/postgkyl/cli/state.py                             7      0      0      0 100.00%
+src/postgkyl/cli_spec.py                             99      1     32      1  98.47%   72
+src/postgkyl/dg/__init__.py                           4      0      0      0 100.00%
+src/postgkyl/dg/interpolate.py                       81      3     26      3  94.39%   31, 94, 165
+src/postgkyl/dg/map.py                               60      0     12      0 100.00%
+src/postgkyl/dg/modal.py                             88      0     28      0 100.00%
+src/postgkyl/dg/rep.py                               81      1     24      1  98.10%   174
+src/postgkyl/diagnostics/__init__.py                 43      0     16      1  98.31%   153->130
+src/postgkyl/diagnostics/discovery.py                24      0     12      0 100.00%
+src/postgkyl/diagnostics/gk/__init__.py              19      0      2      0 100.00%
+src/postgkyl/diagnostics/gk/distf.py                 82      2     40      7  92.62%   83, 94, 211->213, 213->215, 215->217, 217->219, 219->221
+src/postgkyl/diagnostics/gk/energy_balance.py       174      0     50      1  99.55%   107->109
+src/postgkyl/diagnostics/gk/load_quantity.py         49      1     22      1  97.18%   112
+src/postgkyl/diagnostics/gk/nodes.py                108      0     36      0 100.00%
+src/postgkyl/diagnostics/gk/particle_balance.py     124      0     28      0 100.00%
+src/postgkyl/diagnostics/gk/quantities.py           246      0     50      0 100.00%
+src/postgkyl/diagnostics/gk/quantity.py             119      1     42      1  98.76%   246
+src/postgkyl/diagnostics/gk/registry.py              86      0      0      0 100.00%
+src/postgkyl/diagnostics/gk/utils.py                 69      0     20      0 100.00%
+src/postgkyl/diagnostics/mom/__init__.py              2      0      0      0 100.00%
+src/postgkyl/diagnostics/mom/enstrophy.py            33      2     12      2  91.11%   28, 76
+src/postgkyl/diagnostics/mom/five_moment.py         138      1     14      1  98.68%   171
+src/postgkyl/diagnostics/mom/ke_dke.py               34      2     14      2  91.67%   75, 77
+src/postgkyl/diagnostics/mom/mhd.py                  89      0      0      0 100.00%
+src/postgkyl/diagnostics/mom/multispecies.py         47      0      4      0 100.00%
+src/postgkyl/diagnostics/mom/plasma.py              108      0     10      1  99.15%   197->200
+src/postgkyl/diagnostics/mom/rotations.py            36      1      2      0  97.37%   219
+src/postgkyl/diagnostics/mom/ten_moment.py          199      0      4      0 100.00%
+src/postgkyl/diagnostics/pkpm/__init__.py            47      0      4      0 100.00%
+src/postgkyl/diagnostics/vm/__init__.py               2      0      0      0 100.00%
+src/postgkyl/diagnostics/vm/kinetic.py               49      0     22      0 100.00%
+src/postgkyl/diagnostics/vm/trajectory.py            58      0     18      2  97.37%   65->53, 77->79
+src/postgkyl/gdata/__init__.py                        5      0      0      0 100.00%
+src/postgkyl/gdata/gdata.py                          88      0     12      0 100.00%
+src/postgkyl/gdata/gdatagroup.py                     48      0     10      0 100.00%
+src/postgkyl/gdata/load.py                           23      0      8      0 100.00%
+src/postgkyl/gdata/verbs.py                           9      0      0      0 100.00%
+src/postgkyl/gdatastate/__init__.py                   5      0      0      0 100.00%
+src/postgkyl/gdatastate/collection.py                39      0     20      0 100.00%
+src/postgkyl/gdatastate/gdatastate.py               305      2    154      2  99.13%   465, 471
+src/postgkyl/gdatastate/gdatastategroup.py           25      0      4      0 100.00%
+src/postgkyl/gdatastate/guards.py                    18      1     10      1  92.86%   24
+src/postgkyl/gdatastate/layout.py                    81      5     30      6  90.09%   60, 64->54, 87, 90, 94, 125
+src/postgkyl/gdatastate/materialize.py               12      0      2      0 100.00%
+src/postgkyl/gpython/__init__.py                      4      0      0      0 100.00%
+src/postgkyl/gpython/_build_info.py                   7      0      0      0 100.00%
+src/postgkyl/gpython/_lib.py                         24      2      4      0  92.86%   72-73
+src/postgkyl/gpython/array.py                        36      0      8      0 100.00%
+src/postgkyl/gpython/basis.py                       142      4     46      4  95.74%   107, 109, 113, 318
+src/postgkyl/gpython/kernels.py                     228      0     92      0 100.00%
+src/postgkyl/gpython/rio.py                          36      0      6      0 100.00%
+src/postgkyl/io/__init__.py                          25      0      8      0 100.00%
+src/postgkyl/io/flash_h5_reader.py                   54      0     10      1  98.44%   80->79
+src/postgkyl/io/geometry.py                          71      0     26      0 100.00%
+src/postgkyl/io/gkyl_c_reader.py                     38      0      6      0 100.00%
+src/postgkyl/io/gkyl_h5_reader.py                    53      0     10      2  96.83%   57->60, 97->100
+src/postgkyl/io/gkyl_reader.py                      246      1     94      3  98.82%   215, 528->exit, 562->565
+src/postgkyl/io/mapping.py                           19      0      4      0 100.00%
+src/postgkyl/io/metadata.py                          35      1     20      2  94.55%   52, 61->55
+src/postgkyl/io/naming.py                            52      0     12      0 100.00%
+src/postgkyl/io/writer.py                           162      1     58      1  99.09%   137
+src/postgkyl/numerics/__init__.py                    14      0      0      0 100.00%
+src/postgkyl/numerics/calculus.py                    37      2     22      2  93.22%   83, 90
+src/postgkyl/numerics/curvilinear.py                 29      0      6      0 100.00%
+src/postgkyl/numerics/downsample.py                  27      0     14      0 100.00%
+src/postgkyl/numerics/elementwise.py                 19      2     12      2  87.10%   19, 21
+src/postgkyl/numerics/ev_ops.py                     215      0     64      0 100.00%
+src/postgkyl/numerics/fft.py                        120      0     62      0 100.00%
+src/postgkyl/numerics/filters.py                     22      0      0      0 100.00%
+src/postgkyl/numerics/fit.py                        198      0     68      1  99.62%   151->145
+src/postgkyl/numerics/grid_centering.py              29      1     20      1  95.92%   17
+src/postgkyl/numerics/idx_parser.py                  35      1     26      1  96.72%   15
+src/postgkyl/numerics/mag_sq.py                       7      0      0      0 100.00%
+src/postgkyl/numerics/natural_sort.py                 5      0      0      0 100.00%
+src/postgkyl/numerics/rel_change.py                   8      0      2      0 100.00%
+src/postgkyl/numerics/resample.py                     5      0      0      0 100.00%
+src/postgkyl/numerics/rotation_matrix.py             16      0      0      0 100.00%
+src/postgkyl/numerics/rz.py                          38      0      8      0 100.00%
+src/postgkyl/operations/__init__.py                  54      0      4      0 100.00%
+src/postgkyl/operations/_compatibility.py            35      3     22      3  89.47%   20, 24, 68
+src/postgkyl/operations/_curvilinear.py              14      0     10      0 100.00%
+src/postgkyl/operations/_mapping.py                  76      0     28      0 100.00%
+src/postgkyl/operations/arithmetic.py               128      2     64      2  97.92%   64, 89
+src/postgkyl/operations/average.py                   40      0     16      0 100.00%
+src/postgkyl/operations/collect.py                   45      0     18      0 100.00%
+src/postgkyl/operations/differentiate.py             65      4     28      4  91.40%   112, 117, 123, 126
+src/postgkyl/operations/eval_at_coord_proj.py        29      0      8      0 100.00%
+src/postgkyl/operations/evaluate.py                 237     18    118      5  91.27%   128, 142, 145, 149-152, 159-169
+src/postgkyl/operations/extract_flux_surface.py      63      0     16      0 100.00%
+src/postgkyl/operations/extract_input.py              8      0      2      0 100.00%
+src/postgkyl/operations/fft.py                       14      0      2      0 100.00%
+src/postgkyl/operations/fit.py                       94      3     38      2  96.21%   163-164, 175
+src/postgkyl/operations/geometry.py                  57      0     16      0 100.00%
+src/postgkyl/operations/grid.py                      24      0     10      0 100.00%
+src/postgkyl/operations/growth.py                     6      0      0      0 100.00%
+src/postgkyl/operations/info.py                       6      0      0      0 100.00%
+src/postgkyl/operations/integrate.py                132      2     46      2  97.75%   69, 150
+src/postgkyl/operations/interpolate.py               12      0      4      0 100.00%
+src/postgkyl/operations/local_poly.py                12      0      4      0 100.00%
+src/postgkyl/operations/magsq.py                     10      0      0      0 100.00%
+src/postgkyl/operations/map.py                       39      0     14      0 100.00%
+src/postgkyl/operations/map_to_rz.py                106      1     34      1  98.57%   103
+src/postgkyl/operations/mask.py                      24      0      8      0 100.00%
+src/postgkyl/operations/print.py                     12      0      6      0 100.00%
+src/postgkyl/operations/relchange.py                 14      0      0      0 100.00%
+src/postgkyl/operations/represent.py                 49      0     18      0 100.00%
+src/postgkyl/operations/select.py                    85      0     42      0 100.00%
+src/postgkyl/operations/sort.py                       7      0      0      0 100.00%
+src/postgkyl/operations/val2coord.py                 40      0     14      0 100.00%
+src/postgkyl/render/__init__.py                       6      0      0      0 100.00%
+src/postgkyl/render/_ffmpeg.py                       47      0     16      0 100.00%
+src/postgkyl/render/_prep.py                         87      0     40      0 100.00%
+src/postgkyl/render/animate.py                      277     11    132     10  94.38%   256->258, 264, 451, 453, 455, 525-527, 533, 545, 550, 593
+src/postgkyl/render/labels.py                        25      0     10      0 100.00%
+src/postgkyl/render/matplotlib.py                   698      1    394      1  99.82%   192
+src/postgkyl/render/plotly.py                       386      0    152      3  99.44%   212->216, 759->761, 761->763
+src/postgkyl/render/pyvista.py                      123      1     54      3  97.74%   148, 216->219, 350->353
+src/postgkyl/render/style.py                         11      0      0      0 100.00%
+----------------------------------------------------------------------------------------------
+TOTAL                                              9128     87   3294     95  98.45%
+Coverage XML written to file coverage.xml
+FAIL Required test coverage of 99% not reached. Total coverage: 98.45%

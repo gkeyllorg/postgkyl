@@ -3,7 +3,7 @@
   "checkpoint_id": "01M3F7H13N5X3PJ49A9S3806PR",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "tests/test_analytic_polynomials.py",
     "tests/test_diagnostics_programs_enstrophy.py",
@@ -20,6 +20,20 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
-  ]
+  ],
+  "token_usage": {
+    "input_tokens": 84696,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1213568,
+    "output_tokens": 6195,
+    "api_call_count": 22
+  }
 }
