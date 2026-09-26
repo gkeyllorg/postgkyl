@@ -64,6 +64,33 @@ here is a native `.gkyl` file, so the tests are skipped (not failed)
 when `postgkyl.gpython.available()` is `False`, matching the rest of the
 test suite's `needs_gkeyll` convention.
 
+## Generated data descriptions
+
+Run `python tests/generate_test_data.py` to create the synthetic datasets in
+`tests/test_data/generated/`. Every generated file includes `description`,
+`analytic_function`, and `generation_method` metadata explaining its fields,
+formulas, and how the values were sampled or projected into the DG basis.
+Read these with either interface:
+
+```bash
+pgkyl tests/test_data/generated/gaussian_volume.gkyl info --all
+```
+
+```python
+import postgkyl as pg
+
+data = pg.load("tests/test_data/generated/gaussian_volume.gkyl")
+print(data.ctx["description"])
+print(data.ctx["analytic_function"])
+print(data.ctx["generation_method"])
+```
+
+For example, the Gaussian volume samples `exp(-(x² + 2y² + 0.5z²))` at cell
+centers and stores piecewise constants. The random DG fixtures have no
+prescribed analytic function; their metadata identifies the coefficient
+distribution and random seed instead. These descriptions cover synthetic
+fixtures, not the separate Gkeyll simulation outputs in `tests/test_data/`.
+
 ## Script/CLI figure equivalence
 
 `figure_commands.json` holds a `pgkyl` pipeline for every published figure.

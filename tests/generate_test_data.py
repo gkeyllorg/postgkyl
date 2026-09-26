@@ -7,6 +7,10 @@ Called automatically by conftest.py at the start of each pytest session.
 
 Field files encode polyOrder and basisType in their msgpack metadata block so
 GData auto-populates ctx["poly_order"] and ctx["basis_type"] on load.
+Every file produced by generate_all also records description, analytic_function,
+and generation_method metadata. Inspect them with ``pgkyl FILE info --all`` or
+``pg.load(FILE).info(all=True)``. Random coefficient fixtures explicitly state
+that they have no prescribed analytic function.
 
 C2P mapping files store modal DG coefficients for analytical coordinate
 transformations.  The basis is inferred by GData from num_comps/ndim via
@@ -30,6 +34,16 @@ from scipy import constants
 
 _RNG = np.random.default_rng(42)
 _SQRT3 = np.sqrt(3)
+_RANDOM_METADATA = {
+    "analytic_function":
+    ("No prescribed analytic function. Each cell contains the DG polynomial "
+     "sum_m c_m*phi_m, with independent normal modal coefficients; "
+     "these are not samples of a smooth field."),
+    "generation_method":
+    ("NumPy default_rng(42).standard_normal, drawn sequentially from the "
+     "module-level generator in generation order. Repeated generate_all "
+     "calls in one process advance that stream.")
+}
 
 # Component counts per basis -- mirrors the tables in src/postgkyl/data/dg.py
 # serendipity: indexed as [ndim-1][poly_order]   (p=0 → 1 component)
@@ -112,8 +126,10 @@ def write_gkyl_field(
     f.write(values.astype("<f8").tobytes())  # C-order, little-endian float64
 
 
-def write_gkyl_dynvector(path: Path, time: np.ndarray,
-                         values: np.ndarray) -> None:
+def write_gkyl_dynvector(path: Path,
+                         time: np.ndarray,
+                         values: np.ndarray,
+                         metadata: dict | None = None) -> None:
   """Write a minimal valid .gkyl v1 binary dynvector (file_type=2) file.
 
     A dynvector has no spatial grid -- just a time series of ``num_comps``
@@ -123,12 +139,14 @@ def write_gkyl_dynvector(path: Path, time: np.ndarray,
     """
   nc = values.shape[-1]
   size = len(time)
+  meta = msgpack.packb(metadata) if metadata else b""
 
   with open(path, "wb") as f:
     f.write(b"gkyl0")
     f.write(struct.pack("<q", 1))  # version
     f.write(struct.pack("<q", 2))  # file_type = 2 (dynvec)
-    f.write(struct.pack("<q", 0))  # meta_size = 0 (no meta)
+    f.write(struct.pack("<q", len(meta)))
+    f.write(meta)
     f.write(struct.pack("<q", 2))  # real_type = 2 -> float64
     esznc = nc * 8  # element_size * num_comps (bytes)
     f.write(struct.pack("<q", esznc))
@@ -222,6 +240,16 @@ def _mirror_comparison_profiles(z: np.ndarray, alpha: float) -> np.ndarray:
     two generated datasets remain close enough to read as a convergence
     comparison.  Components are already in the plotting units used by the
     example: m^-3, m/s, keV, and keV.
+
+    Let r=abs(z), s=log10(alpha/2e-5), P=exp(-((r-0.86)/0.16)^2).
+    n0=1.01e13+2.45e19/(1+exp((r-0.92)/0.08))+4.5e18*exp(-(r/0.55)^4).
+    u0=1.30e6*tanh(z/0.05)/(1+exp((0.82-r)/0.05)).
+    Tpar0=0.101+11.8/(1+exp((r-0.90)/0.10))
+          +0.4*exp(-((r-0.55)/0.15)^2).
+    Tperp0=0.101+20.8/(1+exp((r-0.98)/0.13))
+           +10*exp(-((r-0.86)/0.10)^2).
+    Components: (n0*(1-0.025*s*P), u0*(1+0.020*s*P),
+                 Tpar0*(1+0.035*s*P), Tperp0*(1+0.030*s*P)).
     """
   if alpha <= 0.0:
     raise ValueError("alpha must be positive")
@@ -338,8 +366,27 @@ def _generate_analytic_fields(out_dir: Path) -> None:
                              matrix,
                              weights,
                              optimize=True)
-    write_gkyl_field(out_dir / f"{stem}.gkyl", cells, lower, upper,
-                     coefficients.reshape(*cells, -1), order, basis)
+    write_gkyl_field(out_dir / f"{stem}.gkyl",
+                     cells,
+                     lower,
+                     upper,
+                     coefficients.reshape(*cells, -1),
+                     order,
+                     basis,
+                     metadata={
+                         "description":
+                         ("Two polynomial scalar fields (f, g) for testing "
+                          "high-dimensional DG mixed and velocity modes. "
+                          "Coordinates x_d use zero-based indices; "
+                          "q=ndim-2 is v_parallel for gkhybrid."),
+                         "analytic_function":
+                         analytic_fields.__doc__,
+                         "generation_method":
+                         (f"Cellwise L2 projection with {nq}-point Gauss "
+                          "quadrature per axis and Gkeyll basis evaluations; "
+                          "exact up to roundoff. Coefficients are grouped "
+                          "by field, f then g.")
+                     })
 
 
 # ---------------------------------------------------------------------------
@@ -383,14 +430,34 @@ def generate_all(out_dir: Path | str) -> None:
 
   # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
   write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],
-                   np.array([[4 * np.sqrt(2), 0.]]), 1, "serendipity")
+                   np.array([[4 * np.sqrt(2), 0.]]),
+                   1,
+                   "serendipity",
+                   metadata={
+                       "description": "Constant scalar field for DG checks.",
+                       "analytic_function": "f(x) = 4 on [-1, 1].",
+                       "generation_method":
+                       "Exact orthonormal modal coefficients."
+                   })
 
   # The highest 1x1v hybrid mode vanishes at a 2x2 Gauss rule. Native
   # quadrature must retain it using Gkeyll's six-node rule.
   hybrid = np.zeros((1, 1, 6))
   hybrid[..., 5] = 1.0
   write_gkyl_field(out_dir / "fsimple_hyb.gkyl", [1, 1], [-1., -1.], [1., 1.],
-                   hybrid, 1, "hybrid")
+                   hybrid,
+                   1,
+                   "hybrid",
+                   metadata={
+                       "description":
+                       ("Highest 1x1v hybrid basis mode, testing quadrature "
+                        "that resolves a quadratic velocity dependence."),
+                       "analytic_function":
+                       ("f(x,v) = sqrt(15)/4 * x * (3*v^2 - 1) "
+                        "on [-1,1]^2."),
+                       "generation_method":
+                       ("Exact modal coefficients: mode 5 is 1, all others 0.")
+                   })
 
   # Named GK sources for the load_quantity example, in SI units. Piecewise
   # constant profiles in a p1 basis give exact cellwise nonlinear quantities.
@@ -403,11 +470,26 @@ def generate_all(out_dir: Path | str) -> None:
                         axis=-1)
   for suffix, samples, metadata in (
       ("elc_MaxwellianMoments_0", maxwellian, {
-          "mass": constants.electron_mass,
-          "charge": -constants.elementary_charge
+          "mass":
+          constants.electron_mass,
+          "charge":
+          -constants.elementary_charge,
+          "description":
+          "Electron Maxwellian moments (density, u_parallel, T/m).",
+          "analytic_function":
+          ("n(x)=1e19 m^-3; u_parallel(x)=0 m/s; "
+           "T(x)/m_e=e*(20+10*x)/m_e m^2/s^2, "
+           "where T is in joules and e is the elementary charge.")
       }),
-      ("field_0", (5.0 * np.sin(2 * np.pi * x))[:, None], {}),
-      ("geo_int_bmag", (1.0 + 0.5 * x)[:, None], {}),
+      ("field_0", (5.0 * np.sin(2 * np.pi * x))[:, None], {
+          "description": "Electrostatic potential for gyrokinetic diagnostics.",
+          "analytic_function": "phi(x)=5*sin(2*pi*x) V."
+      }),
+      ("geo_int_bmag", (1.0 + 0.5 * x)[:, None], {
+          "description":
+          "Magnetic-field magnitude for gyrokinetic diagnostics.",
+          "analytic_function": "B(x)=1+0.5*x T."
+      }),
   ):
     coefficients = np.zeros((64, samples.shape[-1], 2))
     coefficients[..., 0] = np.sqrt(2.0) * samples
@@ -416,7 +498,13 @@ def generate_all(out_dir: Path | str) -> None:
                      coefficients.reshape(64, -1),
                      poly_order=1,
                      basis_type="serendipity",
-                     metadata=metadata)
+                     metadata={
+                         **metadata, "generation_method":
+                         ("Sample at 64 cell centers x=(i+1/2)/64 on [0,1]; "
+                          "store piecewise constants in a p1 modal basis "
+                          "with zero slopes, rather than projecting the "
+                          "continuous function.")
+                     })
 
   # Packed GK moments with nonzero slopes and jumps between unit-width cells.
   # Each field is a + b*xi in its cell, xi in [-1, 1].
@@ -430,8 +518,19 @@ def generate_all(out_dir: Path | str) -> None:
                    1,
                    "serendipity",
                    metadata={
-                       "mass": 2.,
-                       "charge": 3.
+                       "mass":
+                       2.,
+                       "charge":
+                       3.,
+                       "description":
+                       ("Packed gyrokinetic moments (M0, M1, M2par, M2perp) "
+                        "with slopes and jumps; synthetic mass=2, charge=3."),
+                       "analytic_function":
+                       ("F_i(x)=a_i+b_i*xi, xi=2*(x-i)-1, cell i=0,1. "
+                        f"a={gk_mean.tolist()}; b={gk_slope.tolist()}."),
+                       "generation_method":
+                       ("Exact p1 modal coefficients (sqrt(2)*a, "
+                        "sqrt(2/3)*b), grouped by moment.")
                    })
 
   # Local derivatives see affine slopes, not jumps in the cell means.
@@ -445,7 +544,22 @@ def generate_all(out_dir: Path | str) -> None:
     drift[..., 1:, 0] = norm * np.array([2., 3., 4., 5.])
     write_gkyl_field(out_dir / f"gk_drift_{ndim}d_p1.gkyl",
                      list(cells), [0.] * ndim, [2.] * ndim,
-                     drift.reshape(*cells, 5 * nb), 1, "serendipity")
+                     drift.reshape(*cells, 5 * nb),
+                     1,
+                     "serendipity",
+                     metadata={
+                         "description":
+                         ("Five scalar fields for local gyrokinetic drift "
+                          "derivatives: one discontinuous affine field and "
+                          "four constant auxiliary fields."),
+                         "analytic_function":
+                         ("F0(x)=j+sum_{d=0}^{ndim-1}(d+1)*xi_d, "
+                          "xi_d=2*(x_d-i_d)-1 in cell i; j is the "
+                          "zero-based C-order flat cell index. "
+                          "(F1,F2,F3,F4)=(2,3,4,5)."),
+                         "generation_method":
+                         "Exact orthonormal p1 modal coefficients."
+                     })
 
   # Selection tests need unit-width cells and two complete p2 tensor fields.
   selection_nc = 2 * num_comps("tensor", 2, 2)
@@ -455,7 +569,19 @@ def generate_all(out_dir: Path | str) -> None:
                    [4.0, 3.0],
                    selection_values,
                    poly_order=2,
-                   basis_type="tensor")
+                   basis_type="tensor",
+                   metadata={
+                       "description":
+                       ("Two scalar tensor-p2 fields with distinguishable "
+                        "coefficients for testing cell and field selection."),
+                       "analytic_function":
+                       ("No prescribed continuous analytic function. "
+                        "In cell (i,j), F_k=sum_{m=0}^8 c_{ijkm}*phi_m, "
+                        "c_{ijkm}=18*(3*i+j)+9*k+m; k=0,1."),
+                       "generation_method":
+                       ("Consecutive integers reshaped in C order to "
+                        "(4,3,18) modal coefficients, grouped by field.")
+                   })
 
   # Stationary shock-tube initial state: p0 modal coefficients are sqrt(2)
   # times the physical values in the orthonormal 1D basis.
@@ -472,10 +598,32 @@ def generate_all(out_dir: Path | str) -> None:
   write_gkyl_field(out_dir / "shock_tube_1d_p0.gkyl", [100], [0.0], [1.0],
                    np.sqrt(2.0) * moments,
                    poly_order=0,
-                   basis_type="serendipity")
+                   basis_type="serendipity",
+                   metadata={
+                       "description":
+                       ("Stationary shock-tube initial state: density, three "
+                        "momentum densities, and total energy density."),
+                       "analytic_function":
+                       ("rho=1 and p=1 for x<0.5; rho=0.125 and p=0.1 "
+                        "for x>=0.5. Momentum=(0,0,0); E=p/(gamma-1), "
+                        "gamma=5/3. Domain [0,1]."),
+                       "generation_method":
+                       ("Exact piecewise-constant p0 modal coefficients; "
+                        "the discontinuity coincides with a cell edge.")
+                   })
   growth_time = np.linspace(0.0, 10.0, 101)
-  write_gkyl_dynvector(out_dir / "exponential_energy.gkyl", growth_time,
-                       (1e-6 * np.exp(0.4 * growth_time))[:, None])
+  write_gkyl_dynvector(out_dir / "exponential_energy.gkyl",
+                       growth_time, (1e-6 * np.exp(0.4 * growth_time))[:, None],
+                       metadata={
+                           "description":
+                           ("Exponential energy history for growth-rate "
+                            "fitting; amplitude growth rate is 0.2."),
+                           "analytic_function":
+                           "E(t)=1e-6*exp(0.4*t).",
+                           "generation_method":
+                           ("101 equally spaced time samples on [0,10], "
+                            "including both endpoints; one component.")
+                       })
 
   # Time-resolved, positive travelling waves, encoded as p0 modal fields.
   # Zero-padded frame names preserve time order under shell glob expansion.
@@ -488,7 +636,16 @@ def generate_all(out_dir: Path | str) -> None:
                      poly_order=0,
                      basis_type="serendipity",
                      time=float(time),
-                     frame=frame)
+                     frame=frame,
+                     metadata={
+                         "description":
+                         "Positive 1D scalar wave travelling at unit speed.",
+                         "analytic_function":
+                         "f(x,t)=1+0.6*cos(x-t).",
+                         "generation_method":
+                         ("Cell-center samples on [0,2*pi], stored as p0 "
+                          "modal constants. 16 frames at t=2*pi*frame/16.")
+                     })
   surface_axes = [(np.arange(32) + 0.5) * (2 * np.pi / 32)] * 2
   surface_x, surface_y = np.meshgrid(*surface_axes, indexing="ij")
   for frame, time in enumerate(np.linspace(0.0, 2 * np.pi, 12, endpoint=False)):
@@ -499,16 +656,34 @@ def generate_all(out_dir: Path | str) -> None:
                      poly_order=0,
                      basis_type="serendipity",
                      time=float(time),
-                     frame=frame)
+                     frame=frame,
+                     metadata={
+                         "description":
+                         "Positive 2D wave surface travelling in x.",
+                         "analytic_function":
+                         "f(x,y,t)=1+0.6*cos(x-t)*cos(y).",
+                         "generation_method":
+                         ("Cell-center samples on [0,2*pi]^2, stored as p0 "
+                          "modal constants. 12 frames at t=2*pi*frame/12.")
+                     })
   # An anisotropic Gaussian scalar field for volume and isosurface views.
   volume_axis = (np.arange(24) + 0.5) / 6 - 2
   vx, vy, vz = np.meshgrid(volume_axis, volume_axis, volume_axis, indexing="ij")
   blob = np.exp(-(vx**2 + 2 * vy**2 + 0.5 * vz**2))
-  write_gkyl_field(out_dir / "gaussian_volume.gkyl", [24, 24, 24], [-2.0] * 3,
-                   [2.0] * 3,
-                   np.sqrt(8) * blob[..., None],
-                   poly_order=0,
-                   basis_type="serendipity")
+  write_gkyl_field(
+      out_dir / "gaussian_volume.gkyl", [24, 24, 24], [-2.0] * 3, [2.0] * 3,
+      np.sqrt(8) * blob[..., None],
+      poly_order=0,
+      basis_type="serendipity",
+      metadata={
+          "description":
+          "Anisotropic Gaussian scalar for volume and isosurface views.",
+          "analytic_function":
+          "f(x,y,z)=exp(-(x^2+2*y^2+0.5*z^2)).",
+          "generation_method":
+          ("Cell-center samples on a 24^3 grid over [-2,2]^3, "
+           "stored as p0 modal constants.")
+      })
 
   # --- field files (random DG coefficients) ---
   for stem, ndim, cells, poly_order, basis_type in _FIELD_CONFIGS:
@@ -524,6 +699,11 @@ def generate_all(out_dir: Path | str) -> None:
         values,
         poly_order=poly_order,
         basis_type=basis_type,
+        metadata={
+            **_RANDOM_METADATA, "description":
+            ("Random scalar DG field for basis, reader, and operation "
+             "coverage; no physical interpretation or positivity guarantee.")
+        },
     )
 
   # --- c2p mapping files (analytical DG coordinate coefficients) ---
@@ -536,9 +716,13 @@ def generate_all(out_dir: Path | str) -> None:
     if kind == "stretch":
       phys_lo, phys_hi = extra
       values = _c2p_stretch_values(cells, phys_lo, phys_hi, nc_per_dim)
+      formula = ("X_d=lo_d+(hi_d-lo_d)*xi_d on computational [0,1]^2; "
+                 f"lo={phys_lo}, hi={phys_hi}.")
     elif kind == "rotation":
       angle = extra[0]
       values = _c2p_rotation_values(cells, comp_lo, comp_hi, angle, nc_per_dim)
+      formula = ("X=xi*cos(a)-eta*sin(a); Y=xi*sin(a)+eta*cos(a); "
+                 f"a={angle} radians, computational (xi,eta) in [0,1]^2.")
     else:
       raise ValueError(f"Unknown c2p kind: {kind!r}")
 
@@ -550,6 +734,15 @@ def generate_all(out_dir: Path | str) -> None:
         values,
         poly_order=poly_order,
         basis_type=basis_type,
+        metadata={
+            "description":
+            f"Computational-to-physical coordinate map: {kind}.",
+            "analytic_function":
+            formula,
+            "generation_method":
+            ("Exact affine modal coefficients, grouped by physical "
+             "coordinate; higher-order modes are zero.")
+        },
     )
 
   # --- symmetric four-component beam profiles for a convergence plot ---
@@ -573,6 +766,20 @@ def generate_all(out_dir: Path | str) -> None:
         values,
         poly_order=1,
         basis_type="serendipity",
+        metadata={
+            "description":
+            ("Synthetic symmetric mirror-beam profiles (density, parallel "
+             "velocity, parallel and perpendicular temperatures) for an "
+             "algorithm-sensitivity plot, not simulation output."),
+            "analytic_function":
+            _mirror_comparison_profiles.__doc__,
+            "alpha":
+            alpha,
+            "generation_method":
+            ("Cellwise L2 projection onto p1 using eight-point Gauss "
+             "quadrature on 256 cells over [-2.5,2.5]; "
+             "coefficients grouped by component.")
+        },
     )
 
   # --- two-frame distribution-like family (shared grid, one file per frame) ---
@@ -590,6 +797,12 @@ def generate_all(out_dir: Path | str) -> None:
         basis_type="serendipity",
         time=0.1 * frame,
         frame=frame,
+        metadata={
+            **_RANDOM_METADATA, "description":
+            ("Two-frame distribution-shaped scalar fixture for collection "
+             "and selection; random coefficients, not a physical or "
+             "necessarily positive distribution function.")
+        },
     )
 
   # --- multiblock family: 3 blocks x 2 frames of one 2-D field ---
@@ -612,6 +825,15 @@ def generate_all(out_dir: Path | str) -> None:
           basis_type="serendipity",
           time=0.1 * frame,
           frame=frame,
+          metadata={
+              **_RANDOM_METADATA, "description":
+              ("Random scalar DG field over three adjoining x blocks and "
+               "two frames for multiblock plotting; not physical density."),
+              "generation_method":
+              (_RANDOM_METADATA["generation_method"] +
+               f" Add block index {block} to every modal coefficient "
+               "(not a uniform shift of physical field values).")
+          },
       )
 
   # --- equation-agnostic geometry: two blocks and frames, in 2-D and 3-D ---
@@ -632,7 +854,16 @@ def generate_all(out_dir: Path | str) -> None:
                          np.full((4, ) * ndim + (1, ), value * 2**(ndim / 2)),
                          poly_order=0,
                          basis_type="serendipity",
-                         frame=frame)
+                         frame=frame,
+                         metadata={
+                             "description":
+                             "Constant scalar on a mapped geometry block.",
+                             "analytic_function":
+                             (f"f=7+block+2*frame={value}; block={block}, "
+                              f"frame={frame}."),
+                             "generation_method":
+                             "Exact p0 modal coefficients."
+                         })
       # 2-D uses Cartesian X/Y/Z; 3-D uses R/Z/phi on a field-aligned grid.
       point_values = (np.stack(
           [2.0 + block + coords[0],
@@ -642,14 +873,29 @@ def generate_all(out_dir: Path | str) -> None:
               0.2 * coords[2]
           ],
                                               axis=-1))
+      mapping_formula = (
+          f"(X,Y,Z)=(2+{block}+x,0,z) in computational (x,z)." if ndim == 2 else
+          f"(R,Z,phi)=(2+{block}+x,z,2*pi*y+0.2*z) in computational (x,y,z).")
       write_gkyl_field(out_dir / f"{prefix}-geo_int_nodes.gkyl", [8] * ndim,
                        [0.0] * ndim, [1.0] * ndim,
                        point_values,
                        poly_order=0,
                        basis_type="serendipity",
                        metadata={
-                           "value_form": "nodal",
-                           "geometry_type": 3 if ndim == 2 else 1
+                           "value_form":
+                           "nodal",
+                           "geometry_type":
+                           3 if ndim == 2 else 1,
+                           "description":
+                           ("Physical coordinates for equation-agnostic "
+                            "geometry: Cartesian X/Y/Z in 2D, cylindrical "
+                            "R/Z/phi in 3D, with phi in radians."),
+                           "analytic_function":
+                           mapping_formula,
+                           "generation_method":
+                           ("Point values at two Gauss nodes per axis in "
+                            "each of four computational cells on [0,1]; "
+                            "stored on an 8-per-axis grid as nodal geometry.")
                        })
       if ndim == 2:
         # Exact p1 coefficients for X=2+block+x, Y=0, Z=z.
@@ -659,12 +905,22 @@ def generate_all(out_dir: Path | str) -> None:
         modal[..., 1] = 0.25 / np.sqrt(3.0)
         modal[..., 8] = 2 * z
         modal[..., 10] = 0.25 / np.sqrt(3.0)
-        write_gkyl_field(out_dir / f"{prefix}-geo_int_mapc2p.gkyl", [4, 4],
-                         [0.0, 0.0], [1.0, 1.0],
-                         modal,
-                         poly_order=1,
-                         basis_type="serendipity",
-                         metadata={"geometry_type": 3})
+        write_gkyl_field(
+            out_dir / f"{prefix}-geo_int_mapc2p.gkyl", [4, 4], [0.0, 0.0],
+            [1.0, 1.0],
+            modal,
+            poly_order=1,
+            basis_type="serendipity",
+            metadata={
+                "geometry_type":
+                3,
+                "description":
+                "Cartesian computational-to-physical coordinate map.",
+                "analytic_function":
+                mapping_formula,
+                "generation_method": ("Exact p1 modal coefficients, grouped by "
+                                      "physical coordinate X, Y, Z.")
+            })
 
   # --- dynvector (bare time series, e.g. a field-energy history) ---
   # Two components, each a smooth logistic growth-then-saturate curve (one
@@ -678,8 +934,23 @@ def generate_all(out_dir: Path | str) -> None:
   y0, y_plateau, t_mid, k = 1e-6, 1.0, 30.0, 0.5
   energy0 = y0 + (y_plateau - y0) / (1.0 + np.exp(-k * (t - t_mid)))
   energy1 = y0 + (y_plateau - y0) / (1.0 + np.exp(-0.5 * k * (t - 1.5 * t_mid)))
-  write_gkyl_dynvector(out_dir / "energy_dynvec.gkyl", t,
-                       np.stack([energy0, energy1], axis=-1))
+  write_gkyl_dynvector(out_dir / "energy_dynvec.gkyl",
+                       t,
+                       np.stack([energy0, energy1], axis=-1),
+                       metadata={
+                           "description":
+                           ("Two positive synthetic energy histories with "
+                            "logistic growth and saturation, for fitting "
+                            "and time-series component selection."),
+                           "analytic_function":
+                           (f"E0(t)={y0}+({y_plateau}-{y0})/"
+                            f"(1+exp(-{k}*(t-{t_mid}))); "
+                            f"E1(t)={y0}+({y_plateau}-{y0})/"
+                            f"(1+exp(-{0.5*k}*(t-{1.5*t_mid})))."),
+                           "generation_method":
+                           (f"{n_energy} equally spaced time samples on "
+                            "[0,100], including both endpoints.")
+                       })
 
 
 if __name__ == "__main__":
