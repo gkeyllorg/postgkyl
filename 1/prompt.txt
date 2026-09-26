@@ -1,0 +1,11 @@
+Another agent found an issue.
+
+NumPy ufuncs bypass spatial compatibility checks.
+(postgkyl/src/postgkyl/operations/arithmetic.py:233) checks shape and representation but not grid equality. Two equally shaped datasets on disjoint domains are rejected by a+b, yet accepted by np.add(a,b), which attaches the first dataset's grid to the result.
+Centralize operand compatibility so operator, ufunc, and RPN entry points enforce the same grid/basis/representation rules. Matching array shape is insufficient for physical compatibility.
+
+Please investigate this. Explain what it is saying in clear English. Is this a defect? Is it a bug? Do we need to fix this? What is it saying? Explain this before writing any code.
+
+---
+
+I agree. Operand compatability should be centralized to prevent grid mismatch. Implement an elegant refactored solution to adress this flaw
