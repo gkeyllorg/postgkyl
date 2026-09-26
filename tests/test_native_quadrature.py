@@ -1,4 +1,4 @@
-"""Public basis quadrature: regression for the highest 1x1v hybrid mode."""
+"""Public quadrature representation and exact native integration contracts."""
 
 from pathlib import Path
 
@@ -14,6 +14,104 @@ pytestmark = pytest.mark.skipif(not gpython.available(),
                                 reason="compiled Gkeyll unavailable")
 GENERATED = Path(__file__).parent / "test_data" / "generated"
 HYBRID = GENERATED / "fsimple_hyb.gkyl"
+
+
+@pytest.mark.parametrize("representation", ["modal", "quad", "gauss"])
+@pytest.mark.parametrize("stem", [
+    "fsimple", "1d_ms_p1", "1d_ms_p2", "2d_ms_p1", "2d_ms_p2", "3d_ms_p1",
+    "gk_moments_p1", "gk_drift_3d_p1"
+])
+def test_integrate_generated_field_is_exact(stem, representation):
+  data = pg.load(GENERATED / f"{stem}.gkyl")
+  # Only the constant orthonormal mode has a nonzero cell integral.
+  cell_volume = np.prod(
+      (data.ctx["upper"] - data.ctx["lower"]) / data.num_cells)
+  nb = gpython.basis.num_basis(data.ctx["basis_type"], data.num_dims,
+                               data.ctx["poly_order"])
+  means = data.values.reshape(-1, data.num_comps // nb, nb)[..., 0]
+  expected = means.sum(axis=0) * cell_volume / 2**(data.num_dims / 2)
+  if representation != "modal":
+    data = data.represent(to="quad",
+                          num_quad=3 if representation == "gauss" else None)
+  before = data.values.copy()
+  np.testing.assert_allclose(data.integrate(), expected, rtol=2e-12, atol=2e-12)
+  np.testing.assert_array_equal(data.values, before)
+
+
+@pytest.mark.parametrize("stem", ["1d_ms_p2", "2d_ms_p2", "3d_ms_p1"])
+@pytest.mark.parametrize("representation", ["modal", "quad", "gauss"])
+def test_integral_of_square_matches_modal_norm(stem, representation):
+  data = pg.load(GENERATED / f"{stem}.gkyl")
+  # Orthonormality gives int(f^2) = sum(c_k^2) times the cell Jacobian.
+  jacobian = np.prod(
+      (data.ctx["upper"] - data.ctx["lower"]) / (2 * data.num_cells))
+  expected = np.sum(data.values**2) * jacobian
+  if representation == "modal":
+    result = data.integrate(op="sq")
+  else:
+    quad = data.represent(to="quad",
+                          num_quad=3 if representation == "gauss" else None)
+    result = (quad**2).integrate()
+  np.testing.assert_allclose(result, expected, rtol=2e-12, atol=2e-12)
+
+
+@pytest.mark.parametrize("num_quad", [None, 3])
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("axis", [0, 1, (0, 2)])
+def test_partial_quad_integration_requires_explicit_projection(
+    num_quad, inplace, axis):
+  modal = pg.load(GENERATED / "3d_ms_p1.gkyl")
+  # Squaring gives a retained quadratic dependence outside the p1 basis.
+  # A silent projection would change the partial integral's point values.
+  data = modal.represent(to="quad", num_quad=num_quad)
+  data = data**2
+  before = data.values.copy()
+  message = "no direct partial quadrature integration kernel"
+  with pytest.warns(RuntimeWarning, match=message):
+    with pytest.raises(NotImplementedError, match=message):
+      data.integrate(axis, inplace=inplace)
+  np.testing.assert_array_equal(data.values, before)
+  assert data.ctx["value_form"] == "quad"
+  assert data.num_dims == 3
+  reduced = data.represent(to="modal").integrate(axis)
+  np.testing.assert_allclose(reduced.integrate(),
+                             data.integrate(),
+                             rtol=2e-12,
+                             atol=2e-12)
+
+
+@pytest.mark.parametrize("stem", ["2d_mt_p2", "fsimple_hyb"])
+@pytest.mark.parametrize("value_form", ["modal", "quad"])
+def test_integrate_warns_and_rejects_unsupported_native_basis(stem, value_form):
+  data = pg.load(GENERATED / f"{stem}.gkyl").represent(to=value_form)
+  message = "gkyl_array_integrate kernels.*serendipity p1-p2"
+  with pytest.warns(RuntimeWarning, match=message):
+    with pytest.raises(NotImplementedError, match=message):
+      data.integrate()
+
+
+def test_quad_integration_requires_native_backend(tmp_path, monkeypatch):
+  quad = pg.load(GENERATED / "fsimple.gkyl").represent(to="quad")
+  path = quad.save(str(tmp_path / "quad.gkyl"))
+  monkeypatch.setattr(io, "_READERS", {"test": io.GkylReader})
+  data = pg.load(path)
+  with pytest.warns(RuntimeWarning, match="requires the compiled Gkeyll"):
+    with pytest.raises(NotImplementedError,
+                       match="requires the compiled Gkeyll"):
+      data.integrate()
+
+
+@pytest.mark.parametrize("representation", [[], ["represent", "-t", "quad"]],
+                         ids=["modal", "quad"])
+def test_cli_integrates_constant_field_exactly(representation):
+  result = CliRunner().invoke(
+      cli, [str(GENERATED / "fsimple.gkyl"), *representation, "integrate"])
+  assert result.exit_code == 0, result.output
+  # f=4 on [-1, 1], so both command chains must print 8.
+  np.testing.assert_allclose(float(result.output.strip()),
+                             8.0,
+                             rtol=2e-12,
+                             atol=2e-12)
 
 
 def test_highest_hybrid_mode_survives_default_quad_roundtrip():

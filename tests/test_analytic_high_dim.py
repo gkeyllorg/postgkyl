@@ -37,6 +37,27 @@ def _expected(data, points):
   return analytic_fields(points, data.ctx["basis_type"], data.ctx["poly_order"])
 
 
+@pytest.mark.parametrize("representation", ["modal", "quad", "gauss"])
+@pytest.mark.parametrize("axis", [None, 0], ids=["full", "partial"])
+def test_integration_reports_missing_high_dimensional_kernels(
+    analytic_data, representation, axis):
+  data = analytic_data
+  ndim = data.num_dims
+  basis, order = data.ctx["basis_type"], data.ctx["poly_order"]
+  if representation != "modal":
+    # Gkeyll does not supply the default 5D tensor p2 quadrature transform.
+    explicit_gauss = representation == "gauss" or (basis == "tensor"
+                                                   and ndim == 5 and order == 2)
+    data = data.represent(to="quad", num_quad=3 if explicit_gauss else None)
+  kernel = "gkyl_array_integrate" if axis is None else "gkyl_array_average"
+  message = f"{kernel} kernels in libg0core cover"
+  if representation != "modal" and axis is not None:
+    message = "no direct partial quadrature integration kernel"
+  with pytest.warns(RuntimeWarning, match=message):
+    with pytest.raises(NotImplementedError, match=message):
+      data.integrate(axis)
+
+
 @pytest.mark.parametrize("num_interp", [2, 4])
 def test_interpolation_matches_polynomials_in_every_cell(
     analytic_data, num_interp):

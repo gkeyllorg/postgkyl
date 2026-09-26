@@ -11,8 +11,9 @@ Modal data never leave Gkeyll. Full integration uses
 ``gkyl_array_integrate`` directly. Partial integration uses
 ``gkyl_array_average`` and scales its modal result by the physical volume of
 the removed directions, which is exactly ``int f dx^axes`` rather than a
-sampled/trapezoidal approximation. Point-value data use the NumPy integration
-path at their true point locations.
+sampled/trapezoidal approximation. Quadrature values use their matching
+projection followed by these same kernels. Other point-value data use the
+NumPy integration path at their true point locations.
 
 A curvilinear axis -- part of a joint, non-separable ``.map(space="conf")``
 block -- has no meaningful independent width. Point-value integration must
@@ -23,6 +24,7 @@ volumes (the Jacobian-determinant change-of-variables weight).
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import warnings
 
 import numpy as np
 
@@ -31,6 +33,7 @@ from postgkyl.gdatastate import materialize_point_values
 from postgkyl.numerics import calculus, curvilinear
 
 from ._curvilinear import curvilinear_blocks
+from .represent import represent
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -100,6 +103,33 @@ def _native_partial(data: "GDataState", axes: tuple[int, ...], *, inplace: bool,
                       tag=tag,
                       label=label,
                       cells=np.asarray(cells))
+
+
+def _native_integral(data: "GDataState", axes: tuple[int, ...], *, op: str,
+                     inplace: bool, tag: str | None, label: str | None):
+  """Use existing DG kernels and report unsupported requests explicitly."""
+  quad = data.ctx.get("value_form") == "quad"
+  full = len(axes) == data.num_dims
+  try:
+    if data.backend != "gkyl":
+      raise NotImplementedError(
+          "exact quadrature integration requires the compiled Gkeyll library")
+    if quad and not full:
+      raise NotImplementedError(
+          "Gkeyll has no direct partial quadrature integration kernel; "
+          "call .represent(to='modal') explicitly before integrating a DG "
+          "projection")
+    # Projection includes the quadrature weights and cell-local ordering.
+    # A full integral depends only on the constant mode, so discarded higher
+    # modes cannot change it (unlike a partial integral's retained values).
+    # This temporary does not change the caller's representation or values.
+    modal = represent(data, to="modal") if quad else data
+    if full:
+      return _native_full(modal, op)
+    return _native_partial(modal, axes, inplace=inplace, tag=tag, label=label)
+  except NotImplementedError as error:
+    warnings.warn(str(error), RuntimeWarning, stacklevel=3)
+    raise
 
 
 def _point_integral(data: "GDataState", axes: tuple[int, ...]):
@@ -183,13 +213,16 @@ def integrate(data: "GDataState",
   Integrating every axis is terminal and returns one number per field.
   Integrating a strict subset returns a dataset over the surviving axes.
   Native modal input uses Gkeyll for both cases and remains modal/native after
-  a partial integration; no interpolation or point sampling occurs. Nodal,
-  quadrature, and NumPy-backed inputs are integrated numerically at their true
-  point locations.
+  a partial integration; no interpolation or point sampling occurs. Quadrature
+  input uses its stored projection rule and the same native kernels for full
+  integration. Partial quadrature integration requires an explicit conversion
+  to modal form, since projection can change the retained point values. Nodal
+  and other NumPy-backed inputs use numerical integration at their locations.
+  Missing native kernels emit a warning and raise rather than approximate.
 
   Args:
-    data: Dataset to integrate. Modal data are integrated exactly in DG space;
-      point-value data use their physical point grid.
+    data: Dataset to integrate. Modal and quadrature data use native DG
+      kernels; other point-value data use their physical point grid.
     axis: Axis or axes to integrate: an integer, tuple of integers,
       comma-separated string (``"0,1"``), colon slice string (``"0:2"``), or
       ``None`` for every spatial axis.
@@ -206,6 +239,8 @@ def integrate(data: "GDataState",
     result is exact, modal, and Gkeyll-native.
 
   Raises:
+    NotImplementedError: Gkeyll lacks the requested integration kernel or
+      quadrature transform. A RuntimeWarning also reports the limitation.
     ValueError: If the axes are invalid; a partial curvilinear mapped block is
       requested; ``op`` is used outside a full native-DG integration; or
       dataset-only result options are used for a terminal integration.
@@ -214,22 +249,23 @@ def integrate(data: "GDataState",
   full = len(axes) == data.num_dims
   modal = (data.backend == "gkyl"
            and data.ctx.get("value_form", "modal") == "modal")
+  quad = data.ctx.get("value_form") == "quad"
 
   if full:
     _require_partial_options(inplace=inplace, tag=tag, label=label)
-    if modal:
-      return _native_full(data, op)
-    if op != "none":
-      raise ValueError("op is available only for full native-DG integration")
-    _, values = _point_integral(data, axes)
-    return _terminal_value(values)
-
-  if op != "none":
+  if op != "none" and not (full and modal):
     raise ValueError("op is available only for full native-DG integration")
-  if modal:
-    return _native_partial(data, axes, inplace=inplace, tag=tag, label=label)
+  if modal or quad:
+    return _native_integral(data,
+                            axes,
+                            op=op,
+                            inplace=inplace,
+                            tag=tag,
+                            label=label)
 
   grid, values = _point_integral(data, axes)
+  if full:
+    return _terminal_value(values)
   keep_dirs = [d for d in range(data.num_dims) if d not in axes]
   values = np.squeeze(values, axis=axes)
   new_grid = [grid[d] for d in keep_dirs]
