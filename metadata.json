@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3F7H13N5X3PJ49A9S3806PR",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_analytic_polynomials.py",
+    "tests/test_diagnostics_programs_enstrophy.py",
+    "tests/test_diagnostics_programs_ke_dke.py",
+    "tests/test_layout_contracts.py",
+    "tests/test_numerics_calculus.py",
+    "tests/test_operations_evaluate.py",
+    "tests/test_render_animate.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
