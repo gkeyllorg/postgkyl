@@ -1,0 +1,79 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3DSA11D4MGHD72MDP5ZTR11",
+  "session_id": "01a0db44-2071-75e3-a0cd-6455e68c7942",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-26T02:39:32.2642615Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    ".agents/skills/development/SKILL.md",
+    ".agents/skills/gkeyll-core/SKILL.md",
+    ".agents/skills/native/SKILL.md",
+    "src/postgkyl/dg/modal.py",
+    "src/postgkyl/gpython/csrc/_gpythonmodule.c",
+    "src/postgkyl/gpython/kernels.py",
+    "src/postgkyl/operations/eval_at_coord_proj.py",
+    "tests/test_analytic_polynomials.py",
+    "tests/test_gpython_kernels.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "bda85acffacc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 204868,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 9922304,
+    "output_tokens": 42564,
+    "api_call_count": 69,
+    "subagent_tokens_complete": false
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-26T02:39:32.206975647Z",
+    "agent_lines": 198,
+    "agent_removed": 24,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 8,
+    "total_committed": 198,
+    "total_lines_changed": 230,
+    "agent_percentage": 96.52173913043478,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 185,
+      "user_lines_removed": 13,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".pre-commit-config.yaml": 1,
+        "MANIFEST.in": 1,
+        "scripts/build_gkeyll.sh": 16,
+        "scripts/build_gpython.sh": 6,
+        "scripts/gkeyll-fixes.md": 22,
+        "scripts/gkeyll-fixes.patch": 115,
+        "scripts/gkeyll-revision": 1,
+        "src/postgkyl/dg/modal.py": 3,
+        "src/postgkyl/gpython/_lib.py": 1,
+        "src/postgkyl/gpython/csrc/_gpythonmodule.c": 2,
+        "src/postgkyl/gpython/kernels.py": 12,
+        "src/postgkyl/operations/eval_at_coord_proj.py": 5
+      },
+      "user_removed_per_file": {
+        "scripts/build_gkeyll.sh": 4,
+        "scripts/gkeyll-revision": 1,
+        "src/postgkyl/dg/modal.py": 3,
+        "src/postgkyl/gpython/csrc/_gpythonmodule.c": 1,
+        "src/postgkyl/gpython/kernels.py": 2,
+        "src/postgkyl/operations/eval_at_coord_proj.py": 2
+      }
+    }
+  ]
+}
