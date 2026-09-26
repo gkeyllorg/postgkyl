@@ -1,6 +1,9 @@
 """Sample modal fields on a toroidal surface, with reusable sampling grids."""
 from __future__ import annotations
 
+from typing import Annotated
+from postgkyl.cli_spec import CliHidden
+
 from dataclasses import dataclass
 from functools import partial
 import numpy as np
@@ -81,18 +84,21 @@ def resolve_flux_surface_grid(
                              np.array(axis, copy=True) for axis in edges))
 
 
-def extract_flux_surface(data: "GDataState",
-                         *,
-                         fs_grid: FluxSurfaceGrid | None = None,
-                         mapc2p: str | None = None,
-                         nodes_file: str | None = None,
-                         x_idx: int = 0,
-                         nphi: int = _DEFAULT_NPHI,
-                         nz_interp: int = DEFAULT_NZ_INTERP,
-                         comp: int = 0,
-                         inplace: bool = False,
-                         tag: str | None = None,
-                         label: str | None = None) -> "GDataState":
+def extract_flux_surface(
+    data: "GDataState",
+    *,
+    fs_grid: Annotated[
+        FluxSurfaceGrid | None,
+        CliHidden("reuse a sampling grid through the Python API")] = None,
+    mapc2p: str | None = None,
+    nodes_file: str | None = None,
+    x_idx: int = 0,
+    nphi: int = _DEFAULT_NPHI,
+    nz_interp: int = DEFAULT_NZ_INTERP,
+    comp: int = 0,
+    inplace: bool = False,
+    tag: str | None = None,
+    label: str | None = None) -> "GDataState":
   """Sample a field component on a toroidal surface.
 
   Args:

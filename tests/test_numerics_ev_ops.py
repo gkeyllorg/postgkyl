@@ -204,14 +204,12 @@ class TestLength:
     _, out_vals = ev_ops.length([None, grid], [0.0, values])
     np.testing.assert_allclose(out_vals[0], 4.0)
 
-  def test_cell_centered_grid_length_adds_one_more_dz(self):
-    """When ``len(coord) == values.shape[axis]`` (already-cell-centered
-    grid), one extra spacing is added, matching the ``calculus.integrate``
-    convention."""
-    grid = [np.linspace(0.0, 3.0, 4)]  # 4 cell centers, dx=1
+  def test_point_grid_length_is_the_supplied_coordinate_extent(self):
+    """No interval beyond the supplied point coordinates is implied."""
+    grid = [np.linspace(0.0, 3.0, 4)]
     values = np.ones((4, 1))
     _, out_vals = ev_ops.length([None, grid], [0.0, values])
-    np.testing.assert_allclose(out_vals[0], 4.0)
+    np.testing.assert_allclose(out_vals[0], 3.0, rtol=0, atol=1e-14)
 
 
 class TestGrad:
@@ -308,19 +306,16 @@ class TestIntegrateAndAverage:
     _, out_vals = ev_ops.integrate([None, grid], ["0", values])
     np.testing.assert_allclose(out_vals[0].flat[0], 1.0, rtol=1e-12)
 
-  def test_integrate_cell_centered_grid_appends_last_spacing(self):
-    """When ``len(coord) == values.shape[d]`` (an already-cell-centered
-    grid), one extra spacing is appended to ``dz`` -- matching
-    ``calculus.integrate``'s convention."""
-    x_cc = np.linspace(0.1, 0.9, 5)  # 5 cell centers, dx=0.2
+  def test_integrate_point_samples_uses_only_the_supplied_interval(self):
+    """A constant integrates exactly over [0.1,0.9], length 0.8."""
+    x_cc = np.linspace(0.1, 0.9, 5)
     _, out_vals = ev_ops.integrate(
         [None, [x_cc]], [np.array(0.0), np.ones((5, 1))])
-    np.testing.assert_allclose(out_vals[0].flat[0], 1.0, rtol=1e-12)
+    np.testing.assert_allclose(out_vals[0].flat[0], 0.8, rtol=0, atol=1e-14)
 
   def test_average_cell_centered_grid_length(self):
-    """``avg``'s length computation also has the cell-centered
-    (``len(coord) == values.shape[axis]``) extra-spacing branch."""
-    x_cc = np.linspace(0.1, 0.9, 5)  # total length 1.0
+    """A constant's average is independent of point spacing and extent."""
+    x_cc = np.linspace(0.1, 0.9, 5)
     values = 2.0 * np.ones((5, 1))
     _, out_vals = ev_ops.average([None, [x_cc]], [np.array(0.0), values])
     np.testing.assert_allclose(out_vals[0].flat[0], 2.0, rtol=1e-10)

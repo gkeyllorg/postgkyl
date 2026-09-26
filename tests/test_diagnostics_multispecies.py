@@ -49,9 +49,9 @@ class TestEnergetics:
     out = ms.energetics(elc, ion, field)
 
     assert out.values.shape[-1] == 7
-    pre_expected = 0.3
+    pre_expected = 0.45
     kee_expected = 0.5 * 1.0 * 1.0**2
-    pri_expected = 0.6
+    pri_expected = 0.9
     kei_expected = 0.5 * 1.0 * 0.5**2
     esq_expected = 1.0**2 / 2.0
     bsq_expected = 2.0**2 / 2.0
@@ -64,6 +64,28 @@ class TestEnergetics:
     total = (pre_expected + kee_expected + pri_expected + kei_expected +
              esq_expected + bsq_expected)
     np.testing.assert_allclose(out.values[0, 6], total, rtol=1e-10)
+
+  @pytest.mark.parametrize("gamma", [1.4, 5.0 / 3.0, 2.0])
+  def test_stationary_five_moment_energy_is_conserved(self, gamma):
+    # Each species' conserved energy is 3, whatever its pressure equation.
+    species = _make(_G1D, np.array([[1., 0., 0., 0., 3.]]))
+    field = _make(_G1D, np.zeros((1, 6)))
+    out = ms.energetics(species, species, field, gas_gamma=gamma)
+    np.testing.assert_allclose(out.values, [[3., 0., 3., 0., 0., 0., 6.]],
+                               rtol=0,
+                               atol=2e-15)
+
+  @pytest.mark.parametrize("gamma", [1.4, 5.0 / 3.0])
+  def test_ten_moment_energy_uses_half_anisotropic_pressure_trace(self, gamma):
+    # rho=2, u=(1,-2,3), thermal tensor diag=(2,4,6). The thermal
+    # energy is 6, bulk energy is 14, and conserved half-M trace is 20.
+    values = np.array([[2., 2., -4., 6., 4., -4., 6., 12., -12., 24.]])
+    species = _make(_G1D, values)
+    field = _make(_G1D, np.array([[1., 2., 2., 0., 0., 2.]]))
+    out = ms.energetics(species, species, field, gas_gamma=gamma)
+    np.testing.assert_allclose(out.values, [[6., 14., 6., 14., 4.5, 2., 46.5]],
+                               rtol=0,
+                               atol=2e-14)
 
   def test_result_carries_field_grid(self):
     elc = _make_5mom(rho=1.0, vx=0.0, p=1.0)
@@ -78,13 +100,13 @@ class TestEnergetics:
     field = _make(_G1D, np.array([[1.0, 0.0, 0.0, 0.0, 2.0, 0.0]]))
     out = ms.energetics(elc, ion, field)
     comps = out.values[0]
-    np.testing.assert_allclose(comps[0], 16.0 / 3.0)  # electron thermal
+    np.testing.assert_allclose(comps[0], 8.0)  # electron thermal
     np.testing.assert_allclose(comps[1], 2.0)  # electron kinetic
-    np.testing.assert_allclose(comps[2], 16.0 / 3.0)  # ion thermal
+    np.testing.assert_allclose(comps[2], 8.0)  # ion thermal
     np.testing.assert_allclose(comps[3], 2.0)  # ion kinetic
     np.testing.assert_allclose(comps[4], 0.5)  # electric
     np.testing.assert_allclose(comps[5], 2.0)  # magnetic
-    np.testing.assert_allclose(comps[6], comps[:6].sum())  # total
+    np.testing.assert_allclose(comps[6], 22.5, rtol=0, atol=1e-14)  # 2*E+EM
 
   @needs_gkeyll
   def test_rejects_modal_data(self):

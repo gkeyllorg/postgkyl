@@ -122,7 +122,8 @@ def test_cli_help_is_lowered_from_source_docstrings():
 
 
 def test_python_help_renders_for_function_and_bound_method():
-  summary = "Interpolate DG (modal/nodal) data onto a uniform evaluation mesh."
+  summary = ("Interpolate DG (modal/nodal) data at uniformly spaced points "
+             "in each cell.")
   assert summary in pydoc.render_doc(pg.interpolate)
   assert summary in pydoc.render_doc(GData().interpolate)
 

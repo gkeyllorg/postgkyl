@@ -84,16 +84,20 @@ def test_same_shape_does_not_override_dg_metadata(add, backend, key, value,
                                                   message):
   a, b = _field(backend, "nodal"), _field(backend, "nodal")
   b.ctx[key] = value
+  if key == "value_form" and value == "quad":
+    b.ctx.update(num_quad=1, quad_rule="gauss")
   with pytest.raises(ValueError, match=message):
     add(a, b)
 
 
 @pytest.mark.parametrize("add", ADD, ids=ADD_IDS)
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_same_shape_quadrature_rules_must_match(add, backend):
+def test_same_shape_cannot_claim_an_unavailable_basis_quadrature(add, backend):
   a, b = _field(backend, "quad"), _field(backend, "quad")
   b.ctx["quad_rule"] = "gkeyll"
-  with pytest.raises(ValueError, match="different quadrature rules"):
+  # The p0 serendipity basis has no native quadrature table. A stored count
+  # cannot make that rule valid merely because the array shapes match.
+  with pytest.raises(ValueError, match="complete field blocks|quadrature"):
     add(a, b)
 
 

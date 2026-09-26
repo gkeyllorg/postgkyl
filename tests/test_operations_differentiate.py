@@ -94,13 +94,13 @@ def test_inplace_and_tag_label():
   assert d.get_label() == "dq/dx"
 
 
-def test_mismatched_grid_length_raises():
-  # Cell-centered grid (matches value count, not the expected nodal edges)
-  # cannot form the required cell-widths -- this is the documented caveat.
+def test_point_coordinates_recover_quadratic_derivative():
   x = np.linspace(0.0, 1.0, 10)
   d = _make([x], (x**2)[:, np.newaxis])
-  with pytest.raises(ValueError):
-    operations.differentiate(d)
+  np.testing.assert_allclose(operations.differentiate(d).values[:, 0],
+                             2 * x,
+                             rtol=0,
+                             atol=2e-14)
 
 
 @needs_gkeyll

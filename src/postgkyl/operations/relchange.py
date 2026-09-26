@@ -2,26 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Annotated
+from postgkyl.cli_spec import CliType, DatasetRef
 
 from postgkyl import numerics
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
-
-
-def _require_field_domain(data: "GDataState", who: str) -> None:
-  if data.backend == "gkyl":
-    raise ValueError(
-        f"relchange operates on interpolated (NumPy) values; call .interpolate() "
-        f"first on {who} -- dividing raw DG coefficients would mix basis functions."
-    )
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
-def relchange(data0: "GDataState",
-              data: "GDataState",
+def relchange(data0: Annotated[GDataState, DatasetRef()],
+              data: Annotated[GDataState, DatasetRef()],
               *,
-              comp: int | str | None = None,
+              comp: Annotated[int | str | None,
+                              CliType(str | None)] = None,
               inplace: bool = False,
               tag: str | None = None,
               label: str | None = None):
@@ -46,9 +41,13 @@ def relchange(data0: "GDataState",
     A dataset of the relative change, built from ``data``.
 
   Raises:
-    ValueError: if either operand is native modal (gkyl-backed).
+    ValueError: if either operand is unevaluated modal coefficients.
   """
-  _require_field_domain(data0, "'data0'")
-  _require_field_domain(data, "'data'")
+  require_field_domain(data0, "relchange",
+                       "raw coefficients are not field values")
+  require_field_domain(data, "relchange",
+                       "raw coefficients are not field values")
+  data0 = materialize_point_values(data0)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = numerics.rel_change(data.grid, data0.values, data.values, comp)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)

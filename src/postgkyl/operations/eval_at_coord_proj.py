@@ -9,14 +9,17 @@ dataset -- still modal and gkyl-native -- so it composes with further
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from typing import Annotated
+from postgkyl.cli_spec import CliType
 
 import numpy as np
 
 from postgkyl import dg
+from postgkyl.gdatastate.layout import require_kernel_basis
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
+from ._compatibility import uniform_cartesian_grid
 
 
 def _native_basis(data: "GDataState"):
@@ -34,12 +37,15 @@ def _native_basis(data: "GDataState"):
   if basis_type is None or poly_order is None:
     raise ValueError("eval_at_coord_proj: data has no basis_type/poly_order "
                      "metadata")
+  require_kernel_basis(data)
   return str(basis_type), int(poly_order)
 
 
 def eval_at_coord_proj(data: "GDataState",
-                       eval_dirs,
-                       eval_coords,
+                       eval_dirs: Annotated[Iterable[int],
+                                            CliType(list[int])],
+                       eval_coords: Annotated[Iterable[float],
+                                              CliType(list[float])],
                        *,
                        inplace: bool = False,
                        tag: str | None = None,
@@ -81,12 +87,7 @@ def eval_at_coord_proj(data: "GDataState",
   basis_type, poly_order = _native_basis(data)
   ndim = data.num_dims
 
-  grid = {
-      "ndim": ndim,
-      "lower": np.asarray(data.ctx["lower"]),
-      "upper": np.asarray(data.ctx["upper"]),
-      "cells": np.asarray(data.ctx["cells"]),
-  }
+  grid = uniform_cartesian_grid(data)
   keep_dirs, cells_tar, out_native, btype_tar, poly_order_tar, cdim_tar, \
       vdim_tar = dg.modal.eval_at_coord_proj(grid, basis_type, ndim,
           poly_order, data.native, eval_dirs, eval_coords)

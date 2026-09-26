@@ -202,10 +202,60 @@ class TestKineticEnergy:
       fm.ke(d)
 
   @needs_gkeyll
-  def test_rejects_modal_data(self):
+  def test_rejects_nonfluid_modal_data(self):
     d = pg.load(F1)
-    with pytest.raises(ValueError, match=r"\.interpolate\(\)"):
+    with pytest.raises(ValueError, match="five- or ten-moment"):
       fm.ke(d)
+
+  def test_large_internal_energy_does_not_erase_bulk_energy(self):
+    data = _make(_G1D, np.array([[2., 2., -4., 6., 1e30]]))
+    np.testing.assert_allclose(fm.ke(data).values, [[14.]], rtol=0, atol=0)
+
+  @needs_gkeyll
+  @pytest.mark.parametrize("ndim, expected", [(2, 4.0 / 3.0), (3, 13.0 / 6.0)])
+  def test_modal_affine_momentum_has_exact_integrated_energy(
+      self, ndim, expected):
+    data = pg.load(
+        os.path.join(DATA, "generated", f"moments_{ndim}d_affine_0.gkyl"))
+    energy = fm.ke(data)
+    assert energy.backend == "gkyl"
+    assert energy.ctx["value_form"] == "modal"
+    np.testing.assert_allclose(pg.integrate(energy),
+                               expected,
+                               rtol=2e-14,
+                               atol=2e-14)
+
+  @needs_gkeyll
+  @pytest.mark.parametrize("representation", ["nodal", "quad"])
+  def test_packed_point_bulk_energy_preserves_components(self, representation):
+    data = pg.load(os.path.join(DATA, "generated", "moments_3d_uniform_1.gkyl"))
+    data = data.represent(to=representation)
+    energy = fm.ke(data)
+    assert energy.backend == "gkyl"
+    assert energy.ctx["value_form"] == representation
+    np.testing.assert_allclose(pg.integrate(energy),
+                               2.0,
+                               rtol=2e-14,
+                               atol=2e-14)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("representation", ["nodal", "quad"])
+def test_field_diagnostics_materialize_affine_physical_moments(representation):
+  data = pg.load(os.path.join(DATA, "generated", "moments_2d_affine_0.gkyl"))
+  data = data.represent(to=representation)
+  velocity = fm.vel(data)
+  x, y = np.meshgrid(*velocity.grid, indexing="ij")
+  expected = np.stack([y, -x, 2 * x - y], axis=-1)
+  np.testing.assert_allclose(velocity.values, expected, rtol=2e-14, atol=2e-14)
+  assert velocity.backend == "numpy"
+  assert velocity.ctx["interpolated"]
+  pressure = fm.pressure(data)
+  pressure_expected = (_GAMMA - 1) * (100 - np.sum(expected**2, axis=-1))
+  np.testing.assert_allclose(pressure.values[..., 0],
+                             pressure_expected,
+                             rtol=2e-14,
+                             atol=2e-14)
 
 
 class TestTempSoundMach:

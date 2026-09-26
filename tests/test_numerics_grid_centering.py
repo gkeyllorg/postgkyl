@@ -36,7 +36,7 @@ class TestNodalToCellCenteredGrid:
 
   def test_bad_axis_length_raises(self):
     grid = [np.linspace(0.0, 1.0, 6)]  # neither 4 nor 5 points
-    with pytest.raises(ValueError, match="terribly wrong"):
+    with pytest.raises(ValueError, match="coordinate count"):
       nodal_to_cell_centered_grid(grid, cells=np.array([4]))
 
   def test_meshgrid_true_returns_ij_indexed_grid(self):

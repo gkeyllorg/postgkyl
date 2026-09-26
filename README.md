@@ -127,8 +127,8 @@ bash scripts/update_pgkyl.sh
 ```
 
 The script pulls the current Postgkyl branch's upstream with `--ff-only`,
-fetches the latest commit on Gkeyll's `lapack_lite_shim_bugs` branch, rebuilds
-Gkeyll and the `gpython` extension, and reinstalls Postgkyl. It uses the active
+fetches Gkeyll and checks out the commit pinned in `scripts/gkeyll-revision`,
+rebuilds Gkeyll and the `gpython` extension, and reinstalls Postgkyl. It uses the active
 `python`; set `PYTHON=/path/to/python` to choose another interpreter. Keep NumPy and
 the build tools installed as described above.
 
@@ -184,18 +184,24 @@ the bridge already.
 
 During a source build, `setup.py` runs `scripts/build_gkeyll.sh`, which:
 
-1. Fetches the latest commit from the [Gkeyll](https://github.com/ammarhakim/gkeyll)
-   branch named in `scripts/gkeyll-branch` and checks it out in `gkeyll/`.
+1. Fetches the [Gkeyll](https://github.com/ammarhakim/gkeyll) branch named in
+   `scripts/gkeyll-branch`, then checks out the immutable commit recorded in
+   `scripts/gkeyll-revision` in `gkeyll/`.
 2. Builds its core library with the bundled LAPACK implementation. No
    separate MPI, CUDA, SuperLU, Lua, or system LAPACK installation is needed.
 3. Builds the Python extension and bundles the core library beside it, so
    the installed package can run without the Gkeyll source folder.
 
 The configured branch is `lapack_lite_shim_bugs`, which contains the Gkeyll
-changes required by Postgkyl. Each source build fetches its latest commit and
-fast-forwards the local branch. Builds refuse tracked local modifications or
-local commits that differ from the remote branch. `pgkyl --version` reports
-the branch and commit used for the installed build.
+changes required by Postgkyl. The revision pin fixes which producer code enters
+each source build, even when that branch advances. Builds refuse tracked local
+modifications or local commits that differ from the remote branch. The final
+checkout is detached at the pinned commit; `pgkyl --version` reports that commit.
+To test another producer revision, set `GKEYLL_REVISION` to its full lowercase
+40-character commit hash. Branch names and abbreviated hashes are refused.
+Update the checked-in pin only after validating the native suite against the
+new revision. Development changes still use the in-place build workflow below;
+the clean installation script never builds uncommitted producer changes.
 
 The build needs Git, Make, a C compiler, and network access. It uses `cc` by
 default. To select another installed compiler, for example GCC, run:

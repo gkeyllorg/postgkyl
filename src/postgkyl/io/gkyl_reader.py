@@ -1,12 +1,11 @@
 """Module including Gkeyll binary reader class."""
 
 from typing import Tuple
-import msgpack as mp
 import numpy as np
 import os.path
 
 from . import mapping
-from .metadata import resolve_gkyl_metadata
+from .metadata import resolve_gkyl_metadata, unpack_gkyl_metadata
 
 # Format description for raw Gkeyll output file from
 # gkyl_array_rio_format_desc.h
@@ -205,7 +204,7 @@ class GkylReader(object):
       if meta_size > 0:
         with open(self.file_name, "rb") as fh:
           fh.seek(self.offset)
-          metadata = mp.unpackb(fh.read(meta_size))
+          metadata = unpack_gkyl_metadata(fh.read(meta_size))
         self.offset += meta_size
       resolve_gkyl_metadata(self.ctx,
                             metadata,

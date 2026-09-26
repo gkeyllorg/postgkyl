@@ -487,8 +487,105 @@ def _generate_polynomial_fields(out_dir: Path) -> None:
         })
 
 
+def _generate_moment_frames(out_dir: Path) -> None:
+  """Exact fluid moments, with field-major p1 coefficients, on unit domains.
+
+  Uniform frames have rho=1, u=(frame+1,0,0), internal energy=3.
+  Affine frames have rho=2, E=100 and u=(y+z,-x,2*x-y), with z=0
+  in 2D. All conserved fields are exactly representable p1 polynomials.
+  The total energy E is independent of the kinetic-energy computation.
+  """
+  for ndim in (2, 3):
+    cells = [2, 3, 4][:ndim]
+    grid = [np.linspace(0.0, 1.0, n + 1) for n in cells]
+    centers = np.meshgrid(*[(e[1:] + e[:-1]) / 2 for e in grid], indexing="ij")
+    nb = 2**ndim
+    normalization = 2**(ndim / 2)
+    for frame in range(3):
+      fields = np.array(
+          [1.0, frame + 1.0, 0.0, 0.0, 3.0 + 0.5 * (frame + 1)**2])
+      coefficients = np.zeros((*cells, 5, nb))
+      coefficients[..., 0] = fields * normalization
+      for timing, timestamps in (("uniform", [0.0, 0.1, 0.2]),
+                                 ("irregular", [0.0, 0.1, 0.4]),
+                                 ("untimed", [None, None, None])):
+        write_gkyl_field(
+            out_dir / f"moments_{ndim}d_{timing}_{frame}.gkyl",
+            cells, [0.0] * ndim, [1.0] * ndim,
+            coefficients.reshape(*cells, -1),
+            1,
+            "serendipity",
+            time=timestamps[frame],
+            frame=frame,
+            metadata={
+                "description":
+                "Constant fluid moments on an anisotropic unit grid.",
+                "analytic_function":
+                f"rho=1, u=({frame+1},0,0), internal energy=3",
+                "generation_method":
+                "Closed-form orthonormal Legendre constant coefficients.",
+            })
+    slopes = np.array([[0.0, 1.0, 1.0], [-1.0, 0.0, 0.0], [2.0, -1.0,
+                                                           0.0]])[:, :ndim]
+    coefficients = np.zeros((*cells, 5, nb))
+    coefficients[..., 0, 0] = 2 * normalization
+    coefficients[..., 4, 0] = 100 * normalization
+    for component, row in enumerate(slopes, 1):
+      coefficients[..., component, 0] = 2 * normalization * sum(
+          slope * coordinate for slope, coordinate in zip(row, centers))
+      for axis, slope in enumerate(row):
+        coefficients[..., component,
+                     axis + 1] = (2 * normalization * slope /
+                                  (2 * cells[axis] * np.sqrt(3)))
+    write_gkyl_field(
+        out_dir / f"moments_{ndim}d_affine_0.gkyl",
+        cells, [0.0] * ndim, [1.0] * ndim,
+        coefficients.reshape(*cells, -1),
+        1,
+        "serendipity",
+        metadata={
+            "description":
+            "Affine velocity with rotation and out-of-plane shear.",
+            "analytic_function":
+            "rho=2, E=100, u=(y+z,-x,2*x-y); z=0 in 2D",
+            "generation_method":
+            "Exact closed-form Legendre affine coefficients; field-major blocks.",
+        })
+
+
 def _generate_calculus_samples(out_dir: Path) -> None:
   """Store point samples separately from true cell averages."""
+  x = np.array([-1., -0.8, -0.1, 0.7, 2.])
+  y = np.array([0.25, 0.5, 1.25, 2.25])
+  px, py = np.meshgrid(x, y, indexing="ij")
+  np.savez(
+      out_dir / "point_polynomials.npz",
+      x=x,
+      y=y,
+      values=np.stack([2 + 3 * px - 4 * py + 5 * px * py, px**2 + 2 * py**2],
+                      axis=-1),
+      description="Bilinear and quadratic samples on nonuniform point axes.",
+      analytic_function="f=2+3*x-4*y+5*x*y; g=x^2+2*y^2",
+      generation_method="Point samples including domain boundaries.")
+  # On [-1,1] use f=1+2*x; on [1,3] use f=7-x, giving unequal
+  # traces 3 and 6 at x=1. The second field is identically one.
+  coefficients = np.array([[np.sqrt(2), 2 * np.sqrt(2 / 3),
+                            np.sqrt(2), 0],
+                           [5 * np.sqrt(2), -np.sqrt(2 / 3),
+                            np.sqrt(2), 0]])
+  write_gkyl_field(out_dir / "piecewise_linear_1d.gkyl", [2], [-1.], [3.],
+                   coefficients,
+                   1,
+                   "serendipity",
+                   metadata={
+                       "description":
+                       "Discontinuous affine field and a constant field.",
+                       "analytic_function":
+                       "f=1+2*x on [-1,1], f=7-x on [1,3]; g=1",
+                       "generation_method":
+                       "Exact orthonormal Legendre integrals: "
+                       "c0=sqrt(2)*cell mean, c1=sqrt(2/3)*slope.",
+                   })
   for n in (8, 16, 32):
     edges = np.linspace(-1., 2., n + 1)
     x = (edges[:-1] + edges[1:]) / 2
@@ -514,6 +611,48 @@ def _generate_calculus_samples(out_dir: Path) -> None:
       description="Bilinear and quadratic cell averages on nonuniform edges.",
       analytic_function="f=2+3*x-4*y+5*x*y; g=(1+x^2)*(2-y)",
       generation_method="Exact cell averages on nonuniform edges.")
+
+
+def _generate_representation_fields(out_dir: Path) -> None:
+  """Exact affine fields and a highest-mode Vlasov hybrid field."""
+  centers = np.array([-0.5, 0.5])
+  coefficients = np.column_stack([
+      np.sqrt(2) * (1 + 2 * centers),
+      np.full(2, np.sqrt(2 / 3)),
+      np.sqrt(2) * (3 - centers),
+      np.full(2, -np.sqrt(2 / 3) / 2)
+  ])
+  write_gkyl_field(out_dir / "representation_affine_1d.gkyl", [2], [-1.], [1.],
+                   coefficients,
+                   1,
+                   "serendipity",
+                   metadata={
+                       "description":
+                       "Two exact affine fields, field-major coefficients.",
+                       "analytic_function":
+                       "f=1+2*x; g=3-x on [-1,1]",
+                       "generation_method":
+                       "Closed-form orthonormal Legendre coefficients."
+                   })
+  coefficients = np.zeros((1, 1, 1, 16))
+  coefficients[..., 15] = 1.
+  write_gkyl_field(out_dir / "hybrid_1x2v_highest.gkyl", [1, 1, 1], [-1.] * 3,
+                   [1.] * 3,
+                   coefficients,
+                   1,
+                   "hybrid",
+                   metadata={
+                       "num_cdim":
+                       1,
+                       "num_vdim":
+                       2,
+                       "description":
+                       "Highest 1x2v hybrid mode, coefficient 15 = 1.",
+                       "analytic_function":
+                       "f=1.5*sqrt(5/8)*x*v1*(3*v2^2-1)",
+                       "generation_method":
+                       "One exact normalized product Legendre mode."
+                   })
 
 
 def _generate_fourier_samples(out_dir: Path) -> None:
@@ -571,7 +710,9 @@ def generate_all(out_dir: Path | str) -> None:
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
   _generate_calculus_samples(out_dir)
+  _generate_moment_frames(out_dir)
   _generate_fourier_samples(out_dir)
+  _generate_representation_fields(out_dir)
 
   # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
   write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],

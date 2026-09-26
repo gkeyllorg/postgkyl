@@ -12,46 +12,32 @@ and ``"f 2 *"`` doubles one. Data tokens are:
 - ``fN[c]``       -- component ``c`` of that dataset (slices like ``0:3`` work),
 - ``fN.key``      -- the scalar ``ctx[key]`` of that dataset.
 
-Anything else is parsed as a numeric/axis literal (a float, a ``"0,1"`` /
-``"0:3"`` axis spec, or a Python literal in brackets/parens). Every operator
-in ``numerics.ev_cmds`` is a plain array function -- none needed a
-``NotImplementedError`` GData-only placeholder (see the numerics module
-docstring), so there is nothing left to resolve here.
-
-A data token referencing native (gkyl-backed) data is kept native, not
-forced through ``select()``'s point-value guard, regardless of
-value_form -- see ``_native_kernel``:
-
-- **modal** (DG coefficients): ``+ - * / pow sq sqrt`` use the same
-  arithmetic dispatcher as GData operators, including weak multiplication,
-  division, and projected fractional powers. Unsupported operations and
-  invalid operands raise; coefficients are never treated as point values.
-- **nodal/quad** (point values): every operator in ``_POINTWISE_TOKENS``
-  (``+ - * / pow sq sqrt sin cos tan abs log log10 exp max2 min2
-  scale_comp scale_zi_axis``) is exact regardless of packing, so it is
-  computed with plain NumPy on the view and the result is wrapped back into
-  a native array -- computed on the view, wrapped back native, staying
-  in-value_form, mirroring ``operations.arithmetic``'s ufunc dispatch.
-  Anything else (``dot``, ``avg``, ``max``, ``min``, ``mean``, ``len``,
-  ``grad``, ``grad2``, ``int``, ``div``, ``curl``) is a genuine reduction or
-  finite-difference derivative -- not a per-point transform -- so it leaves
-  the native domain for plain NumPy math on the raw view, same as before;
-  ``apply_operator`` then strips the now-stale ``value_form`` tag and
-  marks the result ``interpolated`` (mirroring ``.interpolate()``) so
-  ``info()`` doesn't keep claiming a value_form the data no longer has.
+Literals supply numbers, component ranges, and axis selectors. Arithmetic on
+modal data uses the canonical DG dispatcher. Integration and gradients use the
+same operations as the Python API. Other point-value consumers first unpack
+DG locations and fields; unsupported stencils raise before touching storage.
 """
 
 from __future__ import annotations
 
+from typing import Annotated
+from postgkyl.cli_spec import CliArgument
+
 import operator
 import re
+from copy import deepcopy
 
 import numpy as np
 
 from postgkyl import dg
 from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.layout import dg_layout
 from postgkyl.numerics import ev_cmds
+from postgkyl.numerics.calculus import parse_axis
 from postgkyl.operations.arithmetic import binary, require_compatible_operands
+from postgkyl.operations.differentiate import differentiate
+from postgkyl.operations.integrate import integrate
 from postgkyl.operations.select import select
 
 # Use the same arithmetic dispatcher as GData's operators.
@@ -87,8 +73,6 @@ _POINTWISE_TOKENS = frozenset({
     "exp",
     "max2",
     "min2",
-    "scale_comp",
-    "scale_zi_axis",
 })
 
 # f, f0, f12 ... with optional [comp] selection and optional .ctxkey suffix.
@@ -100,10 +84,89 @@ def _rep_of(ctx: dict) -> str:
 
 
 def _compare(a, b) -> bool:
-  """Equality that also handles NumPy arrays (used when merging ctx dicts)."""
-  if isinstance(a, np.ndarray):
+  """Value equality for nested metadata, independent of object identity."""
+  if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
     return np.array_equal(a, b)
+  if isinstance(a, dict) and isinstance(b, dict):
+    return a.keys() == b.keys() and all(_compare(a[k], b[k]) for k in a)
+  if isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)):
+    return len(a) == len(b) and all(_compare(x, y) for x, y in zip(a, b))
   return a == b
+
+
+def _merged_context(contexts):
+  """Retain agreeing metadata; keep source provenance separate from structure.
+
+  A combined value has no single source-file header. Retain provenance only
+  for a unary operation; never compare nested headers as live field metadata.
+  """
+  fields = [ctx for ctx in contexts if ctx]
+  result, conflicts = {}, set()
+  for ctx in fields:
+    for key, value in ctx.items():
+      if key == "_load_metadata" and len(fields) > 1:
+        continue
+      if key in result and not _compare(result[key], value):
+        conflicts.add(key)
+      else:
+        result[key] = value
+  return deepcopy({k: v for k, v in result.items() if k not in conflicts})
+
+
+def _axis_literal(value):
+  if isinstance(value, np.ndarray) and value.ndim == 0:
+    value = int(value)
+  return None if isinstance(value, str) and value == "all" else value
+
+
+def _semantic_kernel(token, grids, values, contexts):
+  """Route physical reductions and gradients through their canonical verbs."""
+  if token not in {"int", "avg", "grad", "grad2", "len"}:
+    return None
+  index = 0 if token == "grad" else 1
+  if not grids[index]:
+    raise ValueError(f"evaluate: '{token}' requires a dataset with a grid")
+  data = GDataState(ctx=contexts[index]).push(grids[index], values[index])
+  axis = None if token == "grad" else _axis_literal(values[0])
+  if token in {"int", "avg"}:
+    result = integrate(data, axis=axis)
+    if not isinstance(result, GDataState):
+      result = data._result([],
+                            np.atleast_1d(result),
+                            interpolated=True,
+                            value_form=None,
+                            mapped_axes={})
+    if token == "avg":
+      axes = parse_axis(axis, data.num_dims)
+      if any(np.ndim(data.grid[a]) != 1 for a in axes):
+        raise ValueError("evaluate avg requires separable coordinates")
+      volume = np.prod([data.grid[a][-1] - data.grid[a][0] for a in axes])
+      if volume <= 0:
+        raise ValueError("evaluate avg requires a positive domain volume")
+      result = binary(operator.truediv, result, volume)
+    return result
+  if token == "len":
+    coord = data.grid[int(axis)]
+    if coord.ndim != 1:
+      raise ValueError("evaluate len requires a separable coordinate axis")
+    return data._result([],
+                        np.atleast_1d(coord[-1] - coord[0]),
+                        interpolated=True,
+                        value_form=None,
+                        mapped_axes={})
+  if token == "grad":
+    return differentiate(data)
+  axes = parse_axis(axis, data.num_dims)
+  derivatives = [differentiate(data, direction=a) for a in axes]
+  if not derivatives:
+    raise ValueError("evaluate grad2 needs at least one axis")
+  result = derivatives[0]
+  if len(derivatives) > 1:
+    combined = np.concatenate([d.values for d in derivatives], axis=-1)
+    if result.backend == "gkyl":
+      combined = dg.rep.wrap(combined)
+    result = result._result(result.grid, combined)
+  return result
 
 
 def _modal_view(value, ctx: dict):
@@ -128,7 +191,9 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
   Wrap stack entries in state without copying their native buffers. This keeps
   basis/grid validation and DG kernel selection owned by arithmetic.binary.
   """
-  if not any(dg.modal.is_native(v) for v in tmp_values):
+  if not any(dg.modal.is_native(v) for v in tmp_values) and not any(
+      grid and ctx.get("basis_type") and not ctx.get("interpolated")
+      and _rep_of(ctx) == "modal" for grid, ctx in zip(tmp_grid, tmp_ctx)):
     return None
 
   if token not in _MODAL_BINARY_OPS and token not in _MODAL_UNARY_POWERS:
@@ -156,28 +221,15 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
 
 
 def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
-  """Dispatch a native (gkyl-backed) operand to the value_form-correct math.
-
-  Returns the arithmetic result state for modal data, ``(out_grid,
-  out_values)`` with native arrays for point-value transforms, or ``None``
-  when the caller should run the NumPy function on point values.
-
-  - Every native operand modal: delegates to :func:`_modal_kernel` for
-    DG arithmetic; unsupported operations raise.
-  - Every native operand the *same* nodal/quad value_form, and ``token``
-    in :data:`_POINTWISE_TOKENS`: exact NumPy math on the raw view, wrapped
-    back native -- mirrors ``operations.arithmetic``'s "compute on the view,
-    wrap back native, stay in-value_form" pointwise dispatch.
-  - Point-value dataset pairs use arithmetic's shared compatibility check
-    before their grids or DG metadata can be discarded by array operations.
-  - Any other token (reductions, finite-difference derivatives): returns
-    ``None`` so the caller's plain-NumPy path runs -- the result then
-    genuinely leaves the native/value_form domain.
-  """
+  """Dispatch canonical operations, then pointwise or unpacked array math."""
+  semantic = _semantic_kernel(token, tmp_grid, tmp_values, tmp_ctx)
+  if semantic is not None:
+    return semantic
   is_native = [dg.modal.is_native(v) for v in tmp_values]
   reps = {
       _rep_of(c)
-      for v, c, native in zip(tmp_values, tmp_ctx, is_native) if native
+      for grid, c, native in zip(tmp_grid, tmp_ctx, is_native)
+      if native or (grid and c.get("basis_type") and not c.get("interpolated"))
   }
   if reps == {"modal"}:
     return _modal_kernel(token, tmp_grid, tmp_values, tmp_ctx)
@@ -191,6 +243,22 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
   ]
   for other in fields[1:]:
     require_compatible_operands(fields[0], other)
+
+  if token not in _POINTWISE_TOKENS:
+    for index, (grid, value,
+                ctx) in enumerate(zip(tmp_grid, tmp_values, tmp_ctx)):
+      if not grid:
+        continue
+      field = GDataState(ctx=ctx).push(grid, value)
+      if dg_layout(field) is not None and token in {"div", "curl"}:
+        raise ValueError(
+            f"evaluate '{token}' needs an unpacked point grid; call "
+            ".interpolate() explicitly before a finite-difference stencil")
+      shadow = materialize_point_values(field)
+      tmp_grid[index], tmp_values[index], tmp_ctx[index] = (shadow.grid,
+                                                            shadow.values,
+                                                            shadow.ctx)
+    return None
 
   if not any(is_native) or token not in _POINTWISE_TOKENS:
     return None
@@ -247,7 +315,8 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
     try:
       native_out = _native_kernel(token, tmp_grid, tmp_values, tmp_ctx, func)
       if isinstance(native_out, GDataState):
-        out_grid, out_values = [native_out.grid], [native_out.native]
+        value = native_out.native if native_out.backend == "gkyl" else native_out.values
+        out_grid, out_values = [native_out.grid], [value]
       elif native_out is not None:
         out_grid, out_values = native_out
       else:
@@ -261,38 +330,12 @@ def apply_operator(grid_stack, value_stack, ctx_stack, token: str) -> bool:
     if isinstance(native_out, GDataState):
       out_ctx = dict(native_out.ctx)
     else:
-      # Merge ctx of all inputs; drop keys that disagree between inputs.
-      out_ctx: dict = {}
-      remove_list = []
-      for i in range(num_in):
-        for key in tmp_ctx[i]:
-          if key in out_ctx and _compare(tmp_ctx[i][key], out_ctx[key]):
-            pass  # already copied and matches; nothing to do
-          elif key in out_ctx:
-            remove_list.append(key)  # discrepancy; mark for removal
-          else:
-            out_ctx[key] = tmp_ctx[i][key]
-      for key in dict.fromkeys(remove_list):
-        out_ctx.pop(key)
-
-    # A native nodal/quad operand whose result did *not* come back wrapped
-    # native (a genuine reduction/derivative, per _native_kernel) has left
-    # the per-point field domain: the merged ctx's 'value_form' is now
-    # stale (it still names a value_form this output no longer has), so
-    # drop it and mark the result the same way .interpolate() does -- no
-    # longer gkyl-native -- rather than let info() keep describing it as a
-    # value_form it left behind.
-    was_native_nonmodal = any(
-        dg.modal.is_native(v) and _rep_of(c) != "modal"
-        for v, c in zip(tmp_values, tmp_ctx))
+      out_ctx = _merged_context(tmp_ctx)
 
     for i in range(num_out):
       grid_stack[-num_out + i].append(out_grid[i])
       value_stack[-num_out + i].append(out_values[i])
       this_ctx = dict(out_ctx)
-      if was_native_nonmodal and not dg.modal.is_native(out_values[i]):
-        this_ctx.pop("value_form", None)
-        this_ctx["interpolated"] = True
       ctx_stack[-num_out + i].append(this_ctx)
   return True
 
@@ -314,28 +357,16 @@ def _push_token(token: str, datasets, grid_stack, value_stack,
         raise ValueError(
             f"evaluate: unknown ctx key '{ctx_key}' on dataset f{idx}")
       grid, values = None, np.array(dat.ctx[ctx_key])
-    elif comp is None and dat.backend == "gkyl":
-      # Keep native data on the stack (rather than forcing it through
-      # select()'s point-value guard), regardless of value_form: RPN
-      # math routes through Gkeyll's own weak kernels for modal data, or
-      # exact NumPy math wrapped back native for nodal/quad point values,
-      # when the operator supports it; unsupported modal operations raise
-      # -- see _native_kernel.
-      grid, values = dat.grid, dat.native
+    elif comp is None:
+      grid = dat.grid
+      values = dat.native if dat.backend == "gkyl" else dat.values
     else:
-      # select() carries the shared operability guard (raw modal coefficients
-      # refuse; nodal/quad value_forms, already point values, pass) for
-      # a comp-sliced modal token (still genuinely unsafe -- slicing raw DG
-      # coefficients by component can mix basis functions) and every
-      # already-point-value token. select() itself now keeps a gkyl-backed
-      # nodal/quad result native, so keep pushing the native array here too
-      # (not its plain-view .values) so it stays eligible for _native_kernel.
-      selected = select(dat, comp=comp)
-      grid = selected.grid
-      values = selected.native if selected.backend == "gkyl" else selected.values
+      dat = select(dat, comp=comp)
+      grid = dat.grid
+      values = dat.native if dat.backend == "gkyl" else dat.values
     grid_stack.append([grid])
     value_stack.append([values])
-    ctx_stack.append([dat.ctx])
+    ctx_stack.append([dat.ctx if ctx_key is None else {}])
     return True
 
   # Numeric / axis literal fallback (mirrors the CLI token parser).
@@ -358,7 +389,7 @@ def available_operators() -> list[str]:
   return sorted(ev_cmds)
 
 
-def evaluate(chain: str,
+def evaluate(chain: Annotated[str, CliArgument()],
              *datasets: "GDataState",
              tag: str | None = None,
              label: str | None = None) -> "GDataState":
@@ -399,7 +430,7 @@ def evaluate(chain: str,
 
   final_grid = grid_stack[-1][0]
   final_values = value_stack[-1][0]
-  final_ctx = dict(ctx_stack[-1][0])
+  final_ctx = deepcopy(ctx_stack[-1][0])
   out_grid = final_grid if final_grid is not None else datasets[0].grid
   result = datasets[0]._result(out_grid,
                                final_values,

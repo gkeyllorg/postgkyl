@@ -1,38 +1,39 @@
-"""Materialize point-value state without changing its value form."""
+"""Unpack DG point locations and physical fields into ordinary NumPy state."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from postgkyl.dg import rep
-from .guards import quadrature_order
+from .layout import dg_layout
 
 if TYPE_CHECKING:
   from .gdatastate import GDataState
 
 
-def materialize_point_values(data: "GDataState") -> "GDataState":
-  """Return a NumPy-backed view of nodal or quadrature point values.
+def materialize_point_values(data: "GDataState",
+                             *,
+                             inplace: bool = False) -> "GDataState":
+  """Return ordinary NumPy point values with their actual coordinates.
 
-  NumPy-backed data is already materialized. Native modal coefficients have
-  no unique point-value interpretation and therefore require an explicit
-  representation choice by the caller.
+  Already unpacked values pass through. Packed nodal/quad fields are scattered
+  onto their tensor point grid and cease to carry a packed value_form. Modal
+  coefficients always require an explicit evaluation choice.
   """
-  if data.backend != "gkyl":
+  data._require_operable()
+  layout = dg_layout(data)
+  if layout is None:
     return data
-  value_form = data.ctx.get("value_form", "modal")
-  if value_form == "modal":
-    raise ValueError(
-        "modal DG coefficients are not point values; evaluate explicitly: "
-        ".interpolate() (uniform evaluation mesh), .local_poly() "
-        "(discontinuous plotting mesh), .represent(to='nodal') "
-        "or .represent(to='quad') "
-        "(basis/quadrature points).")
-  grid, values = rep.materialize(
-      str(data.ctx["basis_type"]), data.num_dims, int(data.ctx["poly_order"]),
-      data.native, data.grid, value_form,
-      quadrature_order(data) if value_form == "quad" else None)
-  return data._result(grid, values)
+  grid, values = rep.materialize(*layout.basis_args, data.values, data.grid,
+                                 layout.value_form, layout.num_quad,
+                                 **layout.basis_kwargs)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      interpolated=True,
+                      value_form=None,
+                      num_quad=None,
+                      quad_rule=None)
 
 
 __all__ = ["materialize_point_values"]

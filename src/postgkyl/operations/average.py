@@ -9,14 +9,17 @@ modal and gkyl-native -- so it composes with ``.represent(to='nodal')``,
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from typing import Annotated
+from postgkyl.cli_spec import CliType, DatasetRef
 
 import numpy as np
 
 from postgkyl import dg
+from postgkyl.gdatastate.layout import require_kernel_basis
+from ._compatibility import require_collocated_layout, uniform_cartesian_grid
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def _native_basis(data: "GDataState", what: str):
@@ -33,13 +36,15 @@ def _native_basis(data: "GDataState", what: str):
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError(f"{what} has no basis_type/poly_order metadata")
-  return str(basis_type), int(poly_order)
+  layout = require_kernel_basis(data)
+  return layout.basis_type, layout.poly_order
 
 
 def average(data: "GDataState",
-            dims,
+            dims: Annotated[Iterable[int], CliType(list[int])],
             *,
-            weight: "GDataState | None" = None,
+            weight: Annotated[GDataState | None,
+                              DatasetRef()] = None,
             inplace: bool = False,
             tag: str | None = None,
             label: str | None = None):
@@ -83,14 +88,10 @@ def average(data: "GDataState",
     if w_poly_order != poly_order:
       raise ValueError(
           f"weight poly_order {w_poly_order} != field's {poly_order}")
+    require_collocated_layout(data, weight)
     weight_native = weight.native
 
-  grid = {
-      "ndim": ndim,
-      "lower": np.asarray(data.ctx["lower"]),
-      "upper": np.asarray(data.ctx["upper"]),
-      "cells": np.asarray(data.ctx["cells"]),
-  }
+  grid = uniform_cartesian_grid(data)
   keep_dirs, cells_avg, out_native = dg.modal.average(grid,
                                                       basis_type,
                                                       ndim,

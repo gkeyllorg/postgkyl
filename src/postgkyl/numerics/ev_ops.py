@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .calculus import _split_axis_string
+from .calculus import _split_axis_string, integrate as integrate_values
+from .grid_centering import sample_coordinates
 from .idx_parser import idx_parser
 
 
@@ -144,9 +145,7 @@ def exp(in_grid, in_values):
 def length(in_grid, in_values):
   ax = int(in_values[0])
   ln = in_grid[1][ax][-1] - in_grid[1][ax][0]
-  if len(in_grid[1][ax]) == in_values[1].shape[ax]:
-    ln += in_grid[1][ax][1] - in_grid[1][ax][0]
-  return [[]], [ln]
+  return [[]], [np.atleast_1d(ln)]
 
 
 def grad(in_grid, in_values):
@@ -158,7 +157,8 @@ def grad(in_grid, in_values):
   out_values = np.zeros(out_shape)
 
   for d in range(nd):
-    zc = 0.5 * (in_grid[0][d][1:] + in_grid[0][d][:-1])  # cell centered values
+    zc = sample_coordinates(in_grid[0][d],
+                            in_values[0].shape[d])  # cell centered values
     out_values[..., d * nc:(d + 1) * nc] = np.gradient(in_values[0],
                                                        zc,
                                                        edge_order=2,
@@ -184,7 +184,8 @@ def grad2(in_grid, in_values):
   out_values = np.zeros(out_shape)
 
   for cnt, d in enumerate(rng):
-    zc = 0.5 * (in_grid[1][d][1:] + in_grid[1][d][:-1])  # cell centered values
+    zc = sample_coordinates(in_grid[1][d],
+                            in_values[1].shape[d])  # cell centered values
     out_values[..., cnt * num_comps:(cnt + 1) * num_comps] = np.gradient(
         in_values[1], zc, edge_order=2, axis=d)
   return [out_grid], [out_values]
@@ -214,25 +215,11 @@ def integrate(in_grid, in_values, avg=False):
   if axis is None:
     axis = tuple(range(len(grid)))
 
-  dz = []
-  for d, coord in enumerate(grid):
-    dz.append(coord[1:] - coord[:-1])
-    if len(coord) == values.shape[d]:
-      dz[-1] = np.append(dz[-1], dz[-1][-1])
+  grid, values = integrate_values(grid, values, axis)
+  if avg:
+    for ax in axis:
+      values = values / (in_grid[1][ax][-1] - in_grid[1][ax][0])
 
-  # Integration assuming values are cell centered averages
-  # Should work for nonuniform meshes
-  for ax in sorted(axis, reverse=True):
-    values = np.moveaxis(values, ax, -1)
-    values = np.dot(values, dz[ax])
-  for ax in sorted(axis):
-    grid[ax] = np.array([0])
-    values = np.expand_dims(values, ax)
-    if avg:
-      ln = in_grid[1][ax][-1] - in_grid[1][ax][0]
-      if len(in_grid[1][ax]) == in_values[1].shape[ax]:
-        ln += in_grid[1][ax][1] - in_grid[1][ax][0]
-      values = values / ln
   return [grid], [values]
 
 
@@ -254,7 +241,8 @@ def divergence(in_grid, in_values):
   out_shape[-1] = 1
   out_values = np.zeros(out_shape)
   for d in range(num_dims):
-    zc = 0.5 * (in_grid[0][d][1:] + in_grid[0][d][:-1])  # cell centered values
+    zc = sample_coordinates(in_grid[0][d],
+                            in_values[0].shape[d])  # cell centered values
     out_values[..., 0] = out_values[..., 0] + np.gradient(
         in_values[0][..., d], zc, edge_order=2, axis=d)
   return [out_grid], [out_values]
@@ -272,7 +260,7 @@ def curl(in_grid, in_values):
       raise ValueError(
           f"ERROR in 'evaluate curl': Curl in 1D requires 3-component input and "
           f"{num_comps:d}-component field was provided.")
-    zc0 = 0.5 * (in_grid[0][0][1:] + in_grid[0][0][:-1])
+    zc0 = sample_coordinates(in_grid[0][0], in_values[0].shape[0])
     out_values = np.zeros(out_shape)
     out_values[..., 1] = -np.gradient(
         in_values[0][..., 2], zc0, edge_order=2, axis=0)
@@ -281,8 +269,8 @@ def curl(in_grid, in_values):
                                      edge_order=2,
                                      axis=0)
   elif num_dims == 2:
-    zc0 = 0.5 * (in_grid[0][0][1:] + in_grid[0][0][:-1])
-    zc1 = 0.5 * (in_grid[0][1][1:] + in_grid[0][1][:-1])
+    zc0 = sample_coordinates(in_grid[0][0], in_values[0].shape[0])
+    zc1 = sample_coordinates(in_grid[0][1], in_values[0].shape[1])
     if num_comps < 2:
       raise ValueError(
           f"ERROR in 'evaluate curl': Length of the provided vector ({num_comps:d}) "
@@ -328,9 +316,9 @@ def curl(in_grid, in_values):
           f"ERROR in 'evaluate curl': Length of the provided vector ({num_comps:d}) "
           f"is smaller than number of dimensions ({num_dims:d}). Curl can't "
           f"be calculated.")
-    zc0 = 0.5 * (in_grid[0][0][1:] + in_grid[0][0][:-1])
-    zc1 = 0.5 * (in_grid[0][1][1:] + in_grid[0][1][:-1])
-    zc2 = 0.5 * (in_grid[0][2][1:] + in_grid[0][2][:-1])
+    zc0 = sample_coordinates(in_grid[0][0], in_values[0].shape[0])
+    zc1 = sample_coordinates(in_grid[0][1], in_values[0].shape[1])
+    zc2 = sample_coordinates(in_grid[0][2], in_values[0].shape[2])
     out_values = np.zeros(out_shape)
     out_values[..., 0] = np.gradient(
         in_values[0][..., 2], zc1, edge_order=2, axis=1) - np.gradient(
@@ -396,9 +384,8 @@ def scale_zi_axis(in_grid, in_values):
   idx_scale = in_values[1].item()
   scale_factor = in_values[0].item()
 
-  # NB: mutates the referenced axis array in place (matches src_bak exactly,
-  # including its aliasing with the caller's original grid list).
-  out_grid[int(idx_scale)] *= scale_factor
+  out_grid = list(out_grid)
+  out_grid[int(idx_scale)] = out_grid[int(idx_scale)] * scale_factor
 
   return [out_grid], [original_data]
 

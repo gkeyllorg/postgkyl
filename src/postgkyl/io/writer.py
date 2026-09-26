@@ -16,7 +16,6 @@ from typing import Literal, Protocol
 
 import msgpack
 import numpy as np
-import pyvista as pv
 
 from postgkyl.cli_spec import (
     CommandSpec,
@@ -26,6 +25,8 @@ from postgkyl.cli_spec import (
     command,
 )
 from postgkyl.numerics import nodal_to_cell_centered_grid
+from postgkyl.numerics.grid_centering import sample_coordinates
+from .metadata import encode_structural_metadata
 
 # Only the binary header's structural fields and the private load snapshot
 # are excluded. All other dataset metadata, including representation and
@@ -70,7 +71,9 @@ def save(data: _WritableDataset,
   ``value_form``, ``num_quad``, and simulation identity. Structural fields
   are stored in the binary header; the private load-history snapshot is
   omitted. Current metadata takes precedence over the output filename
-  when reloading.
+  when reloading. Its field header supports uniform Cartesian cell edges
+  only: nonuniform, mapped, and point-coordinate grids are rejected before
+  the output is opened, since the format cannot preserve those coordinates.
 
   Args:
     data: a dataset exposing ``num_dims``/``num_comps``/``num_cells``/
@@ -97,6 +100,7 @@ def save(data: _WritableDataset,
 
   if extension == "gkyl":
     ctx = getattr(data, "ctx", {}) or {}
+    _require_gkyl_grid(data.grid, num_cells, lo, up, ctx)
     _write_gkyl(out_name, num_dims, num_comps, num_cells, lo, up, values, ctx)
   elif extension == "npy":
     np.save(out_name, np.asarray(values).squeeze())
@@ -119,7 +123,28 @@ def _build_meta(ctx: dict) -> dict:
     if key in _INTERNAL_CTX_KEYS:
       continue
     meta[_CTX_TO_META_KEY.get(key, key)] = _to_msgpack_safe(val)
-  return meta
+  return encode_structural_metadata(meta)
+
+
+def _require_gkyl_grid(grid, cells, lower, upper, ctx) -> None:
+  """Refuse geometry that a Gkeyll field header cannot reconstruct."""
+  message = ("gkyl field output requires uniform Cartesian cell edges; "
+             "the format cannot preserve nonuniform, point-coordinate, "
+             "or mapped grids")
+  if ctx.get("mapped_axes") or ctx.get("grid_type") == "mapped":
+    raise ValueError(message)
+  if len(grid) != len(cells):
+    raise ValueError(message)
+  for d, coord in enumerate(grid):
+    expected = np.linspace(lower[d], upper[d], int(cells[d]) + 1)
+    coord = np.asarray(coord)
+    # Only tolerate rounding at the scale of the stored coordinates. A
+    # nonuniform mesh must not become uniform merely because it is small.
+    scale = max(float(np.max(np.abs(expected))), float(np.ptp(expected)))
+    if (coord.shape != expected.shape or not np.all(np.isfinite(coord))
+        or not np.allclose(
+            coord, expected, rtol=0, atol=8 * np.finfo(float).eps * scale)):
+      raise ValueError(message)
 
 
 def _to_msgpack_safe(val):
@@ -159,7 +184,9 @@ def _write_gkyl(out_name, num_dims, num_comps, num_cells, lo, up, values,
 
 
 def _write_txt(out_name, data, num_dims, num_comps, num_cells, values) -> None:
-  grid = [0.5 * (g[1:] + g[:-1]) for g in data.grid]  # cell centers
+  # Resolve every axis before opening the output, so invalid layouts cannot
+  # leave a truncated or partially written destination.
+  grid = [sample_coordinates(g, n) for g, n in zip(data.grid, num_cells)]
   num_rows = int(np.prod(num_cells))
   basis = np.full(num_dims, 1.0)
   for d in range(num_dims - 1):
@@ -185,6 +212,7 @@ def _write_vtk(out_name, data, num_dims, num_cells, values) -> None:
   """
   if num_dims not in (1, 2, 3):
     raise ValueError(f"VTK output supports 1-3 dimensions, got {num_dims}")
+  import pyvista as pv
 
   n_grid = nodal_to_cell_centered_grid(data.grid, num_cells, meshgrid=True)
   fval = np.asarray(values).squeeze()

@@ -1,24 +1,14 @@
-"""``GDataState`` -- the verb-less data container (the CONTAINER layer).
+"""Dataset state and ownership, without operations or rendering dependencies.
 
-Holds a Gkeyll dataset: a nodal ``grid`` (list of 1-D edge arrays) plus values
-in one of **two backends** -- the two-domain lifecycle of REFACTOR_GKEYLL_FFI.md:
-
-- ``backend == "gkyl"``: modal DG coefficients held as a native
-  :class:`~postgkyl.gpython.array.GkylArray`. Gkeyll owns the memory and all math
-  on it (weak ops, coefficient lin-combs, integrate). ``values`` exposes a
-  read-only NumPy *view* for inspection; ``__array__`` refuses (interpolate first).
-- ``backend == "numpy"``: post-``interpolate`` (or never-modal) values as a plain
-  ``np.ndarray`` -- the field domain, where all NumPy math applies.
-
-It constructs itself by delegating to the :mod:`postgkyl.io` leaf and exposes
-only *state*. Crucially it imports **nothing upward** (no ``operations``/``render``/
-``api``). The fluent verb methods and the computing operators live on the
-:class:`postgkyl.gdata.gdata.GData` subclass, one layer up. That is what keeps
-the dependency graph a strict, cycle-free DAG -- see HIERARCHY_2.md / HIERARCHY_3.md.
+Storage (native Gkeyll or NumPy) is independent of representation (modal
+coefficients, packed DG nodes, or ordinary point values). Native arrays expose
+read-only views; point consumers validate the representation before using them.
+The fluent API and arithmetic dispatch live on the GData subclass.
 """
 
 from __future__ import annotations
 
+from copy import deepcopy
 import numbers
 import warnings
 from typing import Tuple
@@ -27,6 +17,7 @@ import numpy as np
 
 from postgkyl import io  # leaf layer (below); top-level import -- never a cycle
 from postgkyl import gpython  # foreign floor (below): GkylArray backend type
+from .layout import resolve_basis_split
 
 
 class GDataState:
@@ -46,7 +37,7 @@ class GDataState:
     self._values: np.ndarray | gpython.GkylArray | None = None
     self.ctx: dict = {}
     if ctx:
-      self.ctx.update(ctx)
+      self.ctx.update(deepcopy(ctx))
     self._tag = tag
     self._label = ""
     self._custom_label = label
@@ -92,6 +83,12 @@ class GDataState:
               "basis_type=/poly_order=/value_form=... explicitly if this "
               "is wrong.",
               stacklevel=2)
+
+      if (self.ctx.get("basis_type") in ("hybrid", "gkhybrid")
+          and not self.ctx.get("interpolated", False)):
+        cdim, vdim = resolve_basis_split(self.ctx, self.num_dims,
+                                         self.values.shape[-1])
+        self.ctx.update(num_cdim=cdim, num_vdim=vdim)
 
   # -------------------------------------------------------------- identity
   def _stamp_output_name(self) -> None:
@@ -164,7 +161,7 @@ class GDataState:
   num_cells = property(get_num_cells)
 
   def get_num_comps(self) -> int:
-    """Return the number of physical components per cell."""
+    """Return the stored component-axis size (packed slots for DG data)."""
     if self.ctx.get("num_comps"):
       return int(self.ctx["num_comps"])
     if isinstance(self._values, gpython.GkylArray):
@@ -223,7 +220,7 @@ class GDataState:
 
   @property
   def backend(self) -> str:
-    """``"gkyl"`` (native modal storage) or ``"numpy"`` (field domain)."""
+    """Array storage backend: ``"gkyl"`` or ``"numpy"``."""
     return "gkyl" if isinstance(self._values, gpython.GkylArray) else "numpy"
 
   @property
@@ -296,7 +293,7 @@ class GDataState:
     new = type(self)(tag=self._tag, label=self._custom_label, ctx=self.ctx)
     new.set_label(self._label)
     new._file_name = self._file_name
-    new.color = self.color
+    new.color = deepcopy(self.color)
     if not metadata_only and self._values is not None:
       dup = (self._values.clone() if isinstance(self._values, gpython.GkylArray)
              else np.array(self._values, copy=True))
@@ -315,17 +312,18 @@ class GDataState:
 
     Every verb funnels its computed ``(grid, values)`` through here. Because
     ``copy`` uses ``type(self)``, the result is the *same* (sub)class as the
-    input -- so ``operations`` can be typed on ``GDataState`` yet return a fluent
-    ``GData`` at runtime.
+    input -- so operations preserve the fluent dataset type. New results
+    own independent grid arrays and nested metadata.
     """
     target = self if inplace else self.clone(metadata_only=True)
-    target.push(grid, values)
+    target.push(grid if inplace else [np.array(g, copy=True) for g in grid],
+                values)
     if tag is not None:
       target.set_tag(tag)
     if label is not None:
       target._custom_label = label
     if ctx_updates:
-      target.ctx.update(ctx_updates)
+      target.ctx.update(deepcopy(ctx_updates))
     return target
 
   # ---------------------------------------------------------- operability
@@ -336,10 +334,14 @@ class GDataState:
     construction), never-modal DG data (``value_form`` is ``nodal``/
     ``quad``), or modal data already run through ``interpolate``
     (``ctx['interpolated']``)."""
-    if not self.ctx.get("basis_type"):
+    if self.ctx.get("interpolated", False):
       return True
-    return (self.ctx.get("value_form", "modal") != "modal"
-            or self.ctx.get("interpolated", False))
+    form = self.ctx.get("value_form")
+    if form in ("nodal", "quad"):
+      return True
+    if form == "modal":
+      return False
+    return not self.ctx.get("basis_type") and self.backend == "numpy"
 
   def _require_operable(self) -> None:
     """Pointwise math is allowed exactly where the data are point values:
@@ -365,17 +367,11 @@ class GDataState:
 
     This is a pure *reader* (no ``operations``), so it lives on the container; the
     computing operators (``__add__``, ``__array_ufunc__``) live on the fluent
-    subclass -- see HIERARCHY_3.md. Nodal/quad data expose their point values;
-    native *modal* data refuses: silently handing out DG coefficients as if
+    subclass. Nodal/quad data expose their point values; modal coefficients
+    refuse regardless of storage: handing them out as if
     they were point values is a correctness trap."""
-    if isinstance(self._values, gpython.GkylArray):
-      if self.ctx.get("value_form", "modal") != "modal":
-        return np.asarray(self.get_values(), dtype=dtype)
-      raise ValueError(
-          "This dataset holds modal DG coefficients in native Gkeyll storage; "
-          ".represent(to='nodal')/.represent(to='quad') for point values, "
-          "or .interpolate() for NumPy.")
-    return np.asarray(self._values, dtype=dtype)
+    self._require_operable()
+    return np.asarray(self.get_values(), dtype=dtype)
 
   # -------------------------------------------------------------- reporting
   def info(self,
@@ -391,9 +387,9 @@ class GDataState:
     if not no_header:
       lbl = self.get_label()
       out += f"{lbl}{' ' if lbl else ''}({self.get_tag()}#{index})\n"
-    if "time" in self.ctx:
+    if self.ctx.get("time") is not None:
       out += f"├─ Time: {self.ctx['time']:e}\n"
-    if "frame" in self.ctx:
+    if self.ctx.get("frame") is not None:
       out += f"├─ Frame: {self.ctx['frame']:d}\n"
     if self.ctx.get("block") is not None:
       out += f"├─ Block: {self.ctx['block']:d} (sim '{self.ctx.get('sim', '')}')\n"

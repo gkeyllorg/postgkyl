@@ -92,7 +92,7 @@ def test_select_keeps_native_point_values_in_the_native_backend():
   assert selected.backend == "gkyl"
   assert selected.ctx["value_form"] == "nodal"
   np.testing.assert_array_equal(selected.ctx["cells"], [24])
-  assert selected.native.ncomp == 1
+  assert selected.native.ncomp == 2
 
 
 # ========================================================== operations.arithmetic
@@ -274,7 +274,7 @@ def test_interpolate_requires_poly_order_when_none_given():
   d = pg.GData()
   d.ctx["basis_type"] = "serendipity"
   d.push([np.linspace(0.0, 1.0, 4)], np.zeros((3, 2)))
-  with pytest.raises(ValueError, match="no 'poly_order' metadata"):
+  with pytest.raises(ValueError, match="no basis_type/poly_order metadata"):
     d.interpolate()
 
 
@@ -507,13 +507,13 @@ def test_integrate_point_default_is_a_full_terminal_integral():
 
 @needs_gkeyll
 def test_integrate_partial_on_native_nodal_representation():
-  # A gkyl-native nodal/quad dataset materializes to its true point grid
-  # before integrating -- same bridge ``plot`` uses (Doctrine V: one home).
+  # The exact cell-local nodal inverse preserves discontinuities; reducing
+  # its modal polynomial returns a native lower-dimensional polynomial.
   nodal = pg.load(F3).represent(to="nodal")
   r = nodal.integrate(2)
-  assert r.backend == "numpy"
+  assert r.backend == "gkyl"
   assert r.num_dims == 2
-  assert r.ctx.get("value_form") is None  # stale tag cleared, not "nodal"
+  assert r.ctx["value_form"] == "modal"
 
 
 def test_integrate_partial_tag_and_label():

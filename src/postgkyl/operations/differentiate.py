@@ -15,17 +15,16 @@ for every direction/component request that touches it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
 from postgkyl import dg
+from postgkyl.gdatastate.layout import dg_layout, require_kernel_basis
 from postgkyl.numerics import curvilinear
+from postgkyl.numerics.grid_centering import sample_coordinates
 
 from ._curvilinear import block_for_axis, curvilinear_blocks
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def differentiate(data: "GDataState",
@@ -44,10 +43,10 @@ def differentiate(data: "GDataState",
   stacks the results in the component axis (``num_comps`` becomes
   ``num_comps * num_dims``, grouped ``[d0_comp0..d0_compN, d1_comp0.., ...]``).
   With an explicit ``direction``, differentiates along that one axis only
-  (``num_comps`` unchanged). A separable axis requires a nodal (edge) grid
-  one entry longer than the value count along that axis; a mismatched axis
-  silently returns a wrong result -- a caveat inherited unchanged from the
-  legacy tool. A curvilinear axis (part of a joint ``.map(space="conf")``
+  (``num_comps`` unchanged). A separable axis accepts point coordinates
+  matching the value count, or cell edges with one additional entry; only
+  cell edges are centered before differentiating. A curvilinear axis
+  (part of a joint ``.map(space="conf")``
   block) has no such per-axis length convention of its own; its block's
   grid arrays carry it instead.
 
@@ -63,8 +62,15 @@ def differentiate(data: "GDataState",
     A dataset of the gradient, on ``data``'s (unchanged) grid.
 
   Raises:
-    ValueError: if native data is non-modal or lacks uniform cell edges.
+    ValueError: if packed DG data is non-modal, a direction is invalid,
+      or native modal data lacks uniform cell edges.
   """
+  if direction is not None and not 0 <= int(direction) < data.num_dims:
+    raise ValueError(f"differentiate direction {direction} out of range")
+  layout = dg_layout(data)
+  if layout is not None and layout.value_form != "modal":
+    raise ValueError("differentiate needs modal coefficients for cell-local "
+                     "DG data; call .represent(to='modal') first.")
   if data.backend == "gkyl":
     out = _differentiate_modal(data, direction)
     return data._result(data.grid, out, inplace=inplace, tag=tag, label=label)
@@ -80,7 +86,7 @@ def differentiate(data: "GDataState",
   def grad_along(d: int) -> np.ndarray:
     info = block_for_axis(blocks, d)
     if info is None:
-      zc = 0.5 * (grid[d][1:] + grid[d][:-1])  # cell centered values
+      zc = sample_coordinates(grid[d], values.shape[d])
       return np.gradient(values, zc, edge_order=2, axis=d)
     off, dims = info
     if off not in block_grad_cache:
@@ -109,6 +115,7 @@ def _differentiate_modal(data: "GDataState", direction: int | None):
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError("differentiate needs basis_type/poly_order metadata")
+  require_kernel_basis(data)
   directions = range(data.num_dims) if direction is None else [int(direction)]
   results = []
   for d in directions:

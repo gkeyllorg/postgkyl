@@ -5,6 +5,25 @@ from __future__ import annotations
 import numpy as np
 
 
+def sample_coordinates(coord: np.ndarray, count: int) -> np.ndarray:
+  """Locate ``count`` samples on a separable point or cell-edge axis.
+
+  Coordinates matching the sample count are already point locations. One
+  extra coordinate denotes cell edges, whose samples live at the midpoints.
+  No domain extent is inferred beyond the supplied coordinates.
+  """
+  coord = np.asarray(coord)
+  if coord.ndim != 1:
+    raise ValueError("sample coordinates require a one-dimensional axis")
+  if len(coord) == count:
+    return coord
+  if len(coord) == count + 1:
+    return 0.5 * (coord[:-1] + coord[1:])
+  raise ValueError(
+      f"coordinate count {len(coord)} must match {count} samples or "
+      f"{count + 1} cell edges")
+
+
 def nodal_to_cell_centered_grid(grid: list[np.ndarray],
                                 cells: np.ndarray,
                                 meshgrid: bool = False) -> list[np.ndarray]:
@@ -29,12 +48,7 @@ def nodal_to_cell_centered_grid(grid: list[np.ndarray],
     raise ValueError("Number dimensions for 'grid' and 'values' doesn't match")
   for d in range(num_dims):
     if len(grid[d].shape) == 1:
-      if grid[d].shape[0] == cells[d]:
-        grid_out.append(grid[d])
-      elif grid[d].shape[0] == cells[d] + 1:
-        grid_out.append(0.5 * (grid[d][:-1] + grid[d][1:]))
-      else:
-        raise ValueError("Something is terribly wrong...")
+      grid_out.append(sample_coordinates(grid[d], cells[d]))
     else:
       if grid[d].shape[d] == cells[d]:
         grid_out.append(grid[d])

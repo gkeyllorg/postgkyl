@@ -1,13 +1,11 @@
-"""The ``interpolate`` verb -- DG coefficients -> values on a uniform mesh."""
+"""Evaluate DG fields on a refined mesh within their original cell edges."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from postgkyl import dg
+from postgkyl.gdatastate.layout import require_dg_layout
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def interpolate(data: "GDataState",
@@ -16,7 +14,7 @@ def interpolate(data: "GDataState",
                 inplace: bool = False,
                 tag: str | None = None,
                 label: str | None = None):
-  """Interpolate DG (modal/nodal) data onto a uniform evaluation mesh.
+  """Interpolate DG (modal/nodal) data at uniformly spaced points in each cell.
 
   Basis, polynomial order, and value_form are properties of ``data`` itself,
   fixed at load time (``pg.load(..., basis_type=..., poly_order=...,
@@ -31,29 +29,20 @@ def interpolate(data: "GDataState",
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
   """
-  basis_type = data.ctx.get("basis_type")
-  if not basis_type:
+  if not data.ctx.get("basis_type"):
     raise ValueError(
-        "dataset has no 'basis_type' metadata; set it at load time "
-        "(pg.load(..., basis_type=...) or the CLI's -b/--basis).")
-
-  poly_order = data.ctx.get("poly_order")
-  if poly_order is None:
-    raise ValueError(
-        "dataset has no 'poly_order' metadata; set it at load time "
-        "(pg.load(..., poly_order=...) or the CLI's -p/--poly_order).")
-
-  value_form = data.ctx.get("value_form", "modal")
-  if data.backend == "gkyl" and value_form != "modal":
-    raise ValueError(f"interpolate expects the modal value_form, not "
-                     f"'{value_form}'; call .represent(to='modal') first.")
+        "dataset has no 'basis_type' metadata; set it at load time")
+  layout = require_dg_layout(data)
+  if layout.value_form == "quad":
+    raise ValueError("quadrature input requires .represent(to='modal') first")
 
   grid, values = dg.interpolate(data.values,
                                 data.grid,
-                                poly_order=poly_order,
-                                basis_type=basis_type,
-                                nodal=(value_form == "nodal"),
-                                num_interp=num_interp)
+                                poly_order=layout.poly_order,
+                                basis_type=layout.basis_type,
+                                nodal=(layout.value_form == "nodal"),
+                                num_interp=num_interp,
+                                **layout.basis_kwargs)
   return data._result(grid,
                       values,
                       inplace=inplace,

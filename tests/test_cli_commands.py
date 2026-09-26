@@ -99,6 +99,19 @@ def test_print_grid_axes(flag):
   assert _ok(DISTF, "print", flag).output == expected
 
 
+@pytest.mark.parametrize("tag_option", ["-t", "--tag"])
+def test_boolean_normalization_respects_later_commands(tag_option):
+  field = DATA / "generated" / "1d_ms_p1.gkyl"
+  result = _ok(field, "interpolate", "plot", "--no_show", "load", "--file_name",
+               field, tag_option, "other", "info")
+  assert "other" in result.output
+
+
+def test_boolean_spelling_inside_a_string_option_is_not_normalized():
+  result = _ok(ENERGY, "--tag", "--grid", "print")
+  assert result.output == _ok(ENERGY, "print").output
+
+
 def test_print_tag_selection_and_explicit_false():
   result = _ok(ENERGY, "--tag", "energy", DISTF, "--tag", "distribution",
                "print", "--use", "energy", "--grid", "False")

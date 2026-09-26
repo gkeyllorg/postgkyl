@@ -1,23 +1,11 @@
-"""Discontinuous-Galerkin interpolation -- modal coefficients -> mesh values.
+"""Evaluate cell-local DG polynomials at physical mesh locations.
 
-**This is the one-way bridge between the two domains**: DG coefficients in
-(read through the container's NumPy view of the native array), plain NumPy
-values out. The interpolation matrix is built from Gkeyll's own basis
-functions (:mod:`postgkyl.gpython.basis` calls the ``eval`` pointer carried by
-``struct gkyl_basis``), then applied per cell with a NumPy ``tensordot`` --
-so the result is always a *new, by-value* NumPy array, never a view of C
-memory. The vendored sympy matrix tables this replaced lived in
-``matrices.py`` (see ``src_bak`` history).
+Gkeyll basis matrices act on each complete field block. Nodal inputs first
+use their exact inverse basis transform. Both paths return independent NumPy
+values, preserving each original cell's physical edges.
 
-:func:`local_poly` is the same bridge with a different evaluation-point
-convention: points span the whole reference cell ``[-1, 1]`` (endpoints
-included) instead of interior subcell centers, and a NaN is spliced in at
-every cell interface -- so a plot shows the true DG inter-cell discontinuity
-instead of the spuriously smooth curve :func:`interpolate` produces. The
-hand-derived per-order polynomial tables the old implementation used
-(``modalDG/kernels/expand_*d.py``, serendipity only) are superseded by
-:func:`postgkyl.gpython.basis.eval_matrix`, which evaluates *any* basis at
-arbitrary points through Gkeyll's own compiled basis-eval.
+``interpolate`` samples interior subcell centers. ``local_poly`` includes cell
+endpoints and inserts NaN separators so plots preserve discontinuous traces.
 """
 
 from __future__ import annotations
@@ -27,15 +15,28 @@ import numpy as np
 from postgkyl.gpython import basis as gpython_basis
 
 
-def num_basis(dim: int, poly_order: int, basis_type: str) -> int:
+def num_basis(dim: int, poly_order: int, basis_type: str,
+              **basis_kwargs) -> int:
   """Number of DG basis functions, straight from Gkeyll's basis object."""
-  return gpython_basis.num_basis(basis_type, dim, poly_order)
+  return gpython_basis.num_basis(basis_type, dim, poly_order, **basis_kwargs)
+
+
+def _validate_coefficients(values, grid, block_size):
+  if values.shape[-1] == 0 or values.shape[-1] % block_size:
+    raise ValueError(f"component count {values.shape[-1]} must contain "
+                     f"complete field blocks of {block_size}")
+  if len(grid) != values.ndim - 1 or any(
+      np.ndim(g) != 1 or len(g) != values.shape[d] + 1
+      for d, g in enumerate(grid)):
+    raise ValueError(
+        "DG interpolation requires one cell-edge grid per dimension")
 
 
 def _make_mesh(num_interp: int, edges: np.ndarray) -> np.ndarray:
-  """Refine a 1-D nodal mesh by ``num_interp`` points per cell (uniform)."""
-  nx = edges.shape[0] - 1
-  return np.linspace(edges[0], edges[-1], num_interp * nx + 1)
+  """Subdivide each physical cell into ``num_interp`` uniform subcells."""
+  fractions = np.arange(num_interp) / num_interp
+  subedges = edges[:-1, None] + np.diff(edges)[:, None] * fractions
+  return np.r_[subedges.ravel(), edges[-1]]
 
 
 def _interpolate_on_mesh(c_mat: np.ndarray, q_in: np.ndarray,
@@ -63,8 +64,10 @@ def interpolate(values: np.ndarray,
                 poly_order: int,
                 basis_type: str,
                 nodal: bool = False,
-                num_interp: int | None = None):
-  """Interpolate DG coefficients onto a refined uniform mesh.
+                num_interp: int | None = None,
+                cdim: int | None = None,
+                vdim: int | None = None):
+  """Interpolate DG coefficients onto a refined cell-edge mesh.
 
   Args:
     values: ``(cells..., total_comps)`` array of DG coefficients.
@@ -81,18 +84,22 @@ def interpolate(values: np.ndarray,
     ``(refined_cells..., num_fields)`` NumPy value array.
   """
   num_dims = len(grid)
+  split = {"cdim": cdim, "vdim": vdim}
   if num_dims == 1 and basis_type == "hybrid":
     basis_type = "serendipity"  # PKPM hybrid degenerates to serendipity in 1D
   if num_interp is None:
     num_interp = poly_order + 1
 
-  nodes = num_basis(num_dims, poly_order, basis_type)
+  if not isinstance(num_interp, (int, np.integer)) or num_interp < 1:
+    raise ValueError("num_interp must be a positive integer")
+  nodes = num_basis(num_dims, poly_order, basis_type, **split)
+  _validate_coefficients(values, grid, nodes)
   num_fields = values.shape[-1] // nodes
   c_mat = gpython_basis.interpolation_matrix(basis_type, num_dims, poly_order,
-                                             num_interp)
+                                             num_interp, **split)
 
-  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order)
-         if nodal else None)
+  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order,
+                                             **split) if nodal else None)
   out = None
   for c in range(num_fields):
     q = values[..., c * nodes:(c + 1) * nodes]
@@ -108,9 +115,8 @@ def interpolate(values: np.ndarray,
 
 def _cell_edges_to_nodes(edges: np.ndarray, nodes_1d: np.ndarray) -> np.ndarray:
   """Physical coordinates of ``nodes_1d`` (in ``[-1, 1]``) within every cell
-  of a 1-D ``edges`` array, flattened cell-major. Works for a non-uniform
-  grid: each cell is scaled/shifted from its own actual width, not assumed
-  uniform across the domain (unlike :func:`_make_mesh`)."""
+  of a 1-D ``edges`` array, flattened cell-major. Each cell is scaled and
+  shifted using its own width, including on nonuniform grids."""
   cell_center = 0.5 * (edges[:-1] + edges[1:])
   dx = edges[1:] - edges[:-1]
   return (cell_center[:, np.newaxis] +
@@ -123,7 +129,9 @@ def local_poly(values: np.ndarray,
                poly_order: int,
                basis_type: str,
                nodal: bool = False,
-               npoints: int = 2):
+               npoints: int = 2,
+               cdim: int | None = None,
+               vdim: int | None = None):
   """Evaluate the DG polynomial cell-by-cell onto a discontinuity-preserving
   plotting mesh.
 
@@ -149,20 +157,24 @@ def local_poly(values: np.ndarray,
     x ``num_cells`` mesh.
   """
   num_dims = len(grid)
+  split = {"cdim": cdim, "vdim": vdim}
   if num_dims == 1 and basis_type == "hybrid":
     basis_type = "serendipity"  # PKPM hybrid degenerates to serendipity in 1D
 
+  if not isinstance(npoints, (int, np.integer)) or npoints < 2:
+    raise ValueError("npoints must be an integer >= 2")
   nodes_1d = np.linspace(-1.0, 1.0, npoints)
   num_nodes = len(nodes_1d)
 
-  nb = num_basis(num_dims, poly_order, basis_type)
+  nb = num_basis(num_dims, poly_order, basis_type, **split)
+  _validate_coefficients(values, grid, nb)
   num_fields = values.shape[-1] // nb
   c_mat = gpython_basis.eval_matrix(
       basis_type, num_dims, poly_order,
-      gpython_basis.tensor_points(nodes_1d, num_dims))
+      gpython_basis.tensor_points(nodes_1d, num_dims), **split)
 
-  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order)
-         if nodal else None)
+  n2m = (gpython_basis.nodal_to_modal_matrix(basis_type, num_dims, poly_order,
+                                             **split) if nodal else None)
   out = None
   for c in range(num_fields):
     q = values[..., c * nb:(c + 1) * nb]

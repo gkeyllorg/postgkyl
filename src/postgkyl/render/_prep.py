@@ -33,6 +33,15 @@ def materialize_plot_data(data: "GDataState") -> "GDataState":
   return materialize_point_values(data)
 
 
+def default_value_label(data: "GDataState", label: str | None) -> str:
+  """Make coefficient plots explicit while respecting a supplied value label."""
+  if label:
+    return label
+  if data.ctx.get("basis_type") and not data.is_interpolated:
+    return "DG coefficient"
+  return ""
+
+
 def remaining_axes(cells) -> tuple[int, ...]:
   """Coordinate indices that remain after collapsing singleton axes."""
   return tuple(d for d, size in enumerate(cells) if size > 1)
@@ -188,6 +197,9 @@ def prep_plot_data(data: "GDataState",
   """
   grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
   num_dims = len(grid)
+  clabel = default_value_label(data, clabel)
+  if num_dims <= 1 and ylabel is None:
+    ylabel = default_value_label(data, ylabel)
   xlabel, ylabel, _zlabel, clabel = resolve_axis_labels(xlabel=xlabel,
                                                         ylabel=ylabel,
                                                         zlabel="",

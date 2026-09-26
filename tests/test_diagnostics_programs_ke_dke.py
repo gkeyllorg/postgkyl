@@ -1,145 +1,122 @@
-"""Tests for ``postgkyl.diagnostics.mom.ke_dke``.
+"""Energy conservation references for actual 2D/3D fluid frame files."""
 
-Ported from ``src_bak/postgkyl/tools/calc_ke_dke.py`` (no ``tests_bak``
-corpus exists for this tool). See the module docstring for the three
-``src_bak`` bugs this port fixes (a file-name f-string missing its own
-parameter, an array-aliasing bug, and an off-by-one difference-loop bound)
--- the tests here pin the *fixed* behavior: an exact analytic kinetic-energy
-value per frame, and a dissipation rate covering every consecutive frame
-pair.
-
-Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_ke_dke.py -v
-"""
-
-from __future__ import annotations
+from dataclasses import FrozenInstanceError
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+import postgkyl as pg
+from postgkyl import gpython
 from postgkyl.diagnostics.mom import ke_dke as kd
 
-
-class _FakeGData:
-
-  def __init__(self, grid, values):
-    self.grid = grid
-    self.values = values
+GEN = Path(__file__).parent / "test_data" / "generated"
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 
-class TestKineticEnergyAnalytic:
-
-  def test_uniform_velocity_matches_hand_derivation(self):
-    n = 4
-    rho = np.full((n, n, n), 2.0)
-    u = np.full((n, n, n), 1.0)
-    v = np.full((n, n, n), 2.0)
-    w = np.full((n, n, n), 3.0)
-    px, py, pz = u * rho, v * rho, w * rho
-    dx = dy = dz = 0.5
-    vol = 10.0
-    ke = kd._kinetic_energy(rho, px, py, pz, dx, dy, dz, vol)
-    # e = rho*(u^2+v^2+w^2) = 2*(1+4+9) = 28 per cell, n^3 = 64 cells.
-    expected = 28.0 * (n**3) * dx * dy * dz * vol
-    np.testing.assert_allclose(ke, expected)
-
-  def test_zero_velocity_gives_zero_energy(self):
-    n = 3
-    rho = np.full((n, n, n), 5.0)
-    zero = np.zeros((n, n, n))
-    ke = kd._kinetic_energy(rho, zero, zero, zero, 1.0, 1.0, 1.0, 1.0)
-    np.testing.assert_allclose(ke, 0.0)
-
-
-class TestDissipationRatePure:
-
-  def test_backward_difference_every_pair(self):
-    ke = np.array([1.0, 3.0, 6.0, 10.0])
-    dke = kd._dissipation_rate(ke, dt=0.5)
-    expected = -(ke[1:] - ke[:-1]) / 0.5
-    np.testing.assert_allclose(dke, expected)
-    assert dke.shape[0] == ke.shape[0] - 1
-
-  def test_constant_ke_gives_zero_dissipation(self):
-    ke = np.full(5, 3.0)
-    dke = kd._dissipation_rate(ke, dt=1.0)
-    np.testing.assert_allclose(dke, 0.0)
+@needs_gkeyll
+@pytest.mark.parametrize("ndim", [2, 3])
+@pytest.mark.parametrize("timing, slopes", [
+    ("uniform", [-15.0, -25.0]),
+    ("irregular", [-15.0, -25.0 / 3.0]),
+    ("untimed", [-15.0, -25.0]),
+])
+def test_real_frames_use_physical_energy_and_timestamps(ndim, timing, slopes):
+  # rho=1, u=(1,0,0), (2,0,0), (3,0,0) on a unit domain. Their
+  # energies are independently 1/2, 2, 9/2. Frame timestamps take precedence
+  # over legacy endpoints; only untimed files need those endpoints.
+  fallback_end = 0.2 if timing == "untimed" else 99.0
+  out = kd.ke_dke(str(GEN / f"moments_{ndim}d_{timing}_"),
+                  0,
+                  2,
+                  dim=ndim,
+                  vol=1.0,
+                  init_time=0.0,
+                  final_time=fallback_end)
+  np.testing.assert_allclose(out.ke, [0.5, 2.0, 4.5], rtol=2e-14, atol=2e-14)
+  np.testing.assert_allclose(out.dke, slopes, rtol=2e-14, atol=2e-13)
 
 
-class TestKeDkeSweep:
+@needs_gkeyll
+@pytest.mark.parametrize("ndim, energy", [(2, 4.0 / 3.0), (3, 13.0 / 6.0)])
+def test_nonconstant_momentum_has_exact_integrated_energy(ndim, energy):
+  # rho=2 and u=(y+z,-x,2*x-y), with z=0 in 2D. Integrating
+  # 1/2*rho*|u|² on the unit domain gives 4/3 (2D) and 13/6 (3D).
+  out = kd.ke_dke(str(GEN / f"moments_{ndim}d_affine_"),
+                  0,
+                  0,
+                  dim=ndim,
+                  vol=2.5,
+                  init_time=0.0,
+                  final_time=0.0)
+  np.testing.assert_allclose(out.ke, [2.5 * energy], rtol=2e-14, atol=2e-14)
+  assert out.dke.shape == (0, )
 
-  def _uniform_frame(self, n=3, value=1.0):
-    edges = np.arange(n + 1, dtype=np.float64)
-    rho = np.full((n, n, n), value)
-    values = np.stack([rho, rho, rho, rho], axis=-1)
-    return _FakeGData([edges, edges, edges], values)
 
-  def test_sweeps_expected_frame_count_and_dke_length(self, monkeypatch):
-    calls = []
+@pytest.mark.parametrize("ndim", [2, 3])
+def test_point_cell_values_use_true_dimensions_and_all_velocity_components(
+    ndim, monkeypatch):
+  grid = [np.linspace(0, 1, n + 1) for n in [2, 3, 4][:ndim]]
+  cells = tuple(len(edges) - 1 for edges in grid)
+  loaded = []
 
-    def fake_gdata(file_name):
-      calls.append(file_name)
-      return self._uniform_frame()
+  def load(name):
+    loaded.append(name)
+    frame = int(Path(name).stem.rsplit("_", 1)[1])
+    # rho=2, u=(a, 2a, -a); KE=6a² on a unit domain.
+    a = frame - 3
+    values = np.broadcast_to([2, 2 * a, 4 * a, -2 * a], (*cells, 4)).copy()
+    data = pg.GData(ctx={"time": (frame - 4) * 0.1})
+    data.push(grid, values)
+    return data
 
-    monkeypatch.setattr(kd, "GData", fake_gdata)
+  monkeypatch.setattr(kd, "GData", load)
+  out = kd.ke_dke("physical-fluid_",
+                  4,
+                  6,
+                  dim=ndim,
+                  vol=1,
+                  init_time=0,
+                  final_time=100,
+                  extension="dat")
+  assert loaded == [f"physical-fluid_{i}.dat" for i in (4, 5, 6)]
+  np.testing.assert_allclose(out.ke, [6, 24, 54], rtol=0, atol=2e-13)
+  np.testing.assert_allclose(out.dke, [-180, -300], rtol=0, atol=3e-12)
 
-    out = kd.ke_dke("sim-fluid_",
-                    0,
-                    3,
-                    dim=3,
-                    vol=1.0,
-                    init_time=0.0,
-                    final_time=3.0)
-    # First frame read twice (once for grid spacing, once in the sweep).
-    assert calls == [
-        "sim-fluid_0.gkyl", "sim-fluid_0.gkyl", "sim-fluid_1.gkyl",
-        "sim-fluid_2.gkyl", "sim-fluid_3.gkyl"
-    ]
-    assert out.ke.shape == (4, )
-    assert out.dke.shape == (3, )
-    # u=v=w=1 (rho=1, px=py=pz=1/rho=... wait: px=py=pz=rho=1 -> u=v=w=1)
-    # constant across every frame -> dke is exactly zero, not just close.
-    np.testing.assert_allclose(out.dke, 0.0)
 
-  def test_dim_2_uses_unit_z_spacing(self, monkeypatch):
+@pytest.mark.parametrize("times", [[0, 0, 1], [0, -1, 1], [0, np.nan, 1]])
+def test_invalid_timestamp_intervals_are_rejected(times):
+  with pytest.raises(ValueError, match="timestamps"):
+    kd._dissipation_rate(np.array([0.5, 2, 4.5]), times)
 
-    def fake_gdata(file_name):
-      return self._uniform_frame(n=2)
 
-    monkeypatch.setattr(kd, "GData", fake_gdata)
-    out = kd.ke_dke("sim-fluid_",
-                    0,
-                    1,
-                    dim=2,
-                    vol=1.0,
-                    init_time=0.0,
-                    final_time=1.0)
-    assert out.ke.shape == (2, )
-
-  def test_uses_own_root_file_name_not_a_literal_string(self, monkeypatch):
-    """Regression test for the src_bak bug where the per-frame file name was
-    built as f"root_file_name{c:d}.gkyl" -- a literal string containing the
-    parameter's *name* -- instead of interpolating its value."""
-    calls = []
-
-    def fake_gdata(file_name):
-      calls.append(file_name)
-      return self._uniform_frame()
-
-    monkeypatch.setattr(kd, "GData", fake_gdata)
-    kd.ke_dke("distinctive_stem_",
+@needs_gkeyll
+def test_dimension_mismatch_is_explicit():
+  with pytest.raises(ValueError, match="has 2 dimensions, expected 3"):
+    kd.ke_dke(str(GEN / "moments_2d_uniform_"),
               0,
-              1,
+              0,
               dim=3,
-              vol=1.0,
-              init_time=0.0,
-              final_time=1.0)
-    assert all(c.startswith("distinctive_stem_") for c in calls)
-    assert not any("root_file_name" in c for c in calls)
+              vol=1,
+              init_time=0,
+              final_time=0)
 
 
-class TestKineticEnergyTracesIsFrozen:
+@needs_gkeyll
+def test_mixed_missing_and_present_timestamps_are_rejected(monkeypatch):
 
-  def test_fields_present(self):
-    t = kd.KineticEnergyTraces(ke=np.array([1.0]), dke=np.array([]))
-    with pytest.raises(Exception):
-      t.ke = np.array([2.0])
+  def load(name):
+    frame = int(Path(name).stem.rsplit("_", 1)[1])
+    timing = "untimed" if frame == 1 else "uniform"
+    return pg.load(str(GEN / f"moments_2d_{timing}_{frame}.gkyl"))
+
+  monkeypatch.setattr(kd, "GData", load)
+  with pytest.raises(ValueError, match="every frame or none"):
+    kd.ke_dke("fluid_", 0, 2, dim=2, vol=1, init_time=0, final_time=1)
+
+
+def test_traces_are_frozen():
+  traces = kd.KineticEnergyTraces(ke=np.array([1.0]), dke=np.array([]))
+  with pytest.raises(FrozenInstanceError):
+    traces.ke = np.array([2.0])

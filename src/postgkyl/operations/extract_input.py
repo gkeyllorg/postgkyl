@@ -13,10 +13,8 @@ otherwise, exactly as the legacy code did when no input file was embedded.
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def extract_input(data: "GDataState") -> str:

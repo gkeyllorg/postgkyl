@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Annotated
+from postgkyl.cli_spec import CliType
 
 import numpy as np
 
 from postgkyl import dg
+from postgkyl.gdatastate.layout import dg_layout
 from postgkyl.numerics import idx_parser
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int,
@@ -51,13 +52,20 @@ def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int,
 
 def select(data: "GDataState",
            *,
-           comp=None,
-           z0=None,
-           z1=None,
-           z2=None,
-           z3=None,
-           z4=None,
-           z5=None,
+           comp: Annotated[int | float | str | None,
+                           CliType(str | None)] = None,
+           z0: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
+           z1: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
+           z2: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
+           z3: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
+           z4: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
+           z5: Annotated[int | float | str | None,
+                         CliType(str | None)] = None,
            inplace: bool = False,
            tag: str | None = None,
            label: str | None = None):
@@ -179,12 +187,9 @@ def select(data: "GDataState",
     values_idx[d] = v_idx
 
   if comp is not None:
-    modal = (data.ctx.get("basis_type")
-             and data.ctx.get("value_form", "modal") == "modal"
-             and not data.ctx.get("interpolated", False))
-    if modal:
-      nb = dg.num_basis(data.num_dims, data.ctx["poly_order"],
-                        data.ctx["basis_type"])
+    layout = dg_layout(data)
+    if layout is not None:
+      nb = layout.block_size
       fields = np.arange(values.shape[-1] // nb)
       selector = idx_parser(comp, fields, nodal=True)
       if isinstance(selector, tuple):

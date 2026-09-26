@@ -36,45 +36,89 @@ def _apply_per_field(arr: GkylArray, comps_in: int,
   return GkylArray.from_numpy(out)
 
 
-def modal_to_nodal(basis_type: str, ndim: int, poly_order: int,
-                   arr: GkylArray) -> GkylArray:
+def modal_to_nodal(basis_type: str,
+                   ndim: int,
+                   poly_order: int,
+                   arr: GkylArray,
+                   *,
+                   cdim: int | None = None,
+                   vdim: int | None = None) -> GkylArray:
   """Coefficients -> values at the basis ``node_list`` points (exact)."""
-  nb = gpython_basis.num_basis(basis_type, ndim, poly_order)
+  nb = gpython_basis.num_basis(basis_type,
+                               ndim,
+                               poly_order,
+                               cdim=cdim,
+                               vdim=vdim)
   return _apply_per_field(
-      arr, nb, gpython_basis.modal_to_nodal_matrix(basis_type, ndim,
-                                                   poly_order))
+      arr, nb,
+      gpython_basis.modal_to_nodal_matrix(basis_type,
+                                          ndim,
+                                          poly_order,
+                                          cdim=cdim,
+                                          vdim=vdim))
 
 
-def nodal_to_modal(basis_type: str, ndim: int, poly_order: int,
-                   arr: GkylArray) -> GkylArray:
+def nodal_to_modal(basis_type: str,
+                   ndim: int,
+                   poly_order: int,
+                   arr: GkylArray,
+                   *,
+                   cdim: int | None = None,
+                   vdim: int | None = None) -> GkylArray:
   """Values at the basis nodes -> coefficients (exact inverse)."""
-  nb = gpython_basis.num_basis(basis_type, ndim, poly_order)
+  nb = gpython_basis.num_basis(basis_type,
+                               ndim,
+                               poly_order,
+                               cdim=cdim,
+                               vdim=vdim)
   return _apply_per_field(
-      arr, nb, gpython_basis.nodal_to_modal_matrix(basis_type, ndim,
-                                                   poly_order))
+      arr, nb,
+      gpython_basis.nodal_to_modal_matrix(basis_type,
+                                          ndim,
+                                          poly_order,
+                                          cdim=cdim,
+                                          vdim=vdim))
 
 
 def modal_to_quad(basis_type: str,
                   ndim: int,
                   poly_order: int,
                   arr: GkylArray,
-                  num_quad: int | None = None) -> GkylArray:
+                  num_quad: int | None = None,
+                  *,
+                  cdim: int | None = None,
+                  vdim: int | None = None) -> GkylArray:
   """Coefficients -> Gkeyll quadrature values (or an explicit Gauss rule)."""
-  nb = gpython_basis.num_basis(basis_type, ndim, poly_order)
+  nb = gpython_basis.num_basis(basis_type,
+                               ndim,
+                               poly_order,
+                               cdim=cdim,
+                               vdim=vdim)
   return _apply_per_field(
       arr, nb,
-      gpython_basis.modal_to_quad_matrix(basis_type, ndim, poly_order,
-                                         num_quad))
+      gpython_basis.modal_to_quad_matrix(basis_type,
+                                         ndim,
+                                         poly_order,
+                                         num_quad,
+                                         cdim=cdim,
+                                         vdim=vdim))
 
 
 def quad_to_modal(basis_type: str,
                   ndim: int,
                   poly_order: int,
                   arr: GkylArray,
-                  num_quad: int | None = None) -> GkylArray:
+                  num_quad: int | None = None,
+                  *,
+                  cdim: int | None = None,
+                  vdim: int | None = None) -> GkylArray:
   """Quadrature values -> coefficients using the matching transform."""
-  mat = gpython_basis.quad_to_modal_matrix(basis_type, ndim, poly_order,
-                                           num_quad)
+  mat = gpython_basis.quad_to_modal_matrix(basis_type,
+                                           ndim,
+                                           poly_order,
+                                           num_quad,
+                                           cdim=cdim,
+                                           vdim=vdim)
   return _apply_per_field(arr, mat.shape[1], mat)
 
 
@@ -87,8 +131,14 @@ def wrap(values: np.ndarray) -> GkylArray:
   return GkylArray.from_numpy(values)
 
 
-def _tensor_point_layout(basis_type: str, ndim: int, poly_order: int, rep: str,
-                         num_quad: int | None):
+def _tensor_point_layout(basis_type: str,
+                         ndim: int,
+                         poly_order: int,
+                         rep: str,
+                         num_quad: int | None,
+                         *,
+                         cdim: int | None = None,
+                         vdim: int | None = None):
   """Per-dimension reference points + permutation into Fortran tensor order.
 
   Returns ``(pts_1d_per_dim, perm)`` where ``values[..., perm]`` reorders a
@@ -99,9 +149,10 @@ def _tensor_point_layout(basis_type: str, ndim: int, poly_order: int, rep: str,
   if rep == "quad" and num_quad is not None:
     pts_1d, _ = np.polynomial.legendre.leggauss(num_quad)
     return [pts_1d] * ndim, None
-  coords = (gpython_basis.quad_node_coords(basis_type, ndim, poly_order)
+  coords = (gpython_basis.quad_node_coords(
+      basis_type, ndim, poly_order, cdim=cdim, vdim=vdim)
             if rep == "quad" else gpython_basis.node_coords(
-                basis_type, ndim, poly_order))
+                basis_type, ndim, poly_order, cdim=cdim, vdim=vdim))
   nb = coords.shape[0]
   # Native coordinate transforms introduce roundoff. Group coordinates by
   # distance, since decimal rounding can split a node across a bin boundary.
@@ -137,7 +188,10 @@ def materialize(basis_type: str,
                 arr: GkylArray,
                 grid: list,
                 rep: str,
-                num_quad: int | None = None):
+                num_quad: int | None = None,
+                *,
+                cdim: int | None = None,
+                vdim: int | None = None):
   """Point-value data -> ``(point coordinate grid, ndarray)`` at the TRUE
   physical point locations -- the render path for nodal/quad datasets.
 
@@ -145,16 +199,22 @@ def materialize(basis_type: str,
   this performs no basis math at all: the values *are* the field at their
   points; only coordinates and ordering are computed.
   """
-  pts_1d, perm = _tensor_point_layout(basis_type, ndim, poly_order, rep,
-                                      num_quad)
+  pts_1d, perm = _tensor_point_layout(basis_type,
+                                      ndim,
+                                      poly_order,
+                                      rep,
+                                      num_quad,
+                                      cdim=cdim,
+                                      vdim=vdim)
   counts = [len(p) for p in pts_1d]
   npc = int(np.prod(counts))
-  if arr.ncomp % npc:
-    raise ValueError(
-        f"ncomp {arr.ncomp} is not a multiple of {npc} points/cell")
-  nfields = arr.ncomp // npc
+  raw = arr.view() if isinstance(arr, GkylArray) else np.asarray(arr)
+  ncomp = raw.shape[-1]
+  if ncomp % npc:
+    raise ValueError(f"ncomp {ncomp} is not a multiple of {npc} points/cell")
+  nfields = ncomp // npc
   cells = [len(g) - 1 for g in grid]
-  v = arr.view().reshape(*cells, nfields, npc)
+  v = raw.reshape(*cells, nfields, npc)
   if perm is not None:
     v = v[..., perm]
 
@@ -180,19 +240,33 @@ def apply_pointwise(basis_type: str,
                     poly_order: int,
                     arr: GkylArray,
                     fn,
-                    num_quad: int | None = None) -> GkylArray:
+                    num_quad: int | None = None,
+                    *,
+                    cdim: int | None = None,
+                    vdim: int | None = None) -> GkylArray:
   """``fn`` applied pointwise via quadrature: modal → quad → fn → modal.
 
   The standard DG treatment of nonlinear operations. ``fn`` receives the
   ``(cells, nfields*nq)`` array of quadrature values and must return the same
   shape (any NumPy ufunc qualifies). The result is modal again.
   """
-  quad = modal_to_quad(basis_type, ndim, poly_order, arr, num_quad)
+  quad = modal_to_quad(basis_type,
+                       ndim,
+                       poly_order,
+                       arr,
+                       num_quad,
+                       cdim=cdim,
+                       vdim=vdim)
   vals = fn(quad.view())
   vals = np.asarray(vals, dtype=np.float64)
   if vals.shape != (quad.size, quad.ncomp):
     raise ValueError(
         f"apply(fn): fn changed the shape {(quad.size, quad.ncomp)} -> "
         f"{vals.shape}; it must act pointwise.")
-  return quad_to_modal(basis_type, ndim, poly_order, GkylArray.from_numpy(vals),
-                       num_quad)
+  return quad_to_modal(basis_type,
+                       ndim,
+                       poly_order,
+                       GkylArray.from_numpy(vals),
+                       num_quad,
+                       cdim=cdim,
+                       vdim=vdim)

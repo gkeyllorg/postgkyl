@@ -115,9 +115,9 @@ def test_missing_basis_type_raises():
     d.local_poly()
 
 
-def test_rejects_non_modal_value_form():
-  d = pg.load(F1D).represent(to="nodal")
-  with pytest.raises(ValueError, match="modal value_form"):
+def test_rejects_quadrature_value_form():
+  d = pg.load(F1D).represent(to="quad")
+  with pytest.raises(ValueError, match="quadrature input"):
     d.local_poly()
 
 

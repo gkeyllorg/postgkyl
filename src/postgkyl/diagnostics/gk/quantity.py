@@ -100,20 +100,17 @@ class GkQuantity:
                           species: str,
                           frames: list[int] | None = None
                           ) -> tuple[int, set[int]]:
-    """Find the first source combination whose files all exist and share the
-    same set of available frames.
+    """Find the first complete source combination with common frames.
 
     Returns:
       ``(combo_idx, frames_avail)``; a combination made up only of geo files
       is flagged with ``frames_avail == {-1}``.
     """
-    frames_avail: set[int] = set()
-    combo_idx = 0
     for cidx, combo in enumerate(self.source):
+      frames_avail: set[int] | None = None
       for src in combo:
         if isinstance(src, str) and self.is_geo:
           if not os.path.isfile(os.path.join(path, f"{name}-{src}.gkyl")):
-            frames_avail = set()
             break
           continue
 
@@ -125,26 +122,14 @@ class GkQuantity:
                                                       frames)
 
         if frames_avail_q == {-1}:
-          combo_idx = cidx
           continue
-
-        if frames_avail_q:
-          if not frames_avail:
-            frames_avail = set(frames_avail_q)
-          elif frames_avail_q != frames_avail:
-            frames_avail = set()
-            break
-          combo_idx = cidx
-        else:
+        frames_avail = (set(frames_avail_q) if frames_avail is None else
+                        frames_avail & frames_avail_q)
+        if not frames_avail:
           break
       else:
-        if not frames_avail:
-          frames_avail = {-1}
-          combo_idx = cidx
-
-      if frames_avail:
-        break
-    return combo_idx, frames_avail
+        return cidx, {-1} if frames_avail is None else frames_avail
+    return 0, set()
 
   # -------------------------------------------------------------- public
   def get_label(self,
@@ -209,7 +194,7 @@ class GkQuantity:
           if lower <= f < upper and (f - lower) % step == 0
       ]
 
-    return combo_idx, frame_list
+    return combo_idx, [frame for frame in frame_list if frame in frames_avail]
 
   def get_src_gdata(self, src: "str | GkQuantity", path: str, name: str,
                     species: str, frame: int | None, **extra) -> "GDataState":

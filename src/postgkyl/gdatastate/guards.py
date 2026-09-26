@@ -1,13 +1,4 @@
-"""The shared field-domain guard used by field-only verbs and diagnostics.
-
-Centralizes the check-and-raise boilerplate that was independently retyped
-across several ``operations`` physics verbs (moved to ``diagnostics`` by layer 10):
-each caller keeps its own ``reason`` clause (why *this* function's math has
-no meaning on raw modal coefficients), but the check itself --
-``backend == "gkyl"`` -> raise with the standard ".interpolate() first" message
-shape -- has one home. This is a state-invariant helper, not a verb, so it
-lives on ``gdatastate`` (which stays verb-less) rather than ``operations``.
-"""
+"""Shared semantic guards for DG representations and point consumers."""
 
 from __future__ import annotations
 
@@ -42,7 +33,7 @@ def require_same_quadrature(left: "GDataState", right: "GDataState") -> None:
 
 
 def require_field_domain(data: "GDataState", who: str, reason: str) -> None:
-  """Raise if ``data`` is native modal (gkyl-backed) DG coefficients.
+  """Raise if ``data`` is modal DG coefficients, regardless of storage backend.
 
   Args:
     data: The dataset to check.
@@ -51,9 +42,9 @@ def require_field_domain(data: "GDataState", who: str, reason: str) -> None:
       e.g. ``"rotating raw DG coefficients would mix basis functions"``.
 
   Raises:
-    ValueError: if ``data.backend == "gkyl"``.
+    ValueError: if values are modal DG coefficients.
   """
-  if data.backend == "gkyl":
+  if not data.is_interpolated:
     raise ValueError(
-        f"{who} operates on interpolated (NumPy) values; call .interpolate() "
+        f"{who} operates on point values, not modal DG coefficients; call .interpolate() "
         f"first -- {reason}.")

@@ -34,15 +34,25 @@ def is_native(value) -> bool:
   return isinstance(value, GkylArray)
 
 
-def shift_mean(basis_type: str, ndim: int, poly_order: int, a: GkylArray,
-               val: float) -> GkylArray:
+def shift_mean(basis_type: str,
+               ndim: int,
+               poly_order: int,
+               a: GkylArray,
+               val: float,
+               *,
+               cdim: int | None = None,
+               vdim: int | None = None) -> GkylArray:
   """``f + val`` for a modal field: only the mean coefficient moves.
 
   The normalized constant basis function is ``b_0 = 2^(-ndim/2)``, so a shift
   of the field by ``val`` is a shift of coefficient 0 by ``val * 2^(ndim/2)``,
   applied per field (``gkyl_array_shiftc`` on each field's coefficient 0).
   """
-  nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
+  nb = gpython.basis.num_basis(basis_type,
+                               ndim,
+                               poly_order,
+                               cdim=cdim,
+                               vdim=vdim)
   coeff_shift = float(val) * 2.0**(ndim / 2.0)
   out = a
   for f in range(a.ncomp // nb):

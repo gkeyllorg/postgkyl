@@ -106,22 +106,48 @@ class _GeneratedCommand(click.Command):
   """Render positional parameter docs separately from option docs."""
 
   def parse_args(self, ctx, args):
-    """Let generated boolean options omit their otherwise optional value."""
-    boolean_options = {
-        option_name
+    """Normalize optional booleans within this command's option span.
+
+    Click's chain parser stops reading options at the first positional token.
+    Respect that boundary, and skip each nonboolean option's values, so a
+    later command's options (or a string value resembling a flag) stay intact.
+    """
+    options = {
+        option_name: parameter
         for parameter in self.get_params(ctx)
-        if isinstance(parameter, _OptionalBooleanOption)
-        for option_name in parameter.opts
+        if isinstance(parameter, click.Option) for option_name in parameter.opts
     }
     normalized = []
-    for index, value in enumerate(args):
+    index = 0
+    while index < len(args):
+      value = args[index]
+      if value == "--" or (not value.startswith("-")
+                           and not ctx.allow_interspersed_args):
+        normalized.extend(args[index:])
+        break
       normalized.append(value)
-      option_name = value.partition("=")[0]
-      if value != option_name or option_name not in boolean_options:
+      index += 1
+      option_name, separator, _ = value.partition("=")
+      parameter = options.get(option_name)
+      attached_value = bool(separator)
+      if parameter is None and value.startswith(
+          "-") and not value.startswith("--"):
+        parameter = options.get(value[:2])
+        attached_value = len(value) > 2
+      if parameter is None:
         continue
-      next_value = args[index + 1] if index + 1 < len(args) else None
-      if next_value is None or not _is_boolean_literal(next_value):
-        normalized.append("True")
+      if isinstance(parameter, _OptionalBooleanOption):
+        if attached_value:
+          continue
+        if index < len(args) and _is_boolean_literal(args[index]):
+          normalized.append(args[index])
+          index += 1
+        else:
+          normalized.append("True")
+      elif not parameter.is_flag and not parameter.count:
+        remaining = parameter.nargs - int(attached_value)
+        normalized.extend(args[index:index + remaining])
+        index += remaining
     return super().parse_args(ctx, normalized)
 
   def format_options(self, ctx, formatter) -> None:

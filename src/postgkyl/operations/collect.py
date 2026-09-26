@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from postgkyl.gdatastate import flatten_datasets
+from postgkyl.gdatastate import flatten_datasets, materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 from postgkyl.gdatastate.gdatastate import GDataState
+from ._compatibility import require_collocated_layout
 
 
 def _collect_group(states: list, start: int, *, sumdata: bool,
@@ -18,13 +20,19 @@ def _collect_group(states: list, start: int, *, sumdata: bool,
   ``ctx['frame']``) stays consistent with the ungrouped (no-``chunk``) case."""
   time, values = [], []
   grid = None
+  reference = None
   for i, dat in enumerate(states, start=start):
-    if dat.backend == "gkyl":
-      raise ValueError(
-          f"collect operates on interpolated (NumPy) values; call .interpolate() "
-          f"first on dataset {i} -- stacking raw DG coefficients would mix "
-          f"basis functions.")
-    stamp = dat.ctx.get("time", dat.ctx.get("frame", i))
+    require_field_domain(dat, "collect",
+                         "raw coefficients are not field values")
+    dat = materialize_point_values(dat)
+    if not sumdata and reference is not None:
+      require_collocated_layout(reference, dat)
+    reference = dat if reference is None else reference
+    stamp = dat.ctx.get("time")
+    if stamp is None:
+      stamp = dat.ctx.get("frame")
+    if stamp is None:
+      stamp = i
     time.append(stamp)
 
     val = dat.values
@@ -48,6 +56,8 @@ def _collect_group(states: list, start: int, *, sumdata: bool,
   out_grid = [time] if sumdata else [np.array(time)] + grid
   return states[0]._result(out_grid,
                            values,
+                           interpolated=True,
+                           value_form=None,
                            tag=(tag or "default"),
                            label=(label if label is not None else "collect"))
 

@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Annotated
+from postgkyl.cli_spec import DatasetRef
+
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 import numpy as np
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def mask(data: "GDataState",
-         mask_data: "GDataState | None" = None,
+         mask_data: Annotated[GDataState | None,
+                              DatasetRef()] = None,
          *,
          lower: float | None = None,
          upper: float | None = None,
@@ -33,7 +37,7 @@ def mask(data: "GDataState",
   - ``upper`` only: mask values above ``upper``.
 
   Args:
-    data: the dataset to mask; must be NumPy-backed.
+    data: the dataset to mask; must contain point values.
     mask_data: an already-loaded dataset whose field selects the mask
       (negative -> masked); it must have exactly one component -- the mask
       is broadcast across every component of ``data`` via
@@ -54,18 +58,17 @@ def mask(data: "GDataState",
     A dataset whose values are a masked array.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or if none of
+    ValueError: if ``data`` is unevaluated modal coefficients, or if none of
       ``mask_data``, ``lower``, or ``upper`` is provided.
     IndexError: if ``mask_data`` has more than one component -- the
       repeated mask no longer matches ``data.values``'s shape and
       ``np.ma.masked_where`` rejects the mismatched condition array.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "mask operates on interpolated (NumPy) values; call .interpolate() "
-        "first -- masking raw DG coefficients has no basis-space meaning.")
+  require_field_domain(data, "mask", "raw coefficients are not field values")
+  data = materialize_point_values(data, inplace=inplace)
   values = data.values
   if mask_data is not None:
+    mask_data = materialize_point_values(mask_data)
     mask_field = mask_data.values
     mask_rep = np.repeat(mask_field, data.num_comps, axis=-1)
     masked = np.ma.masked_where(mask_rep < 0.0, values)

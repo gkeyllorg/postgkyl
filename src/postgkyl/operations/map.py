@@ -12,23 +12,26 @@ copy: this verb never touches them).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Annotated
+from postgkyl.cli_spec import CliType, CliArgument
+
 from postgkyl import dg
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 from postgkyl.gdatastate.gdatastate import GDataState
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState as _GDataState
 
-
-def map(data: "_GDataState",
-        mapping: "str | _GDataState",
+def map(data: GDataState,
+        mapping: Annotated[str | GDataState,
+                           CliType(str),
+                           CliArgument()],
         *,
         space: str = "conf",
         basis_type: str | None = None,
         poly_order: int | None = None,
         inplace: bool = False,
         tag: str | None = None,
-        label: str | None = None) -> "_GDataState":
+        label: str | None = None) -> GDataState:
   """Replace a block of ``data``'s grid axes with mapped coordinates.
 
   Evaluates the mapping's DG coefficients at ``data``'s existing grid
@@ -80,10 +83,9 @@ def map(data: "_GDataState",
       metadata (and none was given at load time); or if its component
       count does not match the expected ``m * num_basis``.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "map operates on interpolated (NumPy) target grids; call .interpolate() "
-        "first -- deforming a native modal grid has no basis-space meaning.")
+  require_field_domain(data, "map",
+                       "raw modal grids require explicit evaluation")
+  data = materialize_point_values(data, inplace=inplace)
 
   # basis_type/poly_order are load-time properties of the mapping dataset;
   # they only apply here when this call is the one loading it (a filename),

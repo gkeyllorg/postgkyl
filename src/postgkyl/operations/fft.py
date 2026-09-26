@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 from postgkyl import numerics
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def fft(data: "GDataState",
@@ -28,7 +28,7 @@ def fft(data: "GDataState",
   dynvector's) is passed through unchanged.
 
   Args:
-    data: the dataset to transform; must be NumPy-backed (call ``.interpolate()``
+    data: the dataset to transform; must contain point values (call ``.interpolate()``
       first on native modal data).
     psd: when True, return the power spectral density ``|FT|^2`` over the
       positive frequencies only.
@@ -44,14 +44,11 @@ def fft(data: "GDataState",
     values are the transform, PSD, or isotropic spectrum.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or if isotropic
+    ValueError: if ``data`` is unevaluated modal coefficients, or if isotropic
       binning is requested for data that is not 2D/3D.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "fft operates on interpolated (NumPy) values; call .interpolate() first "
-        "-- Fourier transforming raw DG coefficients would mix basis functions."
-    )
+  require_field_domain(data, "fft", "raw coefficients are not field values")
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = data.grid, data.values
   num_cells = values.shape[:-1]
   if any(grid[d].shape[0] == num_cells[d] + 1 for d in range(len(grid))):

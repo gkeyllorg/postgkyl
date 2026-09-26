@@ -357,6 +357,9 @@ def test_cli_argument_marker_requires_a_positional_python_parameter():
 def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
   """Keep runtime CLI metadata authoritative over resolved string hints."""
   original = compiler.get_type_hints
+  annotations = dict(average.__annotations__)
+  annotations["weight"] = original(average, include_extras=True)["weight"]
+  monkeypatch.setattr(average, "__annotations__", annotations)
   evaluated = None
 
   def track_evaluated(source, **kwargs):
@@ -372,6 +375,28 @@ def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
   assert "weight" not in evaluated
   assert weight.dataset_ref
   assert weight.codec.optional
+
+
+@pytest.mark.parametrize("spelling", ["--limits=1", "-l1"])
+def test_chain_boolean_normalization_skips_attached_tuple_values(spelling):
+  calls = []
+
+  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
+  def options(*, limits: tuple[int, int], enabled: bool = False):
+    """Record parsed options.
+
+    Args:
+      limits: Two interval endpoints.
+      enabled: Enable the option.
+    """
+    calls.append((limits, enabled))
+
+  group = click.Group(chain=True)
+  group.add_command(build_click_command(compile_callable(options)))
+  result = CliRunner().invoke(group, ["options", spelling, "2", "--enabled"],
+                              obj=DataSpace())
+  assert result.exit_code == 0, result.output
+  assert calls == [((1, 2), True)]
 
 
 def test_public_inventory_is_total_unique_and_deterministic():

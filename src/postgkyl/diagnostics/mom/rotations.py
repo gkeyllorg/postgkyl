@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
@@ -120,11 +121,13 @@ def parrotate(array: "GDataState",
     A three-component dataset of the parallel projection.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed), or the
+    ValueError: if either input is modal DG coefficients, or the
       component counts do not match a three-component field.
   """
   _require_field_domain(array, "parrotate", _REASON)
   _require_field_domain(rotator, "parrotate", _REASON)
+  array = materialize_point_values(array, inplace=inplace)
+  rotator = materialize_point_values(rotator)
   grid, values = _parrotate(array.grid,
                             array.values,
                             rotator.values,
@@ -161,11 +164,13 @@ def perprotate(array: "GDataState",
     A three-component dataset of the perpendicular component.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed), or the
+    ValueError: if either input is modal DG coefficients, or the
       component counts do not match a three-component field.
   """
   _require_field_domain(array, "perprotate", _REASON)
   _require_field_domain(rotator, "perprotate", _REASON)
+  array = materialize_point_values(array, inplace=inplace)
+  rotator = materialize_point_values(rotator)
   grid, values = _perprotate(array.grid,
                              array.values,
                              rotator.values,

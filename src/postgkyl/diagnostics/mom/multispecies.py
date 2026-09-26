@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ... import numerics
+from ...gdatastate import materialize_point_values
 from ...gdatastate.guards import require_field_domain as _require_field_domain
-from .five_moment import _get_ke, _get_p
+from .five_moment import _get_ke, _get_p, _infer_num_moms
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
@@ -60,6 +61,12 @@ def _energetics(
   _, kee = _get_ke(elc_grid, elc_values, gas_gamma=gas_gamma, num_moms=num_moms)
   _, pri = _get_p(ion_grid, ion_values, gas_gamma=gas_gamma, num_moms=num_moms)
   _, kei = _get_ke(ion_grid, ion_values, gas_gamma=gas_gamma, num_moms=num_moms)
+  # Scalar pressure is one third of the tensor trace for ten moments.
+  # Its internal energy is half that trace, independent of gas_gamma.
+  pre = pre / (gas_gamma - 1) if _infer_num_moms(elc_values,
+                                                 num_moms) == 5 else 1.5 * pre
+  pri = pri / (gas_gamma - 1) if _infer_num_moms(ion_values,
+                                                 num_moms) == 5 else 1.5 * pri
   _, esq = numerics.mag_sq(field_grid, field_values, coords="0:3")
   _, bsq = numerics.mag_sq(field_grid, field_values, coords="3:6")
 
@@ -129,14 +136,15 @@ def energetics(elc: "GDataState",
   5. magnetic field energy (``|B|^2 / 2``)
   6. total energy (sum of the above)
 
+  Thermal energy is ``p/(gas_gamma-1)`` for five moments and half the
+  pressure-tensor trace for ten moments, independent of ``gas_gamma``.
+
   Args:
-    elc: Electron fluid moments (used to compute thermal pressure and
-      kinetic energy); must be NumPy-backed.
-    ion: Ion fluid moments (used to compute thermal pressure and kinetic
-      energy); must be NumPy-backed.
+    elc: Electron fluid moments (used to compute internal and kinetic energy); must contain physical point values.
+    ion: Ion fluid moments (used to compute internal and kinetic energy); must contain physical point values.
     field: EM field whose components 0:3 are the electric field and 3:6
       are the magnetic field; its grid/metadata are carried to the output.
-      Must be NumPy-backed.
+      Must contain physical point values.
     gas_gamma: Adiabatic index, forwarded to the pressure/kinetic-energy
       calculation for both species.
     num_moms: Number of moments (5 or 10) for both species; inferred from
@@ -149,20 +157,29 @@ def energetics(elc: "GDataState",
     A seven-component dataset of the energy decomposition.
 
   Raises:
-    ValueError: if any input is native modal (gkyl-backed).
+    ValueError: if any input contains unevaluated modal coefficients.
   """
   _require_field_domain(elc, "energetics", _REASON)
   _require_field_domain(ion, "energetics", _REASON)
   _require_field_domain(field, "energetics", _REASON)
+  elc = materialize_point_values(elc)
+  ion = materialize_point_values(ion)
+  point_field = materialize_point_values(field)
   grid, values = _energetics(elc.grid,
                              elc.values,
                              ion.grid,
                              ion.values,
-                             field.grid,
-                             field.values,
+                             point_field.grid,
+                             point_field.values,
                              gas_gamma=gas_gamma,
                              num_moms=num_moms)
-  return field._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return field._result(grid,
+                       values,
+                       inplace=inplace,
+                       tag=tag,
+                       label=label,
+                       interpolated=True,
+                       value_form=None)
 
 
 def accumulate_current(data: "GDataState",
@@ -182,7 +199,7 @@ def accumulate_current(data: "GDataState",
 
   Args:
     data: A species dataset carrying the flow/momentum moments to scale;
-      must be NumPy-backed.
+      must contain physical point values.
     qbym: When True, scale by the charge-to-mass ratio (q/m); otherwise
       scale by ``-1.0``. Set True for fluid data.
     charge: Particle charge, required when ``qbym`` is True.
@@ -196,22 +213,24 @@ def accumulate_current(data: "GDataState",
     A dataset of the scaled current contribution.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed); if ``qbym`` is
+    ValueError: if ``data`` contains unevaluated modal coefficients; if ``qbym`` is
       True and ``charge``/``mass`` are not both given (a nonzero ``mass``).
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "accumulate_current operates on interpolated (NumPy) values; call "
-        ".interpolate() first -- scaling raw DG coefficients by a per-species "
-        "factor is still valid numerically, but this verb is field-domain "
-        "only.")
+  _require_field_domain(data, "accumulate_current", _REASON)
   if qbym and (charge is None or not mass):
     raise ValueError(
         "accumulate_current: qbym=True requires both 'charge' and a "
         f"nonzero 'mass' -- got charge={charge!r}, mass={mass!r}.")
-  grid, values = _accumulate_current(data.grid,
-                                     data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _accumulate_current(point_data.grid,
+                                     point_data.values,
                                      qbym=qbym,
                                      charge=charge,
                                      mass=mass)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)

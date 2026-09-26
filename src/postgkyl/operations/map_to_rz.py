@@ -1,6 +1,9 @@
 """Map modal fields onto a physical R-Z slice, with reusable projections."""
 from __future__ import annotations
 
+from typing import Annotated
+from postgkyl.cli_spec import CliHidden
+
 from dataclasses import dataclass
 from functools import partial
 import numpy as np
@@ -168,18 +171,21 @@ def _validate_projection(data: "GDataState", projection: RzProjection) -> None:
         "Incompatible R-Z projection: projection and data grid shapes differ.")
 
 
-def map_to_rz(data: "GDataState",
-              *,
-              projection: RzProjection | None = None,
-              mapc2p: str | None = None,
-              nodes_file: str | None = None,
-              z_axis: float = 0.0,
-              phi_tor: float = 0.0,
-              nz_interp: int = DEFAULT_NZ_INTERP,
-              comp: int = 0,
-              inplace: bool = False,
-              tag: str | None = None,
-              label: str | None = None) -> "GDataState":
+def map_to_rz(
+    data: "GDataState",
+    *,
+    projection: Annotated[
+        RzProjection | None,
+        CliHidden("reuse a projection through the Python API")] = None,
+    mapc2p: str | None = None,
+    nodes_file: str | None = None,
+    z_axis: float = 0.0,
+    phi_tor: float = 0.0,
+    nz_interp: int = DEFAULT_NZ_INTERP,
+    comp: int = 0,
+    inplace: bool = False,
+    tag: str | None = None,
+    label: str | None = None) -> "GDataState":
   """Map a modal field component onto a physical R-Z slice.
 
   Two-dimensional input deforms the interpolated grid. Three-dimensional

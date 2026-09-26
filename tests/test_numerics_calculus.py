@@ -124,15 +124,16 @@ class TestIntegrate2D:
 class TestIntegrateCellCentered:
 
   def test_cell_centered_grid(self):
-    # len(coord) == values.shape[d] -> a last element is appended to dz
-    x_cc = np.linspace(0.1, 0.9, 5)  # 5 cell centers, dx=0.2
+    # Point coordinates specify only [0.1,0.9], not extrapolated cell edges.
+    x_cc = np.linspace(0.1, 0.9, 5)
     _, out = calculus.integrate([x_cc], np.ones((5, 1)), axis=0)
-    np.testing.assert_allclose(out.flat[0], 1.0, rtol=1e-12)
+    np.testing.assert_allclose(out.flat[0], 0.8, rtol=0, atol=2e-15)
 
-  def test_single_cell_axis_uses_mean(self):
+  def test_single_point_has_zero_measure(self):
     grid = [np.array([0.5]), np.linspace(0.0, 1.0, 4)]
     _, out = calculus.integrate(grid, np.ones((1, 3, 1)), axis=0)
     assert out.shape[0] == 1
+    np.testing.assert_array_equal(out, np.zeros((1, 3, 1)))
 
 
 @pytest.mark.parametrize("axis", [None, 0, 1])

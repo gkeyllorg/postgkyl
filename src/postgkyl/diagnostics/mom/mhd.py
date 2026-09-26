@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 from .five_moment import _get_density, _get_vx, _get_vy, _get_vz
 from .five_moment import density, xvel, yvel, zvel, vel
 
@@ -133,7 +134,7 @@ def bx(data: "GDataState",
   """x magnetic-field component (component 5 of MHD data).
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -142,9 +143,10 @@ def bx(data: "GDataState",
     A single-component dataset of ``Bx``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "bx", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_Bx(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -157,7 +159,7 @@ def by(data: "GDataState",
   """y magnetic-field component (component 6 of MHD data).
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -166,9 +168,10 @@ def by(data: "GDataState",
     A single-component dataset of ``By``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "by", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_By(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -181,7 +184,7 @@ def bz(data: "GDataState",
   """z magnetic-field component (component 7 of MHD data).
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -190,9 +193,10 @@ def bz(data: "GDataState",
     A single-component dataset of ``Bz``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "bz", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_Bz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -205,7 +209,7 @@ def bi(data: "GDataState",
   """Magnetic-field vector ``(Bx, By, Bz)`` (components 5:8).
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -214,9 +218,10 @@ def bi(data: "GDataState",
     A three-component dataset of the magnetic field.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "bi", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_Bi(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -230,7 +235,7 @@ def mag_pressure(data: "GDataState",
   """Magnetic pressure ``p_B = 0.5 * (Bx**2 + By**2 + Bz**2) / mu_0``.
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     mu_0: Vacuum permeability.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -240,9 +245,10 @@ def mag_pressure(data: "GDataState",
     A single-component dataset of the magnetic pressure.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "mag_pressure", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_mag_p(data.grid, data.values, mu_0=mu_0)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -258,7 +264,7 @@ def pressure(data: "GDataState",
   ``p = (gas_gamma - 1) * (E - 0.5*rho*|v|**2 - p_B)``.
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     gas_gamma: Adiabatic index.
     mu_0: Vacuum permeability used in the magnetic energy.
     inplace: Mutate and return ``data`` instead of a new dataset.
@@ -269,9 +275,10 @@ def pressure(data: "GDataState",
     A single-component dataset of the thermal pressure.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pressure", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_p(data.grid,
                             data.values,
                             gas_gamma=gas_gamma,
@@ -289,7 +296,7 @@ def temp(data: "GDataState",
   """Temperature ``T = p / rho``.
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     gas_gamma: Adiabatic index.
     mu_0: Vacuum permeability used to compute the pressure.
     inplace: Mutate and return ``data`` instead of a new dataset.
@@ -300,9 +307,10 @@ def temp(data: "GDataState",
     A single-component dataset of the temperature.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "temp", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_temp(data.grid,
                                data.values,
                                gas_gamma=gas_gamma,
@@ -320,7 +328,7 @@ def sound(data: "GDataState",
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     gas_gamma: Adiabatic index.
     mu_0: Vacuum permeability used to compute the pressure.
     inplace: Mutate and return ``data`` instead of a new dataset.
@@ -331,9 +339,10 @@ def sound(data: "GDataState",
     A single-component dataset of the sound speed.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "sound", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_sound(data.grid,
                                 data.values,
                                 gas_gamma=gas_gamma,
@@ -351,7 +360,7 @@ def mach(data: "GDataState",
   """Sonic Mach number ``M = |v| / c_s``.
 
   Args:
-    data: MHD conserved variables; must be NumPy-backed.
+    data: MHD conserved variables; must contain point values.
     gas_gamma: Adiabatic index.
     mu_0: Vacuum permeability used to compute the pressure.
     inplace: Mutate and return ``data`` instead of a new dataset.
@@ -362,9 +371,10 @@ def mach(data: "GDataState",
     A single-component dataset of the Mach number.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "mach", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mhd_mach(data.grid,
                                data.values,
                                gas_gamma=gas_gamma,

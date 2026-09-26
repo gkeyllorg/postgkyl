@@ -26,6 +26,7 @@ import numpy as np
 
 from ... import numerics
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 from .five_moment import _get_density, _get_temp
 from .mhd import _get_mhd_temp
 
@@ -286,9 +287,10 @@ def magB(field: "GDataState",
     A single-component dataset of ``|B|``.
 
   Raises:
-    ValueError: if ``field`` is native modal (gkyl-backed).
+    ValueError: if ``field`` is modal DG coefficients.
   """
   _require_field_domain(field, "magB", _REASON)
+  field = materialize_point_values(field, inplace=inplace)
   grid, values = _get_magB(field.grid, field.values)
   return field._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -308,7 +310,7 @@ def vt(species: "GDataState",
 
   Args:
     species: Species moment data (5- or 10-moment, or MHD when ``mhd=True``);
-      must be NumPy-backed.
+      must contain point values.
     gas_gamma: Adiabatic index used when computing the temperature/pressure.
     num_moms: Number of moments (5 or 10); inferred when ``None``.
     mass: Particle mass.
@@ -325,9 +327,10 @@ def vt(species: "GDataState",
     A single-component dataset of the thermal velocity.
 
   Raises:
-    ValueError: if ``species`` is native modal (gkyl-backed).
+    ValueError: if ``species`` is modal DG coefficients.
   """
   _require_field_domain(species, "vt", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
   grid, values = _get_vt(species.grid,
                          species.values,
                          gas_gamma=gas_gamma,
@@ -351,7 +354,7 @@ def vA(species: "GDataState",
   Args:
     species: Species moment data providing the density; must be
       NumPy-backed.
-    field: EM field data providing ``|B|``; must be NumPy-backed.
+    field: EM field data providing ``|B|``; must contain point values.
     mu_0: Vacuum permeability.
     inplace: mutate and return ``species`` instead of a new dataset.
     tag: optional tag for the returned dataset.
@@ -361,10 +364,12 @@ def vA(species: "GDataState",
     A single-component dataset of the Alfven velocity.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(species, "vA", _REASON)
   _require_field_domain(field, "vA", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
+  field = materialize_point_values(field)
   grid, values = _get_vA(species.grid,
                          species.values,
                          field.grid,
@@ -383,7 +388,7 @@ def omegaC(field: "GDataState",
   """Cyclotron (gyro) frequency ``omega_c = |q| * |B| / m``.
 
   Args:
-    field: EM field data providing ``Bx, By, Bz``; must be NumPy-backed.
+    field: EM field data providing ``Bx, By, Bz``; must contain point values.
     mass: Particle mass.
     charge: Particle charge; only its magnitude affects the result.
     inplace: Mutate and return ``field`` instead of a new dataset.
@@ -394,9 +399,10 @@ def omegaC(field: "GDataState",
     A single-component dataset of the cyclotron frequency.
 
   Raises:
-    ValueError: if ``field`` is native modal (gkyl-backed).
+    ValueError: if ``field`` is modal DG coefficients.
   """
   _require_field_domain(field, "omegaC", _REASON)
+  field = materialize_point_values(field, inplace=inplace)
   grid, values = _get_omegaC(field.grid, field.values, mass=mass, charge=charge)
   return field._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -412,7 +418,7 @@ def omegaP(species: "GDataState",
   """Plasma frequency ``omega_p = sqrt(q**2 * n / (m**2 * epsilon_0))``.
 
   Args:
-    species: Fluid moment data providing mass density; must be NumPy-backed.
+    species: Fluid moment data providing mass density; must contain point values.
     mass: Particle mass.
     charge: Particle charge.
     epsilon_0: Vacuum permittivity.
@@ -424,9 +430,10 @@ def omegaP(species: "GDataState",
     A single-component dataset of the plasma frequency.
 
   Raises:
-    ValueError: if ``species`` is native modal (gkyl-backed).
+    ValueError: if ``species`` is modal DG coefficients.
   """
   _require_field_domain(species, "omegaP", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
   grid, values = _get_omegaP(species.grid,
                              species.values,
                              mass=mass,
@@ -447,7 +454,7 @@ def d(species: "GDataState",
   """Inertial (skin-depth) length ``d = c / omega_p``.
 
   Args:
-    species: Fluid moment data providing mass density; must be NumPy-backed.
+    species: Fluid moment data providing mass density; must contain point values.
     mass: Particle mass.
     charge: Particle charge.
     epsilon_0: Vacuum permittivity.
@@ -460,9 +467,10 @@ def d(species: "GDataState",
     A single-component dataset of the inertial length.
 
   Raises:
-    ValueError: if ``species`` is native modal (gkyl-backed).
+    ValueError: if ``species`` is modal DG coefficients.
   """
   _require_field_domain(species, "d", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
   grid, values = _get_d(species.grid,
                         species.values,
                         mass=mass,
@@ -487,7 +495,7 @@ def lambdaD(species: "GDataState",
   """Debye length ``lambda_D = v_th / omega_p``.
 
   Args:
-    species: Fluid moment data; must be NumPy-backed.
+    species: Fluid moment data; must contain point values.
     gas_gamma: Adiabatic index used to compute thermal velocity.
     num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
     mass: Particle mass.
@@ -504,9 +512,10 @@ def lambdaD(species: "GDataState",
     A single-component dataset of the Debye length.
 
   Raises:
-    ValueError: if ``species`` is native modal (gkyl-backed).
+    ValueError: if ``species`` is modal DG coefficients.
   """
   _require_field_domain(species, "lambdaD", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
   grid, values = _get_lambdaD(species.grid,
                               species.values,
                               gas_gamma=gas_gamma,
@@ -536,7 +545,7 @@ def rho(species: "GDataState",
   Args:
     species: Fluid moment data used for thermal velocity; must be
       NumPy-backed.
-    field: EM field data used for cyclotron frequency; must be NumPy-backed.
+    field: EM field data used for cyclotron frequency; must contain point values.
     gas_gamma: Adiabatic index used to compute thermal velocity.
     num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
     mass: Particle mass.
@@ -552,10 +561,12 @@ def rho(species: "GDataState",
     A single-component dataset of the gyroradius.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(species, "rho", _REASON)
   _require_field_domain(field, "rho", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
+  field = materialize_point_values(field)
   grid, values = _get_rho(species.grid,
                           species.values,
                           field.grid,
@@ -585,7 +596,7 @@ def beta(species: "GDataState",
   Args:
     species: Fluid moment data used for thermal velocity and density; must
       be NumPy-backed.
-    field: EM field data used for Alfven velocity; must be NumPy-backed.
+    field: EM field data used for Alfven velocity; must contain point values.
     gas_gamma: Adiabatic index used to compute thermal velocity.
     num_moms: Number of fluid moments (5 or 10); inferred when ``None``.
     mass: Particle mass.
@@ -600,10 +611,12 @@ def beta(species: "GDataState",
     A single-component dataset of plasma beta.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(species, "beta", _REASON)
   _require_field_domain(field, "beta", _REASON)
+  species = materialize_point_values(species, inplace=inplace)
+  field = materialize_point_values(field)
   grid, values = _get_beta(species.grid,
                            species.values,
                            field.grid,

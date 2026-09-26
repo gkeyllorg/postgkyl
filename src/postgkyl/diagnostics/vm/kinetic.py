@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 
 if TYPE_CHECKING:
   from ...gdatastate.gdatastate import GDataState
@@ -108,7 +109,7 @@ def transform_frame(distribution: "GDataState",
     distribution: The particle distribution function to shift; must be
       NumPy-backed.
     bulk: The bulk (drift) velocity field; one component per velocity
-      dimension. Must be NumPy-backed.
+      dimension. Must contain point values.
     cdim: Number of configuration-space dimensions. The remaining grid
       axes are treated as velocity-space dimensions.
     inplace: mutate and return ``distribution`` instead of a new dataset.
@@ -119,10 +120,12 @@ def transform_frame(distribution: "GDataState",
     A dataset with the same values on a velocity-shifted grid.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(distribution, "transform_frame", _REASON)
   _require_field_domain(bulk, "transform_frame", _REASON)
+  distribution = materialize_point_values(distribution, inplace=inplace)
+  bulk = materialize_point_values(bulk)
   grid, values = _transform_frame(distribution.grid, distribution.values,
                                   bulk.values, cdim)
   return distribution._result(grid,

@@ -20,6 +20,18 @@ from postgkyl.render._prep import (
 # --------------------------------------------------------------------------
 
 
+def test_modal_plots_label_coefficients_and_point_plots_do_not():
+  data = GDataState(
+      ctx=dict(basis_type="serendipity", poly_order=1, value_form="modal"))
+  data.push([np.array([0., 1., 2.])], np.array([[2., 0.], [3., 0.]]))
+  panel = prep_plot_data(data)
+  assert panel.ylabel == "DG coefficient"
+  assert panel.clabel == "DG coefficient"
+  assert prep_plot_data(data, ylabel="chosen").ylabel == "chosen"
+  data.ctx["interpolated"] = True
+  assert prep_plot_data(data).ylabel == ""
+
+
 class TestDefaultAxisLabels:
 
   def test_returns_one_label_per_dim(self):

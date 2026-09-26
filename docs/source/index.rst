@@ -13,6 +13,7 @@ Start with a complete example, then use the reference to adapt it to your run.
    Python API <reference/api>
    Command reference <reference/cli>
    concepts
+   migration
    reference/quantities
    contributing
    provenance

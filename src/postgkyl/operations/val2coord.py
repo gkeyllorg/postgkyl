@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 import numpy as np
 
 from postgkyl.gdatastate.gdatastategroup import GDataStateGroup
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def _get_range(str_in: str, length: int) -> np.ndarray:
@@ -67,14 +67,13 @@ def val2coord(data: "GDataState",
     A ``GDataStateGroup`` containing one dataset per selected y-component.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or if more than
+    ValueError: if ``data`` is unevaluated modal coefficients, or if more than
       one x-component is selected and their number does not equal the
       number of y-components.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "val2coord operates on interpolated (NumPy) values; call .interpolate() "
-        "first -- raw DG coefficients are not tabular columns.")
+  require_field_domain(data, "val2coord",
+                       "raw coefficients are not field values")
+  data = materialize_point_values(data)
   values = data.values
   x_comps = _get_range(x, values.shape[-1])
   y_comps = _get_range(y, values.shape[-1])

@@ -57,29 +57,14 @@ from .geometry import Geometry, resolve_geometry
 # Command metadata is attached at the layer that owns each operation.  This
 # block is deliberately declarative: discovery still walks the public API and
 # there is no registration side effect or CLI import here.
-from typing import Annotated, Literal
-
 from postgkyl.cli_spec import (
-    CliArgument,
-    CliHidden,
-    CliType,
     CommandSpec,
-    DatasetRef,
     Execution,
     ResultPolicy,
     Section,
     command,
     hidden,
 )
-from postgkyl.gdatastate.gdatastate import GDataState
-
-
-def _resolve_receiver_annotations(*functions) -> None:
-  """Make the modules' public forward references runtime-resolvable."""
-  for function in functions:
-    function.__globals__.setdefault("GDataState", GDataState)
-    function.__globals__.setdefault("_GDataState", GDataState)
-
 
 _MAP = CommandSpec(Section.VERBS, Execution.MAP_REPLACE)
 _APPEND = CommandSpec(Section.VERBS, Execution.MAP_APPEND, consumes_inputs=True)
@@ -90,64 +75,6 @@ _TERM_EACH = CommandSpec(Section.UTILITY,
 _TERM_ALL = CommandSpec(Section.UTILITY,
                         Execution.TERMINAL_ALL,
                         result=ResultPolicy.VALUE)
-
-for _function in (
-    interpolate,
-    local_poly,
-    select,
-    integrate,
-    average,
-    eval_at_coord_proj,
-    fft,
-    magsq,
-    relchange,
-    mask,
-    collect,
-    sort,
-    grid,
-    val2coord,
-    extract_input,
-    fit,
-    differentiate,
-    evaluate,
-    map,
-    represent,
-    growth,
-):
-  _resolve_receiver_annotations(_function)
-
-select.__annotations__.update(comp=str | None,
-                              z0=str | None,
-                              z1=str | None,
-                              z2=str | None,
-                              z3=str | None,
-                              z4=str | None,
-                              z5=str | None)
-integrate.__annotations__["op"] = Literal["none", "abs", "sq"]
-integrate.__annotations__["axis"] = Annotated[int | tuple | str | None,
-                                              CliType(str | None),
-                                              CliArgument()]
-evaluate.__annotations__["chain"] = Annotated[str, CliArgument()]
-average.__annotations__["dims"] = list[int]
-average.__annotations__["weight"] = Annotated[GDataState | None, DatasetRef()]
-eval_at_coord_proj.__annotations__.update(eval_dirs=list[int],
-                                          eval_coords=list[float])
-relchange.__annotations__.update(data0=Annotated[GDataState,
-                                                 DatasetRef()],
-                                 data=Annotated[GDataState,
-                                                DatasetRef()],
-                                 comp=str | None)
-mask.__annotations__["mask_data"] = Annotated[GDataState | None, DatasetRef()]
-fit.__annotations__["guess"] = str | None
-map.__annotations__["data"] = GDataState
-map.__annotations__["mapping"] = Annotated[str, CliArgument()]
-map_to_rz.__annotations__["projection"] = Annotated[
-    RzProjection | None,
-    CliHidden("reuse a projection through the Python API")]
-extract_flux_surface.__annotations__["fs_grid"] = Annotated[
-    FluxSurfaceGrid | None,
-    CliHidden("reuse a sampling grid through the Python API")]
-represent.__annotations__["to"] = Literal["modal", "nodal", "quad"]
 
 for _function in (interpolate, local_poly, select, average, eval_at_coord_proj,
                   fft, magsq, grid, differentiate, map, map_to_rz,

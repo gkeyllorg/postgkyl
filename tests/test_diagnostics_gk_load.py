@@ -967,9 +967,8 @@ class TestGkQuantityGetAvailSource:
                                                "1:")
     assert frames == [1, 2, 3]
 
-  def test_mismatched_frame_sets_falls_back_to_next_combo(self, tmp_path):
-    # combo 0 ("a","b") has mismatched frame sets -> rejected; combo 1 ("c")
-    # is used instead.
+  def test_overlapping_frame_sets_use_their_intersection(self, tmp_path):
+    # The preferred complete combination can be computed on its common frame.
     quant = qmod.GkQuantity(name="q",
                             source=[["a", "b"], ["c"]],
                             fetch_func=[None, None],
@@ -980,8 +979,33 @@ class TestGkQuantityGetAvailSource:
     self._touch_frames(tmp_path, "sim-ion_c_", [5])
     combo_idx, frames = quant.get_avail_source(str(tmp_path), "sim", "ion",
                                                None)
-    assert combo_idx == 1
-    assert frames == [5]
+    assert combo_idx == 0
+    assert frames == [0]
+
+  def test_missing_later_source_falls_back_without_stale_frames(self, tmp_path):
+    quant = qmod.GkQuantity("q", [["a", "missing"], ["b"]], [None, None],
+                            "q",
+                            is_species_dep=True)
+    self._touch_frames(tmp_path, "sim-ion_a_", [0, 1])
+    self._touch_frames(tmp_path, "sim-ion_b_", [0, 2])
+    assert quant.get_avail_source(str(tmp_path), "sim", "ion",
+                                  None) == (1, [0, 2])
+
+  def test_disjoint_sources_fall_back(self, tmp_path):
+    quant = qmod.GkQuantity("q", [["a", "b"], ["c"]], [None, None],
+                            "q",
+                            is_species_dep=True)
+    self._touch_frames(tmp_path, "sim-ion_a_", [0])
+    self._touch_frames(tmp_path, "sim-ion_b_", [1])
+    self._touch_frames(tmp_path, "sim-ion_c_", [2])
+    assert quant.get_avail_source(str(tmp_path), "sim", "ion", None) == (1, [2])
+
+  def test_explicit_list_returns_only_common_existing_frames(self, tmp_path):
+    quant = qmod.GkQuantity("q", [["a", "b"]], [None], "q", is_species_dep=True)
+    self._touch_frames(tmp_path, "sim-ion_a_", [0, 1, 2])
+    self._touch_frames(tmp_path, "sim-ion_b_", [0, 2])
+    assert quant.get_avail_source(str(tmp_path), "sim", "ion",
+                                  "0,1,2") == (0, [0, 2])
 
   def test_no_files_found_raises(self, tmp_path):
     quant = qmod.GkQuantity(name="q",

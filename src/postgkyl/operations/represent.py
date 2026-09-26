@@ -8,13 +8,13 @@ always shows what the numbers mean. All of them keep the data gkyl-native.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Literal
 
 from postgkyl import dg
 from postgkyl.gdatastate.guards import quadrature_order
+from postgkyl.gdatastate.layout import require_dg_layout
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 VALUE_FORMS = ("modal", "nodal", "quad")
 
@@ -35,7 +35,7 @@ def _native_basis(data: "GDataState"):
 
 def represent(data: "GDataState",
               *,
-              to: str,
+              to: Literal["modal", "nodal", "quad"],
               num_quad: int | None = None,
               inplace: bool = False,
               tag: str | None = None,
@@ -60,6 +60,8 @@ def represent(data: "GDataState",
     raise ValueError(f"unknown value_form '{to}'; "
                      f"choices: {VALUE_FORMS}")
   basis_type, ndim, poly_order = _native_basis(data)
+  layout = require_dg_layout(data)
+  split = layout.basis_kwargs
   cur = data.ctx.get("value_form", "modal")
   arr = data.native
   same_quad = cur == to == "quad" and num_quad is None
@@ -68,17 +70,18 @@ def represent(data: "GDataState",
 
   if cur != to or (cur == "quad" and num_quad is not None):
     if cur == "nodal":  # leave nodal (exact)
-      arr = dg.rep.nodal_to_modal(basis_type, ndim, poly_order, arr)
+      arr = dg.rep.nodal_to_modal(basis_type, ndim, poly_order, arr, **split)
     elif cur == "quad":  # leave quad (projection, with the data's own rule)
       arr = dg.rep.quad_to_modal(basis_type, ndim, poly_order, arr,
-                                 quadrature_order(data))
+                                 quadrature_order(data), **split)
     # arr is now modal
     if to == "nodal":
-      arr = dg.rep.modal_to_nodal(basis_type, ndim, poly_order, arr)
+      arr = dg.rep.modal_to_nodal(basis_type, ndim, poly_order, arr, **split)
     elif to == "quad":
       modal_ncomp = arr.ncomp
-      arr = dg.rep.modal_to_quad(basis_type, ndim, poly_order, arr, num_quad)
-      nb = dg.num_basis(ndim, poly_order, basis_type)
+      arr = dg.rep.modal_to_quad(basis_type, ndim, poly_order, arr, num_quad,
+                                 **split)
+      nb = dg.num_basis(ndim, poly_order, basis_type, **split)
       nq = arr.ncomp // (modal_ncomp // nb) if num_quad is None else num_quad
       rule = "gkeyll" if num_quad is None else "gauss"
   else:
@@ -124,11 +127,13 @@ def apply(data: "GDataState",
     ValueError: If ``data`` is not native modal data or lacks basis metadata.
   """
   basis_type, ndim, poly_order = _native_basis(data)
+  layout = require_dg_layout(data)
+  split = layout.basis_kwargs
   if data.ctx.get("value_form", "modal") != "modal":
     raise ValueError(
         "apply() expects modal data; call .represent(to='modal') first.")
   out = dg.rep.apply_pointwise(basis_type, ndim, poly_order, data.native, fn,
-                               num_quad)
+                               num_quad, **split)
   return data._result(data.grid,
                       out,
                       inplace=inplace,

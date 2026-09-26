@@ -6,6 +6,7 @@ Run:  PYTHONPATH=src pytest tests/test_postgkyl.py -v
 import ast
 import collections
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -28,6 +29,21 @@ F1 = os.path.join(
     DATA, "rt_gk_tcv_iwl_adapt_source_1x2v_p1-ion_HamiltonianMoments_250.gkyl")
 F2D = os.path.join(DATA, "generated", "2d_ms_p1.gkyl")
 F_GKHYBRID = os.path.join(DATA, "rt_gk_tcv_iwl_1x2v_p1-elc_250.gkyl")
+
+
+def test_file_loading_does_not_initialize_optional_render_backends():
+  """A normal numerical process must exit without ever loading VTK."""
+  result = subprocess.run([
+      sys.executable, "-c",
+      "import sys; import postgkyl as pg; pg.load(sys.argv[1]); "
+      "assert 'pyvista' not in sys.modules; "
+      "assert 'vtkmodules' not in sys.modules; "
+      "assert 'plotly.graph_objects' not in sys.modules", F1
+  ],
+                          capture_output=True,
+                          text=True,
+                          timeout=30)
+  assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_load_metadata():
@@ -546,16 +562,20 @@ def _layer(path, pkg_root):
   return module if module in _LAYERS else ""
 
 
-def _import_targets(node):
+def _import_targets(node, package="postgkyl"):
   if isinstance(node, ast.Import):
     for n in node.names:
       if n.name == "postgkyl" or n.name.startswith("postgkyl."):
         t = n.name.split(".")
         yield t[1] if len(t) > 1 else ""
   elif isinstance(node, ast.ImportFrom):
-    if node.level:
-      return
     mod = node.module or ""
+    if node.level:
+      parents = package.split(".")
+      if node.level > len(parents):
+        raise ValueError(f"relative import escapes package {package}")
+      prefix = parents[:len(parents) - node.level + 1]
+      mod = ".".join(prefix + ([mod] if mod else []))
     if mod == "postgkyl":
       for n in node.names:
         yield n.name if n.name in _LAYERS else ""
@@ -573,8 +593,10 @@ def _build_edges(pkg_root=None):
         continue
       p = os.path.join(dp, f)
       src = _layer(p, pkg_root)
+      relative_dir = Path(p).parent.relative_to(pkg_root)
+      package = ".".join(("postgkyl", *relative_dir.parts))
       for node in ast.walk(ast.parse(Path(p).read_text(encoding="utf-8"), p)):
-        for tgt in _import_targets(node):
+        for tgt in _import_targets(node, package):
           if tgt == src:
             continue
           edges[src].add(tgt)
@@ -681,6 +703,34 @@ def test_build_edges_flags_a_disallowed_import(tmp_path):
   _write_module(pkg_root, "badlayer", "mod.py", "import postgkyl.operations\n")
   _, violations = _build_edges(pkg_root)
   assert any("badlayer" in v and "operations" in v for v in violations)
+
+
+@pytest.mark.parametrize("statement", [
+    "from postgkyl.gdata import GData",
+    "from ..gdata import GData",
+    "from .. import gdata",
+])
+def test_build_edges_rejects_upward_import_in_each_spelling(
+    tmp_path, statement):
+  pkg_root = str(tmp_path / "postgkyl")
+  _write_module(pkg_root, "numerics", "bad.py", statement)
+  edges, violations = _build_edges(pkg_root)
+  assert edges["numerics"] == {"gdata"}
+  assert violations == ["numerics/bad.py [numerics] -> [gdata]"]
+
+
+def test_build_edges_resolves_nested_relative_and_package_imports(tmp_path):
+  pkg_root = str(tmp_path / "postgkyl")
+  _write_module(
+      pkg_root, "diagnostics/mom", "__init__.py",
+      "from ...operations import select\nfrom . import five_moment\n")
+  _write_module(pkg_root, "operations", "__init__.py",
+                "from ..diagnostics.mom import five_moment\n")
+  edges, violations = _build_edges(pkg_root)
+  assert edges["diagnostics"] == {"operations"}
+  assert edges["operations"] == {"diagnostics"}
+  assert violations == ["operations/__init__.py [operations] -> [diagnostics]"]
+  assert _find_cycles(edges)
 
 
 def test_build_edges_classifies_a_flat_leaf_module(tmp_path):

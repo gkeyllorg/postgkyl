@@ -1,4 +1,4 @@
-"""Trapezoidal-style integration over a nodal grid (pure NumPy).
+"""Integrate cell averages or point samples on separable grids (pure NumPy).
 
 ``grad``/``div``/``curl`` are deliberately absent: the ``src_bak`` originals
 are unimplemented placeholders (``...`` bodies, no arguments) -- there is no
@@ -49,15 +49,17 @@ def integrate(
     values: np.ndarray,
     axis: int | tuple | str | None = None
 ) -> tuple[list[np.ndarray], np.ndarray]:
-  """Integrate cell-centered-average data over one or more axes.
+  """Integrate cell averages or point samples over one or more axes.
 
-  Uses the NumPy dot product against the cell widths (trapezoidal for
-  nodal/edge grids, exact for cell-centered-average data); works for
-  nonuniform meshes. True DG integration is not implemented here -- this
-  mirrors the legacy behaviour exactly.
+  An axis with one more coordinate than values contains cell edges: sum
+  each cell's average times its width. An axis matching the value count
+  contains point samples: use the composite trapezoidal rule between the
+  supplied points. Both rules support nonuniform meshes. A single point
+  spans zero length. Packed DG data must be integrated before materializing
+  it as a point mesh, since that mesh can lose cell-local polynomial meaning.
 
   Args:
-    grid: Nodal (edge) coordinate arrays, one per spatial dimension.
+    grid: Edge or point coordinate arrays, one per spatial dimension.
     values: Data array; the last axis is components, the rest are spatial.
     axis: Axis (or axes) to integrate over: an ``int``, a ``tuple`` of
       ``int``, a comma-separated string (``"0,1"``), a colon slice string
@@ -75,21 +77,19 @@ def integrate(
   values = np.copy(values)
   axis = parse_axis(axis, len(grid))
 
-  # Get dz elements
-  dz = []
-  for d, coord in enumerate(grid):
-    dz.append(coord[1:] - coord[:-1])
-    if len(coord) > 1 and len(coord) == values.shape[d]:
-      dz[-1] = np.append(dz[-1], dz[-1][-1])
-
-  # Integration assuming values are cell centered averages
-  # Should work for nonuniform meshes
   for ax in sorted(axis, reverse=True):
-    if len(grid[ax]) > 1:
-      values = np.moveaxis(values, ax, -1)
-      values = np.dot(values, dz[ax])
+    coord = np.asarray(grid[ax])
+    if coord.ndim != 1:
+      raise ValueError("separable integration requires one-dimensional axes")
+    count = values.shape[ax]
+    if len(coord) == count + 1:
+      values = np.tensordot(values, np.diff(coord), axes=(ax, 0))
+    elif len(coord) == count:
+      values = np.trapezoid(values, x=coord, axis=ax)
     else:
-      values = values.mean(axis=ax)
+      raise ValueError(
+          f"axis {ax}: coordinate count {len(coord)} must match {count} "
+          f"point samples or {count + 1} cell edges")
 
   for ax in sorted(axis):
     grid[ax] = np.array([grid[ax].mean()])

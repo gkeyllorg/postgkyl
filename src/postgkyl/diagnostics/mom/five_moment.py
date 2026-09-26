@@ -16,10 +16,14 @@ can compose the same formulas without re-deriving them.
 
 from __future__ import annotations
 
+import operator
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ...gdatastate import materialize_point_values
+from ...operations.arithmetic import binary
+from ...operations.select import select
 from ...gdatastate.guards import require_field_domain as _require_field_domain
 
 if TYPE_CHECKING:
@@ -149,9 +153,8 @@ def _get_ke(
 ) -> tuple[list[np.ndarray], np.ndarray]:
   """Compute the kinetic (bulk-flow) energy density from fluid moment data.
 
-  For 5-moment data it is the total energy minus the thermal energy
-  ``p / (gas_gamma - 1)``. For 10-moment data it is
-  ``0.5 * rho * (vx**2 + vy**2 + vz**2)`` directly.
+  For either moment layout this is ``0.5 * |momentum|**2 / rho``.
+  Computing it directly avoids cancellation against the internal energy.
 
   Args:
     grid: Nodal coordinate arrays, one per spatial dimension.
@@ -163,17 +166,11 @@ def _get_ke(
   Returns:
     ``(grid, values)`` holding the kinetic energy density field.
   """
-  num_moms = _infer_num_moms(values, num_moms)
-
-  if num_moms == 5:
-    _, pr = _get_p(grid, values, gas_gamma=gas_gamma, num_moms=num_moms)
-    out_values = values[..., 4, np.newaxis] - pr / (gas_gamma - 1)
-  else:  # num_moms == 10
-    _, rho = _get_density(grid, values)
-    _, vx = _get_vx(grid, values)
-    _, vy = _get_vy(grid, values)
-    _, vz = _get_vz(grid, values)
-    out_values = 0.5 * rho * (vx**2 + vy**2 + vz**2)
+  _infer_num_moms(values, num_moms)
+  if values.shape[-1] < 4:
+    raise ValueError("ke requires density and all three momentum components")
+  _, rho = _get_density(grid, values)
+  out_values = 0.5 * np.sum(values[..., 1:4]**2, axis=-1, keepdims=True) / rho
 
   return list(grid), out_values
 
@@ -228,7 +225,7 @@ def density(data: "GDataState",
   """Mass density (component 0 of fluid moment data).
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     inplace: mutate and return ``data`` instead of a new dataset.
     tag: optional tag for the returned dataset.
     label: optional label for the returned dataset.
@@ -237,11 +234,18 @@ def density(data: "GDataState",
     A single-component dataset of the density.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` contains unevaluated modal coefficients.
   """
   _require_field_domain(data, "density", _REASON)
-  grid, values = _get_density(data.grid, data.values)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  point_data = materialize_point_values(data)
+  grid, values = _get_density(point_data.grid, point_data.values)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def xvel(data: "GDataState",
@@ -252,7 +256,7 @@ def xvel(data: "GDataState",
   """x velocity: x momentum (component 1) over density.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     inplace: mutate and return ``data`` instead of a new dataset.
     tag: optional tag for the returned dataset.
     label: optional label for the returned dataset.
@@ -261,11 +265,18 @@ def xvel(data: "GDataState",
     A single-component dataset of the x velocity.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` contains unevaluated modal coefficients.
   """
   _require_field_domain(data, "xvel", _REASON)
-  grid, values = _get_vx(data.grid, data.values)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  point_data = materialize_point_values(data)
+  grid, values = _get_vx(point_data.grid, point_data.values)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def yvel(data: "GDataState",
@@ -276,7 +287,7 @@ def yvel(data: "GDataState",
   """y velocity: y momentum (component 2) over density.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -285,11 +296,18 @@ def yvel(data: "GDataState",
     A single-component dataset of the y velocity.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` contains unevaluated modal coefficients.
   """
   _require_field_domain(data, "yvel", _REASON)
-  grid, values = _get_vy(data.grid, data.values)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  point_data = materialize_point_values(data)
+  grid, values = _get_vy(point_data.grid, point_data.values)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def zvel(data: "GDataState",
@@ -300,7 +318,7 @@ def zvel(data: "GDataState",
   """z velocity: z momentum (component 3) over density.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -309,11 +327,18 @@ def zvel(data: "GDataState",
     A single-component dataset of the z velocity.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` contains unevaluated modal coefficients.
   """
   _require_field_domain(data, "zvel", _REASON)
-  grid, values = _get_vz(data.grid, data.values)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  point_data = materialize_point_values(data)
+  grid, values = _get_vz(point_data.grid, point_data.values)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def vel(data: "GDataState",
@@ -324,7 +349,7 @@ def vel(data: "GDataState",
   """Velocity vector ``(vx, vy, vz)``: momentum (1:4) over density.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -333,11 +358,18 @@ def vel(data: "GDataState",
     A three-component dataset of the fluid velocity.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` contains unevaluated modal coefficients.
   """
   _require_field_domain(data, "vel", _REASON)
-  grid, values = _get_vi(data.grid, data.values)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  point_data = materialize_point_values(data)
+  grid, values = _get_vi(point_data.grid, point_data.values)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def pressure(data: "GDataState",
@@ -350,7 +382,7 @@ def pressure(data: "GDataState",
   """Scalar pressure from fluid moment data (5- or 10-moment).
 
   Args:
-    data: Fluid moment data (5- or 10-moment); must be NumPy-backed.
+    data: Fluid moment data (5- or 10-moment) at physical points.
     gas_gamma: Adiabatic index, used only for 5-moment data.
     num_moms: Number of moments (5 or 10); inferred from the component count
       when ``None``.
@@ -362,15 +394,22 @@ def pressure(data: "GDataState",
     A single-component dataset of the scalar pressure.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
+    ValueError: if ``data`` contains unevaluated modal coefficients, or ``num_moms`` is
       ``None`` and cannot be inferred.
   """
   _require_field_domain(data, "pressure", _REASON)
-  grid, values = _get_p(data.grid,
-                        data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _get_p(point_data.grid,
+                        point_data.values,
                         gas_gamma=gas_gamma,
                         num_moms=num_moms)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def ke(data: "GDataState",
@@ -382,9 +421,14 @@ def ke(data: "GDataState",
        label: str | None = None) -> "GDataState":
   """Kinetic (bulk-flow) energy density from fluid moment data.
 
+  Native data retains its representation and uses semantic component
+  selection and arithmetic. On modal inputs, this computes the weak
+  products of each momentum component, then weakly divides their sum by
+  density. It never indexes modal coefficients as physical components.
+
   Args:
-    data: Fluid moment data; must be NumPy-backed.
-    gas_gamma: Adiabatic index, used only for 5-moment data.
+    data: Native DG or physical point-value fluid moments.
+    gas_gamma: Retained for API compatibility; bulk energy is independent of it.
     num_moms: Number of moments (5 or 10); inferred from component count
       when ``None``.
     inplace: Mutate and return ``data`` instead of a new dataset.
@@ -395,15 +439,37 @@ def ke(data: "GDataState",
     A single-component dataset of the bulk-flow energy density.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
-      ``None`` and cannot be inferred.
+    ValueError: if the moment layout cannot be inferred, or modal data
+      lacks native arithmetic support.
   """
+  if data.backend == "gkyl":
+    rho = select(data, comp=0)
+    moments = data.num_comps // rho.num_comps
+    if (num_moms is None and moments not in (5, 10)) or moments < 4:
+      raise ValueError("ke requires five- or ten-moment fluid data")
+    momentum = [select(data, comp=i) for i in (1, 2, 3)]
+    squares = [binary(operator.mul, p, p) for p in momentum]
+    squared = binary(operator.add, binary(operator.add, squares[0], squares[1]),
+                     squares[2])
+    energy = binary(operator.mul, 0.5, binary(operator.truediv, squared, rho))
+    return data._result(data.grid,
+                        energy.native,
+                        inplace=inplace,
+                        tag=tag,
+                        label=label)
   _require_field_domain(data, "ke", _REASON)
-  grid, values = _get_ke(data.grid,
-                         data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _get_ke(point_data.grid,
+                         point_data.values,
                          gas_gamma=gas_gamma,
                          num_moms=num_moms)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def temp(data: "GDataState",
@@ -416,7 +482,7 @@ def temp(data: "GDataState",
   """Temperature ``T = p / rho`` from fluid moment data.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     gas_gamma: Adiabatic index, used only for 5-moment data.
     num_moms: Number of moments (5 or 10); inferred from component count
       when ``None``.
@@ -428,15 +494,22 @@ def temp(data: "GDataState",
     A single-component dataset of the temperature.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
+    ValueError: if ``data`` contains unevaluated modal coefficients, or ``num_moms`` is
       ``None`` and cannot be inferred.
   """
   _require_field_domain(data, "temp", _REASON)
-  grid, values = _get_temp(data.grid,
-                           data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _get_temp(point_data.grid,
+                           point_data.values,
                            gas_gamma=gas_gamma,
                            num_moms=num_moms)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def sound(data: "GDataState",
@@ -449,7 +522,7 @@ def sound(data: "GDataState",
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     gas_gamma: Adiabatic index.
     num_moms: Number of moments (5 or 10); inferred from component count
       when ``None``.
@@ -461,15 +534,22 @@ def sound(data: "GDataState",
     A single-component dataset of the sound speed.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
+    ValueError: if ``data`` contains unevaluated modal coefficients, or ``num_moms`` is
       ``None`` and cannot be inferred.
   """
   _require_field_domain(data, "sound", _REASON)
-  grid, values = _get_sound(data.grid,
-                            data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _get_sound(point_data.grid,
+                            point_data.values,
                             gas_gamma=gas_gamma,
                             num_moms=num_moms)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def mach(data: "GDataState",
@@ -482,7 +562,7 @@ def mach(data: "GDataState",
   """Sonic Mach number ``M = |v| / c_s``.
 
   Args:
-    data: Fluid moment data; must be NumPy-backed.
+    data: Fluid moment data at physical points (interpolated, nodal, or quadrature).
     gas_gamma: Adiabatic index used to compute the sound speed.
     num_moms: Number of moments (5 or 10); inferred from component count
       when ``None``.
@@ -494,15 +574,22 @@ def mach(data: "GDataState",
     A single-component dataset of the Mach number.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or ``num_moms`` is
+    ValueError: if ``data`` contains unevaluated modal coefficients, or ``num_moms`` is
       ``None`` and cannot be inferred.
   """
   _require_field_domain(data, "mach", _REASON)
-  grid, values = _get_mach(data.grid,
-                           data.values,
+  point_data = materialize_point_values(data)
+  grid, values = _get_mach(point_data.grid,
+                           point_data.values,
                            gas_gamma=gas_gamma,
                            num_moms=num_moms)
-  return data._result(grid, values, inplace=inplace, tag=tag, label=label)
+  return data._result(grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None)
 
 
 def velocity(density: "GDataState",
@@ -519,7 +606,7 @@ def velocity(density: "GDataState",
 
   Args:
     density: Number/mass density moment (single component); the divisor.
-      Must be NumPy-backed.
+      Must contain physical point values.
     momentum: Momentum moment(s) to divide by the density. Must be
       NumPy-backed.
     inplace: mutate and return ``density`` instead of a new dataset.
@@ -530,16 +617,20 @@ def velocity(density: "GDataState",
     A dataset of the velocity.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input contains unevaluated modal coefficients.
   """
   _require_field_domain(density, "velocity", _REASON)
   _require_field_domain(momentum, "velocity", _REASON)
-  values = momentum.values / density.values
-  return density._result(density.grid,
+  point_density = materialize_point_values(density)
+  point_momentum = materialize_point_values(momentum)
+  values = point_momentum.values / point_density.values
+  return density._result(point_density.grid,
                          values,
                          inplace=inplace,
                          tag=tag,
-                         label=label)
+                         label=label,
+                         interpolated=True,
+                         value_form=None)
 
 
 VARIABLES = {

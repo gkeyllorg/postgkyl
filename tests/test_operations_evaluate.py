@@ -284,6 +284,8 @@ def _native_field(value, value_form):
                basis_type="serendipity",
                poly_order=0,
                cells=[4],
+               num_quad=1,
+               quad_rule="gauss",
                value_form=value_form)
 
 
@@ -302,7 +304,7 @@ def test_native_point_reduction_leaves_the_value_form_domain():
   d = _native_field(4.0, "nodal")
   result = operations.evaluate("f mean", d)
   assert result.backend == "numpy"
-  assert "value_form" not in result.ctx
+  assert result.ctx.get("value_form") is None
   assert result.ctx["interpolated"] is True
 
 

@@ -15,21 +15,27 @@ should be fit (e.g. ``fit(d, 'exp2', window=True)``); see
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Annotated
+from postgkyl.cli_spec import CliType
+
 import inspect
-from typing import TYPE_CHECKING
+
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 import numpy as np
 
 from postgkyl import numerics
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def fit(data: "GDataState",
         fit_type: str,
         *,
-        guess=None,
+        guess: Annotated[str | Sequence[float] | np.ndarray | None,
+                         CliType(str | None)] = None,
         window: bool = False,
         min_n: int | None = None,
         print_coeffs: bool = False,
@@ -44,7 +50,7 @@ def fit(data: "GDataState",
   ``integrate`` or ``select``) are dropped, so 1D and 2D fits are supported.
 
   Args:
-    data: the dataset to fit; must be NumPy-backed. Its grid provides the
+    data: the dataset to fit; must contain point values. Its grid provides the
       independent variable(s) and each component is fit separately.
     fit_type: the model to fit -- a key of ``numerics.FIT_FUNCTIONS``
       ('linear', 'quadratic', 'plane', 'quadratic2d', 'exp_plateau',
@@ -79,15 +85,13 @@ def fit(data: "GDataState",
     ``ctx['fit_params']``, ``ctx['fit_std']``, and ``ctx['fit_R2']`` set.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), if ``fit_type``
+    ValueError: if ``data`` is unevaluated modal coefficients, if ``fit_type``
       is neither a recognized model name nor a valid RPN expression, if the
       data's active dimensionality does not match the model's, or if
       ``window=True`` and the data is not 1D.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "fit operates on interpolated (NumPy) values; call .interpolate() first "
-        "-- fitting raw DG coefficients would mix basis functions.")
+  require_field_domain(data, "fit", "raw coefficients are not field values")
+  data = materialize_point_values(data, inplace=inplace)
   grid = data.grid
   values = data.values
   spatial_shape = values.shape[:-1]

@@ -16,11 +16,10 @@ was requested -- those fall through to the pure-Python :class:`GkylReader`.
 from __future__ import annotations
 
 import numpy as np
-import msgpack
 
 from postgkyl import gpython
 from . import mapping
-from .metadata import resolve_gkyl_metadata
+from .metadata import resolve_gkyl_metadata, unpack_gkyl_metadata
 
 
 class GkylCReader:
@@ -55,7 +54,7 @@ class GkylCReader:
   def preload(self) -> None:
     grid, _, meta, esznc, _ = gpython.rio.read_header(self.file_name)
     resolve_gkyl_metadata(self.ctx,
-                          msgpack.unpackb(meta) if meta else {},
+                          unpack_gkyl_metadata(meta),
                           basis_type=self._basis_type_override,
                           poly_order=self._poly_order_override,
                           value_form=self._value_form_override)

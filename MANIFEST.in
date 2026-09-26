@@ -1,6 +1,7 @@
 include scripts/build_gkeyll.sh
 include scripts/build_gpython.sh
 include scripts/gkeyll-branch
+include scripts/gkeyll-revision
 include scripts/smoke_wheel.sh
 include src/postgkyl/gpython/csrc/_gpythonmodule.c
 

@@ -27,8 +27,6 @@ from typing import Annotated
 
 import matplotlib as mpl
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from postgkyl.cli_spec import (
     CliType,
@@ -44,8 +42,8 @@ from postgkyl.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._ffmpeg import require_ffmpeg
-from ._prep import (materialize_plot_data, resolve_axis_labels,
-                    squeeze_collapsed_axes, subplot_grid)
+from ._prep import (default_value_label, materialize_plot_data,
+                    resolve_axis_labels, squeeze_collapsed_axes, subplot_grid)
 from .labels import latex_to_html
 from .style import DEFAULT_STYLE, apply_style
 
@@ -596,7 +594,11 @@ def plotly(data: GDataState,
   Returns:
     plotly.graph_objects.Figure: the assembled figure.
   """
+  import plotly.graph_objects as go
+  from plotly.subplots import make_subplots
+
   data = materialize_plot_data(data)
+  clabel = default_value_label(data, clabel)
   theme_colors = _apply_plot_style(style,
                                    rcParams,
                                    diverging,
@@ -910,6 +912,8 @@ def plotly_animate(data: Annotated[list[GDataState],
   Returns:
     plotly.graph_objects.Figure: the assembled animation.
   """
+  import plotly.graph_objects as go
+
   data_sequence = list(data)
   if not data_sequence:
     raise ValueError("plotly_animate requires at least one dataset")

@@ -90,15 +90,16 @@ def test_integrate_warns_and_rejects_unsupported_native_basis(stem, value_form):
       data.integrate()
 
 
-def test_quad_integration_requires_native_backend(tmp_path, monkeypatch):
+def test_quad_integration_uses_the_same_rule_after_a_python_reader_load(
+    tmp_path, monkeypatch):
   quad = pg.load(GENERATED / "fsimple.gkyl").represent(to="quad")
   path = quad.save(str(tmp_path / "quad.gkyl"))
   monkeypatch.setattr(io, "_READERS", {"test": io.GkylReader})
   data = pg.load(path)
-  with pytest.warns(RuntimeWarning, match="requires the compiled Gkeyll"):
-    with pytest.raises(NotImplementedError,
-                       match="requires the compiled Gkeyll"):
-      data.integrate()
+  assert data.backend == "numpy"
+  assert data.ctx["value_form"] == "quad"
+  # f=4 on [-1,1]. Storage is independent of the retained quadrature rule.
+  np.testing.assert_allclose(data.integrate(), 8.0, rtol=0, atol=2e-14)
 
 
 @pytest.mark.parametrize("representation", [[], ["represent", "-t", "quad"]],

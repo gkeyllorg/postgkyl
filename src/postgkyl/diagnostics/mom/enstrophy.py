@@ -1,24 +1,4 @@
-"""2-D/3-D five-moment enstrophy diagnostic.
-
-Ported from ``src_bak/postgkyl/tools/calc_enstrophy.py``. Sweeps a family of
-five-moment output frames (density + momentum, ``rho, px, py, pz``) and
-computes, per frame, the enstrophy in its general form (integral of the
-squared magnitude of the curl of the velocity over the volume) and its
-incompressible form (integral of a velocity-gradient invariant, weighted by
-density).
-
-Fixes one bug present in ``src_bak``: ``incom_enstrophy = enstrophy`` aliased
-the very array the general-form result was written into, so both returned
-traces ended up identical (equal to whichever form was written last in the
-frame loop) instead of being the two distinct quantities the function's own
-docstring and return statement promised -- doctrine #21 requires fixing an
-unambiguous bug rather than silently porting it forward. The per-cell nested
-loop's ``range(len(axis) - 1)`` bound (leaving the last plane along every
-axis at zero) is preserved verbatim: unlike the aliasing, it is not
-unambiguously a bug (it could be deliberate avoidance of a less-accurate
-``np.gradient`` edge-order boundary), so changing it would be a silent
-numerical-behavior change doctrine #21 forbids.
-"""
+"""Two- and three-dimensional fluid enstrophy from physical velocity fields."""
 
 from __future__ import annotations
 
@@ -31,59 +11,39 @@ from postgkyl.gdata import GData
 
 @dataclass(frozen=True)
 class EnstrophyTraces:
-  """Per-frame enstrophy traces, one entry per swept frame.
+  """Frame integrals of ``|curl(u)|**2`` and ``rho*sum_ij(du_i/dx_j)**2``.
 
-  Attributes:
-    enstrophy: General-form enstrophy (integral of the squared curl
-      magnitude).
-    incompressible_enstrophy: Incompressible-form enstrophy (integral of a
-      density-weighted velocity-gradient invariant).
+  The second quantity is the density-weighted squared velocity-gradient
+  norm, conventionally used for incompressible viscous dissipation. These
+  definitions omit an optional factor of one half.
   """
 
   enstrophy: np.ndarray
   incompressible_enstrophy: np.ndarray
 
 
-def _enstrophy_terms(rho: np.ndarray, px: np.ndarray, py: np.ndarray,
-                     pz: np.ndarray, dx: float, dy: float,
-                     dz: float) -> tuple[float, float]:
-  """Pure array math: the general and incompressible enstrophy integrals
-  for one frame of five-moment (density + momentum) data.
-
-  Args:
-    rho, px, py, pz: 3-D density and momentum-component arrays (same shape).
-    dx, dy, dz: Grid spacing along each axis.
-
-  Returns:
-    ``(enstrophy, incompressible_enstrophy)``: the two scalar integrals for
-    this frame.
-  """
-  u = px / rho
-  v = py / rho
-  w = pz / rho
-
-  u_grad = np.gradient(u, dx, dy, dz, edge_order=2)
-  v_grad = np.gradient(v, dx, dy, dz, edge_order=2)
-  w_grad = np.gradient(w, dx, dy, dz, edge_order=2)
-  grad_tensor = np.array([u_grad, v_grad, w_grad])
-
-  u_x, u_y, u_z = u_grad
-  v_x, v_y, v_z = v_grad
-  w_x, w_y, w_z = w_grad
-
-  curl_mag = (w_y - v_z)**2 + (u_z - w_x)**2 + (v_x - u_y)**2
-  enstrophy = np.sum(curl_mag, axis=(0, 1, 2)) * dx * dy * dz
-
-  nx, ny, nz = rho.shape
-  incom_mag = np.zeros((nx, ny, nz))
-  for c in range(nx - 1):
-    for j in range(ny - 1):
-      for k in range(nz - 1):
-        cell = grad_tensor[:, :, c, j, k]
-        incom_mag[c, j, k] = np.trace(np.transpose(cell) * cell) * rho[c, j, k]
-  incompressible_enstrophy = np.sum(incom_mag, axis=(0, 1, 2)) * dx * dy * dz
-
-  return enstrophy, incompressible_enstrophy
+def _enstrophy_terms(data: GData) -> tuple[float, float]:
+  """Compose velocity, derivatives and integration with their DG semantics."""
+  if data.num_dims not in (2, 3):
+    raise ValueError("enstrophy requires two or three spatial dimensions")
+  if data.backend == "gkyl" and data.ctx.get("value_form") != "modal":
+    data = data.represent(to="modal")
+  rho = data.select(comp=0)
+  velocity = [data.select(comp=i) / rho for i in (1, 2, 3)]
+  gradient = [[
+      component.differentiate(direction=d) for d in range(data.num_dims)
+  ] for component in velocity]
+  if data.num_dims == 2:
+    for row in gradient:
+      row.append(rho * 0.0)
+  curl = [
+      gradient[2][1] - gradient[1][2], gradient[0][2] - gradient[2][0],
+      gradient[1][0] - gradient[0][1]
+  ]
+  squared_curl = sum(component**2 for component in curl)
+  squared_gradient = sum(entry**2 for row in gradient for entry in row)
+  return (float(squared_curl.integrate()),
+          float((rho * squared_gradient).integrate()))
 
 
 def enstrophy(
@@ -93,34 +53,32 @@ def enstrophy(
     *,
     extension: str = "gkyl",
 ) -> EnstrophyTraces:
-  """Sweep a frame family and compute the enstrophy in 2 forms.
+  """Integrate squared curl and density-weighted velocity gradients per frame.
+
+  Native DG data uses weak velocity division, local polynomial derivatives
+  (excluding inter-cell jumps), weak products, and DG integration. Native
+  nodal/quadrature data is first represented as modal. Point samples use
+  numerical derivatives and integration at their physical coordinates. All
+  cells, including boundary cells, contribute. For two spatial dimensions,
+  derivatives in the absent third direction are zero; all three velocity
+  components still contribute.
 
   Args:
     stem: File-name stem before the frame number, e.g. ``"sim-fluid_"``.
     init_frame: First frame (inclusive).
     final_frame: Last frame (inclusive).
-    extension: File extension of the frame files (defaults to the native
-      ``gkyl`` format).
+    extension: Frame-file extension.
 
   Returns:
-    :class:`EnstrophyTraces`, one entry per swept frame.
+    One value of each integral per frame.
   """
+  if final_frame < init_frame:
+    raise ValueError("final_frame must be at least init_frame")
   num_frames = final_frame - init_frame + 1
-
-  first = GData(f"{stem}{init_frame}.{extension}")
-  grid = first.grid
-  dx = grid[0][1] - grid[0][0]
-  dy = grid[1][1] - grid[1][0]
-  dz = grid[2][1] - grid[2][0]
-
-  enstrophy_trace = np.empty(num_frames)
-  incompressible_trace = np.empty(num_frames)
-  for r, frame_idx in enumerate(range(init_frame, final_frame + 1)):
-    data = GData(f"{stem}{frame_idx}.{extension}")
-    values = data.values
-    rho, px, py, pz = (values[..., c] for c in range(4))
-    enstrophy_trace[r], incompressible_trace[r] = _enstrophy_terms(
-        rho, px, py, pz, dx, dy, dz)
-
-  return EnstrophyTraces(enstrophy=enstrophy_trace,
-                         incompressible_enstrophy=incompressible_trace)
+  curl_trace = np.empty(num_frames)
+  gradient_trace = np.empty(num_frames)
+  for index, frame in enumerate(range(init_frame, final_frame + 1)):
+    data = GData(f"{stem}{frame}.{extension}")
+    curl_trace[index], gradient_trace[index] = _enstrophy_terms(data)
+  return EnstrophyTraces(enstrophy=curl_trace,
+                         incompressible_enstrophy=gradient_trace)

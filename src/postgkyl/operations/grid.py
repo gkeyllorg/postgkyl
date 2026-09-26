@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 import numpy as np
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def grid(data: "GDataState",
@@ -34,24 +34,23 @@ def grid(data: "GDataState",
     coordinates, on a placeholder index grid (one cell per original node).
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed), or its grid does
+    ValueError: if ``data`` is unevaluated modal coefficients, or its grid does
       not have one entry per dimension reported by ``num_cells``.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "grid operates on interpolated (NumPy) values; call .interpolate() "
-        "first -- raw DG coefficients have no per-node coordinates.")
+  require_field_domain(data, "grid", "raw coefficients are not field values")
+  data = materialize_point_values(data, inplace=inplace)
   grid_in = data.grid
   num_dims = data.num_dims
-  num_cells = data.num_cells
   if len(grid_in) != num_dims:
     raise ValueError(
         f"grid: dataset reports {num_dims:d} dimension(s) but its grid has "
         f"{len(grid_in):d} axis (axes); shapes are inconsistent.")
 
-  grid_out = [np.arange(nc + 2) for nc in num_cells]
+  node_counts = ([len(g) for g in grid_in]
+                 if grid_in[0].ndim == 1 else list(grid_in[0].shape))
+  grid_out = [np.arange(nc + 1) for nc in node_counts]
 
-  shape = np.append(np.copy(num_cells) + 1, num_dims)
+  shape = [*node_counts, num_dims]
   values = np.zeros(shape)
   if num_dims == 1:
     values[..., 0] = grid_in[0]

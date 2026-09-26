@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.guards import require_field_domain
 
 from postgkyl import numerics
 
-if TYPE_CHECKING:
-  from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def magsq(data: "GDataState",
@@ -22,7 +22,7 @@ def magsq(data: "GDataState",
   returning a single-component field.
 
   Args:
-    data: the dataset holding the vector field; must be NumPy-backed.
+    data: the dataset holding the vector field; must contain point values.
     coords: ``"start:end"`` slice of the component axis to sum the squares
       of. Defaults to the first three components.
     inplace: mutate and return ``data`` instead of a new dataset.
@@ -33,12 +33,9 @@ def magsq(data: "GDataState",
     A single-component dataset of the magnitude squared.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is unevaluated modal coefficients.
   """
-  if data.backend == "gkyl":
-    raise ValueError(
-        "magsq operates on interpolated (NumPy) values; call .interpolate() "
-        "first -- summing squares of raw DG coefficients would mix basis functions."
-    )
+  require_field_domain(data, "magsq", "raw coefficients are not field values")
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = numerics.mag_sq(data.grid, data.values, coords=coords)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)

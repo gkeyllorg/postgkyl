@@ -1,12 +1,10 @@
 """Arithmetic / NumPy-ufunc backend for the fluent operators.
 
-Defined here (in ``operations``) -- not on the container -- so the computing operators
-follow the same one-way layering as every other verb (HIERARCHY_3.md).
+Storage and representation are independent. Native modal coefficients use DG
+kernels; nodal/quadrature values allow pointwise operations in either storage
+backend. Plain NumPy fields use their directly located samples.
 
-Dispatch is on the container's ``backend`` (the two-domain lifecycle of
-REFACTOR_GKEYLL_FFI.md):
-
-- **gkyl-backed (modal) operands** run inside Gkeyll: ``*``/``/`` are the weak
+- **Native modal operands** run inside Gkeyll: ``*``/``/`` are the weak
   kernels (``gkyl_dg_mul_op``/``div_op``), ``+``/``-`` are coefficient linear
   combinations (``gkyl_array_set``/``accumulate``), scalar multiply is
   ``gkyl_array_scale``, scalar add shifts the mean coefficient, positive
@@ -18,8 +16,9 @@ REFACTOR_GKEYLL_FFI.md):
   times a phase-space distribution) automatically route ``*`` through
   ``gkyl_dg_mul_conf_phase_op_range`` instead -- whichever operand has fewer
   dimensions is the conf side, independent of call order.
-- **numpy-backed operands** take the unchanged NumPy path.
-- **Mixing the domains** in one expression is an error naming the fix.
+- **NumPy-backed modal coefficients** require explicit evaluation or conversion
+  before pointwise math.
+- **Mixed backends or representations** raise an error naming the conversion.
 """
 
 from __future__ import annotations
@@ -29,8 +28,9 @@ import operator
 import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.gdatastate.guards import require_same_quadrature
+from postgkyl.gdatastate.layout import require_dg_layout, require_kernel_basis
 from postgkyl import dg, numerics
+from ._compatibility import require_collocated_layout, require_same_backend as _require_same_backend
 
 
 def binary(op, a, b):
@@ -62,7 +62,7 @@ def _basis_of(data: GDataState):
   poly_order = data.ctx.get("poly_order")
   if basis_type is None or poly_order is None:
     raise ValueError("modal operand has no basis_type/poly_order metadata")
-  return str(basis_type), data.num_dims, int(poly_order)
+  return require_dg_layout(data).basis_args
 
 
 def _modal_binary(op, a, b, pa, pb):
@@ -90,13 +90,6 @@ def _rep_of(data: GDataState) -> str | None:
   return data.ctx.get("value_form", "modal")
 
 
-def _require_same_backend(left: GDataState, right: GDataState) -> None:
-  if left.backend != right.backend:
-    raise ValueError(
-        "operands have different backends (gkyl vs numpy); call .interpolate() "
-        "on the native operand to combine them.")
-
-
 def require_compatible_operands(left: GDataState, right: GDataState) -> None:
   """Require matching physical locations and value layouts for arithmetic.
 
@@ -104,18 +97,7 @@ def require_compatible_operands(left: GDataState, right: GDataState) -> None:
   Scalars/arrays have no dataset coordinates to compare. The modal conf/phase
   product has a separate grid-prefix contract in ``_modal_conf_phase_mul``.
   """
-  _require_same_backend(left, right)
-  if not numerics.grids_compatible(left.grid, right.grid):
-    raise ValueError("operands live on different grids")
-  rep = _rep_of(left)
-  if rep != _rep_of(right):
-    raise ValueError(
-        f"operands are in different value_forms ({rep} vs {_rep_of(right)}); "
-        "convert one explicitly with .represent(to=...).")
-  if rep is not None and _basis_of(left) != _basis_of(right):
-    raise ValueError("operands have different DG bases")
-  if rep == "quad":
-    require_same_quadrature(left, right)
+  require_collocated_layout(left, right)
   if left.values.shape != right.values.shape:
     raise ValueError(
         f"incompatible shapes {left.values.shape} vs {right.values.shape}")
@@ -138,6 +120,7 @@ def _modal_dataset_pair(op, pa: GDataState, pb: GDataState):
     # with NumPy on the views, wrap back native, stay in-value_form.
     out = dg.rep.wrap(op(np.asarray(pa.values), np.asarray(pb.values)))
   elif op in (operator.mul, operator.truediv):
+    basis = require_kernel_basis(pa).basis_args
     out = (dg.modal.weak_mul if op is operator.mul else dg.modal.weak_div)(
         *basis, A, B)
   else:
@@ -174,8 +157,8 @@ def _modal_conf_phase_mul(op, pa: GDataState, pb: GDataState):
         "the lower-dimensional operand's grid is not the leading dimensions "
         "of the higher-dimensional operand's grid; they are not the same "
         "simulation's conf-space and phase-space grids.")
-  conf_type, conf_ndim, conf_p = _basis_of(conf)
-  phase_type, phase_ndim, _ = _basis_of(phase)
+  conf_type, conf_ndim, conf_p = require_kernel_basis(conf).basis_args
+  phase_type, phase_ndim, _ = require_kernel_basis(phase).basis_args
   out = dg.modal.weak_mul_conf_phase(conf_type, conf_ndim, phase_type,
                                      phase_ndim, conf_p, conf.num_cells,
                                      phase.num_cells, conf.native, phase.native)
@@ -183,7 +166,8 @@ def _modal_conf_phase_mul(op, pa: GDataState, pb: GDataState):
 
 
 def _modal_scalar(op, data: GDataState, s: float, *, scalar_first: bool):
-  basis = _basis_of(data)
+  layout = require_dg_layout(data)
+  basis = layout.basis_args
   rep = _rep_of(data)
   A = data.native
   # Adding/subtracting a *scalar* only shifts the mean (constant) DG
@@ -193,8 +177,9 @@ def _modal_scalar(op, data: GDataState, s: float, *, scalar_first: bool):
   # runs Gkeyll's own accumulate over every coefficient, higher orders
   # included. In point-value forms (nodal/quad) there's no separate mean
   # coefficient to single out, so a scalar shift moves every component.
-  shift = (dg.modal.shift_all if rep != "modal" else
-           lambda a, v: dg.modal.shift_mean(*basis, a, v))
+  shift = (
+      dg.modal.shift_all if rep != "modal" else
+      lambda a, v: dg.modal.shift_mean(*basis, a, v, **layout.basis_kwargs))
   if op is operator.mul:  # linear: valid in any rep
     out = dg.modal.scale(A, s)
   elif op is operator.truediv and not scalar_first:
@@ -212,8 +197,10 @@ def _modal_scalar(op, data: GDataState, s: float, *, scalar_first: bool):
         data.values), s)
     out = dg.rep.wrap(op(*args))
   elif op is operator.truediv:  # s / f -- weak reciprocal
+    basis = require_kernel_basis(data).basis_args
     out = dg.modal.scale(dg.modal.weak_inv(*basis, A), s)
   elif op is operator.pow and not scalar_first:
+    basis = require_kernel_basis(data).basis_args
     out = dg.modal.power(*basis,
                          A,
                          s if not float(s).is_integer() else int(s),

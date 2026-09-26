@@ -16,6 +16,7 @@ import numpy as np
 
 from ... import numerics
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 from .five_moment import (
     _get_density,
     _get_vx,
@@ -299,7 +300,7 @@ def pressure(data: "GDataState",
   10-moment fluid data.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     gas_gamma: Unused compatibility parameter.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -309,9 +310,10 @@ def pressure(data: "GDataState",
     A single-component dataset of the scalar pressure.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pressure", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_p(data.grid,
                         data.values,
                         gas_gamma=gas_gamma,
@@ -328,7 +330,7 @@ def ke(data: "GDataState",
   """Kinetic (bulk-flow) energy density from 10-moment fluid data.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     gas_gamma: Unused compatibility parameter.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -338,9 +340,10 @@ def ke(data: "GDataState",
     A single-component dataset of the bulk-flow energy density.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "ke", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_ke(data.grid,
                          data.values,
                          gas_gamma=gas_gamma,
@@ -357,7 +360,7 @@ def temp(data: "GDataState",
   """Temperature ``T = p / rho`` from 10-moment fluid data.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     gas_gamma: Unused compatibility parameter.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -367,9 +370,10 @@ def temp(data: "GDataState",
     A single-component dataset of the temperature.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "temp", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_temp(data.grid,
                            data.values,
                            gas_gamma=gas_gamma,
@@ -386,7 +390,7 @@ def sound(data: "GDataState",
   """Sound speed ``c_s = sqrt(gas_gamma * p / rho)`` from 10-moment data.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     gas_gamma: Adiabatic index used in the sound speed.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -396,9 +400,10 @@ def sound(data: "GDataState",
     A single-component dataset of the sound speed.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "sound", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_sound(data.grid,
                             data.values,
                             gas_gamma=gas_gamma,
@@ -415,7 +420,7 @@ def mach(data: "GDataState",
   """Sonic Mach number ``M = |v| / c_s`` from 10-moment data.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     gas_gamma: Adiabatic index used in the sound speed.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
@@ -425,9 +430,10 @@ def mach(data: "GDataState",
     A single-component dataset of the Mach number.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "mach", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_mach(data.grid,
                            data.values,
                            gas_gamma=gas_gamma,
@@ -443,7 +449,7 @@ def pxx(data: "GDataState",
   """``P_xx`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -452,9 +458,10 @@ def pxx(data: "GDataState",
     A single-component dataset of ``P_xx``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pxx", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pxx(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -467,7 +474,7 @@ def pxy(data: "GDataState",
   """``P_xy`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -476,9 +483,10 @@ def pxy(data: "GDataState",
     A single-component dataset of ``P_xy``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pxy", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pxy(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -491,7 +499,7 @@ def pxz(data: "GDataState",
   """``P_xz`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -500,9 +508,10 @@ def pxz(data: "GDataState",
     A single-component dataset of ``P_xz``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pxz", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pxz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -515,7 +524,7 @@ def pyy(data: "GDataState",
   """``P_yy`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -524,9 +533,10 @@ def pyy(data: "GDataState",
     A single-component dataset of ``P_yy``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pyy", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pyy(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -539,7 +549,7 @@ def pyz(data: "GDataState",
   """``P_yz`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -548,9 +558,10 @@ def pyz(data: "GDataState",
     A single-component dataset of ``P_yz``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pyz", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pyz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -563,7 +574,7 @@ def pzz(data: "GDataState",
   """``P_zz`` pressure-tensor component.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -572,9 +583,10 @@ def pzz(data: "GDataState",
     A single-component dataset of ``P_zz``.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pzz", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pzz(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -588,7 +600,7 @@ def pressure_tensor(data: "GDataState",
   ``(P_xx, P_xy, P_xz, P_yy, P_yz, P_zz)``.
 
   Args:
-    data: Ten-moment fluid data; must be NumPy-backed.
+    data: Ten-moment fluid data; must contain point values.
     inplace: Mutate and return ``data`` instead of a new dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.
@@ -597,9 +609,10 @@ def pressure_tensor(data: "GDataState",
     A six-component dataset of the symmetric pressure tensor.
 
   Raises:
-    ValueError: if ``data`` is native modal (gkyl-backed).
+    ValueError: if ``data`` is modal DG coefficients.
   """
   _require_field_domain(data, "pressure_tensor", _REASON)
+  data = materialize_point_values(data, inplace=inplace)
   grid, values = _get_pij(data.grid, data.values)
   return data._result(grid, values, inplace=inplace, tag=tag, label=label)
 
@@ -614,9 +627,9 @@ def p_par(ptensor: "GDataState",
 
   Args:
     ptensor: Six-component symmetric pressure tensor (Pxx, Pxy, Pxz, Pyy,
-      Pyz, Pzz); must be NumPy-backed.
+      Pyz, Pzz); must contain point values.
     bfield: Magnetic field whose first three components are (Bx, By, Bz);
-      must be NumPy-backed.
+      must contain point values.
     inplace: mutate and return ``ptensor`` instead of a new dataset.
     tag: optional tag for the returned dataset.
     label: optional label for the returned dataset.
@@ -625,10 +638,12 @@ def p_par(ptensor: "GDataState",
     A single-component dataset of the parallel pressure.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(ptensor, "p_par", _REASON)
   _require_field_domain(bfield, "p_par", _REASON)
+  ptensor = materialize_point_values(ptensor, inplace=inplace)
+  bfield = materialize_point_values(bfield)
   grid, values = _get_p_par(ptensor.grid, ptensor.values, bfield.grid,
                             bfield.values)
   return ptensor._result(grid, values, inplace=inplace, tag=tag, label=label)
@@ -645,9 +660,9 @@ def p_perp(ptensor: "GDataState",
 
   Args:
     ptensor: Six-component symmetric pressure tensor (Pxx, Pxy, Pxz, Pyy,
-      Pyz, Pzz); must be NumPy-backed.
+      Pyz, Pzz); must contain point values.
     bfield: Magnetic field whose first three components are (Bx, By, Bz);
-      must be NumPy-backed.
+      must contain point values.
     inplace: mutate and return ``ptensor`` instead of a new dataset.
     tag: optional tag for the returned dataset.
     label: optional label for the returned dataset.
@@ -656,10 +671,12 @@ def p_perp(ptensor: "GDataState",
     A single-component dataset of the perpendicular pressure.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(ptensor, "p_perp", _REASON)
   _require_field_domain(bfield, "p_perp", _REASON)
+  ptensor = materialize_point_values(ptensor, inplace=inplace)
+  bfield = materialize_point_values(bfield)
   grid, values = _get_p_perp(ptensor.grid, ptensor.values, bfield.grid,
                              bfield.values)
   return ptensor._result(grid, values, inplace=inplace, tag=tag, label=label)
@@ -680,9 +697,9 @@ def agyro(ptensor: "GDataState",
 
   Args:
     ptensor: Six-component symmetric pressure tensor (Pxx, Pxy, Pxz, Pyy,
-      Pyz, Pzz); must be NumPy-backed.
+      Pyz, Pzz); must contain point values.
     bfield: Magnetic field whose first three components are (Bx, By, Bz);
-      must be NumPy-backed.
+      must contain point values.
     measure: 'frobenius' (Frobenius norm of the agyrotropic part of the
       pressure tensor) or 'swisdak' (the Q measure of Swisdak 2015).
       Case-insensitive.
@@ -694,11 +711,13 @@ def agyro(ptensor: "GDataState",
     A single-component dataset of the agyrotropy.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed), or
+    ValueError: if either input is modal DG coefficients, or
       ``measure`` is not 'frobenius' or 'swisdak'.
   """
   _require_field_domain(ptensor, "agyro", _AGYRO_REASON)
   _require_field_domain(bfield, "agyro", _AGYRO_REASON)
+  ptensor = materialize_point_values(ptensor, inplace=inplace)
+  bfield = materialize_point_values(bfield)
   grid, values = _get_agyro(ptensor.grid,
                             ptensor.values,
                             bfield.grid,
@@ -722,9 +741,9 @@ def mom_agyro(species: "GDataState",
 
   Args:
     species: Raw 10-moment fluid data for a single species (density,
-      momentum, and the six pressure-tensor moments); must be NumPy-backed.
+      momentum, and the six pressure-tensor moments); must contain point values.
     field: Gkeyll EM field whose components 3:6 are the magnetic field (Bx,
-      By, Bz); must be NumPy-backed.
+      By, Bz); must contain point values.
     measure: 'frobenius' (Frobenius norm of the agyrotropic part of the
       pressure tensor) or 'swisdak' (the Q measure of Swisdak 2015).
       Case-insensitive.
@@ -736,11 +755,13 @@ def mom_agyro(species: "GDataState",
     A single-component dataset of the agyrotropy.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed), or
+    ValueError: if either input is modal DG coefficients, or
       ``measure`` is not 'frobenius' or 'swisdak'.
   """
   _require_field_domain(species, "mom_agyro", _AGYRO_REASON)
   _require_field_domain(field, "mom_agyro", _AGYRO_REASON)
+  species = materialize_point_values(species, inplace=inplace)
+  field = materialize_point_values(field)
   grid, values = _get_gkyl_10m_agyro(species.grid,
                                      species.values,
                                      field.grid,

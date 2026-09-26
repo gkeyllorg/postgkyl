@@ -28,7 +28,7 @@ fi
 echo "# Updating Postgkyl from the current branch's upstream"
 git -C "${ROOT_DIR}" pull --ff-only
 
-# setup.py fetches the configured Gkeyll branch and builds core and gpython
+# setup.py fetches the configured Gkeyll revision and builds core and gpython
 # using this same interpreter.
 echo "# Rebuilding Gkeyll and gpython, and reinstalling Postgkyl"
 POSTGKYL_SKIP_GKEYLL_BUILD=0 "${PYTHON}" -m pip install \

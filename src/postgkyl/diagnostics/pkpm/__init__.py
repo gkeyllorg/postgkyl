@@ -20,6 +20,7 @@ import numpy as np
 
 from ...gdata.gdata import GData
 from ...gdatastate.guards import require_field_domain as _require_field_domain
+from ...gdatastate import materialize_point_values
 from ..vm.kinetic import transform_frame
 
 if TYPE_CHECKING:
@@ -99,9 +100,9 @@ def laguerre_compose(distribution: "GDataState",
 
   Args:
     distribution: The two-component PKPM Laguerre expansion coefficients
-      ``F0(x, v_par)`` and ``G(x, v_par)``; must be NumPy-backed.
+      ``F0(x, v_par)`` and ``G(x, v_par)``; must contain point values.
     variables: The PKPM variables dataset providing T/m(x) (used as the
-      first component); must be NumPy-backed.
+      first component); must contain point values.
     inplace: mutate and return ``distribution`` instead of a new dataset.
     tag: optional tag for the returned dataset.
     label: optional label for the returned dataset.
@@ -110,10 +111,12 @@ def laguerre_compose(distribution: "GDataState",
     A dataset holding the composed ``f(x, v_par, v_perp)``.
 
   Raises:
-    ValueError: if either input is native modal (gkyl-backed).
+    ValueError: if either input is modal DG coefficients.
   """
   _require_field_domain(distribution, "laguerre_compose", _REASON)
   _require_field_domain(variables, "laguerre_compose", _REASON)
+  distribution = materialize_point_values(distribution, inplace=inplace)
+  variables = materialize_point_values(variables)
   grid, values = _laguerre_compose(distribution.grid, distribution.values,
                                    variables.values)
   return distribution._result(grid,
