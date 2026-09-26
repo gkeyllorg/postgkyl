@@ -1,0 +1,18 @@
+A previous agent revamped the unit testing system. They produced highly precise analytic unit tests. Some of them are failing and this indicates a shortcoming on postgkeyll. Go through the unit tests and improve the percision and accuracy of this codebase. They left off with a few notes.
+
+Added analytic tests for DG operations, integration, derivatives, Fourier spectra, fitting, and physical diagnostics. New fixtures generate automatically under tests/test_data/generated/. Updated the testing skill (.agents/skills/testing/SKILL.md) to require independent references and justified tolerances.
+
+Full suite: 2,700 passed, 6 skipped, 35 failed:
+
+2 failures in p2 partial integration and averaging.
+33 coordinate-projection failures, including native crashes isolated in subprocesses.
+
+Please make this codebase robust and accurate.
+
+---
+
+Make the relevant modification to Gkeyll inside the /gkeyll folder. Apply the patch and relevant modifications there. Do not commit anything. Assess why this decision was made and ammend the skill files such that future agents know to make changes direclty in the linked /gkeyll, but not to commit anything
+
+---
+
+Please clarify where these changes in gkeyll are.
