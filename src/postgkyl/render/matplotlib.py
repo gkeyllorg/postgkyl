@@ -226,6 +226,19 @@ def _nodal_grid(grid: list, cells: np.ndarray) -> list:
   return out
 
 
+def _point_mesh_edges(points: np.ndarray, cell_edges: np.ndarray) -> np.ndarray:
+  """Bound point-value patches by their DG cell edges and interior midpoints.
+
+  These are display boundaries, not quadrature weights or new sample points.
+  Keeping each cell boundary also preserves jumps between neighboring cells.
+  """
+  points = points.reshape(len(cell_edges) - 1, -1)
+  edges = np.empty_like(points)
+  edges[:, 0] = cell_edges[:-1]
+  edges[:, 1:] = 0.5 * (points[:, :-1] + points[:, 1:])
+  return np.append(edges.ravel(), cell_edges[-1])
+
+
 def _shared_component_range(states, zshift: float, zscale: float) -> list:
   """Per-component ``(vmin, vmax)`` across *every* dataset drawn on one figure.
 
@@ -441,6 +454,8 @@ def plot(
   cell grid. To plot the evaluated field, first use ``interpolate`` (uniform
   mesh), ``local_poly`` (preserves cell jumps), ``represent(to='nodal')``
   (basis nodes), or ``represent(to='quad')`` (quadrature points).
+  For native nodal/quadrature heatmaps, colored patches end at the original
+  cell boundaries, with interior edges midway between sampling points.
   The input dataset is unchanged.
 
   For 1-D data, passing ``cmap`` together with ``cval`` colors the line by
@@ -597,6 +612,7 @@ def plot(
   figures = []
   plot_args = () if args is None else args
   for family_index, states in enumerate(families):
+    source_states = states
     states = [materialize_plot_data(state) for state in states]
     family_saveas = _indexed_saveas(saveas, family_index, indexed)
     for st in states:
@@ -922,6 +938,16 @@ def plot(
         if grid_indices:
           grid = [np.arange(int(num_cells)) for num_cells in cells]
 
+        mesh_grid = grid
+        source = source_states[ds_i]
+        if (num_dims == 2 and not grid_indices and source.backend == "gkyl"
+            and source.ctx.get("value_form") in ("nodal", "quad")):
+          mesh_axes = axes[::-1] if transpose else axes
+          mesh_grid = [
+              _point_mesh_edges(points, source.grid[axis])
+              for points, axis in zip(grid, mesh_axes)
+          ]
+
         num_comps = values.shape[-1]
         idx_comps = range(int(np.floor(num_comps / step)))
 
@@ -1164,11 +1190,11 @@ def plot(
                 extend = "max"
               elif comp_zmin is not None:
                 extend = "min"
-              x = (grid[0] + xshift) * xscale
-              y = (grid[1] + yshift) * yscale
+              x = (mesh_grid[0] + xshift) * xscale
+              y = (mesh_grid[1] + yshift) * yscale
               z = (values[..., comp].transpose() + zshift) * zscale
               if len(x) == z.shape[1] or len(y) == z.shape[0]:
-                nodal_grid = _nodal_grid(grid, cells)
+                nodal_grid = _nodal_grid(mesh_grid, cells)
                 x = (nodal_grid[0] + xshift) * xscale
                 y = (nodal_grid[1] + yshift) * yscale
               if x.ndim > 1:

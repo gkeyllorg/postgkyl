@@ -618,6 +618,72 @@ def _field_2d_rect(n0=4, n1=8) -> GDataState:
   return d
 
 
+@needs_gkeyll
+class TestPointMeshBoundaries:
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_hybrid_quad_patches_stay_inside_the_original_cell(self, transpose):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl")).represent(to="quad")
+    before = data.values.copy()
+    fig = backend.plot(data,
+                       no_show=True,
+                       transpose=transpose,
+                       xshift=2.0,
+                       xscale=3.0,
+                       yshift=-1.0,
+                       yscale=2.0)
+    mesh = fig.axes[0].collections[0]
+    edges = [
+        np.array([-1., 0., 1.]),
+        np.array([-1., -np.sqrt(3 / 5) / 2,
+                  np.sqrt(3 / 5) / 2, 1.])
+    ]
+    values = np.array([[-1 / np.sqrt(5), 1 / np.sqrt(5)],
+                       [np.sqrt(5) / 4, -np.sqrt(5) / 4],
+                       [-1 / np.sqrt(5), 1 / np.sqrt(5)]])
+    if transpose:
+      edges.reverse()
+      values = values.T
+    coordinates = mesh.get_coordinates()
+    np.testing.assert_allclose(coordinates[0, :, 0], (edges[0] + 2) * 3)
+    np.testing.assert_allclose(coordinates[:, 0, 1], (edges[1] - 1) * 2)
+    np.testing.assert_allclose(mesh.get_array(), values)
+    np.testing.assert_allclose(fig.axes[0].get_xlim(), (3, 9))
+    np.testing.assert_allclose(fig.axes[0].get_ylim(), (-4, 0))
+    np.testing.assert_array_equal(data.values, before)
+    for axis in data.grid:
+      np.testing.assert_array_equal(axis, [-1, 1])
+
+  @pytest.mark.parametrize("representation", ["nodal", "quad"])
+  def test_patches_preserve_unequal_cell_boundaries(self, representation):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl"))
+    # Two unequal cells with a jump in the constant field at z0=0.
+    coefficients = np.zeros((2, 6))
+    coefficients[:, 0] = [2., 4.]
+    data.ctx["cells"] = np.array([2, 1])
+    data.push(
+        [np.array([-2., 0., 3.]), np.array([1., 5.])],
+        gpython.GkylArray.from_numpy(coefficients))
+    data = data.represent(to=representation)
+    fig = backend.plot(data, no_show=True)
+    mesh = fig.axes[0].collections[0]
+    coordinates = mesh.get_coordinates()
+    np.testing.assert_allclose(coordinates[0, :, 0], [-2, -1, 0, 1.5, 3],
+                               atol=1e-14)
+    np.testing.assert_allclose(coordinates[[0, -1], 0, 1], [1, 5])
+    np.testing.assert_allclose(mesh.get_array(), [[1, 1, 2, 2]] * 3)
+
+  def test_four_point_quadrature_uses_nonuniform_interior_edges(self):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl")).represent(to="quad",
+                                                                    num_quad=4)
+    fig = backend.plot(data, no_show=True)
+    coordinates = fig.axes[0].collections[0].get_coordinates()
+    # Four Gauss points: +/-0.8611363116 and +/-0.3399810436.
+    expected = [-1., -0.6005586775894544, 0., 0.6005586775894544, 1.]
+    np.testing.assert_allclose(coordinates[0, :, 0], expected, atol=1e-14)
+    np.testing.assert_allclose(coordinates[:, 0, 1], expected, atol=1e-14)
+
+
 class TestTranspose:
 
   def test_1d_puts_the_coordinate_on_the_vertical_axis(self):
