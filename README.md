@@ -127,9 +127,9 @@ bash scripts/update_pgkyl.sh
 ```
 
 The script pulls the current Postgkyl branch's upstream with `--ff-only`,
-fetches the latest commit on Gkeyll's `lapack_lite_shim` branch, rebuilds Gkeyll and
-the `gpython` extension, and reinstalls Postgkyl. It uses the active `python`;
-set `PYTHON=/path/to/python` to choose another interpreter. Keep NumPy and
+fetches the latest commit on Gkeyll's `lapack_lite_shim_bugs` branch, rebuilds
+Gkeyll and the `gpython` extension, and reinstalls Postgkyl. It uses the active
+`python`; set `PYTHON=/path/to/python` to choose another interpreter. Keep NumPy and
 the build tools installed as described above.
 
 For an editable developer installation, use:
@@ -190,6 +190,10 @@ During a source build, `setup.py` runs `scripts/build_gkeyll.sh`, which:
    separate MPI, CUDA, SuperLU, Lua, or system LAPACK installation is needed.
 3. Builds the Python extension and bundles the core library beside it, so
    the installed package can run without the Gkeyll source folder.
+
+The pinned revision currently comes from `lapack_lite_shim_bugs`, which
+contains the Gkeyll changes required by Postgkyl. The update script advances
+the pin to the latest commit on that branch.
 
 The build needs Git, Make, a C compiler, and network access. It uses `cc` by
 default. To select another installed compiler, for example GCC, run:

@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)
 GKEYLL_DIR="${ROOT_DIR}/gkeyll"
-GKEYLL_BRANCH="${GKEYLL_BRANCH:-lapack_lite_shim}"
+GKEYLL_BRANCH="${GKEYLL_BRANCH:-lapack_lite_shim_bugs}"
 PYTHON="${PYTHON:-python}"
 
 INSTALL_OPTIONS=(--no-build-isolation)
