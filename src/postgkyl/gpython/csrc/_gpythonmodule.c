@@ -37,6 +37,7 @@
 #include <numpy/arrayobject.h>
 
 #include <errno.h>
+#include <math.h>
 
 #include <gkyl_gpython.h>
 
@@ -949,6 +950,24 @@ py_eval_at_coord_proj(PyObject *self, PyObject *args)
     goto fail;
   }
   int out_btype, out_poly_order, out_cdim, out_vdim;
+  // Gkeyll builds with fast-math, so reject non-finite buffers here, where
+  // isfinite retains its IEEE semantics, before the native cell search.
+  const double *lower = PyArray_DATA(lo), *upper = PyArray_DATA(up);
+  const double *coords = PyArray_DATA(evalcoords);
+  for (int d = 0; d < ndim; ++d) {
+    if (!isfinite(lower[d]) || !isfinite(upper[d])) {
+      PyErr_SetString(PyExc_ValueError,
+                      "eval_at_coord_proj: grid bounds must be finite");
+      goto fail;
+    }
+  }
+  for (int i = 0; i < num_eval; ++i) {
+    if (!isfinite(coords[i])) {
+      PyErr_SetString(PyExc_ValueError,
+                      "eval_at_coord_proj: eval_coords must be finite");
+      goto fail;
+    }
+  }
   gpython_array *out = gpython_eval_at_coord_proj(
       b, cdim_do, ndim, PyArray_DATA(lo), PyArray_DATA(up), PyArray_DATA(nc),
       num_eval, PyArray_DATA(evaldirs), PyArray_DATA(evalcoords), ndim_tar,
@@ -963,7 +982,8 @@ py_eval_at_coord_proj(PyObject *self, PyObject *args)
   if (!out) {
     PyErr_SetString(PyExc_ValueError,
                     "eval_at_coord_proj: operand shapes incompatible with the "
-                    "basis/grid, or eval_dirs out of range");
+                    "basis/grid, or invalid eval_dirs/eval_coords "
+                    "(coordinates must be finite and within the grid)");
     return NULL;
   }
   PyObject *outcap = wrap_array(out);

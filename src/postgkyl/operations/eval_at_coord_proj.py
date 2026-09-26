@@ -49,13 +49,16 @@ def eval_at_coord_proj(data: "GDataState",
 
   Args:
     data: gkyl-backed (native modal) dataset in the modal value_form.
-    eval_dirs: 0-based direction indices to evaluate away (e.g. the selected
-      ``z0``-``z5`` flags at the CLI layer).
-    eval_coords: physical coordinates, one per entry of ``eval_dirs`` (same
-      order); in the dataset's own computational grid sense (the same
+    eval_dirs: Distinct 0-based integer direction indices to evaluate away
+      (e.g. the selected ``z0``-``z5`` flags at the CLI layer).
+    eval_coords: Finite physical coordinates within the closed grid bounds,
+      one per entry of ``eval_dirs`` in the same order; in the dataset's own
+      computational grid sense (the same
       convention every other native-modal verb here, e.g. ``average``,
       uses -- not a separately mapped/deformed physical grid, which this
       architecture only ever produces post-``interpolate()``).
+      At an interior cell face, use the cell on the higher-coordinate side;
+      at either domain boundary, use the adjacent interior cell.
     inplace: Mutate and return ``data`` instead of creating a dataset.
     tag: Optional tag for the returned dataset.
     label: Optional label for the returned dataset.

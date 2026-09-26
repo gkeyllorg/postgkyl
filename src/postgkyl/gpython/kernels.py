@@ -11,6 +11,8 @@ Python-side capability guards mirror Gkeyll's own limits (which are C
 
 from __future__ import annotations
 
+from operator import index
+
 import numpy as np
 
 from . import _lib
@@ -590,10 +592,16 @@ def _check_eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
       raise NotImplementedError(
           f"Gkeyll's {basis_type} eval_at_coord_proj kernels in {ndim}D "
           f"support poly_order 1..{max_p}, got {poly_order}")
-  eval_dirs = sorted(set(int(d) for d in eval_dirs))
-  if not eval_dirs or eval_dirs[0] < 0 or eval_dirs[-1] >= ndim:
+  try:
+    eval_dirs = [index(d) for d in eval_dirs]
+  except TypeError as error:
+    raise ValueError(
+        "eval_dirs must contain integer direction indices") from error
+  if not eval_dirs or min(eval_dirs) < 0 or max(eval_dirs) >= ndim:
     raise ValueError(f"eval_dirs {eval_dirs} out of range for a {ndim}D "
                      "field")
+  if len(set(eval_dirs)) != len(eval_dirs):
+    raise ValueError("eval_dirs must be distinct")
   return eval_dirs
 
 
@@ -632,6 +640,9 @@ def eval_at_coord_proj(basis_type: str, ndim: int, poly_order: int,
   eval_coords_arr = np.asarray(eval_coords, dtype=np.float64)
   if eval_coords_arr.shape != eval_dirs_arr.shape:
     raise ValueError("eval_dirs and eval_coords must have the same length")
+  order = np.argsort(eval_dirs_arr)
+  eval_dirs_arr = eval_dirs_arr[order]
+  eval_coords_arr = eval_coords_arr[order]
   cells_tar = np.asarray(cells_tar, dtype=np.int32)
   out_cap, btype, poly_order_tar, cdim_tar, vdim_tar = (
       _lib.require().eval_at_coord_proj(basis._cap, int(cdim_do), lower, upper,

@@ -6,6 +6,7 @@ The small, exactly representable fields allow roundoff-level tolerances.
 """
 
 from itertools import product
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -203,6 +204,58 @@ def test_three_dimensional_reduction_over_nonadjacent_axes():
   np.testing.assert_allclose(result.values, expected, **ROUND_OFF)
 
 
+@pytest.mark.parametrize("case,removed", [
+    pytest.param(case, d, id=f"{case[0]}-axis{d}")
+    for case in SERENDIPITY_CASES if case[1] > 1 for d in range(case[1])
+])
+def test_weighted_average_preserves_analytic_dependence(case, removed):
+  data, factors, grid = _load_case(case)
+  result = data.average([removed],
+                        weight=data.select(comp=1)).interpolate(num_interp=3)
+  kept = [d for d in range(data.num_dims) if d != removed]
+  weight = factors[1][removed]
+  scale = [
+      _integral(field[removed] * weight, grid[removed]) /
+      _integral(weight, grid[removed]) for field in factors
+  ]
+  expected = _values([[field[d] for d in kept]
+                      for field in factors], _centers(result.grid)) * scale
+  # Separability cancels the surviving weight in the projected weak solve;
+  # the retained answer is again exactly in the donor's polynomial space.
+  np.testing.assert_allclose(result.values, expected, **ROUND_OFF)
+
+
+def _coordinate_projection(data, directions, coordinates, tmp_path):
+  output = tmp_path / "projection.npz"
+  # Regression protection: an output-stride bug used to corrupt native memory.
+  # Keep crashes isolated so other analytic checks can still run.
+  process = subprocess.run([
+      sys.executable, "-c", """
+import json
+import sys
+import numpy as np
+import postgkyl as pg
+data = pg.load(sys.argv[1])
+result = data.eval_at_coord_proj(json.loads(sys.argv[2]), json.loads(sys.argv[3]))
+assert result.backend == "gkyl"
+assert result.ctx["value_form"] == "modal"
+points = result.interpolate(num_interp=3)
+np.savez(sys.argv[4], values=points.values,
+         coefficients=result.values, poly_order=result.ctx["poly_order"],
+         **{f"grid{d}": e for d, e in enumerate(points.grid)})
+""", data.file_name,
+      json.dumps(directions),
+      json.dumps(coordinates),
+      str(output)
+  ],
+                           capture_output=True,
+                           text=True,
+                           timeout=30)
+  assert process.returncode == 0, (
+      f"Coordinate projection exited {process.returncode}:\n{process.stderr}")
+  return output
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("fraction", [0., 0.37, 1.])
 @pytest.mark.parametrize("case,direction", [
@@ -214,31 +267,7 @@ def test_coordinate_projection_evaluates_physical_polynomial(
   data, factors, grid = _load_case(case)
   e = grid[direction]
   coord = e[0] + fraction * (e[-1] - e[0])
-  output = tmp_path / "projection.npz"
-  # Valid coordinate projections currently can corrupt native memory. Isolate
-  # this operation so a C abort is a test failure and other checks still run.
-  process = subprocess.run([
-      sys.executable, "-c", """
-import sys
-import numpy as np
-import postgkyl as pg
-data = pg.load(sys.argv[1])
-result = data.eval_at_coord_proj([int(sys.argv[2])], [float(sys.argv[3])])
-assert result.backend == "gkyl"
-assert result.ctx["value_form"] == "modal"
-points = result.interpolate(num_interp=3)
-np.savez(sys.argv[4], values=points.values,
-         **{f"grid{d}": e for d, e in enumerate(points.grid)})
-""", data.file_name,
-      str(direction),
-      str(coord),
-      str(output)
-  ],
-                           capture_output=True,
-                           text=True,
-                           timeout=30)
-  assert process.returncode == 0, (
-      f"Coordinate projection exited {process.returncode}:\n{process.stderr}")
+  output = _coordinate_projection(data, [direction], [coord], tmp_path)
   with np.load(output) as result:
     kept = [d for d in range(data.num_dims) if d != direction]
     axes = []
@@ -251,6 +280,71 @@ np.savez(sys.argv[4], values=points.values,
     scale = [field[direction](coord) for field in factors]
     np.testing.assert_allclose(result["values"],
                                _values(kept_factors, axes) * scale, **ROUND_OFF)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("case", POLYNOMIAL_CASES, ids=lambda case: case[0])
+def test_full_coordinate_projection_preserves_modal_normalization(
+    case, tmp_path):
+  data, factors, grid = _load_case(case)
+  coordinates = [
+      e[0] + (0.2 + 0.2 * d) * (e[-1] - e[0]) for d, e in enumerate(grid)
+  ]
+  # Reverse the directions and coordinates together to exercise the pairing.
+  output = _coordinate_projection(data, list(reversed(range(data.num_dims))),
+                                  coordinates[::-1], tmp_path)
+  expected = np.array([
+      np.prod([p(x) for p, x in zip(field, coordinates)]) for field in factors
+  ])
+  with np.load(output) as result:
+    assert result["poly_order"] == 0
+    np.testing.assert_allclose(result["coefficients"],
+                               np.sqrt(2) * expected[None, :], **ROUND_OFF)
+    np.testing.assert_allclose(result["values"],
+                               np.broadcast_to(expected, (3, 2)), **ROUND_OFF)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("directions", [[0, 2], [2, 0]])
+def test_coordinate_projection_pairs_nonadjacent_directions(
+    directions, tmp_path):
+  data, factors, _ = _load_case(("polynomial_3d_ms_p1", 3, "serendipity", 1))
+  coordinates = {0: -0.4, 2: 4.1}
+  output = _coordinate_projection(data, directions,
+                                  [coordinates[d] for d in directions],
+                                  tmp_path)
+  with np.load(output) as result:
+    y, = _centers([result["grid0"]])
+    expected = np.stack(
+        [field[0](-0.4) * field[1](y) * field[2](4.1) for field in factors],
+        axis=-1)
+    np.testing.assert_allclose(result["values"], expected, **ROUND_OFF)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("direction", [1, 2])
+@pytest.mark.parametrize("coordinate", [0., 1., 2.])
+def test_coordinate_projection_chooses_the_upper_trace_at_internal_faces(
+    direction, coordinate, tmp_path):
+  data = pg.load(GEN / "gk_drift_3d_p1.gkyl")
+  output = _coordinate_projection(data, [direction], [coordinate], tmp_path)
+  with np.load(output) as result:
+    axes = _centers([result["grid0"], result["grid1"]])
+    kept_points = iter(np.meshgrid(*axes, indexing="ij"))
+    coords = [
+        np.full((6, 6), coordinate) if d == direction else next(kept_points)
+        for d in range(3)
+    ]
+    # Each unit cell has F0=j+sum((d+1)*xi_d), with C-order cell index j.
+    # An internal face uses the upper cell; the domain endpoint stays inside.
+    indices = [np.minimum(x.astype(int), 1) for x in coords]
+    value = 4 * indices[0] + 2 * indices[1] + indices[2]
+    for d, (x, i) in enumerate(zip(coords, indices)):
+      value = value + (d + 1) * (2 * (x - i) - 1)
+    expected = np.empty((6, 6, 5))
+    expected[..., 0] = value
+    expected[..., 1:] = [2., 3., 4., 5.]
+    np.testing.assert_allclose(result["values"], expected, **ROUND_OFF)
 
 
 def test_scalar_arithmetic_and_field_selection_have_physical_meaning(

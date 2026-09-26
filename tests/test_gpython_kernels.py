@@ -644,6 +644,34 @@ def test_eval_at_coord_proj_rejects_eval_dirs_coords_length_mismatch():
                          [1], a)
 
 
+@pytest.mark.parametrize("directions,coordinates,message", [
+    ([0, 0], [0.1, 0.2], "distinct"),
+    ([0.5], [0.1], "integer"),
+    ([0], [np.nan], "finite"),
+    ([0], [np.inf], "finite"),
+    ([0], [-np.inf], "finite"),
+    ([0], [-0.01], "within the grid"),
+    ([0], [1.01], "within the grid"),
+])
+def test_eval_at_coord_proj_rejects_invalid_coordinates(directions, coordinates,
+                                                        message):
+  a = _const_field("serendipity", 1, 1, [4], 3.0)
+  grid = {"ndim": 1, "lower": [0.0], "upper": [1.0], "cells": [4]}
+  with pytest.raises(ValueError, match=message):
+    k.eval_at_coord_proj("serendipity", 1, 1, 1, grid, directions, coordinates,
+                         1, [1], a)
+
+
+@pytest.mark.parametrize("ndim_tar,cells_tar", [(1, [3]), (2, [2, 1])])
+def test_eval_at_coord_proj_rejects_incompatible_target_grid(
+    ndim_tar, cells_tar):
+  a = _const_field("serendipity", 2, 1, [2, 3], 3.0)
+  grid = {"ndim": 2, "lower": [0., 0.], "upper": [1., 1.], "cells": [2, 3]}
+  with pytest.raises(ValueError, match="basis/grid"):
+    k.eval_at_coord_proj("serendipity", 2, 1, 2, grid, [1], [0.5], ndim_tar,
+                         cells_tar, a)
+
+
 # ------------------------------------------------------------------ powsqrt
 def test_powsqrt_of_a_constant_field_is_exact():
   basis_type, ndim, p, cells = "serendipity", 1, 1, 4

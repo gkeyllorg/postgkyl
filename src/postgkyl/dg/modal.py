@@ -175,9 +175,9 @@ def eval_at_coord_proj(grid: dict, basis_type: str, ndim: int, poly_order: int,
     every donor direction is evaluated away, since Gkeyll always keeps at
     least one target dimension).
   """
-  eval_dirs = sorted(set(int(d) for d in eval_dirs))
-  if not eval_dirs or eval_dirs[0] < 0 or eval_dirs[-1] >= ndim:
-    raise ValueError(f"eval_dirs {eval_dirs} out of range for a {ndim}D field")
+  # Keep directions paired with their coordinates. The native boundary checks
+  # the request and sorts both together for Gkeyll's kernel convention.
+  eval_dirs = tuple(eval_dirs)
   keep_dirs = [d for d in range(ndim) if d not in eval_dirs]
   cells = np.asarray(grid["cells"])
   ndim_tar = len(keep_dirs) if keep_dirs else 1
