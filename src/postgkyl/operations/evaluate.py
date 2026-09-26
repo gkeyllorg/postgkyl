@@ -51,7 +51,7 @@ import numpy as np
 from postgkyl import dg
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.numerics import ev_cmds
-from postgkyl.operations.arithmetic import binary
+from postgkyl.operations.arithmetic import binary, require_compatible_operands
 from postgkyl.operations.select import select
 
 # Use the same arithmetic dispatcher as GData's operators.
@@ -139,7 +139,7 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
 
   operands = []
   for grid, value, ctx in zip(tmp_grid, tmp_values, tmp_ctx):
-    if dg.modal.is_native(value):
+    if grid:
       operands.append(GDataState(ctx=ctx).push(grid, value))
     else:
       scalar = _as_scalar(value)
@@ -168,16 +168,13 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
     in :data:`_POINTWISE_TOKENS`: exact NumPy math on the raw view, wrapped
     back native -- mirrors ``operations.arithmetic``'s "compute on the view,
     wrap back native, stay in-value_form" pointwise dispatch.
-  - Native operands in *different* value_forms: raises; callers must
-    convert representations explicitly before combining datasets.
+  - Point-value dataset pairs use arithmetic's shared compatibility check
+    before their grids or DG metadata can be discarded by array operations.
   - Any other token (reductions, finite-difference derivatives): returns
     ``None`` so the caller's plain-NumPy path runs -- the result then
     genuinely leaves the native/value_form domain.
   """
   is_native = [dg.modal.is_native(v) for v in tmp_values]
-  if not any(is_native):
-    return None
-
   reps = {
       _rep_of(c)
       for v, c, native in zip(tmp_values, tmp_ctx, is_native) if native
@@ -185,13 +182,17 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
   if reps == {"modal"}:
     return _modal_kernel(token, tmp_grid, tmp_values, tmp_ctx)
 
-  if len(reps) > 1:
-    raise ValueError(
-        f"evaluate: '{token}' mixes native operands in different "
-        f"value_forms ({sorted(reps)}); convert explicitly with .represent(to=...)."
-    )
+  # Empty/absent grids belong to scalars, literals, or terminal reductions.
+  # Wrap field stack entries without copying buffers so all entry points use
+  # the same compatibility rules, including after component selection.
+  fields = [
+      GDataState(ctx=ctx).push(grid, value)
+      for grid, value, ctx in zip(tmp_grid, tmp_values, tmp_ctx) if grid
+  ]
+  for other in fields[1:]:
+    require_compatible_operands(fields[0], other)
 
-  if token not in _POINTWISE_TOKENS:
+  if not any(is_native) or token not in _POINTWISE_TOKENS:
     return None
 
   view_values = [_modal_view(v, c) for v, c in zip(tmp_values, tmp_ctx)]

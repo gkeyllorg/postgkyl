@@ -200,7 +200,7 @@ def test_quantities_reject_mixed_representations(moments):
   t = moments.select(comp=2)
   with pytest.raises(ValueError, match="value_forms"):
     ff.fetch_press_p([n, t.represent(to="nodal")])
-  with pytest.raises(ValueError, match="one operand is modal"):
+  with pytest.raises(ValueError, match="different backends"):
     ff.fetch_press_p([n, t.interpolate()])
 
 

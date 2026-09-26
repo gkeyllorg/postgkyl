@@ -33,13 +33,6 @@ from postgkyl.gdatastate.guards import require_same_quadrature
 from postgkyl import dg, numerics
 
 
-def _unpack(x):
-  """(values, grid, dataset|None) for a dataset; (array, None, None) otherwise."""
-  if isinstance(x, GDataState):
-    return x.values, x.grid, x
-  return np.asarray(x), None, None
-
-
 def binary(op, a, b):
   """``a <op> b`` where at least one operand is a dataset; result copies its grid."""
   pa = a if isinstance(a, GDataState) else None
@@ -52,16 +45,13 @@ def binary(op, a, b):
 
 # --------------------------------------------------------------- numpy domain
 def _numpy_binary(op, a, b, pa, pb):
-  va, ga, _ = _unpack(a)
-  vb, gb, _ = _unpack(b)
   primary = pa if pa is not None else pb
   primary._require_operable()
   if pa is not None and pb is not None:
     pb._require_operable()
-    if not numerics.grids_compatible(ga, gb):
-      raise ValueError("operands live on different grids")
-    if va.shape != vb.shape:
-      raise ValueError(f"incompatible shapes {va.shape} vs {vb.shape}")
+    require_compatible_operands(pa, pb)
+  va = pa.values if pa is not None else np.asarray(a)
+  vb = pb.values if pb is not None else np.asarray(b)
   return primary._result(primary.grid, op(va, vb))
 
 
@@ -87,30 +77,58 @@ def _modal_binary(op, a, b, pa, pb):
   return _modal_scalar(op, primary, float(other), scalar_first=pa is None)
 
 
-def _rep_of(data: GDataState) -> str:
+def _rep_of(data: GDataState) -> str | None:
+  """DG layout, or None for fields whose grid directly locates their values.
+
+  Interpolation retains source basis metadata as provenance; it no longer
+  describes the output's value layout. Storage alone does not decide this:
+  DG nodal/quad data can also be loaded into NumPy arrays.
+  """
+  if data.backend == "numpy" and (data.ctx.get("interpolated", False)
+                                  or not data.ctx.get("basis_type")):
+    return None
   return data.ctx.get("value_form", "modal")
 
 
-def _modal_dataset_pair(op, pa: GDataState, pb: GDataState):
-  if pb.backend != "gkyl" or pa.backend != "gkyl":
+def _require_same_backend(left: GDataState, right: GDataState) -> None:
+  if left.backend != right.backend:
     raise ValueError(
-        "one operand is modal (gkyl-native) and the other is interpolated; "
-        "call .interpolate() on the modal operand to combine them.")
-  if pa.num_dims != pb.num_dims:
-    return _modal_conf_phase_mul(op, pa, pb)
-  if not numerics.grids_compatible(pa.grid, pb.grid):
+        "operands have different backends (gkyl vs numpy); call .interpolate() "
+        "on the native operand to combine them.")
+
+
+def require_compatible_operands(left: GDataState, right: GDataState) -> None:
+  """Require matching physical locations and value layouts for arithmetic.
+
+  Operators, ufuncs, and RPN point-value operations share this contract.
+  Scalars/arrays have no dataset coordinates to compare. The modal conf/phase
+  product has a separate grid-prefix contract in ``_modal_conf_phase_mul``.
+  """
+  _require_same_backend(left, right)
+  if not numerics.grids_compatible(left.grid, right.grid):
     raise ValueError("operands live on different grids")
-  basis = _basis_of(pa)
-  if _basis_of(pb) != basis:
-    raise ValueError("operands have different DG bases")
-  rep = _rep_of(pa)
-  if rep != _rep_of(pb):
+  rep = _rep_of(left)
+  if rep != _rep_of(right):
     raise ValueError(
-        f"operands are in different value_forms ({rep} vs {_rep_of(pb)}); "
+        f"operands are in different value_forms ({rep} vs {_rep_of(right)}); "
         "convert one explicitly with .represent(to=...).")
-  A, B = pa.native, pb.native
+  if rep is not None and _basis_of(left) != _basis_of(right):
+    raise ValueError("operands have different DG bases")
   if rep == "quad":
-    require_same_quadrature(pa, pb)
+    require_same_quadrature(left, right)
+  if left.values.shape != right.values.shape:
+    raise ValueError(
+        f"incompatible shapes {left.values.shape} vs {right.values.shape}")
+
+
+def _modal_dataset_pair(op, pa: GDataState, pb: GDataState):
+  if pa.num_dims != pb.num_dims:
+    _require_same_backend(pa, pb)
+    return _modal_conf_phase_mul(op, pa, pb)
+  require_compatible_operands(pa, pb)
+  basis = _basis_of(pa)
+  rep = _rep_of(pa)
+  A, B = pa.native, pb.native
   if op is operator.add:  # linear: valid in any rep
     out = dg.modal.lincomb(1.0, A, 1.0, B)
   elif op is operator.sub:
@@ -231,28 +249,20 @@ def apply_ufunc(ufunc, method, *inputs, **kwargs):
     return ufunc.reduce(np.asarray(data.values), **kwargs)
   if method != "__call__" or "out" in kwargs:
     return NotImplemented
-  primary = next(x for x in inputs if isinstance(x, GDataState))
-  primary._require_operable()
-  rep = (_rep_of(primary) if primary.backend == "gkyl" else None)
+  datasets = [x for x in inputs if isinstance(x, GDataState)]
+  primary = datasets[0]
   raw = []
   for x in inputs:
     if isinstance(x, GDataState):
       x._require_operable()
-      if x.backend == "gkyl" and _rep_of(x) != rep or (x.backend != "gkyl"
-                                                       and rep is not None):
-        raise ValueError("operands are in different value_forms; convert one "
-                         "explicitly with .represent(to=...).")
-      if x.values.shape != primary.values.shape:
-        raise ValueError(
-            f"incompatible shapes {x.values.shape} vs {primary.values.shape}")
-      if rep == "quad":
-        require_same_quadrature(primary, x)
       raw.append(np.asarray(x.values))
     elif isinstance(x, GDataState._HANDLED_TYPES):
       raw.append(x)
     else:
       return NotImplemented
+  for other in datasets[1:]:
+    require_compatible_operands(primary, other)
   result = ufunc(*raw, **kwargs)
-  if rep is not None:
-    return primary._result(primary.grid, dg.rep.wrap(result))
+  if primary.backend == "gkyl":
+    result = dg.rep.wrap(result)
   return primary._result(primary.grid, result)
