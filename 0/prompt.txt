@@ -1,0 +1,5 @@
+Along these lines, I'm looking at the output to pgkyl fsimple_hyb.gkyl represent -t quad pl --saveas "fsim_hyb_quad.png" --no_show
+
+[Image #1] 
+
+It seems like the grid edges are not the same as the edges of the cell. This is a 1 cell array that's defined from -1,1 in both z0 and z1 directions, but the grid extends beyond that. Furthermore, I would expect the grid to be a bit non-uniform because the interpolation is at quadrature nodes and not quite uniform. Is the grid correctly adapting to the quadrature nodes and the new grid? I would expect the cell centers of the grid to be at the quadrature nodes, but that might be mathematically infeasable. Explain how the values are chosen here and why the grid takes on the values that it does
