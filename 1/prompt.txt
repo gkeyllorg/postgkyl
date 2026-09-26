@@ -1,0 +1,10 @@
+Please explain why the grid is only 2x2, but the data is 2x3
+
+(refactor-diagnostics) postgkyl: pgkyl fsimple_hyb.gkyl represent -t quad pr -g
+[-1.  1.]
+[-1.  1.]
+(refactor-diagnostics) postgkyl: pgkyl fsimple_hyb.gkyl represent -t quad pr
+[-0.447213595499958   0.5590169943749476 -0.447213595499958
+  0.447213595499958  -0.5590169943749476  0.447213595499958 ]
+
+Do not touch the code. Just explain why this is hapening. Is it a bug? Is it a feature? I would have expected the grid to print the grid. I believe it is a edge-centered grid. Is this grid wrong?
