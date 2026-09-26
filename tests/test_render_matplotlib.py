@@ -1,0 +1,1000 @@
+"""Tests for postgkyl.render.matplotlib -- multi-panel figures, the pgkyl
+colorbar, log axes, vmin/vmax, aspect, and mapped (curvilinear) grids.
+
+``render.plot``'s basic single/multi-dataset 1-D and 2-D behaviour is already
+covered by ``tests/test_coverage_leaf.py`` and ``tests/test_postgkyl.py``;
+this file focuses on the features layer 09 adds on top.
+"""
+
+from __future__ import annotations
+
+import os
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+import postgkyl as pg
+from postgkyl import gpython, operations
+from postgkyl.gdatastate.gdatastate import GDataState
+from postgkyl.render import matplotlib as backend
+
+needs_gkeyll = pytest.mark.skipif(
+    not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "tests", "test_data")
+GEN = os.path.join(DATA, "generated")
+
+
+def _line(n=8, offset=0.0) -> GDataState:
+  d = GDataState()
+  d.push([np.linspace(0.0, 1.0, n + 1)],
+         (np.arange(n, dtype=float) + offset)[:, None])
+  return d
+
+
+def _field_2d(n=8, ncomp=1) -> GDataState:
+  d = GDataState()
+  grid = [np.linspace(0.0, 1.0, n + 1), np.linspace(0.0, 1.0, n + 1)]
+  values = np.stack([
+      np.arange(n * n, dtype=float).reshape(n, n) + 10.0 * c
+      for c in range(ncomp)
+  ],
+                    axis=-1)
+  d.push(grid, values)
+  return d
+
+
+@pytest.fixture(autouse=True)
+def _close_figs():
+  plt.close("all")
+  yield
+  plt.close("all")
+
+
+@pytest.fixture
+def field_3d():
+  data = GDataState()
+  data.push([np.linspace(0, d + 1, d + 4) for d in range(3)],
+            np.arange(60.0).reshape(3, 4, 5, 1))
+  return data
+
+
+class TestSelectedAxisLabels:
+
+  @pytest.mark.parametrize("axis, surviving", [(0, (1, 2)), (1, (0, 2)),
+                                               (2, (0, 1))])
+  @pytest.mark.parametrize("transpose", [False, True])
+  @pytest.mark.parametrize("grid_indices", [False, True])
+  def test_labels_follow_surviving_coordinates(self, field_3d, axis, surviving,
+                                               transpose, grid_indices):
+    selected = operations.select(field_3d, **{f"z{axis}": 1})
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=transpose,
+                       grid_indices=grid_indices)
+    x, y = surviving[::-1] if transpose else surviving
+    symbol = "i" if grid_indices else "z"
+    assert fig.get_supxlabel() == rf"${symbol}_{x}$"
+    assert fig.get_supylabel() == rf"${symbol}_{y}$"
+    if not grid_indices:
+      np.testing.assert_allclose(fig.axes[0].get_xlim(), (0, x + 1))
+      np.testing.assert_allclose(fig.axes[0].get_ylim(), (0, y + 1))
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_repeated_selection_preserves_last_coordinate(self, field_3d,
+                                                        transpose):
+    selected = operations.select(operations.select(field_3d, z0=1), z1=2)
+    fig = backend.plot(selected, no_show=True, transpose=transpose)
+    assert (fig.get_supylabel()
+            if transpose else fig.get_supxlabel()) == r"$z_2$"
+    line = fig.axes[0].lines[0]
+    coordinate = line.get_ydata() if transpose else line.get_xdata()
+    np.testing.assert_allclose(coordinate, np.linspace(0.3, 2.7, 5))
+
+  def test_explicit_labels_override_selected_defaults(self, field_3d):
+    selected = operations.select(field_3d, z1=1)
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=True,
+                       xlabel="height",
+                       ylabel="radius")
+    assert fig.get_supxlabel() == "height"
+    assert fig.get_supylabel() == "radius"
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  @pytest.mark.parametrize("lineouts", [0, 1])
+  def test_lineout_labels_follow_selected_coordinates(self, field_3d, transpose,
+                                                      lineouts):
+    selected = operations.select(field_3d, z1=1)
+    fig = backend.plot(selected,
+                       no_show=True,
+                       transpose=transpose,
+                       lineouts=lineouts)
+    axes = (2, 0) if transpose else (0, 2)
+    assert fig.get_supxlabel() == rf"$z_{axes[lineouts]}$"
+    assert fig.axes[1].get_ylabel() == rf"$z_{axes[1 - lineouts]}$"
+
+
+# --------------------------------------------------------------------------
+# Multi-panel (multi-component) layout
+# --------------------------------------------------------------------------
+
+
+class TestMultiPanel:
+
+  def test_two_components_get_two_axes(self):
+    fig = backend.plot(_field_2d(ncomp=2), no_show=True)
+    assert len(fig.axes) >= 2
+
+  def test_four_components_use_a_square_grid(self):
+    fig = backend.plot(_field_2d(ncomp=4), no_show=True)
+    # 4 components -> 2x2 grid -> 4 panel axes, each with its own colorbar axes.
+    assert len(fig.axes) == 8
+
+  def test_five_components_hides_the_leftover_axis(self):
+    fig = backend.plot(_field_2d(ncomp=5), no_show=True)
+    off_axes = [ax for ax in fig.axes if not ax.axison]
+    assert len(off_axes) == 1
+
+  def test_single_component_has_no_per_panel_title(self):
+    fig = backend.plot(_field_2d(ncomp=1), no_show=True)
+    assert fig.axes[0].get_title() == ""
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_value_bounds_can_target_one_panel(self, transpose):
+    dat = _line()
+    dat.values = np.column_stack((dat.values[:, 0], dat.values[:, 0] + 100))
+    axis = "x" if transpose else "y"
+    fig = backend.plot(dat,
+                       transpose=transpose,
+                       no_show=True,
+                       **{
+                           axis + "min": {
+                               0: -1
+                           },
+                           axis + "max": {
+                               0: 10
+                           }
+                       })
+    limits = [ax.get_xlim() if transpose else ax.get_ylim() for ax in fig.axes]
+    assert limits[0] == (-1, 10)
+    assert 90 < limits[1][0] <= 100
+    assert 107 <= limits[1][1] < 120
+
+  def test_color_bounds_can_target_one_panel_of_overlaid_fields(self):
+    first, second = _field_2d(ncomp=2), _field_2d(ncomp=2)
+    second.values = second.values + 100
+    fig = backend.plot(first,
+                       second,
+                       figure=plt.figure(),
+                       zmin={1: -5},
+                       zmax={1: 200},
+                       no_colorbar=True,
+                       no_show=True)
+    for ax, limits in zip(fig.axes, [(0, 163), (-5, 200)]):
+      assert len(ax.collections) == 2
+      assert all(mesh.get_clim() == limits for mesh in ax.collections)
+
+  def test_legend_can_be_limited_to_one_subplot_and_relocated(self):
+    a = _line()
+    b = _line(offset=3.0)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1.0))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1.0))
+
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       legend_labels=["first", "second"],
+                       legend_subplot=1,
+                       legend_loc="lower left")
+
+    assert fig.axes[0].get_legend() is None
+    legend = fig.axes[1].get_legend()
+    assert legend is not None
+    assert legend._loc == 3  # Matplotlib's code for "lower left".
+    assert [text.get_text()
+            for text in legend.get_texts()] == ["first", "second"]
+
+  @pytest.mark.parametrize("count", [1, 2])
+  @pytest.mark.parametrize("components", [1, 2])
+  @pytest.mark.parametrize("forcelegend", [False, True])
+  def test_default_legend_labels(self, count, components, forcelegend):
+    datasets = [_line(offset=i) for i in range(count)]
+    for i, data in enumerate(datasets):
+      data._file_name = f"/results/run{i}.gkyl"
+      data.values = np.repeat(data.values, components, axis=-1)
+    fig = backend.plot(*datasets,
+                       multiblock=True,
+                       no_show=True,
+                       forcelegend=forcelegend)
+    for comp, ax in enumerate(fig.axes):
+      expected = ([f"c{comp}"] if count == 1 else
+                  [f"run{i}.gkyl_c{comp}" for i in range(count)])
+      assert [text.get_text()
+              for text in ax.get_legend().get_texts()] == expected
+
+  def test_partial_legend_labels_and_in_memory_fallback(self):
+    datasets = [_line() for _ in range(3)]
+    datasets[1].label = "computed"
+    fig = backend.plot(*datasets,
+                       multiblock=True,
+                       no_show=True,
+                       legend_labels=["new,old"])
+    assert [text.get_text() for text in fig.axes[0].get_legend().get_texts()
+            ] == ["new,old", "computed_c0", "dataset 2_c0"]
+
+  def test_legend_subplot_rejects_an_out_of_range_index(self):
+    with pytest.raises(ValueError, match="between 0 and 0"):
+      backend.plot(_line(), no_show=True, legend_subplot=1)
+
+
+# --------------------------------------------------------------------------
+# The pgkyl colorbar
+# --------------------------------------------------------------------------
+
+
+class TestColorbar:
+
+  def test_colorbar_true_adds_an_axes(self):
+    fig = backend.plot(_field_2d(), no_show=True, no_colorbar=False)
+    assert len(fig.axes) == 2  # the panel + the appended colorbar axes
+
+  def test_colorbar_false_omits_it(self):
+    fig = backend.plot(_field_2d(), no_show=True, no_colorbar=True)
+    assert len(fig.axes) == 1
+
+  def test_clabel_reaches_the_colorbar(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       no_colorbar=False,
+                       clabel="density")
+    cbar_ax = fig.axes[1]
+    assert cbar_ax.get_ylabel() == "density"
+
+
+# --------------------------------------------------------------------------
+# Log axes
+# --------------------------------------------------------------------------
+
+
+class TestLogAxes:
+
+  def test_logx_1d(self):
+    fig = backend.plot(_line(), no_show=True, logx=True)
+    assert fig.axes[0].get_xscale() == "log"
+
+  def test_logy_1d(self):
+    fig = backend.plot(_line(), no_show=True, logy=True)
+    assert fig.axes[0].get_yscale() == "log"
+
+  def test_logz_uses_lognorm_on_2d_colormap(self):
+    d = _field_2d()
+    d.values[...] = d.values + 1.0  # keep strictly positive for LogNorm
+    fig = backend.plot(d, no_show=True, logz=True)
+    im = fig.axes[0].collections[0]
+    from matplotlib.colors import LogNorm
+    assert isinstance(im.norm, LogNorm)
+
+
+# --------------------------------------------------------------------------
+# Grid indices
+# --------------------------------------------------------------------------
+
+
+class TestGridIndices:
+
+  def test_1d_uses_zero_based_indices_instead_of_grid_values(self):
+    data = GDataState()
+    time = np.array([0.0, 0.1, 0.4, 1.2])
+    data.push([time], np.arange(time.size, dtype=float)[:, None])
+
+    fig = backend.plot(data, no_show=True, grid_indices=True)
+
+    np.testing.assert_array_equal(fig.axes[0].lines[0].get_xdata(),
+                                  np.arange(time.size))
+    assert fig.get_supxlabel() == r"$i_0$"
+    np.testing.assert_array_equal(data.grid[0], time)
+
+  def test_2d_puts_cell_centers_at_integer_indices(self):
+    data = _field_2d(n=4)
+
+    fig = backend.plot(data, no_show=True, grid_indices=True, no_colorbar=True)
+
+    coordinates = fig.axes[0].collections[0].get_coordinates()
+    assert coordinates[..., 0].min() == pytest.approx(-0.5)
+    assert coordinates[..., 0].max() == pytest.approx(3.5)
+    assert coordinates[..., 1].min() == pytest.approx(-0.5)
+    assert coordinates[..., 1].max() == pytest.approx(3.5)
+    assert fig.get_supxlabel() == r"$i_0$"
+    assert fig.get_supylabel() == r"$i_1$"
+
+
+# --------------------------------------------------------------------------
+# Joined linear/log split panels
+# --------------------------------------------------------------------------
+
+
+class TestSplitLinearLog:
+
+  @staticmethod
+  def _split_line(ncomp=1):
+    d = GDataState()
+    # Cell centers are exactly [-2, -1, 0, 1, 2], pinning the split-point
+    # ownership rule (the point itself belongs to the right panel).
+    grid = [np.linspace(-2.5, 2.5, 6)]
+    base = np.array([1.0, 2.0, 3.0, 10.0, 100.0])
+    values = np.stack([base * (comp + 1) for comp in range(ncomp)], axis=-1)
+    d.push(grid, values)
+    return d
+
+  def test_each_component_becomes_a_linear_left_log_right_pair(self):
+    fig = backend.plot(self._split_line(ncomp=2),
+                       no_show=True,
+                       split_linear_log=True)
+
+    assert len(fig.axes) == 4
+    assert [axis.get_yscale()
+            for axis in fig.axes] == ["linear", "log", "linear", "log"]
+    np.testing.assert_allclose(fig.axes[0].lines[0].get_xdata(), [-2.0, -1.0])
+    np.testing.assert_allclose(fig.axes[1].lines[0].get_xdata(),
+                               [0.0, 1.0, 2.0])
+    assert fig.axes[0].get_xlim()[1] == pytest.approx(0.0)
+    assert fig.axes[1].get_xlim()[0] == pytest.approx(0.0)
+
+  def test_split_point_and_log_side_are_configurable(self):
+    fig = backend.plot(self._split_line(),
+                       no_show=True,
+                       split_linear_log=True,
+                       split_point=1.0,
+                       split_log_side="left",
+                       split_log_base=2)
+
+    left, right = fig.axes
+    assert left.get_yscale() == "log"
+    assert right.get_yscale() == "linear"
+    assert left.yaxis._scale.base == 2
+    np.testing.assert_allclose(left.lines[0].get_xdata(), [-2.0, -1.0, 0.0])
+    np.testing.assert_allclose(right.lines[0].get_xdata(), [1.0, 2.0])
+
+  def test_per_component_linear_and_log_limits(self):
+    fig = backend.plot(self._split_line(ncomp=2),
+                       no_show=True,
+                       split_linear_log=True,
+                       split_linear_ylim=[(0.0, 5.0), (-2.0, 8.0)],
+                       split_log_ylim={
+                           0: (1.0, 200.0),
+                           1: (2.0, 400.0)
+                       })
+
+    assert fig.axes[0].get_ylim() == (0.0, 5.0)
+    assert fig.axes[1].get_ylim() == (1.0, 200.0)
+    assert fig.axes[2].get_ylim() == (-2.0, 8.0)
+    assert fig.axes[3].get_ylim() == (2.0, 400.0)
+
+  def test_shared_limit_pair_applies_to_every_component(self):
+    fig = backend.plot(self._split_line(ncomp=2),
+                       no_show=True,
+                       split_linear_log=True,
+                       split_linear_ylim=(0.0, 10.0))
+    assert fig.axes[0].get_ylim() == (0.0, 10.0)
+    assert fig.axes[2].get_ylim() == (0.0, 10.0)
+
+  def test_legend_subplot_uses_log_half_of_logical_subplot(self):
+    a = self._split_line(ncomp=2)
+    b = self._split_line(ncomp=2)
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       split_linear_log=True,
+                       legend_labels=["a", "b"],
+                       legend_subplot=1,
+                       split_legend_side="log")
+
+    assert fig.axes[0].get_legend() is None
+    assert fig.axes[1].get_legend() is None
+    assert fig.axes[2].get_legend() is None
+    legend = fig.axes[3].get_legend()
+    assert [text.get_text() for text in legend.get_texts()] == ["a", "b"]
+
+  def test_pair_geometry_and_logical_labels(self):
+    fig = backend.plot(self._split_line(),
+                       no_show=True,
+                       split_linear_log=True,
+                       split_width_ratios=(2.0, 1.0),
+                       split_gap=0.05,
+                       subplot_titles="density",
+                       subplot_ylabels="n",
+                       subplot_xlabels="z")
+    left, right = fig.axes
+    assert left.get_position().width / right.get_position(
+    ).width == pytest.approx(2.0)
+    assert left.get_title() == "density"
+    assert left.get_ylabel() == "n"
+    assert left.get_xlabel() == "z"
+    assert right.yaxis.get_ticks_position() == "right"
+
+  def test_left_owns_seam_tick_label_by_default(self):
+    fig = backend.plot(self._split_line(), no_show=True, split_linear_log=True)
+    left_ticks = fig.axes[0].get_xticks()
+    right_ticks = fig.axes[1].get_xticks()
+    assert left_ticks[-1] == pytest.approx(0.0)
+    assert right_ticks[0] > 0.0
+
+  @pytest.mark.parametrize("kwargs, message", [
+      ({
+          "split_log_side": "middle"
+      }, "split_log_side"),
+      ({
+          "split_legend_side": "middle"
+      }, "split_legend_side"),
+      ({
+          "split_width_ratios": (1.0, 0.0)
+      }, "split_width_ratios"),
+      ({
+          "split_gap": -0.1
+      }, "split_gap"),
+      ({
+          "split_log_nonpositive": "drop"
+      }, "split_log_nonpositive"),
+      ({
+          "split_seam_ticklabels": "middle"
+      }, "split_seam_ticklabels"),
+      ({
+          "split_log_base": 1.0
+      }, "split_log_base"),
+  ])
+  def test_invalid_split_options_raise(self, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+      backend.plot(self._split_line(),
+                   no_show=True,
+                   split_linear_log=True,
+                   **kwargs)
+
+  def test_split_rejects_2d_transpose_and_logy(self):
+    with pytest.raises(ValueError, match="only supported for 1D"):
+      backend.plot(_field_2d(), no_show=True, split_linear_log=True)
+    with pytest.raises(ValueError, match="transpose"):
+      backend.plot(self._split_line(),
+                   no_show=True,
+                   split_linear_log=True,
+                   transpose=True)
+    with pytest.raises(ValueError, match="logy"):
+      backend.plot(self._split_line(),
+                   no_show=True,
+                   split_linear_log=True,
+                   logy=True)
+
+
+# --------------------------------------------------------------------------
+# value ranges: ymin/ymax (1-D), zmin/zmax (2-D color range)
+# --------------------------------------------------------------------------
+
+
+class TestValueRange:
+
+  def test_ymin_ymax_set_1d_ylim(self):
+    fig = backend.plot(_line(), no_show=True, ymin=-5.0, ymax=50.0)
+    assert fig.axes[0].get_ylim() == (-5.0, 50.0)
+
+  def test_zmin_zmax_set_2d_colormap_range(self):
+    fig = backend.plot(_field_2d(), no_show=True, zmin=0.0, zmax=1.0)
+    im = fig.axes[0].collections[0]
+    assert im.get_clim() == (0.0, 1.0)
+
+
+# --------------------------------------------------------------------------
+# Aspect
+# --------------------------------------------------------------------------
+
+
+class TestAspect:
+
+  def test_aspect_applies_to_2d_axes(self):
+    # aspect only takes effect with fixaspect=True -- --aspect on the CLI
+    # implies --fix-aspect (see cli/commands/plot.py), but the render engine
+    # itself keeps the two independent, exactly as main's output.plot did.
+    fig = backend.plot(_field_2d(), no_show=True, fixaspect=True, aspect=1.0)
+    assert fig.axes[0].get_aspect() == 1.0
+
+  def test_aspect_none_leaves_default(self):
+    fig = backend.plot(_field_2d(), no_show=True)
+    assert fig.axes[0].get_aspect() == "auto"
+
+
+# --------------------------------------------------------------------------
+# cmap / diverging
+# --------------------------------------------------------------------------
+
+
+class TestColormap:
+
+  def test_explicit_cmap_is_used(self):
+    fig = backend.plot(_field_2d(), no_show=True, cmap="plasma")
+    im = fig.axes[0].collections[0]
+    assert im.get_cmap().name == "plasma"
+
+  def test_diverging_uses_rdbu(self):
+    fig = backend.plot(_field_2d(), no_show=True, diverging=True)
+    im = fig.axes[0].collections[0]
+    assert im.get_cmap().name == "RdBu_r"
+
+
+# --------------------------------------------------------------------------
+# style / rcParams
+# --------------------------------------------------------------------------
+
+
+class TestStyleAndRcParams:
+
+  def test_style_kwarg_applies_named_style(self):
+    backend.plot(_line(), no_show=True, style="default")
+    import matplotlib as mpl
+    assert mpl.rcParams["image.cmap"] == "viridis"
+
+  def test_rcparams_dict_overrides(self):
+    backend.plot(_line(), no_show=True, rcParams={"lines.linewidth": 5.0})
+    import matplotlib as mpl
+    assert mpl.rcParams["lines.linewidth"] == 5.0
+
+
+# --------------------------------------------------------------------------
+# output
+# --------------------------------------------------------------------------
+
+
+class TestSaving:
+
+  @pytest.mark.parametrize("extension", [".png", ".pdf"])
+  def test_saveas_writes_supported_formats(self, tmp_path, extension):
+    output = tmp_path / f"figure{extension}"
+    fig = backend.plot(_line(), no_show=True, saveas=output)
+
+    assert output.exists()
+    assert fig is plt.gcf()
+
+  def test_extensionless_saveas_defaults_to_png(self, tmp_path):
+    output = tmp_path / "figure"
+    backend.plot(_line(), no_show=True, saveas=output)
+
+    assert (tmp_path / "figure.png").exists()
+
+  def test_empty_saveas_is_inert(self, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    backend.plot(_line(), no_show=True, saveas="")
+    assert list(tmp_path.iterdir()) == []
+
+  def test_save_true_derives_a_png_name(self, tmp_path, monkeypatch):
+    data = _line()
+    data._file_name = "/input/run.gkyl"
+    monkeypatch.chdir(tmp_path)
+
+    backend.plot(data, no_show=True, save=True)
+
+    assert (tmp_path / "run.png").exists()
+
+  def test_saveas_sequence_writes_each_requested_format(self, tmp_path):
+    outputs = [tmp_path / "figure.png", tmp_path / "figure.pdf"]
+    backend.plot(_line(), no_show=True, saveas=outputs)
+    assert all(output.exists() for output in outputs)
+
+  def test_unsupported_save_extension_raises(self, tmp_path):
+    with pytest.raises(ValueError, match="Supported formats are: .png, .pdf"):
+      backend.plot(_line(), no_show=True, saveas=tmp_path / "figure.svg")
+
+
+# --------------------------------------------------------------------------
+# fig reuse (the hook render.animate needs)
+# --------------------------------------------------------------------------
+
+
+class TestFigureReuse:
+
+  def test_reusing_a_figure_clears_previous_axes(self):
+    fig = plt.figure()
+    backend.plot(_line(), no_show=True, figure=fig, clear=True)
+    first_axes_id = id(fig.axes[0])
+    backend.plot(_line(offset=5.0), no_show=True, figure=fig, clear=True)
+    assert len(fig.axes) == 1
+    assert id(fig.axes[0]) != first_axes_id
+
+
+# --------------------------------------------------------------------------
+# transpose -- swap the horizontal and vertical axes (upstream PR #225)
+# --------------------------------------------------------------------------
+
+
+def _field_2d_rect(n0=4, n1=8) -> GDataState:
+  d = GDataState()
+  grid = [np.linspace(0.0, 1.0, n0 + 1), np.linspace(0.0, 2.0, n1 + 1)]
+  values = np.arange(n0 * n1, dtype=float).reshape(n0, n1)[..., None]
+  d.push(grid, values)
+  return d
+
+
+@needs_gkeyll
+class TestPointMeshBoundaries:
+
+  @pytest.mark.parametrize("transpose", [False, True])
+  def test_hybrid_quad_patches_stay_inside_the_original_cell(self, transpose):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl")).represent(to="quad")
+    before = data.values.copy()
+    fig = backend.plot(data,
+                       no_show=True,
+                       transpose=transpose,
+                       xshift=2.0,
+                       xscale=3.0,
+                       yshift=-1.0,
+                       yscale=2.0)
+    mesh = fig.axes[0].collections[0]
+    edges = [
+        np.array([-1., 0., 1.]),
+        np.array([-1., -np.sqrt(3 / 5) / 2,
+                  np.sqrt(3 / 5) / 2, 1.])
+    ]
+    values = np.array([[-1 / np.sqrt(5), 1 / np.sqrt(5)],
+                       [np.sqrt(5) / 4, -np.sqrt(5) / 4],
+                       [-1 / np.sqrt(5), 1 / np.sqrt(5)]])
+    if transpose:
+      edges.reverse()
+      values = values.T
+    coordinates = mesh.get_coordinates()
+    np.testing.assert_allclose(coordinates[0, :, 0], (edges[0] + 2) * 3)
+    np.testing.assert_allclose(coordinates[:, 0, 1], (edges[1] - 1) * 2)
+    np.testing.assert_allclose(mesh.get_array(), values)
+    np.testing.assert_allclose(fig.axes[0].get_xlim(), (3, 9))
+    np.testing.assert_allclose(fig.axes[0].get_ylim(), (-4, 0))
+    np.testing.assert_array_equal(data.values, before)
+    for axis in data.grid:
+      np.testing.assert_array_equal(axis, [-1, 1])
+
+  @pytest.mark.parametrize("representation", ["nodal", "quad"])
+  def test_patches_preserve_unequal_cell_boundaries(self, representation):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl"))
+    # Two unequal cells with a jump in the constant field at z0=0.
+    coefficients = np.zeros((2, 6))
+    coefficients[:, 0] = [2., 4.]
+    data.ctx["cells"] = np.array([2, 1])
+    data.push(
+        [np.array([-2., 0., 3.]), np.array([1., 5.])],
+        gpython.GkylArray.from_numpy(coefficients))
+    data = data.represent(to=representation)
+    fig = backend.plot(data, no_show=True)
+    mesh = fig.axes[0].collections[0]
+    coordinates = mesh.get_coordinates()
+    np.testing.assert_allclose(coordinates[0, :, 0], [-2, -1, 0, 1.5, 3],
+                               atol=1e-14)
+    np.testing.assert_allclose(coordinates[[0, -1], 0, 1], [1, 5])
+    np.testing.assert_allclose(mesh.get_array(), [[1, 1, 2, 2]] * 3)
+
+  def test_four_point_quadrature_uses_nonuniform_interior_edges(self):
+    data = pg.load(os.path.join(GEN, "fsimple_hyb.gkyl")).represent(to="quad",
+                                                                    num_quad=4)
+    fig = backend.plot(data, no_show=True)
+    coordinates = fig.axes[0].collections[0].get_coordinates()
+    # Four Gauss points: +/-0.8611363116 and +/-0.3399810436.
+    expected = [-1., -0.6005586775894544, 0., 0.6005586775894544, 1.]
+    np.testing.assert_allclose(coordinates[0, :, 0], expected, atol=1e-14)
+    np.testing.assert_allclose(coordinates[:, 0, 1], expected, atol=1e-14)
+
+
+class TestTranspose:
+
+  def test_1d_puts_the_coordinate_on_the_vertical_axis(self):
+    fig = backend.plot(_line(), no_show=True, transpose=True)
+    line = fig.axes[0].lines[0]
+    edges = np.linspace(0.0, 1.0, 9)
+    np.testing.assert_allclose(line.get_ydata(), 0.5 * (edges[:-1] + edges[1:]))
+    np.testing.assert_allclose(line.get_xdata(), np.arange(8, dtype=float))
+
+  def test_1d_default_label_follows_the_coordinate(self):
+    fig = backend.plot(_line(), no_show=True, transpose=True)
+    assert fig.get_supylabel() == r"$z_0$"
+    assert fig.get_supxlabel() == ""
+
+  def test_2d_swaps_the_mesh_axes(self):
+    n0, n1 = 4, 8
+    d = _field_2d_rect(n0, n1)
+    fig = backend.plot(d, no_show=True, transpose=True)
+    im = fig.axes[0].collections[0]
+    # The horizontal axis now carries dimension 1 (extent 0..2), the
+    # vertical dimension 0 (extent 0..1); the quads' value layout follows.
+    assert im.get_coordinates().shape == (n0 + 1, n1 + 1, 2)
+    np.testing.assert_allclose(fig.axes[0].get_xlim(), (0.0, 2.0))
+    np.testing.assert_allclose(fig.axes[0].get_ylim(), (0.0, 1.0))
+    np.testing.assert_allclose(
+        np.asarray(im.get_array()).reshape(n0, n1), d.values[..., 0])
+
+  def test_2d_swaps_the_default_labels(self):
+    fig = backend.plot(_field_2d_rect(), no_show=True, transpose=True)
+    assert fig.get_supxlabel() == r"$z_1$"
+    assert fig.get_supylabel() == r"$z_0$"
+
+  def test_2d_does_not_mutate_the_dataset(self):
+    d = _field_2d_rect()
+    cells_before = d.num_cells.copy()
+    values_before = d.values.copy()
+    backend.plot(d, no_show=True, transpose=True)
+    np.testing.assert_array_equal(d.num_cells, cells_before)
+    np.testing.assert_array_equal(d.values, values_before)
+
+
+# --------------------------------------------------------------------------
+# Mapped (curvilinear) grids -- MAPPING.md's BACKEND row
+# --------------------------------------------------------------------------
+
+
+@needs_gkeyll
+class TestMappedGrids:
+
+  def test_2d_curvilinear_grid_plots_via_pcolormesh(self):
+    data = pg.load(os.path.join(GEN, "2d_ms_p1.gkyl")).interpolate()
+    mapped = operations.map(data,
+                            os.path.join(GEN, "2d_c2p_stretch_ms_p1.gkyl"),
+                            space="conf")
+    assert mapped.grid[0].ndim == 2  # genuinely curvilinear
+    fig = mapped.plot(no_show=True)
+    assert fig is not None
+    im = fig.axes[0].collections[0]
+    assert im.get_array().size > 0
+
+  def test_1d_non_uniform_mapped_axis_uses_true_centers(self):
+    """A 1-D vel map produces non-uniform edges; _centers must handle them
+    generically (it already does -- this pins the behaviour)."""
+    edges = np.array([0.0, 1.0, 4.0, 9.0, 16.0])  # non-uniform, monotone
+    d = GDataState()
+    d.push([edges], np.arange(4, dtype=float)[:, None])
+    fig = backend.plot(d, no_show=True)
+    line = fig.axes[0].lines[0]
+    x_plotted = line.get_xdata()
+    np.testing.assert_allclose(x_plotted, 0.5 * (edges[:-1] + edges[1:]))
+
+
+# --------------------------------------------------------------------------
+# surface plots
+# --------------------------------------------------------------------------
+
+
+class TestSurface:
+
+  def test_surface_uses_3d_axes(self):
+    fig = backend.plot(_field_2d(), no_show=True, surface=True)
+    assert fig.axes[0].name == "3d"
+
+  def test_surface_without_comparison_gets_a_colorbar(self):
+    fig = backend.plot(_field_2d(), no_show=True, surface=True)
+    assert len(fig.axes) == 2  # the 3D panel + its colorbar
+
+  def test_surface_alpha_is_applied(self):
+    fig = backend.plot(_field_2d(), no_show=True, surface=True, alpha=0.3)
+    poly3d = fig.axes[0].collections[0]
+    assert poly3d.get_alpha() == pytest.approx(0.3)
+
+
+# --------------------------------------------------------------------------
+# multi-dataset 2D overlay comparison (surface/contour)
+# --------------------------------------------------------------------------
+
+
+class TestComparisonOverlay:
+
+  def test_contour_comparison_gives_each_dataset_its_own_color_and_legend(self):
+    fig = backend.plot(_field_2d(),
+                       _field_2d(),
+                       multiblock=True,
+                       no_show=True,
+                       contour=True,
+                       comparison=True,
+                       legend_labels=["a", "b"])
+    ax = fig.axes[0]
+    assert ax.get_legend() is not None
+    handles = ax.get_legend().legend_handles
+    assert len(handles) == 2
+    assert handles[0].get_facecolor() != handles[1].get_facecolor()
+
+  def test_surface_comparison_gives_each_dataset_its_own_color_and_legend(self):
+    fig = backend.plot(_field_2d(),
+                       _field_2d(),
+                       multiblock=True,
+                       no_show=True,
+                       surface=True,
+                       comparison=True,
+                       legend_labels=["a", "b"])
+    ax = fig.axes[0]
+    assert ax.get_legend() is not None
+    assert len(ax.get_legend().legend_handles) == 2
+
+
+# --------------------------------------------------------------------------
+# cval-based colormap coloring for 1D lines
+# --------------------------------------------------------------------------
+
+
+class TestCvalColoring:
+
+  def test_line_colored_by_cval(self):
+    fig = backend.plot(_line(),
+                       no_show=True,
+                       cmap="viridis",
+                       cval=0.0,
+                       cval_min=0.0,
+                       cval_max=1.0)
+    assert fig.axes[0].lines[0].get_color() == plt.get_cmap("viridis")(0.0)
+
+  def test_second_call_into_the_same_figure_uses_its_own_cval(self):
+    fig = backend.plot(_line(),
+                       no_show=True,
+                       cmap="viridis",
+                       cval=0.0,
+                       cval_min=0.0,
+                       cval_max=1.0)
+    backend.plot(_line(offset=1),
+                 figure=fig,
+                 no_show=True,
+                 cmap="viridis",
+                 cval=1.0,
+                 cval_min=0.0,
+                 cval_max=1.0)
+    colors = [line.get_color() for line in fig.axes[0].lines]
+    assert colors[0] == plt.get_cmap("viridis")(0.0)
+    assert colors[1] == plt.get_cmap("viridis")(1.0)
+
+  def test_cval_without_cmap_is_ignored(self):
+    fig = backend.plot(_line(), no_show=True, cval=0.5, color="red")
+    assert fig.axes[0].lines[0].get_color() == "red"
+
+
+# --------------------------------------------------------------------------
+# Explicit colors for 1D lines
+# --------------------------------------------------------------------------
+
+
+class TestLineColors:
+
+  def test_color_sequence_assigns_one_color_to_each_dataset(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       _line(offset=2),
+                       multiblock=True,
+                       no_show=True,
+                       color=["tab:red", "tab:green", "tab:blue"])
+
+    assert [line.get_color() for line in fig.axes[0].lines
+            ] == ["tab:red", "tab:green", "tab:blue"]
+
+  def test_scalar_color_still_applies_to_every_line(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       color="purple")
+    assert [line.get_color()
+            for line in fig.axes[0].lines] == ["purple", "purple"]
+
+  def test_dataset_colors_repeat_across_component_panels(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       color=["red", "blue"])
+
+    assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
+    assert [line.get_color() for line in fig.axes[1].lines] == ["red", "blue"]
+
+  def test_color_sequence_follows_dataset_then_component_order(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       color=["red", "orange", "blue", "cyan"])
+
+    assert [line.get_color() for line in fig.axes[0].lines] == ["red", "blue"]
+    assert [line.get_color()
+            for line in fig.axes[1].lines] == ["orange", "cyan"]
+
+  def test_rgb_tuple_remains_a_single_color(self):
+    rgb = (0.1, 0.2, 0.3)
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       color=rgb)
+    assert [line.get_color() for line in fig.axes[0].lines] == [rgb, rgb]
+
+  def test_color_sequence_length_must_match_line_count(self):
+    with pytest.raises(ValueError, match="2 entries.*expected either 3.*or 3"):
+      backend.plot(_line(),
+                   _line(offset=1),
+                   _line(offset=2),
+                   multiblock=True,
+                   no_show=True,
+                   color=["red", "blue"])
+
+
+# --------------------------------------------------------------------------
+# Per-dataset linestyles for 1D lines
+# --------------------------------------------------------------------------
+
+
+class TestLineStyles:
+
+  def test_linestyle_sequence_assigns_one_style_to_each_dataset(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=["-", "--"])
+
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
+
+  def test_scalar_linestyle_applies_to_every_dataset(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=":")
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == [":", ":"]
+
+  def test_single_entry_sequence_applies_to_every_dataset(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=["-."])
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-.", "-."]
+
+  def test_omitted_linestyle_does_not_override_plot_format(self):
+    fig = backend.plot(_line(), no_show=True, args=["--"])
+    assert fig.axes[0].lines[0].get_linestyle() == "--"
+
+  def test_dataset_linestyles_repeat_across_component_panels(self):
+    a = _line()
+    b = _line(offset=2)
+    a.values = np.column_stack((a.values[:, 0], a.values[:, 0] + 1))
+    b.values = np.column_stack((b.values[:, 0], b.values[:, 0] + 1))
+
+    fig = backend.plot(a,
+                       b,
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=["-", "--"])
+
+    assert [line.get_linestyle() for line in fig.axes[0].lines] == ["-", "--"]
+    assert [line.get_linestyle() for line in fig.axes[1].lines] == ["-", "--"]
+
+  def test_dataset_linestyles_apply_to_both_split_axes(self):
+    fig = backend.plot(_line(),
+                       _line(offset=1),
+                       multiblock=True,
+                       no_show=True,
+                       linestyle=["-", "--"],
+                       split_linear_log=True,
+                       split_point=0.5)
+
+    for axis in fig.axes:
+      assert [line.get_linestyle() for line in axis.lines] == ["-", "--"]
+
+  def test_linestyle_sequence_length_must_match_dataset_count(self):
+    with pytest.raises(ValueError, match="2 entries.*expected either 1.*or 3"):
+      backend.plot(_line(),
+                   _line(offset=1),
+                   _line(offset=2),
+                   multiblock=True,
+                   no_show=True,
+                   linestyle=["-", "--"])

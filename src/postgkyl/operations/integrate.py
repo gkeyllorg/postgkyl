@@ -1,0 +1,287 @@
+"""Full and partial grid integration under one ``integrate`` verb.
+
+The return shape states which operation was requested:
+
+* integrating every spatial direction is terminal and returns one number per
+  field;
+* integrating a strict subset returns a dataset over the surviving
+  directions.
+
+Modal data never leave Gkeyll. Full integration uses
+``gkyl_array_integrate`` directly. Partial integration uses
+``gkyl_array_average`` and scales its modal result by the physical volume of
+the removed directions, which is exactly ``int f dx^axes`` rather than a
+sampled/trapezoidal approximation. Cell-local nodal values use their exact
+inverse transform, and quadrature values use their matching projection,
+followed by these same kernels. Other point-value data use the
+NumPy integration path at their true point locations.
+
+A curvilinear axis -- part of a joint, non-separable ``.map(space="conf")``
+block -- has no meaningful independent width. Point-value integration must
+therefore remove the whole mapped block at once, using its physical cell
+volumes (the Jacobian-determinant change-of-variables weight).
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+from postgkyl.cli_spec import CliType, CliArgument
+
+import warnings
+
+import numpy as np
+
+from postgkyl import dg
+from postgkyl.gdatastate import materialize_point_values
+from postgkyl.gdatastate.layout import dg_layout, require_kernel_basis
+from postgkyl.numerics import calculus, curvilinear
+
+from ._curvilinear import curvilinear_blocks
+from ._compatibility import uniform_cartesian_grid as _native_grid
+from .represent import represent
+
+from postgkyl.gdatastate.gdatastate import GDataState
+
+
+def _parse_axes(axis: int | tuple | str | None, ndim: int) -> tuple[int, ...]:
+  axes = tuple(int(a) for a in calculus.parse_axis(axis, ndim))
+  if not axes:
+    raise ValueError("integrate needs at least one axis")
+  if len(set(axes)) != len(axes):
+    raise ValueError(f"integrate axes must be distinct, got {axes}")
+  if min(axes) < 0 or max(axes) >= ndim:
+    raise ValueError(f"integrate axes {axes} out of range for a {ndim}D field")
+  return tuple(sorted(axes))
+
+
+def _native_basis(data: "GDataState") -> tuple[str, int]:
+  if data.backend != "gkyl":
+    raise ValueError(
+        "exact DG integration needs native modal data and is not available "
+        "without the Gkeyll library")
+  if data.ctx.get("value_form", "modal") != "modal":
+    raise ValueError(
+        f"exact DG integration expects the modal value_form, not "
+        f"'{data.ctx['value_form']}'; call .represent(to='modal') first")
+  basis_type = data.ctx.get("basis_type")
+  poly_order = data.ctx.get("poly_order")
+  if basis_type is None or poly_order is None:
+    raise ValueError("dataset has no basis_type/poly_order metadata")
+  require_kernel_basis(data)
+  return str(basis_type), int(poly_order)
+
+
+def _native_full(data: "GDataState", op: str):
+  basis_type, poly_order = _native_basis(data)
+  result = dg.modal.integrate(_native_grid(data),
+                              basis_type,
+                              poly_order,
+                              data.native,
+                              op=op)
+  return float(result[0]) if result.size == 1 else result
+
+
+def _native_partial(data: "GDataState", axes: tuple[int, ...]):
+  basis_type, poly_order = _native_basis(data)
+  grid = _native_grid(data)
+  keep_dirs, cells, out = dg.modal.average(grid, basis_type, data.num_dims,
+                                           poly_order, data.native, axes)
+
+  # gkyl_array_average returns int(f dx^axes) / int(dx^axes). Scaling the
+  # reduced modal coefficients recovers the integral exactly and stays native.
+  lengths = grid["upper"] - grid["lower"]
+  out = dg.modal.scale(out, float(np.prod(lengths[list(axes)])))
+  new_grid = [np.asarray(data.grid[d]) for d in keep_dirs]
+  return new_grid, out, np.asarray(cells)
+
+
+def _native_integral(data: "GDataState", axes: tuple[int, ...], *, op: str,
+                     inplace: bool, tag: str | None, label: str | None):
+  """Use existing DG kernels and report unsupported requests explicitly."""
+  source = data
+  value_form = data.ctx.get("value_form", "modal")
+  quad = value_form == "quad"
+  full = len(axes) == data.num_dims
+  try:
+    if data.backend != "gkyl":
+      data = data._result(data.grid, dg.rep.wrap(data.values))
+    if quad and not full:
+      raise NotImplementedError(
+          "Gkeyll has no direct partial quadrature integration kernel; "
+          "call .represent(to='modal') explicitly before integrating a DG "
+          "projection")
+    # Projection includes the quadrature weights and cell-local ordering.
+    # A full integral depends only on the constant mode, so discarded higher
+    # modes cannot change it (unlike a partial integral's retained values).
+    # This temporary does not change the caller's representation or values.
+    # Nodal inversion is cell-local and exact, including discontinuous traces
+    # at a common cell interface. Never integrate a flattened nodal mesh.
+    modal = represent(data, to="modal") if value_form != "modal" else data
+    if full:
+      return _native_full(modal, op)
+    grid, values, cells = _native_partial(modal, axes)
+    return source._result(grid,
+                          values,
+                          inplace=inplace,
+                          tag=tag,
+                          label=label,
+                          cells=cells,
+                          value_form="modal",
+                          num_quad=None,
+                          quad_rule=None)
+  except NotImplementedError as error:
+    warnings.warn(str(error), RuntimeWarning, stacklevel=3)
+    raise
+
+
+def _point_integral(data: "GDataState", axes: tuple[int, ...]):
+  data._require_operable()
+  shadow = materialize_point_values(data)
+  grid = list(shadow.grid)
+  values = shadow.values
+
+  blocks = curvilinear_blocks(grid, data.ctx.get("mapped_axes", {}))
+  requested = set(axes)
+  curvilinear_runs = []
+  handled = set()
+  for off, dims in blocks.items():
+    overlap = requested & set(dims)
+    if not overlap:
+      continue
+    if overlap != set(dims):
+      raise ValueError(
+          f"integrate: axis/axes {sorted(overlap)} belong to a curvilinear "
+          f"(mapped) block spanning dimensions {dims}; a partial reduction "
+          "of the block has no single physical answer -- include every "
+          "axis of the block together in the same call")
+    curvilinear_runs.append((off, dims))
+    handled.update(dims)
+
+  separable_axes = tuple(a for a in axes if a not in handled)
+  if separable_axes:
+    grid, values = calculus.integrate(grid, values, separable_axes)
+
+  for _, dims in curvilinear_runs:
+    m = len(dims)
+    block_coords = [grid[d] for d in dims]
+    volume = curvilinear.cell_volume(block_coords)
+    volume = volume.reshape(volume.shape + (1, ) * (values.ndim - m))
+    moved = np.moveaxis(values, dims, range(m))
+    reduced = np.sum(moved * volume, axis=tuple(range(m)), keepdims=True)
+    values = np.moveaxis(reduced, range(m), dims)
+    for d in dims:
+      grid[d] = np.array([grid[d].mean()])
+  return grid, values
+
+
+def _terminal_value(values: np.ndarray):
+  result = np.asarray(values).reshape(-1, values.shape[-1])[0]
+  return float(result[0]) if result.size == 1 else np.array(result, copy=True)
+
+
+def _remaining_mapped_axes(data: "GDataState", keep_dirs: list[int]) -> dict:
+  old = data.ctx.get("mapped_axes", {})
+  old_to_new = {old_dim: new_dim for new_dim, old_dim in enumerate(keep_dirs)}
+  groups: dict[int, list[int]] = {}
+  for old_dim, offset in old.items():
+    if old_dim in old_to_new:
+      groups.setdefault(offset, []).append(old_dim)
+
+  result = {}
+  for old_dims in groups.values():
+    new_dims = [old_to_new[d] for d in old_dims]
+    new_offset = min(new_dims)
+    result.update({d: new_offset for d in new_dims})
+  return result
+
+
+def _require_partial_options(*, inplace: bool, tag: str | None,
+                             label: str | None) -> None:
+  if inplace or tag is not None or label is not None:
+    raise ValueError(
+        "inplace, tag, and label apply only to partial integration, which "
+        "returns a dataset")
+
+
+def integrate(data: "GDataState",
+              axis: Annotated[int | tuple[int, ...] | str | None,
+                              CliType(str | None),
+                              CliArgument()] = None,
+              *,
+              op: Literal["none", "abs", "sq"] = "none",
+              inplace: bool = False,
+              tag: str | None = None,
+              label: str | None = None):
+  """Integrate over all or a subset of a dataset's spatial axes.
+
+  Integrating every axis is terminal and returns one number per field.
+  Integrating a strict subset returns a dataset over the surviving axes.
+  Native modal input uses Gkeyll for both cases and remains modal/native after
+  a partial integration; no interpolation or point sampling occurs. Quadrature
+  input uses its stored projection rule and the same native kernels for full
+  integration. Partial quadrature integration requires an explicit conversion
+  to modal form, since projection can change the retained point values.
+  Cell-local nodal input uses its exact inverse transform before integration,
+  preserving cell boundaries and discontinuities. Plain edge-located values
+  use cell widths; plain point samples use the trapezoidal rule on their
+  supplied domain, without extrapolating beyond its endpoints.
+  Missing native kernels emit a warning and raise rather than approximate.
+
+  Args:
+    data: Dataset to integrate. Modal and quadrature data use native DG
+      kernels; other point-value data use their physical point grid.
+    axis: Axis or axes to integrate: an integer, tuple of integers,
+      comma-separated string (``"0,1"``), colon slice string (``"0:2"``), or
+      ``None`` for every spatial axis.
+    op: Full native-DG integrand operation: ``"none"``, ``"abs"``, or
+      ``"sq"``. Partial and point-value integration support ``"none"`` only.
+    inplace: Mutate ``data`` for partial integration; unavailable for a full,
+      terminal integration.
+    tag: Optional tag for a partial-integration result.
+    label: Optional label for a partial-integration result.
+
+  Returns:
+    A float (one field) or NumPy array (multiple fields) when every axis is
+    integrated; otherwise a dataset over the surviving axes. A partial modal
+    result is exact, modal, and Gkeyll-native.
+
+  Raises:
+    NotImplementedError: Gkeyll lacks the requested integration kernel or
+      quadrature transform. A RuntimeWarning also reports the limitation.
+    ValueError: If the axes are invalid; a partial curvilinear mapped block is
+      requested; ``op`` is used outside a full native-DG integration; or
+      dataset-only result options are used for a terminal integration.
+  """
+  axes = _parse_axes(axis, data.num_dims)
+  full = len(axes) == data.num_dims
+  layout = dg_layout(data)
+  modal = layout is not None and layout.value_form == "modal"
+
+  if full:
+    _require_partial_options(inplace=inplace, tag=tag, label=label)
+  if op != "none" and not (full and modal):
+    raise ValueError("op is available only for full native-DG integration")
+  if layout is not None:
+    return _native_integral(data,
+                            axes,
+                            op=op,
+                            inplace=inplace,
+                            tag=tag,
+                            label=label)
+
+  grid, values = _point_integral(data, axes)
+  if full:
+    return _terminal_value(values)
+  keep_dirs = [d for d in range(data.num_dims) if d not in axes]
+  values = np.squeeze(values, axis=axes)
+  new_grid = [grid[d] for d in keep_dirs]
+  mapped_axes = _remaining_mapped_axes(data, keep_dirs)
+  return data._result(new_grid,
+                      values,
+                      inplace=inplace,
+                      tag=tag,
+                      label=label,
+                      interpolated=True,
+                      value_form=None,
+                      mapped_axes=mapped_axes,
+                      grid_type="mapped" if mapped_axes else "uniform")

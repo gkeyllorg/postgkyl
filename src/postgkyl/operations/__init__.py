@@ -1,0 +1,125 @@
+"""The data-transformation library -- one function per operation.
+
+Every verb takes a dataset first and returns a dataset (via ``_result``), so the
+fluent ``GData`` methods, the operators, and any CLI all delegate here and can
+never drift apart. Verbs are typed on ``GDataState`` but return the caller's
+concrete (sub)class because ``_result`` rebuilds ``type(self)``.
+
+``interpolate`` is the one-way modal -> NumPy bridge; ``arithmetic`` dispatches
+on the container backend (Gkeyll kernels for modal data, NumPy for field data);
+``integrate`` performs full or partial integration inside Gkeyll on modal
+data (full is terminal; partial stays native and lower-dimensional);
+``average`` reduces modal data over a dimension subset via
+``gkyl_array_average``, producing a new lower-dimensional modal dataset.
+
+Coordinate transformations have their own flat verb modules. ``geometry``
+assembles point coordinates using I/O's shared Gkeyll file conventions;
+mapping operations accept reusable projections or resolve that geometry.
+Equation-specific physical compositions belong in ``diagnostics``.
+
+The terminal renderers (``plot``, ``animate``, ``plotly``, ``plotly_animate``,
+and ``pyvista``) are exceptions:
+this namespace re-exports their exact canonical callables from
+:mod:`postgkyl.render` without wrapping them.
+"""
+
+from . import arithmetic
+from .interpolate import interpolate
+from .local_poly import local_poly
+from .select import select
+from .info import info
+from .print import print
+from .integrate import integrate
+from .average import average
+from .eval_at_coord_proj import eval_at_coord_proj
+from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
+from .represent import apply, represent
+
+from .fft import fft
+from .magsq import magsq
+from .relchange import relchange
+from .mask import mask
+from .collect import collect
+from .sort import sort
+from .grid import grid
+from .val2coord import val2coord
+from .extract_input import extract_input
+from .fit import fit
+from .growth import growth
+from .differentiate import differentiate
+from .evaluate import available_operators as available_evaluate_operators, evaluate
+from .map import map
+from .map_to_rz import map_to_rz, resolve_rz_projection, RzProjection
+from .extract_flux_surface import (extract_flux_surface,
+                                   resolve_flux_surface_grid, FluxSurfaceGrid)
+from .geometry import Geometry, resolve_geometry
+
+# Command metadata is attached at the layer that owns each operation.  This
+# block is deliberately declarative: discovery still walks the public API and
+# there is no registration side effect or CLI import here.
+from postgkyl.cli_spec import (
+    CommandSpec,
+    Execution,
+    ResultPolicy,
+    Section,
+    command,
+    hidden,
+)
+
+_MAP = CommandSpec(Section.VERBS, Execution.MAP_REPLACE)
+_APPEND = CommandSpec(Section.VERBS, Execution.MAP_APPEND, consumes_inputs=True)
+_COMBINE = CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True)
+_TERM_EACH = CommandSpec(Section.UTILITY,
+                         Execution.TERMINAL_EACH,
+                         result=ResultPolicy.VALUE)
+_TERM_ALL = CommandSpec(Section.UTILITY,
+                        Execution.TERMINAL_ALL,
+                        result=ResultPolicy.VALUE)
+
+for _function in (interpolate, local_poly, select, average, eval_at_coord_proj,
+                  fft, magsq, grid, differentiate, map, map_to_rz,
+                  extract_flux_surface):
+  command(_MAP)(_function)
+command(_APPEND)(val2coord)
+command(_COMBINE)(relchange)
+command(_COMBINE)(collect)
+command(CommandSpec(Section.VERBS, Execution.COMBINE,
+                    consumes_inputs=True))(sort)
+command(_COMBINE)(evaluate)
+command(_MAP)(mask)
+command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
+command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(growth)
+command(
+    CommandSpec(Section.UTILITY,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))(info)
+command(
+    CommandSpec(Section.UTILITY,
+                Execution.TERMINAL_ALL,
+                result=ResultPolicy.SILENT))(print)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_OR_TERMINAL_EACH,
+                result=ResultPolicy.VALUE))(integrate)
+command(_TERM_EACH)(extract_input)
+command(_MAP)(represent)
+
+hidden("requires a Python callable and cannot be lowered losslessly")(apply)
+hidden("registry provider used by evaluate help and validation")(
+    available_evaluate_operators)
+
+for _function in (resolve_geometry, resolve_rz_projection,
+                  resolve_flux_surface_grid):
+  hidden("constructs geometry or projections for the Python API")(_function)
+
+__all__ = [
+    "interpolate", "local_poly", "select", "info", "print", "integrate",
+    "average", "eval_at_coord_proj", "plot", "animate", "plotly",
+    "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
+    "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
+    "extract_input", "fit", "differentiate", "evaluate",
+    "available_evaluate_operators", "map", "growth", "map_to_rz",
+    "resolve_rz_projection", "extract_flux_surface",
+    "resolve_flux_surface_grid", "resolve_geometry", "Geometry", "RzProjection",
+    "FluxSurfaceGrid"
+]

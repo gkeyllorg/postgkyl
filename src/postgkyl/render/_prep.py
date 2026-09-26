@@ -1,0 +1,221 @@
+"""Dataset -> plottable-array preparation, shared by every render backend.
+
+Private to ``render/``: this is the one concern the old tree split across
+``utils/load_plot_data.py`` (dataset -> grid/values/dimensionality) and
+``utils/axis_and_grid_prep.py`` (squeeze collapsed axes, resolve axis/colorbar
+label defaults). Here it collapses to a single function over
+:class:`~postgkyl.gdatastate.gdatastate.GDataState` -- the new container already exposes
+``grid``/``values``/``num_dims`` uniformly, so there is no dual "GData or
+tuple" input to dispatch on (contrast the old ``load_plot_data``).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from postgkyl.gdatastate import materialize_point_values
+
+if TYPE_CHECKING:
+  from postgkyl.gdatastate.gdatastate import GDataState
+
+
+def materialize_plot_data(data: "GDataState") -> "GDataState":
+  """Keep modal coefficients on their cell grid; materialize point values.
+
+  Each stored coefficient is a separate plotting channel. Rendering neither
+  evaluates the DG expansion nor changes the input representation.
+  """
+  if data.ctx.get("value_form", "modal") == "modal":
+    return data
+  return materialize_point_values(data)
+
+
+def default_value_label(data: "GDataState", label: str | None) -> str:
+  """Make coefficient plots explicit while respecting a supplied value label."""
+  if label:
+    return label
+  if data.ctx.get("basis_type") and not data.is_interpolated:
+    return "DG coefficient"
+  return ""
+
+
+def remaining_axes(cells) -> tuple[int, ...]:
+  """Coordinate indices that remain after collapsing singleton axes."""
+  return tuple(d for d, size in enumerate(cells) if size > 1)
+
+
+def default_axis_labels(axes: tuple[int, ...],
+                        *,
+                        grid_indices: bool = False) -> list[str]:
+  """Label surviving coordinates by their original dataset indices."""
+  symbol = "i" if grid_indices else "z"
+  return [rf"${symbol}_{i}$" for i in axes]
+
+
+def format_axis_label(label: str, shift: float, scale: float) -> str:
+  """Annotate an axis label with its shift/scale, matching the old style."""
+  if shift != 0.0 and scale != 1.0:
+    return rf"({label:s} + {shift:.2e}) $\times$ {scale:.2e}"
+  if shift != 0.0:
+    return rf"{label:s} + {shift:.2e}"
+  if scale != 1.0:
+    return rf"{label:s} $\times$ {scale:.2e}"
+  return label
+
+
+def squeeze_collapsed_axes(
+    grid: list[np.ndarray],
+    values: np.ndarray) -> tuple[list[np.ndarray], np.ndarray, tuple[int, ...]]:
+  """Drop grid axes with exactly one cell (e.g. a ``select()``-ed coordinate).
+
+  Curvilinear (multi-dimensional, ``.map()``-produced) coordinate arrays
+  cannot simply be indexed on the dropped axis -- every coordinate array
+  spans all dimensions jointly -- so each is averaged along it first (a
+  size-1 axis is unaffected by the mean); the now-redundant axis entry is
+  then removed from the coordinate list.
+
+  Args:
+    grid: One nodal (edge) coordinate array per dimension.
+    values: Cell values, shape ``(*cells, num_comps)``.
+
+  Returns:
+    ``(grid, values, axes)`` with every size-1 axis removed and ``axes``
+    identifying the surviving coordinate indices in the input dataset.
+  """
+  num_dims = len(grid)
+  cells = values.shape[:num_dims]
+  axes = remaining_axes(cells)
+  drop = [d for d in range(num_dims) if d not in axes]
+  if not drop:
+    return list(grid), values, axes
+
+  grid = [np.asarray(g) for g in grid]
+  if any(g.ndim > 1 for g in grid):
+    for d in range(num_dims):
+      for i in reversed(drop):
+        grid[d] = np.mean(grid[d], axis=i)
+  for i in reversed(drop):
+    grid.pop(i)
+  values = np.squeeze(values, tuple(drop))
+  return grid, values, axes
+
+
+def subplot_grid(num_comps: int,
+                 num_rows: int | None = None,
+                 num_cols: int | None = None) -> tuple[int, int]:
+  """Choose a near-square ``(rows, cols)`` layout for ``num_comps`` panels."""
+  if num_rows is not None:
+    return num_rows, int(np.ceil(num_comps / num_rows))
+  if num_cols is not None:
+    return int(np.ceil(num_comps / num_cols)), num_cols
+  sr = np.sqrt(num_comps)
+  if sr == np.ceil(sr):
+    return int(sr), int(sr)
+  if np.ceil(sr) * np.floor(sr) >= num_comps:
+    return int(np.floor(sr)), int(np.ceil(sr))
+  return int(np.ceil(sr)), int(np.ceil(sr))
+
+
+@dataclass(frozen=True)
+class PlotPanel:
+  """Squeezed, label-resolved view of one dataset, ready for a render call."""
+  grid: list[np.ndarray]
+  values: np.ndarray
+  num_dims: int
+  num_comps: int
+  xlabel: str
+  ylabel: str
+  clabel: str
+
+
+def resolve_axis_labels(*,
+                        xlabel: str | None,
+                        ylabel: str | None,
+                        zlabel: str | None,
+                        clabel: str,
+                        axes: tuple[int, ...],
+                        xshift: float = 0.0,
+                        yshift: float = 0.0,
+                        zshift: float = 0.0,
+                        xscale: float = 1.0,
+                        yscale: float = 1.0,
+                        zscale: float = 1.0) -> tuple[str, str, str, str]:
+  """Infer default ``$z_i$`` labels and apply shift/scale annotations.
+
+  Shared by the 2-D (``matplotlib``, no real ``z`` axis) and 3-D
+  (``plotly``, ``z`` is a genuine coordinate) backends. ``axes`` preserves
+  the input dataset's coordinate indices after singleton axes are removed.
+  """
+  labels = default_axis_labels(axes)
+  num_dims = len(axes)
+  if xlabel is None:
+    xlabel = labels[0] if num_dims > 0 else ""
+  if ylabel is None:
+    ylabel = labels[1] if num_dims > 1 else ""
+  if zlabel is None:
+    zlabel = labels[2] if num_dims > 2 else r"$z_2$"
+  xlabel = format_axis_label(xlabel, xshift, xscale)
+  ylabel = format_axis_label(ylabel, yshift, yscale)
+  zlabel = format_axis_label(zlabel, zshift, zscale)
+  if zscale != 1.0:
+    clabel = (rf"{clabel:s} $\times$ {zscale:.3e}"
+              if clabel else rf"$\times$ {zscale:.3e}")
+  return xlabel, ylabel, zlabel, clabel
+
+
+def prep_plot_data(data: "GDataState",
+                   *,
+                   xlabel: str | None = None,
+                   ylabel: str | None = None,
+                   clabel: str = "",
+                   xshift: float = 0.0,
+                   yshift: float = 0.0,
+                   zshift: float = 0.0,
+                   xscale: float = 1.0,
+                   yscale: float = 1.0,
+                   zscale: float = 1.0) -> PlotPanel:
+  """Squeeze collapsed axes and resolve axis/colorbar label defaults.
+
+  Args:
+    data: The dataset to prepare, with modal coefficients on the cell grid
+      or point values materialized on their sampling grid.
+    xlabel: Explicit x-axis label; defaults to the first surviving coordinate.
+    ylabel: Explicit y-axis label; defaults to the second surviving coordinate
+      when the (squeezed) dataset is 2-D, else empty.
+    clabel: Colorbar label base text; annotated with ``zscale`` when it is
+      not 1.
+    xshift, yshift, zshift: Additive shifts recorded in the axis labels
+      (the caller applies them to the plotted arrays).
+    xscale, yscale, zscale: Multiplicative scales recorded in the axis
+      labels (the caller applies them to the plotted arrays).
+
+  Returns:
+    A :class:`PlotPanel` with the squeezed grid/values and resolved labels.
+  """
+  grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
+  num_dims = len(grid)
+  clabel = default_value_label(data, clabel)
+  if num_dims <= 1 and ylabel is None:
+    ylabel = default_value_label(data, ylabel)
+  xlabel, ylabel, _zlabel, clabel = resolve_axis_labels(xlabel=xlabel,
+                                                        ylabel=ylabel,
+                                                        zlabel="",
+                                                        clabel=clabel,
+                                                        axes=axes,
+                                                        xshift=xshift,
+                                                        yshift=yshift,
+                                                        zshift=zshift,
+                                                        xscale=xscale,
+                                                        yscale=yscale,
+                                                        zscale=zscale)
+
+  return PlotPanel(grid=grid,
+                   values=values,
+                   num_dims=num_dims,
+                   num_comps=values.shape[-1],
+                   xlabel=xlabel,
+                   ylabel=ylabel,
+                   clabel=clabel)
