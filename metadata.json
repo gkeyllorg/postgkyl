@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M3DGH10J6K3CP46BN3533B81",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/postgkyl/gpython/basis.py",
+    "tests/generate_test_data.py",
+    "tests/test_analytic_high_dim.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 81296,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2196736,
+    "output_tokens": 9127,
+    "api_call_count": 32
+  }
+}
