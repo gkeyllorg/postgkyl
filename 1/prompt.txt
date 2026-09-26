@@ -1,0 +1,7 @@
+for some reason, the bash script for building gpython is not working correctly. 
+
+bash scripts/build_gkeyll.sh
+
+---
+
+I want lapack_lite_shim_bugs to have all the changes that must be made to Gkeyll. Merge the changes into lapack_lite_shim_bugs. For now, postgkeyll should compile against this branch
