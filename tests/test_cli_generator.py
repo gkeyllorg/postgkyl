@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import inspect
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -358,7 +359,10 @@ def test_concrete_annotated_alias_is_not_reprocessed(monkeypatch):
   """Keep runtime CLI metadata authoritative over resolved string hints."""
   original = compiler.get_type_hints
   annotations = dict(average.__annotations__)
-  annotations["weight"] = original(average, include_extras=True)["weight"]
+  # Unlike get_type_hints on Python 3.10, this does not add an outer Optional
+  # around Annotated when the parameter defaults to None.
+  annotations["weight"] = inspect.get_annotations(average,
+                                                  eval_str=True)["weight"]
   monkeypatch.setattr(average, "__annotations__", annotations)
   evaluated = None
 
