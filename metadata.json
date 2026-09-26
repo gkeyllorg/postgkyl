@@ -3,11 +3,12 @@
   "checkpoint_id": "01M3F689CNMKCPTAN0KZCJ9H9Q",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     ".github/workflows/docs.yml",
     ".github/workflows/test.yml",
-    "pyproject.toml"
+    "pyproject.toml",
+    "tests/conftest.py"
   ],
   "sessions": [
     {
@@ -16,13 +17,20 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 115363,
+    "input_tokens": 180973,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 2155008,
-    "output_tokens": 13268,
-    "api_call_count": 28
+    "cache_read_tokens": 2916608,
+    "output_tokens": 22482,
+    "api_call_count": 44
   }
 }

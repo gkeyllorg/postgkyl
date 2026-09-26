@@ -1,0 +1,5 @@
+To accelerate the .github workflows, use paralellism within pytest. I'm doing this locally with pytest -n 6.
+
+---
+
+Search the web for ubuntu-latest specs to take best advantage of that hardware
