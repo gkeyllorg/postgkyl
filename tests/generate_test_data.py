@@ -16,6 +16,10 @@ _get_basis_p().  Two mapping types are provided:
 
 Dynvector files (file_type=2, a bare time series with no spatial grid --
 e.g. a field-energy history) are written by ``write_gkyl_dynvector``.
+
+Analytic 4D--6D fields are projected using Gkeyll's own basis evaluations.
+They are generated when the compiled library is available; their consumers
+are native tests and skip when it is unavailable.
 """
 import struct
 from pathlib import Path
@@ -268,6 +272,77 @@ def _project_1d_p1(fn, lower: float, upper: float, cells: int,
 
 
 # ---------------------------------------------------------------------------
+# Analytic high-dimensional fields
+# ---------------------------------------------------------------------------
+
+# (stem, ndim, poly_order, basis_type). Gkeyll has no 6D gkhybrid or p2 basis.
+ANALYTIC_CONFIGS = [
+    (f"analytic_{ndim}d_{short}_p{order}", ndim, order, basis)
+    for ndim in (4, 5, 6) for short, basis in (
+        ("ms", "serendipity"),
+        ("mt", "tensor"),
+        ("gkhyb", "gkhybrid"),
+    ) for order in ((1, ) if basis == "gkhybrid" or ndim == 6 else (1, 2))
+    if not (ndim == 6 and basis == "gkhybrid")
+]
+
+
+def analytic_fields(points: np.ndarray, basis: str, order: int) -> np.ndarray:
+  """Two exactly representable polynomials, with coordinates on the last axis.
+
+  f = 2 + sum((d+1)*x_d) + x_0*x_last, plus x_q^2/2 when supported.
+  g = product(1 + (d+1)*x_d/5), with an extra (1+x_q/3) for serendipity
+  p2 and gkhybrid, or x_d^2/10 in every factor for tensor p2.
+
+  Here q=ndim-2 is v_parallel for gkhybrid. These terms exercise mixed
+  modes, the quadratic velocity modes, and tensor-only quadratic products.
+  """
+  ndim = points.shape[-1]
+  q = ndim - 2
+  quadratic = order == 2 or basis == "gkhybrid"
+  f = (2.0 + points @ np.arange(1, ndim + 1) + points[..., 0] * points[..., -1])
+  if quadratic:
+    f = f + 0.5 * points[..., q]**2
+  factors = 1.0 + points * np.arange(1, ndim + 1) / 5.0
+  if basis == "tensor" and order == 2:
+    factors = factors + points**2 / 10.0
+  g = np.prod(factors, axis=-1)
+  if quadratic and basis != "tensor":
+    g = g * (1.0 + points[..., q] / 3.0)
+  return np.stack([f, g], axis=-1)
+
+
+def _generate_analytic_fields(out_dir: Path) -> None:
+  """Project the polynomials by exact Gauss integration, field-blocked."""
+  from postgkyl import gpython
+
+  if not gpython.available():
+    return
+  for stem, ndim, order, basis in ANALYTIC_CONFIGS:
+    # Unequal counts, origins and widths expose axis/cell ordering mistakes.
+    cells = [2, 3] + [1] * (ndim - 3) + [2]
+    lower = -0.5 + np.arange(ndim) / 10.0
+    upper = lower + 1.0 + np.arange(ndim) / 5.0
+    dx = (upper - lower) / cells
+    centers = np.stack(np.meshgrid(
+        *[lower[d] + (np.arange(cells[d]) + 0.5) * dx[d] for d in range(ndim)],
+        indexing="ij"),
+                       axis=-1).reshape(-1, ndim)
+    nq = 3 if order == 2 or basis == "gkhybrid" else 2
+    nodes, weights = gpython.basis.gauss_quad(ndim, nq)
+    matrix = gpython.basis.eval_matrix(basis, ndim, order, nodes)
+    samples = analytic_fields(centers[:, None, :] + nodes * dx / 2, basis,
+                              order)
+    coefficients = np.einsum("cqf,qb,q->cfb",
+                             samples,
+                             matrix,
+                             weights,
+                             optimize=True)
+    write_gkyl_field(out_dir / f"{stem}.gkyl", cells, lower, upper,
+                     coefficients.reshape(*cells, -1), order, basis)
+
+
+# ---------------------------------------------------------------------------
 # Configuration tables
 # ---------------------------------------------------------------------------
 
@@ -304,6 +379,7 @@ def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
+  _generate_analytic_fields(out_dir)
 
   # Constant f=4 on [-1,1], with orthonormal p1 modal coefficients.
   write_gkyl_field(out_dir / "fsimple.gkyl", [1], [-1.], [1.],

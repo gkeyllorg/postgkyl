@@ -248,6 +248,12 @@ def nodal_to_modal_matrix(basis_type: str, ndim: int,
   def build():
     g0 = _lib.require()
     basis = get_basis(basis_type, ndim, poly_order)
+    # Gkeyll can evaluate this basis, but its n2m_list[5][2] is NULL
+    # (core/zero/gkyl_cart_modal_tensor_priv.h). Do not call that pointer.
+    if basis.id == "tensor" and ndim == 5 and poly_order == 2:
+      raise NotImplementedError(
+          "Gkeyll has no nodal-to-modal transform for tensor p2 in 5D; "
+          "use modal data with represent(to='quad', num_quad=3) instead.")
     nb = basis.num_basis
     mat = np.empty((nb, nb))
     for j in range(nb):
