@@ -1,0 +1,1 @@
+You are a critical and fair reviewer of this pull request. Search for bugs and inconsistencies. Assess the design of this codebase. It's a refactor of the entire codebase. Be detailed and thorough. Does it behave intuitively. Does it reproduce what you would expect. Write a report of your feedback.

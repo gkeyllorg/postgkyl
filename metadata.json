@@ -3,7 +3,7 @@
   "checkpoint_id": "01M3F5QY3FEVFF3AQ24RAS41V8",
   "strategy": "manual-commit",
   "branch": "refactor-diagnostics",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "scripts/gkeyll-revision",
     "src/postgkyl/dg/interpolate.py",
@@ -50,14 +50,21 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 135044,
+    "input_tokens": 387436,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 2739712,
-    "output_tokens": 17491,
-    "api_call_count": 36,
+    "cache_read_tokens": 7570304,
+    "output_tokens": 50626,
+    "api_call_count": 74,
     "subagent_tokens_complete": false
   }
 }
