@@ -9,6 +9,7 @@ not on ``PATH``.
 from __future__ import annotations
 
 import os
+import subprocess
 from importlib import import_module
 
 import matplotlib
@@ -919,3 +920,48 @@ def test_mpeg4_export_accepts_odd_frame_dimensions(tmp_path, nproc):
                    nproc=nproc,
                    no_show=True)
   assert output.stat().st_size > 0
+
+
+@pytest.mark.parametrize("options, message", [
+    (dict(cutoffglobalrange=0), "cutoffglobalrange"),
+    (dict(cutoffglobalrange=1.1), "cutoffglobalrange"),
+    (dict(group=2), "group must be 0 or 1"),
+    (dict(collected=True), "collected requires NumPy datasets"),
+    (dict(grouptags=True), "grouptags requires a flat dataset sequence"),
+])
+def test_invalid_animation_options_fail_before_rendering(options, message):
+  with pytest.raises(ValueError, match=message):
+    anim_mod.animate([[_line_frame(0)]], no_show=True, **options)
+
+
+def test_empty_tag_groups_are_rejected():
+  with pytest.raises(ValueError, match="no datasets to animate"):
+    anim_mod.animate([_line_frame(0)],
+                     use="absent",
+                     grouptags=True,
+                     no_show=True)
+
+
+def test_tag_filter_preserves_grouped_frames_and_drops_empty_frames():
+  chosen = _line_frame(2)
+  chosen.tag = "chosen"
+  animation = _draw_animation(
+      [[_line_frame(0)], [chosen, _line_frame(1)]], use="chosen", figsize="4,3")
+  assert animation._save_count == 1
+  np.testing.assert_array_equal(animation._fig.get_size_inches(), [4, 3])
+  np.testing.assert_array_equal(animation._fig.axes[0].lines[0].get_ydata(),
+                                np.arange(8) + 2)
+
+
+@pytest.mark.parametrize("codec", ["mpeg4", "ffv1"])
+@pytest.mark.parametrize("error", [
+    BrokenPipeError("encoder closed"),
+    subprocess.CalledProcessError(1, ["ffmpeg"], stderr=b"bad codec\xff"),
+])
+def test_video_errors_restore_configuration_and_decode_stderr(codec, error):
+  original = matplotlib.rcParams["animation.ffmpeg_path"]
+  with pytest.raises(RuntimeError, match="encoder closed|bad codec"):
+    with anim_mod._video_export("movie.mkv", ("/test/ffmpeg", codec), 12):
+      assert matplotlib.rcParams["animation.ffmpeg_path"] == "/test/ffmpeg"
+      raise error
+  assert matplotlib.rcParams["animation.ffmpeg_path"] == original

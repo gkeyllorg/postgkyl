@@ -120,3 +120,12 @@ def test_traces_are_frozen():
   traces = kd.KineticEnergyTraces(ke=np.array([1.0]), dke=np.array([]))
   with pytest.raises(FrozenInstanceError):
     traces.ke = np.array([2.0])
+
+
+@pytest.mark.parametrize("dim, first, last, message", [
+    (1, 0, 1, "requires dim=2 or dim=3"),
+    (2, 2, 1, "final_frame must be at least init_frame"),
+])
+def test_invalid_frame_requests_fail_before_loading(dim, first, last, message):
+  with pytest.raises(ValueError, match=message):
+    kd.ke_dke("unused_", first, last, dim, 1., 0., 1.)

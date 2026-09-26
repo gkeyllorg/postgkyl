@@ -153,3 +153,13 @@ def test_nonuniform_cell_averages_obey_analytic_integrals(axis):
     expected = np.stack([-6 + 18.5 * c, 1.5 * (1 + mean_x2)], axis=-1)[:,
                                                                        None, :]
   np.testing.assert_allclose(result, expected, rtol=2e-14, atol=2e-14)
+
+
+@pytest.mark.parametrize("coord, message", [
+    (np.zeros((3, 2)), "one-dimensional axes"),
+    (np.arange(6.), "coordinate count 6 must match 3"),
+])
+def test_integrate_rejects_coordinates_without_sample_correspondence(
+    coord, message):
+  with pytest.raises(ValueError, match=message):
+    calculus.integrate([coord], np.ones((3, 1)))

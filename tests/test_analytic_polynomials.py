@@ -133,12 +133,18 @@ def test_conversion_preserves_the_polynomial_not_just_a_round_trip(
 
 @pytest.mark.parametrize("point_values", [False, True],
                          ids=["modal", "sampled"])
+@pytest.mark.parametrize("expression",
+                         [None, "f grad", "f 0:1 grad2", "f 0:2 grad2"])
 def test_gradient_includes_all_directions_and_both_fields(
-    polynomial_case, point_values):
+    polynomial_case, point_values, expression):
   data, factors, _ = polynomial_case
   if point_values:
     data = data.interpolate(num_interp=4)
-  result = data.differentiate()
+  # Cap the axis range for 1D fixtures; grad2 preserves selector order.
+  if expression == "f 0:2 grad2" and data.num_dims == 1:
+    expression = "f 0:1 grad2"
+  result = (data.differentiate() if expression is None else pg.evaluate(
+      expression, data))
   if not point_values:
     assert result.backend == "gkyl"
     assert result.ctx["value_form"] == "modal"
@@ -147,7 +153,10 @@ def test_gradient_includes_all_directions_and_both_fields(
   # including its one-sided quadratic boundary stencil.
   axes = _centers(result.grid)
   expected = []
-  for direction in range(data.num_dims):
+  directions = (range(1)
+                if expression == "f 0:1 grad2" else range(min(2, data.num_dims))
+                if expression == "f 0:2 grad2" else range(data.num_dims))
+  for direction in directions:
     differentiated = [[
         p.deriv() if d == direction else p for d, p in enumerate(field)
     ] for field in factors]

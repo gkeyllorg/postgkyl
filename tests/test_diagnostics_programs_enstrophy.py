@@ -81,3 +81,17 @@ def test_traces_are_frozen():
   traces = ens.EnstrophyTraces(np.array([1.0]), np.array([2.0]))
   with pytest.raises(FrozenInstanceError):
     traces.enstrophy = np.array([3.0])
+
+
+@pytest.mark.parametrize("ndim", [1, 4])
+def test_enstrophy_rejects_unsupported_spatial_dimension(ndim):
+  data = pg.GData().push([np.arange(3.) for _ in range(ndim)],
+                         np.zeros((2, ) * ndim + (5, )))
+  with pytest.raises(ValueError, match="two or three spatial dimensions"):
+    ens._enstrophy_terms(data)
+
+
+def test_enstrophy_rejects_reversed_frame_range():
+  with pytest.raises(ValueError,
+                     match="final_frame must be at least init_frame"):
+    ens.enstrophy("unused_", 2, 1)

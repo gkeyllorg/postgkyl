@@ -325,3 +325,42 @@ def test_modal_dispatch_scalar_helpers_cover_scalar_shapes():
   assert evaluate_module._as_scalar(np.array([3.0])) is None
   assert evaluate_module._modal_kernel("+", [None], [np.array([1.0])],
                                        [{}]) is None
+
+
+@pytest.mark.parametrize(
+    "expression", ["1 grad", "1 0 int", "1 0 avg", "1 0 len", "1 0 grad2"])
+def test_physical_operators_reject_scalar_operands(expression):
+  with pytest.raises(ValueError, match="requires a dataset with a grid"):
+    operations.evaluate(expression, _field(1.0))
+
+
+def test_gradient_selector_requires_at_least_one_axis():
+  with pytest.raises(ValueError, match="grad2 needs at least one axis"):
+    operations.evaluate("f 0:0 grad2", _field(1.0))
+
+
+def test_domain_length_uses_selected_axis_endpoints():
+  data = _make([np.array([-2., -1., 3.]),
+                np.array([4., 5., 7., 9.])], np.zeros((2, 3, 1)))
+  result = operations.evaluate("f 1 len", data)
+  assert result.grid == []
+  np.testing.assert_array_equal(result.values, [5.])
+
+
+def test_average_rejects_nonpositive_domain_volume():
+  data = _make([np.array([2., 1., 0.])], np.ones((2, 1)))
+  with pytest.raises(ValueError, match="positive domain volume"):
+    operations.evaluate("f 0 avg", data)
+
+
+@pytest.mark.parametrize("expression, message", [
+    ("f 0 len", "separable coordinate axis"),
+    ("f 0,1 avg", "separable coordinates"),
+])
+def test_domain_queries_reject_curvilinear_coordinates(expression, message):
+  # An ordinary Cartesian mesh stored as joint coordinates still has no
+  # single separable coordinate array for len/avg.
+  grid = list(np.meshgrid(np.arange(4.), np.arange(5.), indexing="ij"))
+  data = _make(grid, np.ones((3, 4, 1)), mapped_axes={0: 0, 1: 0})
+  with pytest.raises(ValueError, match=message):
+    operations.evaluate(expression, data)
