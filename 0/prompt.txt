@@ -1,0 +1,1 @@
+Isolate the unit tests which take the most time. Is there a way to make them faster? Are they covering an important part of the codebase? The unit testing system aims to be fast, with no single unit test taking more than 5 seconds
