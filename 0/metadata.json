@@ -1,0 +1,62 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3MJH87XGMXECQQVKFR7MDFC",
+  "session_id": "01a0e910-4200-77c3-aa4a-383662b17d25",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-28T17:55:51.127033639Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/source/concepts.rst",
+    "src/postgkyl/operations/__init__.py",
+    "src/postgkyl/operations/average.py",
+    "src/postgkyl/operations/eval_at_coord_proj.py",
+    "tests/test_analytic_polynomials.py",
+    "tests/test_coverage_operations.py",
+    "tests/test_review_composition.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "1e88fab2f2ea",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 82653,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3535744,
+    "output_tokens": 14743,
+    "api_call_count": 54,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-28T17:55:51.062922451Z",
+    "agent_lines": 50,
+    "agent_removed": 46,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 50,
+    "total_lines_changed": 96,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 294,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/validation/normalization/README.md": 98,
+        "docs/validation/normalization/coordinate_projection.csv": 42,
+        "docs/validation/normalization/pgkyl.txt": 4,
+        "examples/scripts/validate_normalization.py": 103,
+        "tests/test_analytic_polynomials.py": 47
+      }
+    }
+  ]
+}

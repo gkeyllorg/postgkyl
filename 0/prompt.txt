@@ -1,0 +1,22 @@
+There is a factor of 2 inside eval_at_coord_proj that I'd like you to review. Here is the feedback I got. Make and save some figures and plots to show that this produces the correct results. Point out the unit tests that have been run to ensure this is correct.
+
+These changes in kernel selection and eval_at_coord I approved in another PR.
+
+The scale by 2 seems a bit off, or there's something I don't understand.
+
+We should consistently use 1/sqrt(2) as the p=0 normalization, in Gkeyll and postgkyl. If that's not the case, change it throughout to make it consistent.
+
+Then there's a separate issue of what postgkyl should produce after the average command, e.g. if I do
+pgkyl sim_2x-field_1.gkyl average 0,1
+should the result of this be:
+
+the genuine average, or
+the expansion coefficient of the average
+? I'm mostly sure, but not 100%, that it should be 1. It depends a bit on what commands we wish to support after this, but any spatial commands (e.g. interp) don't make much sense for a single number. That said, I haven't thought of every possible command.
+Max, before merging, please do and show a test (with a reg test and pgkyl) showing that the average is actually what one would expect.
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Change full averaging to a physical scalar","question":"The current API keeps a full average as modal data; interpolation then returns the genuine mean. For this review, should I preserve that behavior or change full averaging to return a physical scalar?","questionItemId":"[\"request_user_input_async\",\"REDACTED\",0]"}]
+</send_user_message_question_reply>
