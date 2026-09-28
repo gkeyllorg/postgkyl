@@ -1,0 +1,54 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3MN2NW3J6YPB7P03M44K3CS",
+  "session_id": "01a0e94a-3a9b-7743-adbc-6c161c4b4505",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-28T18:40:18.11642988Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "MANIFEST.in",
+    "README.md",
+    "scripts/build_gkeyll.sh",
+    "scripts/gkeyll-branch",
+    "scripts/gkeyll-revision",
+    "tests/test_gkeyll_build_revision.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "950e196b7c16",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 50939,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1510400,
+    "output_tokens": 6095,
+    "api_call_count": 35,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-28T18:40:18.094365487Z",
+    "agent_lines": 90,
+    "agent_removed": 137,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 90,
+    "total_lines_changed": 227,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
