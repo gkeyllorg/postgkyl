@@ -1,0 +1,1 @@
+How do we release a build of postgkeyll to a common package manager so that people can do something like pip install postgkyl or mamba install postgkyl? We want to make the build and installation process as simple as possible. Perhaps one just has to execute a single command without cloning the postgkyl repo to install this package.
