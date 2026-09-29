@@ -1,0 +1,75 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3QH5SNH00QATFKBRG0RMPPV",
+  "session_id": "01a0eee9-eafe-7b10-8242-550636411387",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-29T21:29:49.512710667Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    ".github/workflows/docs.yml",
+    ".github/workflows/test.yml",
+    ".github/workflows/wheels.yml",
+    ".gitignore",
+    "MANIFEST.in",
+    "README.md",
+    "docs/source/contributing.rst",
+    "docs/source/development.md",
+    "docs/source/index.rst",
+    "docs/source/installation.md",
+    "environment.yml",
+    "pyproject.toml",
+    "scripts/build_docs.py",
+    "scripts/build_gkeyll.sh",
+    "scripts/build_gpython.sh",
+    "scripts/check_wheel.py",
+    "scripts/smoke_wheel.sh",
+    "scripts/update_gkeyll.sh",
+    "scripts/update_pgkyl.sh",
+    "setup.py",
+    "src/postgkyl/_version.py",
+    "src/postgkyl/gpython/__init__.py",
+    "src/postgkyl/gpython/_lib.py",
+    "src/postgkyl/gpython/csrc/_gpythonmodule.c",
+    "tests/test_docs_build.py",
+    "tests/test_gkeyll_build_revision.py",
+    "tests/test_packaging.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "6eccaffb418a",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 228573,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6062208,
+    "output_tokens": 53261,
+    "api_call_count": 53,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-29T21:29:49.458930433Z",
+    "agent_lines": 712,
+    "agent_removed": 767,
+    "human_added": 19,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 731,
+    "total_lines_changed": 1518,
+    "agent_percentage": 97.4308300395257,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+How can we simplify the build instructions and process?
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Both","question":"Should the simplification focus on installation instructions, the build machinery, or both?","questionItemId":"[\"request_user_input_async\",\"REDACTED\",0]"}]
+</send_user_message_question_reply>
+
+---
+
+Implement these suggestions. Validate it here. Validate on clean builds

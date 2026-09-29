@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3QH5SNH00QATFKBRG0RMPPV",
+  "strategy": "manual-commit",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".github/workflows/docs.yml",
+    ".github/workflows/test.yml",
+    ".github/workflows/wheels.yml",
+    ".gitignore",
+    "MANIFEST.in",
+    "README.md",
+    "docs/source/contributing.rst",
+    "docs/source/development.md",
+    "docs/source/index.rst",
+    "docs/source/installation.md",
+    "environment.yml",
+    "pyproject.toml",
+    "scripts/build_docs.py",
+    "scripts/build_gkeyll.sh",
+    "scripts/build_gpython.sh",
+    "scripts/check_wheel.py",
+    "scripts/smoke_wheel.sh",
+    "scripts/update_gkeyll.sh",
+    "scripts/update_pgkyl.sh",
+    "setup.py",
+    "src/postgkyl/_version.py",
+    "src/postgkyl/gpython/__init__.py",
+    "src/postgkyl/gpython/_lib.py",
+    "src/postgkyl/gpython/csrc/_gpythonmodule.c",
+    "tests/test_docs_build.py",
+    "tests/test_gkeyll_build_revision.py",
+    "tests/test_packaging.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 228573,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6062208,
+    "output_tokens": 53261,
+    "api_call_count": 53,
+    "subagent_tokens_complete": true
+  }
+}
