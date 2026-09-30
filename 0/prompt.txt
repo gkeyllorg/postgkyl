@@ -1,0 +1,1060 @@
+Documentation is still failing CI. Fix the documentation build. Add tests locally to ensure that building the documentation is fine. 
+Search logs
+1s
+1s
+4s
+2m 3s
+2m 16s
+Run python -m pytest --dist=loadscope tests/test_documentation.py tests/test_examples.py tests/test_docs_build.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/postgkyl/postgkyl
+configfile: pyproject.toml
+plugins: platformdirs-4.12.2, timeout-2.4.0, cov-7.1.0, xdist-3.8.0, anyio-4.15.1
+created: 4/4 workers
+4 workers [44 items]
+
+.....................................EEE....                             [100%]
+==================================== ERRORS ====================================
+__________ ERROR at setup of test_published_inventory_and_navigation ___________
+[gw2] linux -- Python 3.12.14 /opt/hostedtoolcache/Python/3.12.14/x64/bin/python
+
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTrac...16658e0>, _basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def documentation(tmp_path_factory):
+      destination = tmp_path_factory.mktemp("docs")
+      source = destination / "source"
+      subprocess.run([
+          sys.executable,
+          str(ROOT / "scripts/build_docs.py"), "--output",
+          str(source)
+      ],
+                     cwd=ROOT,
+                     check=True)
+>     subprocess.run([
+          sys.executable, "-m", "sphinx", "-W", "--keep-going", "-b", "html", "-c",
+          str(ROOT / "docs"),
+          str(source),
+          str(destination / "html")
+      ],
+                     check=True)
+
+tests/test_docs_build.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', ...],)
+kwargs = {}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/subprocess.py:571: CalledProcessError
+---------------------------- Captured stdout setup -----------------------------
+loaded: <GData (8, 8) | 8 comp | [0,1] [0,1] | serendipity p1 modal | gkyl-native | tag 'default'>
+interpolated: <GData (16, 16) | 2 comp | [0,1] [0,1] | serendipity p1 interpolate | tag 'default'>
+saved plot: /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/figures/01_quickstart_comp0.png
+saved plot: /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/figures/01_quickstart_lineout.png
+round-tripped through /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/figures/01_quickstart_out.gkyl
+01_quickstart: OK
+01_quickstart_comp0.png: Identical pixels (1 frame(s)) and timing
+01_quickstart_lineout.png: Identical pixels (1 frame(s)) and timing
+(a*b)/b == a:   True
+a+a == 2*a:     True
+integrate(a) =  [1.  1.5]
+np.sqrt(modal) refuses: Cannot do NumPy math on modal DG coefficients. Convert explicitly: .represent(to='nodal')/.represent(to='quad') (pointwise, stays native), .apply(fn) (pointwise via quadrature, projects back to modal), or .interpolate() (leave for the NumPy field domain).
+sqrt(a^2+b^2) == sqrt(2)*a: True
+np.asarray(interpolated) -> (16, 16, 2) float64
+02_arithmetic_and_numpy: OK
+02_arithmetic.png: Identical pixels (1 frame(s)) and timing
+fm.density(modal) refuses: density operates on point values, not modal DG coefficients; call .interpolate() first -- extracting primitive variables from raw DG coefficients would mix basis functions.
+03_diagnostics_five_moment: OK
+03_diagnostics_density.png: Identical pixels (1 frame(s)) and timing
+03_diagnostics_pressure.png: Identical pixels (1 frame(s)) and timing
+registered quantities: ['ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'beta', 'c_s', 'debye_length', 'diamag_vel', 'distf', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'larmor_radius', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt']
+M0: <GData (24,) | 2 comp | [-3.14159,3.14159] | serendipity p1 modal | gkyl-native | tag 'default'>  label: $M_{0i}$ (m$^{-3}$)
+(J B)^-1: <GData (32,) | 2 comp | [-3.14159,3.14159] | serendipity p1 modal | gkyl-native | tag 'default'>  label: $(J B)^{-1}$
+distf: <GData (64, 32, 16) | 1 comp | [-3.14159,3.14159] [-0.707107,0.707107] [0,1] | gkhybrid p1 interpolate | tag 'f'>
+04_gyrokinetics: OK
+04_gyrokinetics_M0.png: Identical pixels (1 frame(s)) and timing
+04_gyrokinetics_jacobtot_inv.png: Identical pixels (1 frame(s)) and timing
+04_gyrokinetics_distf_slice.png: Identical pixels (1 frame(s)) and timing
+05_map_to_rz: OK
+05_map_to_rz.png: Identical pixels (1 frame(s)) and timing
+06_growth.png: Identical pixels (1 frame(s)) and timing
+07_collect.png: Identical pixels (1 frame(s)) and timing
+07_wave.gif: Identical pixels (16 frame(s)) and timing
+07_surface.gif: Identical pixels (12 frame(s)) and timing
+08_surface.html: Identical Plotly traces, layout, and configuration
+08_volume.html: Identical Plotly traces, layout, and configuration
+09_isosurfaces.png: Identical pixels (1 frame(s)) and timing
+09_volume.png: Identical pixels (1 frame(s)) and timing
+10_manual.png: Identical pixels (1 frame(s)) and timing
+11_multiblock: OK
+11_multiblock.png: Identical pixels (1 frame(s)) and timing
+12_gk_load_quantity: vt, phi_norm, larmor_radius OK
+12_gk_load_quantity_vt.png: Identical pixels (1 frame(s)) and timing
+12_gk_load_quantity_phi_norm.png: Identical pixels (1 frame(s)) and timing
+12_gk_load_quantity_larmor_radius.png: Identical pixels (1 frame(s)) and timing
+mirror_comparison.png: Identical pixels (1 frame(s)) and timing
+Running Sphinx v8.2.3
+loading translations [en]... done
+making output directory... done
+myst v4.0.1: MdParserConfig(commonmark_only=False, gfm_only=False, enable_extensions=set(), disable_syntax=[], all_links_external=False, links_external_new_tab=False, url_schemes=('http', 'https', 'mailto', 'ftp'), ref_domains=None, fence_as_directive=set(), number_code_blocks=[], title_to_header=False, heading_anchors=0, heading_slug_func=None, html_meta={}, footnote_sort=True, footnote_transition=True, words_per_minute=200, substitutions={}, linkify_fuzzy_links=True, dmath_allow_labels=True, dmath_allow_space=True, dmath_allow_digits=True, dmath_double_inline=False, update_mathjax=True, mathjax_classes='tex2jax_process|mathjax_process|math|output_area', enable_checkboxes=False, suppress_warnings=[], highlight_code_blocks=True)
+building [mo]: targets for 0 po files that are out of date
+writing output... 
+building [html]: targets for 304 source files that are out of date
+updating environment: [new config] 304 added, 0 changed, 0 removed
+reading sources... [  0%] animation
+reading sources... [  1%] arithmetic-representation
+reading sources... [  1%] cli-tutorial
+reading sources... [  1%] concepts
+reading sources... [  2%] contributing
+reading sources... [  2%] development
+reading sources... [  2%] examples
+reading sources... [  3%] exponential-growth
+reading sources... [  3%] fluid-pressure
+reading sources... [  3%] gyrokinetic-distribution
+reading sources... [  4%] gyrokinetic-quantities
+reading sources... [  4%] index
+reading sources... [  4%] installation
+reading sources... [  5%] interactive
+reading sources... [  5%] interface-equivalence
+reading sources... [  5%] main
+reading sources... [  6%] manual-arrays
+reading sources... [  6%] migration
+reading sources... [  6%] multiblock
+reading sources... [  7%] physical-rz
+reading sources... [  7%] plotly
+reading sources... [  7%] profile-comparison
+reading sources... [  8%] provenance
+reading sources... [  8%] pyvista
+reading sources... [  8%] quickstart
+reading sources... [  9%] reference/api
+reading sources... [  9%] reference/api-GData
+reading sources... [  9%] reference/api-GDataGroup
+reading sources... [ 10%] reference/api-postgkyl-GData-backend
+reading sources... [ 10%] reference/api-postgkyl-GData-bounds
+reading sources... [ 10%] reference/api-postgkyl-GData-clone
+reading sources... [ 11%] reference/api-postgkyl-GData-div
+reading sources... [ 11%] reference/api-postgkyl-GData-file_name
+reading sources... [ 11%] reference/api-postgkyl-GData-get_bounds
+reading sources... [ 12%] reference/api-postgkyl-GData-get_grid
+reading sources... [ 12%] reference/api-postgkyl-GData-get_grid_type
+reading sources... [ 12%] reference/api-postgkyl-GData-get_label
+reading sources... [ 12%] reference/api-postgkyl-GData-get_num_cells
+reading sources... [ 13%] reference/api-postgkyl-GData-get_num_comps
+reading sources... [ 13%] reference/api-postgkyl-GData-get_num_dims
+reading sources... [ 13%] reference/api-postgkyl-GData-get_tag
+reading sources... [ 14%] reference/api-postgkyl-GData-get_values
+reading sources... [ 14%] reference/api-postgkyl-GData-grid
+reading sources... [ 14%] reference/api-postgkyl-GData-info
+reading sources... [ 15%] reference/api-postgkyl-GData-is_interpolated
+reading sources... [ 15%] reference/api-postgkyl-GData-label
+reading sources... [ 15%] reference/api-postgkyl-GData-load
+reading sources... [ 16%] reference/api-postgkyl-GData-mul
+reading sources... [ 16%] reference/api-postgkyl-GData-native
+reading sources... [ 16%] reference/api-postgkyl-GData-num_cells
+reading sources... [ 17%] reference/api-postgkyl-GData-num_comps
+reading sources... [ 17%] reference/api-postgkyl-GData-num_dims
+reading sources... [ 17%] reference/api-postgkyl-GData-output_name
+reading sources... [ 18%] reference/api-postgkyl-GData-push
+reading sources... [ 18%] reference/api-postgkyl-GData-set_grid
+reading sources... [ 18%] reference/api-postgkyl-GData-set_label
+reading sources... [ 19%] reference/api-postgkyl-GData-set_tag
+reading sources... [ 19%] reference/api-postgkyl-GData-set_values
+reading sources... [ 19%] reference/api-postgkyl-GData-tag
+reading sources... [ 20%] reference/api-postgkyl-GData-val2coord
+reading sources... [ 20%] reference/api-postgkyl-GData-values
+reading sources... [ 20%] reference/api-postgkyl-GDataGroup-animate
+reading sources... [ 21%] reference/api-postgkyl-GDataGroup-collect
+reading sources... [ 21%] reference/api-postgkyl-GDataGroup-datasets
+reading sources... [ 21%] reference/api-postgkyl-GDataGroup-evaluate
+reading sources... [ 22%] reference/api-postgkyl-GDataGroup-info
+reading sources... [ 22%] reference/api-postgkyl-GDataGroup-load
+reading sources... [ 22%] reference/api-postgkyl-GDataGroup-plotly_animate
+reading sources... [ 23%] reference/api-postgkyl-GDataGroup-sort
+reading sources... [ 23%] reference/api-postgkyl-GDataGroup-with_
+reading sources... [ 23%] reference/api-postgkyl-animate
+reading sources... [ 24%] reference/api-postgkyl-apply
+reading sources... [ 24%] reference/api-postgkyl-available_evaluate_operators
+reading sources... [ 24%] reference/api-postgkyl-average
+reading sources... [ 25%] reference/api-postgkyl-collect
+reading sources... [ 25%] reference/api-postgkyl-diagnostics-discovery-available_frames
+reading sources... [ 25%] reference/api-postgkyl-diagnostics-discovery-find_output_stems
+reading sources... [ 26%] reference/api-postgkyl-diagnostics-mom-enstrophy-enstrophy
+reading sources... [ 26%] reference/api-postgkyl-diagnostics-mom-five_moment-binary
+reading sources... [ 26%] reference/api-postgkyl-diagnostics-mom-five_moment-density
+reading sources... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-ke
+reading sources... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-mach
+reading sources... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-pressure
+reading sources... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-sound
+reading sources... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-temp
+reading sources... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-vel
+reading sources... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-velocity
+reading sources... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-xvel
+reading sources... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-yvel
+reading sources... [ 30%] reference/api-postgkyl-diagnostics-mom-five_moment-zvel
+reading sources... [ 30%] reference/api-postgkyl-diagnostics-mom-ke_dke-ke_dke
+reading sources... [ 30%] reference/api-postgkyl-diagnostics-mom-mhd-bi
+reading sources... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-bx
+reading sources... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-by
+reading sources... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-bz
+reading sources... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-mach
+reading sources... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-mag_pressure
+reading sources... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-pressure
+reading sources... [ 33%] reference/api-postgkyl-diagnostics-mom-mhd-sound
+reading sources... [ 33%] reference/api-postgkyl-diagnostics-mom-mhd-temp
+reading sources... [ 33%] reference/api-postgkyl-diagnostics-mom-multispecies-accumulate_current
+reading sources... [ 34%] reference/api-postgkyl-diagnostics-mom-multispecies-energetics
+reading sources... [ 34%] reference/api-postgkyl-diagnostics-mom-plasma-beta
+reading sources... [ 34%] reference/api-postgkyl-diagnostics-mom-plasma-d
+reading sources... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-lambdaD
+reading sources... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-magB
+reading sources... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-omegaC
+reading sources... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-omegaP
+reading sources... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-rho
+reading sources... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-vA
+reading sources... [ 37%] reference/api-postgkyl-diagnostics-mom-plasma-vt
+reading sources... [ 37%] reference/api-postgkyl-diagnostics-mom-rotations-bparrotate
+reading sources... [ 37%] reference/api-postgkyl-diagnostics-mom-rotations-bperprotate
+reading sources... [ 38%] reference/api-postgkyl-diagnostics-mom-rotations-parrotate
+reading sources... [ 38%] reference/api-postgkyl-diagnostics-mom-rotations-perprotate
+reading sources... [ 38%] reference/api-postgkyl-diagnostics-mom-ten_moment-agyro
+reading sources... [ 38%] reference/api-postgkyl-diagnostics-mom-ten_moment-ke
+reading sources... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-mach
+reading sources... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-mom_agyro
+reading sources... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-p_par
+reading sources... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-p_perp
+reading sources... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-pressure
+reading sources... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-pressure_tensor
+reading sources... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxx
+reading sources... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxy
+reading sources... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxz
+reading sources... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pyy
+reading sources... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pyz
+reading sources... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pzz
+reading sources... [ 43%] reference/api-postgkyl-diagnostics-mom-ten_moment-sound
+reading sources... [ 43%] reference/api-postgkyl-diagnostics-mom-ten_moment-temp
+reading sources... [ 43%] reference/api-postgkyl-diagnostics-pkpm-laguerre_compose
+reading sources... [ 44%] reference/api-postgkyl-diagnostics-pkpm-load_pkpm
+reading sources... [ 44%] reference/api-postgkyl-diagnostics-vm-kinetic-materialize_point_values
+reading sources... [ 44%] reference/api-postgkyl-diagnostics-vm-kinetic-transform_frame
+reading sources... [ 45%] reference/api-postgkyl-diagnostics-vm-trajectory-trajectory
+reading sources... [ 45%] reference/api-postgkyl-differentiate
+reading sources... [ 45%] reference/api-postgkyl-eval_at_coord_proj
+reading sources... [ 46%] reference/api-postgkyl-evaluate
+reading sources... [ 46%] reference/api-postgkyl-extract_flux_surface
+reading sources... [ 46%] reference/api-postgkyl-extract_input
+reading sources... [ 47%] reference/api-postgkyl-fft
+reading sources... [ 47%] reference/api-postgkyl-fit
+reading sources... [ 47%] reference/api-postgkyl-gk-available_quantities
+reading sources... [ 48%] reference/api-postgkyl-gk-energy_balance
+reading sources... [ 48%] reference/api-postgkyl-gk-energy_balance_error
+reading sources... [ 48%] reference/api-postgkyl-gk-fetch_ExB_vel
+reading sources... [ 49%] reference/api-postgkyl-gk-fetch_M1_from_H
+reading sources... [ 49%] reference/api-postgkyl-gk-fetch_Tpar_from_BiMax
+reading sources... [ 49%] reference/api-postgkyl-gk-fetch_Tpar_from_M0_M1_M2par
+reading sources... [ 50%] reference/api-postgkyl-gk-fetch_Tperp_from_BiMax
+reading sources... [ 50%] reference/api-postgkyl-gk-fetch_Tperp_from_M0_M2perp
+reading sources... [ 50%] reference/api-postgkyl-gk-fetch_beta_from_bmag_press
+reading sources... [ 51%] reference/api-postgkyl-gk-fetch_diamag_vel
+reading sources... [ 51%] reference/api-postgkyl-gk-fetch_gradB_vel
+reading sources... [ 51%] reference/api-postgkyl-gk-fetch_press_from_BiMax
+reading sources... [ 52%] reference/api-postgkyl-gk-fetch_press_from_Max
+reading sources... [ 52%] reference/api-postgkyl-gk-fetch_press_p
+reading sources... [ 52%] reference/api-postgkyl-gk-fetch_temp_from_Max
+reading sources... [ 53%] reference/api-postgkyl-gk-fetch_temp_from_Tpar_Tperp
+reading sources... [ 53%] reference/api-postgkyl-gk-load_distf
+reading sources... [ 53%] reference/api-postgkyl-gk-load_quantity
+reading sources... [ 54%] reference/api-postgkyl-gk-multib_tag
+reading sources... [ 54%] reference/api-postgkyl-gk-nodes
+reading sources... [ 54%] reference/api-postgkyl-gk-nodes_to_RZ
+reading sources... [ 55%] reference/api-postgkyl-gk-particle_balance
+reading sources... [ 55%] reference/api-postgkyl-gk-particle_balance_error
+reading sources... [ 55%] reference/api-postgkyl-gk-resolve_frames
+reading sources... [ 56%] reference/api-postgkyl-grid
+reading sources... [ 56%] reference/api-postgkyl-group_blocks
+reading sources... [ 56%] reference/api-postgkyl-growth
+reading sources... [ 57%] reference/api-postgkyl-info
+reading sources... [ 57%] reference/api-postgkyl-integrate
+reading sources... [ 57%] reference/api-postgkyl-interpolate
+reading sources... [ 58%] reference/api-postgkyl-load
+reading sources... [ 58%] reference/api-postgkyl-local_poly
+reading sources... [ 58%] reference/api-postgkyl-magsq
+reading sources... [ 59%] reference/api-postgkyl-map
+reading sources... [ 59%] reference/api-postgkyl-map_to_rz
+reading sources... [ 59%] reference/api-postgkyl-mask
+reading sources... [ 60%] reference/api-postgkyl-plot
+reading sources... [ 60%] reference/api-postgkyl-plotly
+reading sources... [ 60%] reference/api-postgkyl-plotly_animate
+reading sources... [ 61%] reference/api-postgkyl-print
+reading sources... [ 61%] reference/api-postgkyl-pyvista
+reading sources... [ 61%] reference/api-postgkyl-relchange
+reading sources... [ 62%] reference/api-postgkyl-represent
+reading sources... [ 62%] reference/api-postgkyl-resolve_flux_surface_grid
+reading sources... [ 62%] reference/api-postgkyl-resolve_geometry
+reading sources... [ 62%] reference/api-postgkyl-resolve_rz_projection
+reading sources... [ 63%] reference/api-postgkyl-save
+reading sources... [ 63%] reference/api-postgkyl-select
+reading sources... [ 63%] reference/api-postgkyl-sort
+reading sources... [ 64%] reference/api-postgkyl-val2coord
+reading sources... [ 64%] reference/api-postgkyl-version_report
+reading sources... [ 64%] reference/cli
+reading sources... [ 65%] reference/cli-animate
+reading sources... [ 65%] reference/cli-average
+reading sources... [ 65%] reference/cli-collect
+reading sources... [ 66%] reference/cli-differentiate
+reading sources... [ 66%] reference/cli-discovery_available_frames
+reading sources... [ 66%] reference/cli-discovery_find_output_stems
+reading sources... [ 67%] reference/cli-eval_at_coord_proj
+reading sources... [ 67%] reference/cli-evaluate
+reading sources... [ 67%] reference/cli-extract_flux_surface
+reading sources... [ 68%] reference/cli-extract_input
+reading sources... [ 68%] reference/cli-fft
+reading sources... [ 68%] reference/cli-fit
+reading sources... [ 69%] reference/cli-gk_energy_balance
+reading sources... [ 69%] reference/cli-gk_load_distf
+reading sources... [ 69%] reference/cli-gk_load_quantity
+reading sources... [ 70%] reference/cli-gk_nodes
+reading sources... [ 70%] reference/cli-gk_particle_balance
+reading sources... [ 70%] reference/cli-grid
+reading sources... [ 71%] reference/cli-growth
+reading sources... [ 71%] reference/cli-info
+reading sources... [ 71%] reference/cli-integrate
+reading sources... [ 72%] reference/cli-interpolate
+reading sources... [ 72%] reference/cli-load
+reading sources... [ 72%] reference/cli-local_poly
+reading sources... [ 73%] reference/cli-magsq
+reading sources... [ 73%] reference/cli-map
+reading sources... [ 73%] reference/cli-map_to_rz
+reading sources... [ 74%] reference/cli-mask
+reading sources... [ 74%] reference/cli-mom_enstrophy_enstrophy
+reading sources... [ 74%] reference/cli-mom_five_moment_density
+reading sources... [ 75%] reference/cli-mom_five_moment_ke
+reading sources... [ 75%] reference/cli-mom_five_moment_mach
+reading sources... [ 75%] reference/cli-mom_five_moment_pressure
+reading sources... [ 76%] reference/cli-mom_five_moment_sound
+reading sources... [ 76%] reference/cli-mom_five_moment_temp
+reading sources... [ 76%] reference/cli-mom_five_moment_vel
+reading sources... [ 77%] reference/cli-mom_five_moment_velocity
+reading sources... [ 77%] reference/cli-mom_five_moment_xvel
+reading sources... [ 77%] reference/cli-mom_five_moment_yvel
+reading sources... [ 78%] reference/cli-mom_five_moment_zvel
+reading sources... [ 78%] reference/cli-mom_ke_dke_ke_dke
+reading sources... [ 78%] reference/cli-mom_mhd_bi
+reading sources... [ 79%] reference/cli-mom_mhd_bx
+reading sources... [ 79%] reference/cli-mom_mhd_by
+reading sources... [ 79%] reference/cli-mom_mhd_bz
+reading sources... [ 80%] reference/cli-mom_mhd_density
+reading sources... [ 80%] reference/cli-mom_mhd_mach
+reading sources... [ 80%] reference/cli-mom_mhd_mag_pressure
+reading sources... [ 81%] reference/cli-mom_mhd_pressure
+reading sources... [ 81%] reference/cli-mom_mhd_sound
+reading sources... [ 81%] reference/cli-mom_mhd_temp
+reading sources... [ 82%] reference/cli-mom_mhd_vel
+reading sources... [ 82%] reference/cli-mom_mhd_xvel
+reading sources... [ 82%] reference/cli-mom_mhd_yvel
+reading sources... [ 83%] reference/cli-mom_mhd_zvel
+reading sources... [ 83%] reference/cli-mom_multispecies_accumulate_current
+reading sources... [ 83%] reference/cli-mom_multispecies_energetics
+reading sources... [ 84%] reference/cli-mom_plasma_beta
+reading sources... [ 84%] reference/cli-mom_plasma_d
+reading sources... [ 84%] reference/cli-mom_plasma_lambdaD
+reading sources... [ 85%] reference/cli-mom_plasma_magB
+reading sources... [ 85%] reference/cli-mom_plasma_omegaC
+reading sources... [ 85%] reference/cli-mom_plasma_omegaP
+reading sources... [ 86%] reference/cli-mom_plasma_rho
+reading sources... [ 86%] reference/cli-mom_plasma_vA
+reading sources... [ 86%] reference/cli-mom_plasma_vt
+reading sources... [ 87%] reference/cli-mom_rotations_bparrotate
+reading sources... [ 87%] reference/cli-mom_rotations_bperprotate
+reading sources... [ 87%] reference/cli-mom_rotations_parrotate
+reading sources... [ 88%] reference/cli-mom_rotations_perprotate
+reading sources... [ 88%] reference/cli-mom_ten_moment_agyro
+reading sources... [ 88%] reference/cli-mom_ten_moment_density
+reading sources... [ 88%] reference/cli-mom_ten_moment_ke
+reading sources... [ 89%] reference/cli-mom_ten_moment_mach
+reading sources... [ 89%] reference/cli-mom_ten_moment_mom_agyro
+reading sources... [ 89%] reference/cli-mom_ten_moment_p_par
+reading sources... [ 90%] reference/cli-mom_ten_moment_p_perp
+reading sources... [ 90%] reference/cli-mom_ten_moment_pressure
+reading sources... [ 90%] reference/cli-mom_ten_moment_pressure_tensor
+reading sources... [ 91%] reference/cli-mom_ten_moment_pxx
+reading sources... [ 91%] reference/cli-mom_ten_moment_pxy
+reading sources... [ 91%] reference/cli-mom_ten_moment_pxz
+reading sources... [ 92%] reference/cli-mom_ten_moment_pyy
+reading sources... [ 92%] reference/cli-mom_ten_moment_pyz
+reading sources... [ 92%] reference/cli-mom_ten_moment_pzz
+reading sources... [ 93%] reference/cli-mom_ten_moment_sound
+reading sources... [ 93%] reference/cli-mom_ten_moment_temp
+reading sources... [ 93%] reference/cli-mom_ten_moment_vel
+reading sources... [ 94%] reference/cli-mom_ten_moment_xvel
+reading sources... [ 94%] reference/cli-mom_ten_moment_yvel
+reading sources... [ 94%] reference/cli-mom_ten_moment_zvel
+reading sources... [ 95%] reference/cli-pkpm_laguerre_compose
+reading sources... [ 95%] reference/cli-pkpm_load_pkpm
+reading sources... [ 95%] reference/cli-plot
+reading sources... [ 96%] reference/cli-plotly
+reading sources... [ 96%] reference/cli-plotly_animate
+reading sources... [ 96%] reference/cli-print
+reading sources... [ 97%] reference/cli-pyvista
+reading sources... [ 97%] reference/cli-relchange
+reading sources... [ 97%] reference/cli-represent
+reading sources... [ 98%] reference/cli-save
+reading sources... [ 98%] reference/cli-select
+reading sources... [ 98%] reference/cli-sort
+reading sources... [ 99%] reference/cli-val2coord
+reading sources... [ 99%] reference/cli-vm_kinetic_transform_frame
+reading sources... [ 99%] reference/cli-vm_trajectory_trajectory
+reading sources... [100%] reference/quantities
+reading sources... [100%] tutorials
+looking for now-outdated files... none found
+pickling environment... done
+checking consistency... done
+preparing documents... done
+copying assets... 
+copying downloadable files... [ 20%] downloads/postgkyl-examples.zip
+copying downloadable files... [ 40%] interactive/python-08_surface.html
+copying downloadable files... [ 60%] interactive/cli-08_surface.html
+copying downloadable files... [ 80%] interactive/python-08_volume.html
+copying downloadable files... [100%] interactive/cli-08_volume.html
+copying static files... 
+Writing evaluated template result to /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html/_static/language_data.js
+Writing evaluated template result to /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html/_static/documentation_options.js
+Writing evaluated template result to /tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html/_static/basic.css
+copying static files: done
+copying extra files... 
+copying extra files: done
+copying assets: done
+writing output... [  0%] animation
+writing output... [  1%] arithmetic-representation
+writing output... [  1%] cli-tutorial
+writing output... [  1%] concepts
+writing output... [  2%] contributing
+writing output... [  2%] development
+writing output... [  2%] examples
+writing output... [  3%] exponential-growth
+writing output... [  3%] fluid-pressure
+writing output... [  3%] gyrokinetic-distribution
+writing output... [  4%] gyrokinetic-quantities
+writing output... [  4%] index
+writing output... [  4%] installation
+writing output... [  5%] interactive
+writing output... [  5%] interface-equivalence
+writing output... [  5%] main
+writing output... [  6%] manual-arrays
+writing output... [  6%] migration
+writing output... [  6%] multiblock
+writing output... [  7%] physical-rz
+writing output... [  7%] plotly
+writing output... [  7%] profile-comparison
+writing output... [  8%] provenance
+writing output... [  8%] pyvista
+writing output... [  8%] quickstart
+writing output... [  9%] reference/api
+writing output... [  9%] reference/api-GData
+writing output... [  9%] reference/api-GDataGroup
+writing output... [ 10%] reference/api-postgkyl-GData-backend
+writing output... [ 10%] reference/api-postgkyl-GData-bounds
+writing output... [ 10%] reference/api-postgkyl-GData-clone
+writing output... [ 11%] reference/api-postgkyl-GData-div
+writing output... [ 11%] reference/api-postgkyl-GData-file_name
+writing output... [ 11%] reference/api-postgkyl-GData-get_bounds
+writing output... [ 12%] reference/api-postgkyl-GData-get_grid
+writing output... [ 12%] reference/api-postgkyl-GData-get_grid_type
+writing output... [ 12%] reference/api-postgkyl-GData-get_label
+writing output... [ 12%] reference/api-postgkyl-GData-get_num_cells
+writing output... [ 13%] reference/api-postgkyl-GData-get_num_comps
+writing output... [ 13%] reference/api-postgkyl-GData-get_num_dims
+writing output... [ 13%] reference/api-postgkyl-GData-get_tag
+writing output... [ 14%] reference/api-postgkyl-GData-get_values
+writing output... [ 14%] reference/api-postgkyl-GData-grid
+writing output... [ 14%] reference/api-postgkyl-GData-info
+writing output... [ 15%] reference/api-postgkyl-GData-is_interpolated
+writing output... [ 15%] reference/api-postgkyl-GData-label
+writing output... [ 15%] reference/api-postgkyl-GData-load
+writing output... [ 16%] reference/api-postgkyl-GData-mul
+writing output... [ 16%] reference/api-postgkyl-GData-native
+writing output... [ 16%] reference/api-postgkyl-GData-num_cells
+writing output... [ 17%] reference/api-postgkyl-GData-num_comps
+writing output... [ 17%] reference/api-postgkyl-GData-num_dims
+writing output... [ 17%] reference/api-postgkyl-GData-output_name
+writing output... [ 18%] reference/api-postgkyl-GData-push
+writing output... [ 18%] reference/api-postgkyl-GData-set_grid
+writing output... [ 18%] reference/api-postgkyl-GData-set_label
+writing output... [ 19%] reference/api-postgkyl-GData-set_tag
+writing output... [ 19%] reference/api-postgkyl-GData-set_values
+writing output... [ 19%] reference/api-postgkyl-GData-tag
+writing output... [ 20%] reference/api-postgkyl-GData-val2coord
+writing output... [ 20%] reference/api-postgkyl-GData-values
+writing output... [ 20%] reference/api-postgkyl-GDataGroup-animate
+writing output... [ 21%] reference/api-postgkyl-GDataGroup-collect
+writing output... [ 21%] reference/api-postgkyl-GDataGroup-datasets
+writing output... [ 21%] reference/api-postgkyl-GDataGroup-evaluate
+writing output... [ 22%] reference/api-postgkyl-GDataGroup-info
+writing output... [ 22%] reference/api-postgkyl-GDataGroup-load
+writing output... [ 22%] reference/api-postgkyl-GDataGroup-plotly_animate
+writing output... [ 23%] reference/api-postgkyl-GDataGroup-sort
+writing output... [ 23%] reference/api-postgkyl-GDataGroup-with_
+writing output... [ 23%] reference/api-postgkyl-animate
+writing output... [ 24%] reference/api-postgkyl-apply
+writing output... [ 24%] reference/api-postgkyl-available_evaluate_operators
+writing output... [ 24%] reference/api-postgkyl-average
+writing output... [ 25%] reference/api-postgkyl-collect
+writing output... [ 25%] reference/api-postgkyl-diagnostics-discovery-available_frames
+writing output... [ 25%] reference/api-postgkyl-diagnostics-discovery-find_output_stems
+writing output... [ 26%] reference/api-postgkyl-diagnostics-mom-enstrophy-enstrophy
+writing output... [ 26%] reference/api-postgkyl-diagnostics-mom-five_moment-binary
+writing output... [ 26%] reference/api-postgkyl-diagnostics-mom-five_moment-density
+writing output... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-ke
+writing output... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-mach
+writing output... [ 27%] reference/api-postgkyl-diagnostics-mom-five_moment-pressure
+writing output... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-sound
+writing output... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-temp
+writing output... [ 28%] reference/api-postgkyl-diagnostics-mom-five_moment-vel
+writing output... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-velocity
+writing output... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-xvel
+writing output... [ 29%] reference/api-postgkyl-diagnostics-mom-five_moment-yvel
+writing output... [ 30%] reference/api-postgkyl-diagnostics-mom-five_moment-zvel
+writing output... [ 30%] reference/api-postgkyl-diagnostics-mom-ke_dke-ke_dke
+writing output... [ 30%] reference/api-postgkyl-diagnostics-mom-mhd-bi
+writing output... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-bx
+writing output... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-by
+writing output... [ 31%] reference/api-postgkyl-diagnostics-mom-mhd-bz
+writing output... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-mach
+writing output... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-mag_pressure
+writing output... [ 32%] reference/api-postgkyl-diagnostics-mom-mhd-pressure
+writing output... [ 33%] reference/api-postgkyl-diagnostics-mom-mhd-sound
+writing output... [ 33%] reference/api-postgkyl-diagnostics-mom-mhd-temp
+writing output... [ 33%] reference/api-postgkyl-diagnostics-mom-multispecies-accumulate_current
+writing output... [ 34%] reference/api-postgkyl-diagnostics-mom-multispecies-energetics
+writing output... [ 34%] reference/api-postgkyl-diagnostics-mom-plasma-beta
+writing output... [ 34%] reference/api-postgkyl-diagnostics-mom-plasma-d
+writing output... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-lambdaD
+writing output... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-magB
+writing output... [ 35%] reference/api-postgkyl-diagnostics-mom-plasma-omegaC
+writing output... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-omegaP
+writing output... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-rho
+writing output... [ 36%] reference/api-postgkyl-diagnostics-mom-plasma-vA
+writing output... [ 37%] reference/api-postgkyl-diagnostics-mom-plasma-vt
+writing output... [ 37%] reference/api-postgkyl-diagnostics-mom-rotations-bparrotate
+writing output... [ 37%] reference/api-postgkyl-diagnostics-mom-rotations-bperprotate
+writing output... [ 38%] reference/api-postgkyl-diagnostics-mom-rotations-parrotate
+writing output... [ 38%] reference/api-postgkyl-diagnostics-mom-rotations-perprotate
+writing output... [ 38%] reference/api-postgkyl-diagnostics-mom-ten_moment-agyro
+writing output... [ 38%] reference/api-postgkyl-diagnostics-mom-ten_moment-ke
+writing output... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-mach
+writing output... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-mom_agyro
+writing output... [ 39%] reference/api-postgkyl-diagnostics-mom-ten_moment-p_par
+writing output... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-p_perp
+writing output... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-pressure
+writing output... [ 40%] reference/api-postgkyl-diagnostics-mom-ten_moment-pressure_tensor
+writing output... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxx
+writing output... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxy
+writing output... [ 41%] reference/api-postgkyl-diagnostics-mom-ten_moment-pxz
+writing output... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pyy
+writing output... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pyz
+writing output... [ 42%] reference/api-postgkyl-diagnostics-mom-ten_moment-pzz
+writing output... [ 43%] reference/api-postgkyl-diagnostics-mom-ten_moment-sound
+writing output... [ 43%] reference/api-postgkyl-diagnostics-mom-ten_moment-temp
+writing output... [ 43%] reference/api-postgkyl-diagnostics-pkpm-laguerre_compose
+writing output... [ 44%] reference/api-postgkyl-diagnostics-pkpm-load_pkpm
+writing output... [ 44%] reference/api-postgkyl-diagnostics-vm-kinetic-materialize_point_values
+writing output... [ 44%] reference/api-postgkyl-diagnostics-vm-kinetic-transform_frame
+writing output... [ 45%] reference/api-postgkyl-diagnostics-vm-trajectory-trajectory
+writing output... [ 45%] reference/api-postgkyl-differentiate
+writing output... [ 45%] reference/api-postgkyl-eval_at_coord_proj
+writing output... [ 46%] reference/api-postgkyl-evaluate
+writing output... [ 46%] reference/api-postgkyl-extract_flux_surface
+writing output... [ 46%] reference/api-postgkyl-extract_input
+writing output... [ 47%] reference/api-postgkyl-fft
+writing output... [ 47%] reference/api-postgkyl-fit
+writing output... [ 47%] reference/api-postgkyl-gk-available_quantities
+writing output... [ 48%] reference/api-postgkyl-gk-energy_balance
+writing output... [ 48%] reference/api-postgkyl-gk-energy_balance_error
+writing output... [ 48%] reference/api-postgkyl-gk-fetch_ExB_vel
+writing output... [ 49%] reference/api-postgkyl-gk-fetch_M1_from_H
+writing output... [ 49%] reference/api-postgkyl-gk-fetch_Tpar_from_BiMax
+writing output... [ 49%] reference/api-postgkyl-gk-fetch_Tpar_from_M0_M1_M2par
+writing output... [ 50%] reference/api-postgkyl-gk-fetch_Tperp_from_BiMax
+writing output... [ 50%] reference/api-postgkyl-gk-fetch_Tperp_from_M0_M2perp
+writing output... [ 50%] reference/api-postgkyl-gk-fetch_beta_from_bmag_press
+writing output... [ 51%] reference/api-postgkyl-gk-fetch_diamag_vel
+writing output... [ 51%] reference/api-postgkyl-gk-fetch_gradB_vel
+writing output... [ 51%] reference/api-postgkyl-gk-fetch_press_from_BiMax
+writing output... [ 52%] reference/api-postgkyl-gk-fetch_press_from_Max
+writing output... [ 52%] reference/api-postgkyl-gk-fetch_press_p
+writing output... [ 52%] reference/api-postgkyl-gk-fetch_temp_from_Max
+writing output... [ 53%] reference/api-postgkyl-gk-fetch_temp_from_Tpar_Tperp
+writing output... [ 53%] reference/api-postgkyl-gk-load_distf
+writing output... [ 53%] reference/api-postgkyl-gk-load_quantity
+writing output... [ 54%] reference/api-postgkyl-gk-multib_tag
+writing output... [ 54%] reference/api-postgkyl-gk-nodes
+writing output... [ 54%] reference/api-postgkyl-gk-nodes_to_RZ
+writing output... [ 55%] reference/api-postgkyl-gk-particle_balance
+writing output... [ 55%] reference/api-postgkyl-gk-particle_balance_error
+writing output... [ 55%] reference/api-postgkyl-gk-resolve_frames
+writing output... [ 56%] reference/api-postgkyl-grid
+writing output... [ 56%] reference/api-postgkyl-group_blocks
+writing output... [ 56%] reference/api-postgkyl-growth
+writing output... [ 57%] reference/api-postgkyl-info
+writing output... [ 57%] reference/api-postgkyl-integrate
+writing output... [ 57%] reference/api-postgkyl-interpolate
+writing output... [ 58%] reference/api-postgkyl-load
+writing output... [ 58%] reference/api-postgkyl-local_poly
+writing output... [ 58%] reference/api-postgkyl-magsq
+writing output... [ 59%] reference/api-postgkyl-map
+writing output... [ 59%] reference/api-postgkyl-map_to_rz
+writing output... [ 59%] reference/api-postgkyl-mask
+writing output... [ 60%] reference/api-postgkyl-plot
+writing output... [ 60%] reference/api-postgkyl-plotly
+writing output... [ 60%] reference/api-postgkyl-plotly_animate
+writing output... [ 61%] reference/api-postgkyl-print
+writing output... [ 61%] reference/api-postgkyl-pyvista
+writing output... [ 61%] reference/api-postgkyl-relchange
+writing output... [ 62%] reference/api-postgkyl-represent
+writing output... [ 62%] reference/api-postgkyl-resolve_flux_surface_grid
+writing output... [ 62%] reference/api-postgkyl-resolve_geometry
+writing output... [ 62%] reference/api-postgkyl-resolve_rz_projection
+writing output... [ 63%] reference/api-postgkyl-save
+writing output... [ 63%] reference/api-postgkyl-select
+writing output... [ 63%] reference/api-postgkyl-sort
+writing output... [ 64%] reference/api-postgkyl-val2coord
+writing output... [ 64%] reference/api-postgkyl-version_report
+writing output... [ 64%] reference/cli
+writing output... [ 65%] reference/cli-animate
+writing output... [ 65%] reference/cli-average
+writing output... [ 65%] reference/cli-collect
+writing output... [ 66%] reference/cli-differentiate
+writing output... [ 66%] reference/cli-discovery_available_frames
+writing output... [ 66%] reference/cli-discovery_find_output_stems
+writing output... [ 67%] reference/cli-eval_at_coord_proj
+writing output... [ 67%] reference/cli-evaluate
+writing output... [ 67%] reference/cli-extract_flux_surface
+writing output... [ 68%] reference/cli-extract_input
+writing output... [ 68%] reference/cli-fft
+writing output... [ 68%] reference/cli-fit
+writing output... [ 69%] reference/cli-gk_energy_balance
+writing output... [ 69%] reference/cli-gk_load_distf
+writing output... [ 69%] reference/cli-gk_load_quantity
+writing output... [ 70%] reference/cli-gk_nodes
+writing output... [ 70%] reference/cli-gk_particle_balance
+writing output... [ 70%] reference/cli-grid
+writing output... [ 71%] reference/cli-growth
+writing output... [ 71%] reference/cli-info
+writing output... [ 71%] reference/cli-integrate
+writing output... [ 72%] reference/cli-interpolate
+writing output... [ 72%] reference/cli-load
+writing output... [ 72%] reference/cli-local_poly
+writing output... [ 73%] reference/cli-magsq
+writing output... [ 73%] reference/cli-map
+writing output... [ 73%] reference/cli-map_to_rz
+writing output... [ 74%] reference/cli-mask
+writing output... [ 74%] reference/cli-mom_enstrophy_enstrophy
+writing output... [ 74%] reference/cli-mom_five_moment_density
+writing output... [ 75%] reference/cli-mom_five_moment_ke
+writing output... [ 75%] reference/cli-mom_five_moment_mach
+writing output... [ 75%] reference/cli-mom_five_moment_pressure
+writing output... [ 76%] reference/cli-mom_five_moment_sound
+writing output... [ 76%] reference/cli-mom_five_moment_temp
+writing output... [ 76%] reference/cli-mom_five_moment_vel
+writing output... [ 77%] reference/cli-mom_five_moment_velocity
+writing output... [ 77%] reference/cli-mom_five_moment_xvel
+writing output... [ 77%] reference/cli-mom_five_moment_yvel
+writing output... [ 78%] reference/cli-mom_five_moment_zvel
+writing output... [ 78%] reference/cli-mom_ke_dke_ke_dke
+writing output... [ 78%] reference/cli-mom_mhd_bi
+writing output... [ 79%] reference/cli-mom_mhd_bx
+writing output... [ 79%] reference/cli-mom_mhd_by
+writing output... [ 79%] reference/cli-mom_mhd_bz
+writing output... [ 80%] reference/cli-mom_mhd_density
+writing output... [ 80%] reference/cli-mom_mhd_mach
+writing output... [ 80%] reference/cli-mom_mhd_mag_pressure
+writing output... [ 81%] reference/cli-mom_mhd_pressure
+writing output... [ 81%] reference/cli-mom_mhd_sound
+writing output... [ 81%] reference/cli-mom_mhd_temp
+writing output... [ 82%] reference/cli-mom_mhd_vel
+writing output... [ 82%] reference/cli-mom_mhd_xvel
+writing output... [ 82%] reference/cli-mom_mhd_yvel
+writing output... [ 83%] reference/cli-mom_mhd_zvel
+writing output... [ 83%] reference/cli-mom_multispecies_accumulate_current
+writing output... [ 83%] reference/cli-mom_multispecies_energetics
+writing output... [ 84%] reference/cli-mom_plasma_beta
+writing output... [ 84%] reference/cli-mom_plasma_d
+writing output... [ 84%] reference/cli-mom_plasma_lambdaD
+writing output... [ 85%] reference/cli-mom_plasma_magB
+writing output... [ 85%] reference/cli-mom_plasma_omegaC
+writing output... [ 85%] reference/cli-mom_plasma_omegaP
+writing output... [ 86%] reference/cli-mom_plasma_rho
+writing output... [ 86%] reference/cli-mom_plasma_vA
+writing output... [ 86%] reference/cli-mom_plasma_vt
+writing output... [ 87%] reference/cli-mom_rotations_bparrotate
+writing output... [ 87%] reference/cli-mom_rotations_bperprotate
+writing output... [ 87%] reference/cli-mom_rotations_parrotate
+writing output... [ 88%] reference/cli-mom_rotations_perprotate
+writing output... [ 88%] reference/cli-mom_ten_moment_agyro
+writing output... [ 88%] reference/cli-mom_ten_moment_density
+writing output... [ 88%] reference/cli-mom_ten_moment_ke
+writing output... [ 89%] reference/cli-mom_ten_moment_mach
+writing output... [ 89%] reference/cli-mom_ten_moment_mom_agyro
+writing output... [ 89%] reference/cli-mom_ten_moment_p_par
+writing output... [ 90%] reference/cli-mom_ten_moment_p_perp
+writing output... [ 90%] reference/cli-mom_ten_moment_pressure
+writing output... [ 90%] reference/cli-mom_ten_moment_pressure_tensor
+writing output... [ 91%] reference/cli-mom_ten_moment_pxx
+writing output... [ 91%] reference/cli-mom_ten_moment_pxy
+writing output... [ 91%] reference/cli-mom_ten_moment_pxz
+writing output... [ 92%] reference/cli-mom_ten_moment_pyy
+writing output... [ 92%] reference/cli-mom_ten_moment_pyz
+writing output... [ 92%] reference/cli-mom_ten_moment_pzz
+writing output... [ 93%] reference/cli-mom_ten_moment_sound
+writing output... [ 93%] reference/cli-mom_ten_moment_temp
+writing output... [ 93%] reference/cli-mom_ten_moment_vel
+writing output... [ 94%] reference/cli-mom_ten_moment_xvel
+writing output... [ 94%] reference/cli-mom_ten_moment_yvel
+writing output... [ 94%] reference/cli-mom_ten_moment_zvel
+writing output... [ 95%] reference/cli-pkpm_laguerre_compose
+writing output... [ 95%] reference/cli-pkpm_load_pkpm
+writing output... [ 95%] reference/cli-plot
+writing output... [ 96%] reference/cli-plotly
+writing output... [ 96%] reference/cli-plotly_animate
+writing output... [ 96%] reference/cli-print
+writing output... [ 97%] reference/cli-pyvista
+writing output... [ 97%] reference/cli-relchange
+writing output... [ 97%] reference/cli-represent
+writing output... [ 98%] reference/cli-save
+writing output... [ 98%] reference/cli-select
+writing output... [ 98%] reference/cli-sort
+writing output... [ 99%] reference/cli-val2coord
+writing output... [ 99%] reference/cli-vm_kinetic_transform_frame
+writing output... [ 99%] reference/cli-vm_trajectory_trajectory
+writing output... [100%] reference/quantities
+writing output... [100%] tutorials
+generating indices... genindex done
+writing additional pages... search done
+copying images... [  2%] figures/07_collect.png
+copying images... [  5%] figures/cli/07_collect.png
+copying images... [  7%] figures/07_wave.gif
+copying images... [ 10%] figures/cli/07_wave.gif
+copying images... [ 12%] figures/07_surface.gif
+copying images... [ 14%] figures/cli/07_surface.gif
+copying images... [ 17%] figures/02_arithmetic.png
+copying images... [ 19%] figures/cli/02_arithmetic.png
+copying images... [ 21%] figures/06_growth.png
+copying images... [ 24%] figures/cli/06_growth.png
+copying images... [ 26%] figures/03_diagnostics_density.png
+copying images... [ 29%] figures/cli/03_diagnostics_density.png
+copying images... [ 31%] figures/03_diagnostics_pressure.png
+copying images... [ 33%] figures/cli/03_diagnostics_pressure.png
+copying images... [ 36%] figures/04_gyrokinetics_M0.png
+copying images... [ 38%] figures/cli/04_gyrokinetics_M0.png
+copying images... [ 40%] figures/04_gyrokinetics_jacobtot_inv.png
+copying images... [ 43%] figures/cli/04_gyrokinetics_jacobtot_inv.png
+copying images... [ 45%] figures/04_gyrokinetics_distf_slice.png
+copying images... [ 48%] figures/cli/04_gyrokinetics_distf_slice.png
+copying images... [ 50%] figures/12_gk_load_quantity_vt.png
+copying images... [ 52%] figures/cli/12_gk_load_quantity_vt.png
+copying images... [ 55%] figures/12_gk_load_quantity_phi_norm.png
+copying images... [ 57%] figures/cli/12_gk_load_quantity_phi_norm.png
+copying images... [ 60%] figures/12_gk_load_quantity_larmor_radius.png
+copying images... [ 62%] figures/cli/12_gk_load_quantity_larmor_radius.png
+copying images... [ 64%] figures/10_manual.png
+copying images... [ 67%] figures/cli/10_manual.png
+copying images... [ 69%] figures/11_multiblock.png
+copying images... [ 71%] figures/cli/11_multiblock.png
+copying images... [ 74%] figures/05_map_to_rz.png
+copying images... [ 76%] figures/cli/05_map_to_rz.png
+copying images... [ 79%] figures/mirror_comparison.png
+copying images... [ 81%] figures/cli/mirror_comparison.png
+copying images... [ 83%] figures/09_isosurfaces.png
+copying images... [ 86%] figures/cli/09_isosurfaces.png
+copying images... [ 88%] figures/09_volume.png
+copying images... [ 90%] figures/cli/09_volume.png
+copying images... [ 93%] figures/01_quickstart_comp0.png
+copying images... [ 95%] figures/cli/01_quickstart_comp0.png
+copying images... [ 98%] figures/01_quickstart_lineout.png
+copying images... [100%] figures/cli/01_quickstart_lineout.png
+dumping search index in English (code: en)... done
+dumping object inventory... done
+build finished with problems, 4 warnings (with warnings treated as errors).
+---------------------------- Captured stderr setup -----------------------------
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:3: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:3: WARNING: local id not found in doc 'installation': 'updating-and-rebuilding' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:35: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:93: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+______ ERROR at setup of test_downloaded_examples_run_outside_repository _______
+[gw2] linux -- Python 3.12.14 /opt/hostedtoolcache/Python/3.12.14/x64/bin/python
+
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTrac...16658e0>, _basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def documentation(tmp_path_factory):
+      destination = tmp_path_factory.mktemp("docs")
+      source = destination / "source"
+      subprocess.run([
+          sys.executable,
+          str(ROOT / "scripts/build_docs.py"), "--output",
+          str(source)
+      ],
+                     cwd=ROOT,
+                     check=True)
+>     subprocess.run([
+          sys.executable, "-m", "sphinx", "-W", "--keep-going", "-b", "html", "-c",
+          str(ROOT / "docs"),
+          str(source),
+          str(destination / "html")
+      ],
+                     check=True)
+
+tests/test_docs_build.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', ...],)
+kwargs = {}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/subprocess.py:571: CalledProcessError
+____ ERROR at setup of test_gyrokinetic_quantities_page_has_python_and_cli _____
+[gw2] linux -- Python 3.12.14 /opt/hostedtoolcache/Python/3.12.14/x64/bin/python
+
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _trace=<pluggy._tracing.TagTrac...16658e0>, _basetemp=PosixPath('/tmp/pytest-of-runner/pytest-0/popen-gw2'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def documentation(tmp_path_factory):
+      destination = tmp_path_factory.mktemp("docs")
+      source = destination / "source"
+      subprocess.run([
+          sys.executable,
+          str(ROOT / "scripts/build_docs.py"), "--output",
+          str(source)
+      ],
+                     cwd=ROOT,
+                     check=True)
+>     subprocess.run([
+          sys.executable, "-m", "sphinx", "-W", "--keep-going", "-b", "html", "-c",
+          str(ROOT / "docs"),
+          str(source),
+          str(destination / "html")
+      ],
+                     check=True)
+
+tests/test_docs_build.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', ...],)
+kwargs = {}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+
+/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/subprocess.py:571: CalledProcessError
+=========================== short test summary info ============================
+ERROR tests/test_docs_build.py::test_published_inventory_and_navigation - subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+ERROR tests/test_docs_build.py::test_downloaded_examples_run_outside_repository - subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+ERROR tests/test_docs_build.py::test_gyrokinetic_quantities_page_has_python_and_cli - subprocess.CalledProcessError: Command '['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-m', 'sphinx', '-W', '--keep-going', '-b', 'html', '-c', '/home/runner/work/postgkyl/postgkyl/docs', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source', '/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/html']' returned non-zero exit status 1.
+=================== 41 passed, 3 errors in 132.96s (0:02:12) ===================
+Error: Process completed with exit code 1.
