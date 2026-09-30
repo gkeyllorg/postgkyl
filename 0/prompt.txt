@@ -1,0 +1,44 @@
+please rename
+  enstrophy_enstrophy             -> mom_enstrophy_enstrophy
+  ke_dke_ke_dke                   -> mom_ke_dke_ke_dke
+  kinetic_transform_frame         -> vm_kinetic_transform_frame
+  mhd_bi                          -> mom_mhd_bi
+  mhd_bx                          -> mom_mhd_bx
+  mhd_by                          -> mom_mhd_by
+  mhd_bz                          -> mom_mhd_bz
+  mhd_density                     -> mom_mhd_density
+  mhd_mach                        -> mom_mhd_mach
+  mhd_mag_pressure                -> mom_mhd_mag_pressure
+  mhd_pressure                    -> mom_mhd_pressure
+  mhd_sound                       -> mom_mhd_sound
+  mhd_temp                        -> mom_mhd_temp
+  mhd_vel                         -> mom_mhd_vel
+  mhd_xvel                        -> mom_mhd_xvel
+  mhd_yvel                        -> mom_mhd_yvel
+  mhd_zvel                        -> mom_mhd_zvel
+  multispecies_accumulate_current -> mom_multispecies_accumulate_current
+  multispecies_energetics         -> mom_multispecies_energetics
+  pkpm_laguerre_compose           -> pkpm_laguerre_compose
+  pkpm_load_pkpm                  -> pkpm_load_pkpm
+  plasma_beta                     -> mom_plasma_beta
+  plasma_d                        -> mom_plasma_d
+  plasma_lambdaD                  -> mom_plasma_lambdaD
+  plasma_magB                     -> mom_plasma_magB
+  plasma_omegaC                   -> mom_plasma_omegaC
+  plasma_omegaP                   -> mom_plasma_omegaP
+  plasma_rho                      -> mom_plasma_rho
+  plasma_vA                       -> mom_plasma_vA
+  plasma_vt                       -> mom_plasma_vt
+  rotations_bparrotate            -> mom_rotations_bparrotate
+  rotations_bperprotate           -> mom_rotations_bperprotate
+  rotations_parrotate             -> mom_rotations_parrotate
+  rotations_perprotate            -> mom_rotations_perprotate
+  trajectory_trajectory           -> vm_trajectory_trajectory
+
+Do this in the minimal changes as possible. In other words, the commands from diagnostics mom should have the prefix mom
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Yes, prefix all diagnostics.mom commands","question":"Should five_moment_* and ten_moment_* commands also get the mom_ prefix? They belong to diagnostics.mom but weren’t in your list.","questionItemId":"[\"request_user_input_async\",\"call_HiGLJVXyQ06Gb74CIP7Qfs87\",0]"}]
+</send_user_message_question_reply>
