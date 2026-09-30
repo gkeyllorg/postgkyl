@@ -1,0 +1,8 @@
+CI failed during the documentation build. Fix it. ---------------------------- Captured stderr setup -----------------------------
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:3: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:3: WARNING: local id not found in doc 'installation': 'updating-and-rebuilding' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:35: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/development.md:93: WARNING: local id not found in doc 'installation': 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/installation.md:24: WARNING: 'myst' cross-reference target not found: 'developer-installation' [myst.xref_missing]
+/tmp/pytest-of-runner/pytest-0/popen-gw2/docs0/source/installation.md:73: WARNING: 'myst' cross-reference target not found: 'updating-and-rebuilding' [myst.xref_missing]
+______ ERROR at setup of test_downloaded_examples_run_outside_repository _______

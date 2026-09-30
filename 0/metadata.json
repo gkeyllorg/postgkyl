@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3T4X98G02FC5WSAX51CHQKP",
+  "session_id": "01a0f44c-d3d8-7650-8c8d-2161bd3e8f51",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-30T21:53:10.187432132Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/source/installation.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "6aeb45538077",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 15278,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 283008,
+    "output_tokens": 1254,
+    "api_call_count": 13
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-30T21:53:10.177229221Z",
+    "agent_lines": 2,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 2,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
