@@ -1,0 +1,65 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3T3C62C2S6TE9DB23PCW3TT",
+  "session_id": "01a0f42f-225c-7460-a167-6cf4c0535cdd",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-30T21:26:21.590669776Z",
+  "branch": "refactor-diagnostics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/source/animation.rst",
+    "docs/source/contributing.rst",
+    "docs/source/development.md",
+    "docs/source/installation.md",
+    "docs/source/pyvista.rst",
+    "examples/README.md",
+    "examples/cli_tutorial.md",
+    "notebooks/README.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "a8d2cc9ac931",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 23187,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 198016,
+    "output_tokens": 3038,
+    "api_call_count": 9,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-30T21:26:21.569843199Z",
+    "agent_lines": 87,
+    "agent_removed": 81,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 15,
+    "total_committed": 87,
+    "total_lines_changed": 183,
+    "agent_percentage": 91.80327868852459,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 15,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "README.md": 1,
+        "docs/source/installation.md": 1
+      },
+      "user_removed_per_file": {
+        "README.md": 2,
+        "docs/source/installation.md": 13
+      }
+    }
+  ]
+}
