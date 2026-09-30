@@ -4,7 +4,8 @@ import click
 import numpy as np
 
 from postgkyl.data import GData
-from postgkyl.tools.gk_transport import compute_transport, TRANSPORT_OUTPUTS
+from postgkyl.tools.gk_transport import (compute_transport, gyro_bohm_normalize,
+                                         GYRO_BOHM_OUTPUTS, TRANSPORT_OUTPUTS)
 from postgkyl.utils import verb_print
 from postgkyl.commands.gk_load_quantity import parse_extra
 
@@ -36,7 +37,8 @@ from postgkyl.commands.gk_load_quantity import parse_extra
   help="Number of radial nodes per cell (default poly_order+1).")
 @click.option("--extra", "-e", default=None, type=click.STRING,
   help="Extra key=value pairs for the fetch functions, e.g. mass=...,charge=... A key may "
-       "be given one value per species, in the order of --species.")
+       "be given one value per species, in the order of --species. The gyro-Bohm outputs "
+       "also take Ti_over_Te (default 1), Te_ref (J) and bmag_ref (T).")
 @click.option("--tag", "-t", default="transport", type=click.STRING,
   help="Tag prefix for the output datasets: <tag>_<output>[_<species>].")
 @click.option("--label", "-l", default=None, type=click.STRING,
@@ -53,12 +55,23 @@ def gk_transport(ctx, **kwargs):
     q:     heat flux q = Q - conv*<T>*Gamma,
     D:     particle diffusivity -Gamma/(<g^xx> d<n>/dx) (m^2/s),
     chi:   heat diffusivity -q/(<n> <g^xx> d<T>/dx) (m^2/s),
+    D_gB:  D normalized by the gyro-Bohm diffusivity, D L_n/(rho_s^2 c_s),
+    chi_gB: chi normalized by the gyro-Bohm diffusivity, chi L_T/(rho_s^2 c_s),
     n, T, gxx: the averaged density, temperature and <|grad x|^2>.
   The fluxes are contravariant radial components (.grad x).
 
   \b
+  The gyro-Bohm diffusivities rho_s^2 c_s/L use each species' own gradient
+  lengths L_n = -<n>/(sqrt(<g^xx>) d<n>/dx) and L_T = -<T>/(sqrt(<g^xx>) d<T>/dx),
+  c_s = sqrt(T_e/m_i) and rho_s = c_s/Omega_i with the first ion species' mass
+  and charge and the averaged <B>(x). T_e is the electron species' <T>(x) if
+  listed, else T_i/Ti_over_Te (adiabatic electrons, '--extra Ti_over_Te=',
+  default 1). '--extra Te_ref=,bmag_ref=' replace T_e and B by constants.
+
+  \b
   Command line example:
     pgkyl gk-transport -n gk_tcv_3x2v_p1 -s elc,ion -f 100:200 -o D,chi plot
+    pgkyl gk-transport -n cbc_adiabatic_3x2v_p1 -s ion -o chi_gB -e Ti_over_Te=1 plot
   """
   data = ctx.obj["data"]
 
@@ -71,14 +84,20 @@ def gk_transport(ctx, **kwargs):
   species_list = [s.strip() for s in kwargs["species"].split(",") if s.strip()]
   user_extra = parse_extra(kwargs["extra"])
 
+  all_results = {}
   for species_idx, species in enumerate(species_list):
     verb_print(ctx, f"gk-transport: computing the transport of {species}")
-    results = compute_transport(
+    all_results[species] = compute_transport(
       kwargs["path"], kwargs["name"], species, frame=kwargs["frame"], fluct=kwargs["fluct"],
       conv=kwargs["conv"], grad_tol=kwargs["grad_tol"],
       extra=dict(user_extra, species_idx=species_idx),
       per_frame=kwargs["per_frame"], num_interp=kwargs["interp"])
 
+  if any(o in GYRO_BOHM_OUTPUTS for o in outputs):
+    gyro_bohm_normalize(all_results, Ti_over_Te=user_extra.get("Ti_over_Te", 1.0),
+                        Te_ref=user_extra.get("Te_ref"), bmag_ref=user_extra.get("bmag_ref"))
+
+  for species, results in all_results.items():
     for res in results:
       verb_print(ctx, f"  frames {res['frames'][0]}..{res['frames'][-1]} ({len(res['frames'])})")
       for output in outputs:

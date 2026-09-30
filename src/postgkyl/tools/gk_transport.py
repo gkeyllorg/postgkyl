@@ -11,6 +11,10 @@ averaged profiles, normalized by <|grad x|^2> = <g^xx> so they are in m^2/s
 whatever the radial coordinate x is:
   D   = -Gamma / (<g^xx> d<n>/dx),
   chi = -q / (<n> <g^xx> d<T>/dx).
+They can be normalized by the local gyro-Bohm diffusivities rho_s^2 c_s/L_n and
+rho_s^2 c_s/L_T, with the species' own gradient lengths
+  L_n = -<n>/(sqrt(<g^xx>) d<n>/dx),  L_T = -<T>/(sqrt(<g^xx>) d<T>/dx),
+and c_s = sqrt(T_e/m_i), rho_s = c_s/Omega_i on the averaged profiles.
 """
 import os
 
@@ -19,6 +23,7 @@ import numpy as np
 from postgkyl.data import GData
 from postgkyl.data.dg import GInterpModal
 from postgkyl.tools.gkeyll_dg_ops import GkeyllDGops
+from postgkyl.utils.gk_quantities.fetch_funcs import _get_ctx_val
 from postgkyl.utils.gk_quantities.registry import gk_quant_registry
 
 # Flux-surface directions of 3x field-aligned data: y (binormal) and z (parallel).
@@ -34,6 +39,8 @@ TRANSPORT_OUTPUTS = {
   "q": r"$\langle q^x_{%s}\rangle$",
   "D": r"$D_{%s}$ (m$^2$/s)",
   "chi": r"$\chi_{%s}$ (m$^2$/s)",
+  "D_gB": r"$D_{%s}/D_{gB}$",
+  "chi_gB": r"$\chi_{%s}/\chi_{gB}$",
   "n": r"$\langle n_{%s}\rangle$ (m$^{-3}$)",
   "T": r"$\langle T_{%s}\rangle$ (J)",
   "gxx": r"$\langle g^{xx}\rangle$",
@@ -68,6 +75,84 @@ def transport_coefficients(gamma, heat_flux_tot, n, T, gxx, dn_dx, dT_dx,
   D = _masked_ratio(gamma, gxx*dn_dx, dn_dx)
   chi = _masked_ratio(q, n*gxx*dT_dx, dT_dx)
   return {"q": q, "D": D, "chi": chi}
+
+
+# Outputs that need the gyro-Bohm normalization of gyro_bohm_normalize.
+GYRO_BOHM_OUTPUTS = ("D_gB", "chi_gB")
+
+
+def gyro_bohm_diffusivity(Te, bmag, mass_i: float, charge_i: float):
+  """
+  rho_s^2 c_s (m^3/s), with c_s = sqrt(T_e/m_i), rho_s = c_s/Omega_i and
+  Omega_i = |q_i| B/m_i. Divided by a gradient length it is the gyro-Bohm
+  diffusivity.
+  """
+  c_s = np.sqrt(np.asarray(Te, dtype=float)/mass_i)
+  rho_s = c_s*mass_i/(abs(charge_i)*np.asarray(bmag, dtype=float))
+  return rho_s**2*c_s
+
+
+def _same_window(windows: list, frames: list, species: str) -> dict:
+  for res in windows:
+    if res["frames"] == frames:
+      return res
+  raise ValueError(f"gk-transport: species '{species}' has no data over frames "
+                   f"{frames[0]}..{frames[-1]}, which the gyro-Bohm normalization needs.")
+
+
+def gyro_bohm_normalize(results: dict, Ti_over_Te: float = 1.0, Te_ref=None, bmag_ref=None):
+  """
+  Add the gyro-Bohm normalized diffusivities to the compute_transport results
+  of every species, in place:
+    D_gB   = D / (rho_s^2 c_s/L_n)   = D L_n/(rho_s^2 c_s),
+    chi_gB = chi / (rho_s^2 c_s/L_T) = chi L_T/(rho_s^2 c_s),
+  with each species' own gradient lengths L_n and L_T.
+
+  results maps each species to its list of compute_transport windows. c_s and
+  rho_s use the mass and charge of the first ion (positively charged) species,
+  the averaged <B>(x), and T_e from the electron species if listed, else
+  T_i/Ti_over_Te with T_i the first ion's temperature (adiabatic electrons).
+  Te_ref (J) and bmag_ref (T) replace the T_e and B profiles by constants.
+  """
+  charges = {}
+  for species, windows in results.items():
+    charges[species] = windows[0]["charge"]
+    for key in ("mass", "charge"):
+      if windows[0][key] is None:
+        raise ValueError(f"gk-transport: the gyro-Bohm normalization needs the {key} of "
+                         f"species '{species}'; pass it with '--extra {key}=<value>'.")
+  ions = [s for s, q in charges.items() if q > 0.0]
+  elcs = [s for s, q in charges.items() if q < 0.0]
+  if not ions:
+    raise ValueError("gk-transport: the gyro-Bohm normalization needs an ion species "
+                     f"in --species, got {list(results)}.")
+  if len(elcs) > 1:
+    raise ValueError("gk-transport: expected at most one electron species for the "
+                     f"gyro-Bohm normalization, got {elcs}.")
+
+  for species, windows in results.items():
+    for res in windows:
+      ion = _same_window(results[ions[0]], res["frames"], ions[0])
+      if Te_ref is not None:
+        Te = float(Te_ref)
+      elif elcs:
+        Te = _same_window(results[elcs[0]], res["frames"], elcs[0])["T"]
+      else:
+        Te = ion["T"]/float(Ti_over_Te)
+      if bmag_ref is not None:
+        bmag = float(bmag_ref)
+      elif ion["bmag"] is None:
+        raise ValueError("gk-transport: the gyro-Bohm normalization needs the "
+                         "<prefix>-geo_int_bmag.gkyl file, or '--extra bmag_ref=<value>'.")
+      else:
+        bmag = ion["bmag"]
+      D0 = gyro_bohm_diffusivity(Te, bmag, ion["mass"], ion["charge"])
+
+      with np.errstate(divide="ignore", invalid="ignore"):
+        L_n = -res["n"]/(np.sqrt(res["gxx"])*res["dn_dx"])
+        L_T = -res["T"]/(np.sqrt(res["gxx"])*res["dT_dx"])
+        res["D_gB"] = res["D"]*L_n/D0
+        res["chi_gB"] = res["chi"]*L_T/D0
 
 
 def _parse_frames(frame_inp):
@@ -146,7 +231,10 @@ def compute_transport(path: str, name: str, species: str, frame=None, fluct: str
   Returns:
     A list with one dict per time window (a single one unless per_frame), each
     holding the node grid under 'grid', the frame(s) under 'frames', the time
-    under 'time' and one nodal array per entry of TRANSPORT_OUTPUTS.
+    under 'time', one nodal array per entry of TRANSPORT_OUTPUTS except the
+    gyro-Bohm ones (see gyro_bohm_normalize), the radial gradients 'dn_dx' and
+    'dT_dx', the averaged magnetic field 'bmag' (None without the geo_int_bmag
+    file) and the species' 'mass' and 'charge' (None when unknown).
   """
   path = path.rstrip("/") + "/"
   extra = dict(extra or {})
@@ -160,12 +248,23 @@ def compute_transport(path: str, name: str, species: str, frame=None, fluct: str
   gxx = GData(ctx=gij.ctx)
   gxx.push(gij.get_grid(), gij.get_values()[..., :num_basis])
   gxx_grid, gxx_nodal, _ = _nodal(ops.average(_FSA_DIRS, gxx, weight=jacobgeo), num_interp)
+  bmag_nodal = None
+  if os.path.isfile(os.path.join(path, f"{name}-geo_int_bmag.gkyl")):
+    bmag = _geo(path, name, "geo_int_bmag")
+    _, bmag_nodal, _ = _nodal(ops.average(_FSA_DIRS, bmag, weight=jacobgeo), num_interp)
 
   # Flux-surface averages of every frame, grouped into time windows.
   windows, window, times = [], None, []
   for frame in frames:
     fsa = _fsa_frame(path, name, species, frame, extra, jacobgeo, ops)
     times.append(fsa["n"].ctx.get("time", None))
+    if frame == frames[0]:
+      attrs = {}
+      for key in ("mass", "charge"):
+        try:
+          attrs[key] = float(_get_ctx_val(fsa["T"], key, **extra))
+        except KeyError:
+          attrs[key] = None  # Only needed by the gyro-Bohm normalization.
     if per_frame:
       windows.append(([frame], fsa))
     elif window is None:
@@ -180,13 +279,14 @@ def compute_transport(path: str, name: str, species: str, frame=None, fluct: str
 
   results = []
   for win_frames, profiles in windows:
-    res = {"grid": gxx_grid, "frames": win_frames, "gxx": gxx_nodal}
+    res = {"grid": gxx_grid, "frames": win_frames, "gxx": gxx_nodal, "bmag": bmag_nodal, **attrs}
     nodal = {key: _nodal(prof, num_interp) for key, prof in profiles.items()}
     for key, (_, vals, _) in nodal.items():
       res[key] = vals
     res.update(transport_coefficients(
       res["gamma"], res["Q"], res["n"], res["T"], gxx_nodal,
       dn_dx=nodal["n"][2], dT_dx=nodal["T"][2], conv=conv, grad_tol=grad_tol))
+    res["dn_dx"], res["dT_dx"] = nodal["n"][2], nodal["T"][2]
     win_times = [times[frames.index(f)] for f in win_frames]
     res["time"] = (float(np.mean(win_times)) if None not in win_times else None)
     results.append(res)

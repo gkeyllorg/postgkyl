@@ -15,14 +15,24 @@ Naming keys for some fetch functions below:
   div: divided by
   pow#: raised to the power of #
 
+The helper functions come first, grouped by purpose; the fetch functions follow.
 """
+import os
+
 import numpy as np
-import operator
 
 from postgkyl.data import GData
 from postgkyl.data.dg import get_num_basis
 from postgkyl.tools.gkeyll_dg_ops import GkeyllDGops
 import postgkyl.utils.gkeyll_const as gkc
+
+# ===========================================================================
+# ================================ Helpers ==================================
+# ===========================================================================
+
+# --------------------------------
+# --- Context and allocation ---
+# --------------------------------
 
 def _get_ctx_val(gdata : GData, key : str, **kwargs):
   """
@@ -57,7 +67,6 @@ def _get_ctx_val(gdata : GData, key : str, **kwargs):
                  f"'--extra {key}=<value1>,<value2>,...'.")
 
 def _get_num_basis_from_gdata(gdata) -> int:
-  from postgkyl.data.dg import get_num_basis
   ndim = gdata.get_num_dims()
   poly_order = int(gdata.ctx["poly_order"])
   basis_type = gdata.ctx["basis_type"]
@@ -69,115 +78,113 @@ def _empty_gdata_from_gdata(gdata) -> GData:
   out.push(gdata.get_grid(), np.zeros_like(gdata.get_values()))
   return out
 
+def _empty_scalar_like(gdata) -> GData:
+  """Allocate a zero-valued single-component GData with the grid/ctx of gdata."""
+  num_basis = _get_num_basis_from_gdata(gdata)
+  vals = gdata.get_values()
+  out = GData(ctx=gdata.ctx)
+  out.push(gdata.get_grid(), np.zeros((*vals.shape[:-1], num_basis), dtype=vals.dtype))
+  return out
+
+def _comp(gdata, comp: int) -> GData:
+  """
+  The comp-th physical component of a DG field, as a contiguous copy (the DG
+  operators read the buffer, not a strided view).
+  """
+  num_basis = _get_num_basis_from_gdata(gdata)
+  out = GData(ctx=gdata.ctx)
+  out.push(gdata.get_grid(), gdata.get_values()[..., comp*num_basis:(comp+1)*num_basis].copy())
+  return out
+
+def _scaled(gdata, factor: float) -> GData:
+  """factor*f, a new GData."""
+  out = _empty_gdata_from_gdata(gdata)
+  out.set_values(factor*gdata.get_values())
+  return out
+
+def _add(*fields) -> GData:
+  """Sum of fields, with the grid/ctx of the first one."""
+  out = _empty_gdata_from_gdata(fields[0])
+  out.set_values(sum(field.get_values() for field in fields))
+  return out
+
+def _sub(lop, rop) -> GData:
+  """lop - rop, with the grid/ctx of lop."""
+  out = _empty_gdata_from_gdata(lop)
+  out.set_values(lop.get_values() - rop.get_values())
+  return out
+
+# ---------------------------
+# --- Weak DG algebra ---
+# ---------------------------
+
+def _mul_scalar(lop, rop, factor: float = 1.0, c_lop: int = 0, c_rop: int = 0, like=None):
+  """
+  Weak DG product factor*lop[c_lop]*rop[c_rop], a single-component field with
+  the grid/ctx of like (default lop).
+  """
+  out = _empty_scalar_like(lop if like is None else like)
+  GkeyllDGops().multiply(0, out, c_lop, lop, c_rop, rop)
+  if factor != 1.0:
+    out.set_values(factor*out.get_values())
+  return out
+
+def _inv(gdata):
+  """
+  Weak DG inverse 1/f of a single-component field, computed as s/(s*f) with s
+  the power of two scaling f to order one. The scaling is exact, and prevents
+  products of SI quantities (e.g. n*T^(3/2)*(dT/dx)^2 ~ 1e-39) from under- or
+  overflowing in the inversion.
+  """
+  vals = gdata.get_values()
+  vmax = np.max(np.abs(vals))
+  scale = np.ldexp(1.0, -np.frexp(vmax)[1]) if np.isfinite(vmax) and vmax > 0.0 else 1.0
+  out = _empty_gdata_from_gdata(gdata)
+  GkeyllDGops().invert(0, out, 0, _scaled(gdata, scale))
+  out.set_values(scale*out.get_values())
+  return out
+
+def _div(num, den, factor: float = 1.0, like=None):
+  """Weak DG quotient factor*num/den, with the grid/ctx of like (default num)."""
+  return _mul_scalar(num, _inv(den), factor, like=like)
+
 def _powsqrt_dg(gdata, exponent: float) -> GData:
   """
   pow(sqrt(f), exponent) of a single-component DG field. negative values are set to 1e-40.
   """
-
   out = _empty_gdata_from_gdata(gdata)
-
-  dgops = GkeyllDGops()
-  dgops.powsqrt(out, gdata, exponent)
-
+  GkeyllDGops().powsqrt(out, gdata, exponent)
   return out
 
-def _make_fetch_comp(icomp: int):
-  """Return a fetch function that extracts the comp-th physical component."""
-  def fetch(gdatas, **kw):
-    g = gdatas[0].get_grid()
-    nb = _get_num_basis_from_gdata(gdatas[0])
-    comp = [icomp,icomp] if icomp is not None else [0,int(gdatas[0].get_num_comps()/nb)]
-    v = gdatas[0].get_values()[..., comp[0]*nb:(comp[1]+1)*nb].copy()
-    out = GData(ctx=gdatas[0].ctx)
-    out.push(g, v)
-    return out
-  # end
-  fetch.__name__ = f"fetch_comp{icomp}" if icomp is not None else f"fetch_compAll"
-  return fetch
+def _derivative(field, dim: int):
+  """d(f)/dx^dim of a single-component DG field (cell-local)."""
+  lower, upper = field.get_bounds()
+  cells = field.get_num_cells()
+  out = _empty_gdata_from_gdata(field)
+  GkeyllDGops().differentiate(dim, 1, (upper[dim] - lower[dim])/cells[dim], 0, out, 0, field)
+  return out
 
-def _make_fetch_sick_addsub_sjcl(si: int, ck: int, sj: int, cl: int, op):
-  """
-  Return a fetch function that does:
-    (k-th component of the i-th source) op (l-th component of the j-th source)
-  """
-  def fetch(gdatas, **kwargs):
-    gd_l = gdatas[si]
-    gd_r = gdatas[sj]
+def _radial_derivative(field, qname: str):
+  """d(f)/dx, x being the radial (first) configuration space coordinate."""
+  if field.get_num_dims() < 2:
+    raise ValueError(f"{qname}: a 1x simulation has no radial coordinate x.")
+  return _derivative(field, 0)
 
-    nb_l = _get_num_basis_from_gdata(gd_l)
-    nb_r = _get_num_basis_from_gdata(gd_r)
-    if not nb_l == nb_r:
-      raise ValueError(f"Datasets have different basis")
+# ----------------
+# --- Geometry ---
+# ----------------
 
-    vals_l = gd_l.get_values()[..., ck*nb_l:(ck+1)*nb_l]
-    vals_r = gd_r.get_values()[..., cl*nb_r:(cl+1)*nb_r]
+# Component of the metric tensor g_ij holding the (k,l) entry.
+_G_IJ_COMP = {(0,0): 0, (0,1): 1, (0,2): 2, (1,1): 3, (1,2): 4, (2,2): 5}
 
-    out = GData(ctx=gd_l.ctx)
-    out.push(gd_l.get_grid(), op(vals_l,vals_r))
-
-    return out
-  # end
-  fetch.__name__ = f"fetch_s{si}c{ck}_{op.__name__}_s{sj}c{cl}"
-  return fetch
-
-def _make_fetch_sick_mul_sjcl(si: int, ck: int, sj: int, cl: int):
-  """
-  Return a fetch function that multiplies the k-th component of the i-th
-  source/dataset by the l-th component of the j-th source.
-  """
-  def fetch(gdatas, **kwargs):
-    gd_l = gdatas[si]
-    gd_r = gdatas[sj]
-
-    nb_l = _get_num_basis_from_gdata(gd_l)
-    nb_r = _get_num_basis_from_gdata(gd_r)
-    if not nb_l == nb_r:
-      raise ValueError(f"Datasets have different basis")
-
-    vals_l = gd_l.get_values()
-    out_shape = list(vals_l.shape)
-    out_shape[-1] = nb_l
-  
-    out = GData(ctx=gd_l.ctx)
-    out.push(gd_l.get_grid(), np.zeros(out_shape, dtype=vals_l.dtype))
-  
-    dgops = GkeyllDGops()
-    dgops.multiply(0, out, ck, gd_l, cl, gd_r)
-  
-    return out
-  # end
-  fetch.__name__ = f"fetch_s{si}c{ck}_mul_s{sj}c{cl}"
-  return fetch
-
-def _make_fetch_sick_div_sjcl(si: int, ck: int, sj: int, cl: int):
-  """
-  Return a fetch function that divides the k-th component of the i-th
-  source/dataset by the l-th component of the j-th source.
-  """
-  def fetch(gdatas, **kwargs):
-    gd_l = gdatas[si]
-    gd_r = gdatas[sj]
-
-    nb_l = _get_num_basis_from_gdata(gd_l)
-    nb_r = _get_num_basis_from_gdata(gd_r)
-    if not nb_l == nb_r:
-      raise ValueError(f"Datasets have different basis")
-
-    vals_l = gd_l.get_values()
-    out_shape = list(vals_l.shape)
-    out_shape[-1] = nb_l
-  
-    out = GData(ctx=gd_l.ctx)
-    out.push(gd_l.get_grid(), np.zeros(out_shape, dtype=vals_l.dtype))
-
-    dgops = GkeyllDGops()
-    dgops.invert(0, out, cl, gd_r)
-    dgops.multiply(0, out, ck, gd_l, 0, out)
-  
-    return out
-  # end
-  fetch.__name__ = f"fetch_s{si}c{ck}_div_s{sj}c{cl}"
-  return fetch
+def _select_dir(kwargs, qname: str, index: str = "k") -> int:
+  """The vector component selected with '--extra dir=', checked to be 0, 1 or 2."""
+  if "dir" not in kwargs:
+    raise KeyError(f"{qname}: select the {index}-th component with '--extra dir={index}' (0-index).")
+  comp = int(kwargs["dir"])
+  if not 0 <= comp < 3:
+    raise KeyError(f"{qname}: component must be >= 0 and < 3.")
+  return comp
 
 def _b_cross_grad_div_B_component(scalar, jacobtot_inv, b_i, comp):
   """
@@ -226,395 +233,32 @@ def _b_cross_grad_div_B_component(scalar, jacobtot_inv, b_i, comp):
   else:
     raise KeyError("_b_cross_grad_component: component must be >= 0 and < 3.")
 
-  buff = _empty_gdata_from_gdata(scalar) # Positive term in AxB.
-  out = _empty_gdata_from_gdata(scalar) # Negative term in AxB.
-
-  dgops = GkeyllDGops()
-  lower, upper = scalar.get_bounds()
-  cells = scalar.get_num_cells()
-  if calc_term[0]:
-    # Compute derivatives of the scalar field.
-    dx = (upper[diff_dir_pos] - lower[diff_dir_pos])/cells[diff_dir_pos]
-    dgops.differentiate(diff_dir_pos, 1,  dx, 0, buff, 0, scalar)
-    # Multiply by b_i.
-    dgops.multiply(0, buff, bi_c_pos, b_i, 0, buff)
-
-  if calc_term[1]:
-    # Compute derivatives of the scalar field.
-    dx = (upper[diff_dir_neg] - lower[diff_dir_neg])/cells[diff_dir_neg]
-    dgops.differentiate(diff_dir_neg, 1, -dx, 0, out , 0, scalar)
-    # Multiply by b_i.
-    dgops.multiply(0, out , bi_c_neg, b_i, 0, out )
-
-  # Add the two terms to form the comp-th component of b x grad(f).
-  out.set_values(buff.get_values() + out.get_values())
+  # b_i * d(f)/dx^j for the positive and negative terms of the comp-th component of AxB.
+  out = _empty_gdata_from_gdata(scalar)
+  for calc, diff_dir, bi_c, sign in ((calc_term[0], diff_dir_pos, bi_c_pos,  1.0),
+                                     (calc_term[1], diff_dir_neg, bi_c_neg, -1.0)):
+    if calc:
+      term = _mul_scalar(b_i, _derivative(scalar, diff_dir), c_lop=bi_c)
+      out.set_values(out.get_values() + sign*term.get_values())
 
   # Divide by the Jacobian factor of the curvilinear cross product.
-  dgops.multiply(0, out, 0, out, 0, jacobtot_inv)
+  return _mul_scalar(out, jacobtot_inv)
 
-  return out
-
-# Functions to extract a components.
-fetch_s0cAll = _make_fetch_comp(None)
-fetch_s0c0 = _make_fetch_comp(0)
-fetch_s0c1 = _make_fetch_comp(1)
-fetch_s0c2 = _make_fetch_comp(2)
-fetch_s0c3 = _make_fetch_comp(3)
-
-# Functions to add two components.
-fetch_s0c0_add_s1c0 = _make_fetch_sick_addsub_sjcl(0,0,1,0,operator.add)
-fetch_s0c2_add_s0c3 = _make_fetch_sick_addsub_sjcl(0,2,0,3,operator.add)
-
-# Functions to subtract two components.
-fetch_s0c0_sub_s1c0 = _make_fetch_sick_addsub_sjcl(0,0,1,0,operator.sub)
-
-# Functions to multiply two components.
-fetch_s0c0_mul_s1c0 = _make_fetch_sick_mul_sjcl(0,0,1,0)
-fetch_s0c0_mul_s0c1 = _make_fetch_sick_mul_sjcl(0,0,0,1)
-
-# Functions to divide two components.
-fetch_s1c0_div_s0c0 = _make_fetch_sick_div_sjcl(1,0,0,0)
-
-# ------------------------------------------
-# --- Plasma moments (species-dependent) ---
-# ------------------------------------------
-
-def fetch_M1_from_H(gdatas, **kwargs):
+def _vector_magnitude(cov, contra):
   """
-  M1 from the Hamiltonian moments (Hmom).
+  sqrt(V_i V^i) of a vector whose covariant and contravariant components are
+  returned by cov(i) and contra(i), with the grid/ctx of cov(0).
   """
-  hmom = gdatas[0]
-  mass = _get_ctx_val(hmom, "mass", **kwargs)
-  nb = _get_num_basis_from_gdata(hmom)
-  vals = hmom.get_values()
-
-  m1 = GData(ctx=hmom.ctx)
-  m1.push(hmom.get_grid(), np.zeros_like(vals[..., :nb]))
-
-  dgops = GkeyllDGops()
-  dgops.multiply(0, m1, 0, hmom, 1, hmom)
-
-  m1.set_values(m1.get_values() / mass)
-  return m1
-
-def _make_fetch_M2_from_Max(par: bool, t_comp: int):
-  """
-  Return a fetch function for the second parallel (par=True) or perpendicular
-  moment from (Bi)Maxwellian moments.
-  """
-  def fetch(gdatas, **kwargs):
-    mom = gdatas[0]
-    nb = _get_num_basis_from_gdata(mom)
-    dgops = GkeyllDGops()
-
-    out = GData(ctx=mom.ctx)
-    out.push(mom.get_grid(), np.zeros_like(mom.get_values()[..., :nb]))
-    dgops.multiply(0, out, 0, mom, t_comp, mom)  # n*T/m.
-    if not par:
-      out.set_values(2.0*out.get_values())
-      return out
-
-    nu2 = _empty_gdata_from_gdata(out)
-    dgops.multiply(0, nu2, 0, mom, 1, mom)  # n*upar.
-    dgops.multiply(0, nu2, 0, nu2, 1, mom)  # n*upar^2.
-    out.set_values(out.get_values() + nu2.get_values())
-    return out
-  # end
-  fetch.__name__ = f"fetch_M2{'par' if par else 'perp'}_from_Max_c{t_comp}"
-  return fetch
-
-fetch_M2par_from_Max = _make_fetch_M2_from_Max(True, 2)
-fetch_M2perp_from_Max = _make_fetch_M2_from_Max(False, 2)
-fetch_M2par_from_BiMax = _make_fetch_M2_from_Max(True, 2)
-fetch_M2perp_from_BiMax = _make_fetch_M2_from_Max(False, 3)
-
-def fetch_Tpar_from_BiMax(gdatas, **kwargs):
-  """
-  Tpar from BiMaxwellian moments.
-  """
-  Tpar = fetch_s0c2(gdatas)
-
-  bimax = gdatas[0]
-  mass = _get_ctx_val(bimax, "mass", **kwargs)
-  Tpar.set_values(mass * Tpar.get_values())
-  return Tpar
-
-def fetch_Tpar_from_M0_M1_M2par(gdatas, **kwargs):
-  """
-  upar*M1 + M0*Tpar/m = M2par.
-  Tpar = m * (M2par - upar*M1) / M0.
-  """
-  m0, m1, m2par = gdatas
-  dgops = GkeyllDGops()
-
-  m0_inv = _empty_gdata_from_gdata(m0)
-  upar   = _empty_gdata_from_gdata(m0)
-  Tpar   = _empty_gdata_from_gdata(m0)
-
-  dgops.invert(0, m0_inv, 0, m0)
-  dgops.multiply(0, upar, 0, m1, 0, m0_inv)
-  dgops.multiply(0, upar, 0, upar, 0, m1)
-
-  m2par_val = m2par.get_values()
-  um1_val = upar.get_values()
-  
-  mass = _get_ctx_val(m0, "mass", **kwargs)
-  Tpar.set_values(mass * (m2par_val - um1_val))
-  dgops.multiply(0, Tpar, 0, Tpar, 0, m0_inv)
-  return Tpar
-
-def fetch_Tperp_from_BiMax(gdatas, **kwargs):
-  """
-  Tperp from BiMaxwellian moments.
-  """
-  Tperp = fetch_s0c3(gdatas)
-
-  bimax = gdatas[0]
-  mass = _get_ctx_val(bimax, "mass", **kwargs)
-  Tperp.set_values(mass * Tperp.get_values())
-  return Tperp
-
-def fetch_Tperp_from_M0_M2perp(gdatas, **kwargs):
-  """
-  Tperp = 0.5 * mass * (M2perp / M0).
-  """
-  Tperp = fetch_s1c0_div_s0c0(gdatas)
-
-  m0 = gdatas[0]
-  mass = _get_ctx_val(m0, "mass", **kwargs)
-  Tperp.set_values(0.5 * mass * Tperp.get_values())
-  return Tperp
-
-def fetch_temp_from_Max(gdatas, **kwargs):
-  """
-  temp from Maxwellian moments.
-  """
-  temp = fetch_s0c2(gdatas)
-
-  maxmom = gdatas[0]
-  mass = _get_ctx_val(maxmom, "mass", **kwargs)
-  temp.set_values(mass * temp.get_values())
-  return temp
-
-def fetch_temp_from_Tpar_Tperp(gdatas, **kwargs):
-  """
-  temp = (Tpar + 2*Tperp) / 3.
-  """
-  Tpar, Tperp = gdatas
-
-  temp = _empty_gdata_from_gdata(Tpar)
-
-  Tpar_val  = Tpar.get_values()
-  Tperp_val = Tperp.get_values()
-  
-  temp.set_values((Tpar_val + 2.0*Tperp_val)/3.0)
-  return temp
-
-# ---------------------------------------------------
-# --- Combined plasma moments (species-dependent) ---
-# ---------------------------------------------------
-
-def fetch_press_from_Max(gdatas, **kwargs):
-  """
-  Pressure from Maxwellian moments.
-  press = den * temp.
-  """
-  maxmom = gdatas[0]
-  nb = _get_num_basis_from_gdata(maxmom)
-  vals = maxmom.get_values()[..., :nb]
-  
-  press = GData(ctx=maxmom.ctx)
-  press.push(maxmom.get_grid(), np.zeros_like(vals))
-
-  dgops = GkeyllDGops()
-  dgops.multiply(0, press, 0, maxmom, 2, maxmom)
-
-  mass = _get_ctx_val(maxmom, "mass", **kwargs)
-  press.set_values(mass * press.get_values())
-  return press
-
-def fetch_press_from_BiMax(gdatas, **kwargs):
-  """
-  Pressure from BiMaxwellian moments.
-  press = den * (Tpar + 2*Tperp) / 3.
-  """
-  bimax = gdatas[0]
-  nb = _get_num_basis_from_gdata(bimax)
-  vals = bimax.get_values()
-
-  mass = _get_ctx_val(bimax, "mass", **kwargs)
-  Tpar_vals  = vals[..., 2*nb:3*nb]
-  Tperp_vals = vals[..., 3*nb:4*nb]
-  temp_vals  = mass*(Tpar_vals + 2.0 * Tperp_vals)/3.0
-
-  press = GData(ctx=bimax.ctx)
-  press.push(bimax.get_grid(), temp_vals.copy())
-
-  dgops = GkeyllDGops()
-  dgops.multiply(0, press, 0, bimax, 0, press)
-
-  return press
-
-def fetch_press_p(gdatas, **kwargs):
-  """
-  Perpendicular/parallel pressure in J/m^3.
-  p_p = n * T_p.
-  """
-  m0 = gdatas[0]
-  Tp = gdatas[1]
-  
-  dgops = GkeyllDGops()
-  press_p = _empty_gdata_from_gdata(m0)
-  dgops.multiply(0, press_p, 0, m0, 0, Tp)
-
-  return press_p
-
-def _make_fetch_q(name: str):
-  """
-  Return a fetch function for the lab-frame parallel flux of the parallel
-  (name='par') or perpendicular (name='perp') kinetic energy:
-    q_par  = (m/2)*M3par  = (m/2) int(vpar^3 f) dv,
-    q_perp = (m/2)*M3perp = (m/2) int(vpar*vperp^2 f) dv,
-  so that q_par + q_perp is the parallel flux of the total kinetic energy.
-  Both are in W/m^2 (kg/s^3). gdatas has:
-    1. M3par (name='par') or M3perp (name='perp').
-  """
-  def fetch(gdatas, **kwargs):
-    m3 = gdatas[0]
-    mass = _get_ctx_val(m3, "mass", **kwargs)
-
-    out = _empty_gdata_from_gdata(m3)
-    out.set_values(0.5*mass*m3.get_values())
-    return out
-  # end
-  fetch.__name__ = f"fetch_q{name}"
-  return fetch
-
-fetch_qpar = _make_fetch_q("par")
-fetch_qperp = _make_fetch_q("perp")
-
-def _make_fetch_q_fluid(name: str):
-  """
-  Return a fetch function for the parallel heat flux in the fluid (drift)
-  frame, i.e. the energy carried by the random part of the parallel motion,
-  u = M1/M0 being the parallel drift speed:
-    q_par  = (m/2) int (vpar-u)^3 f dv
-           = (m/2) [M3par - 3*u*M2par + 3*u^2*M1 - u^3*M0]
-           = (m/2) [M3par - 3*u*M2par + 2*u^2*M1],
-    q_perp = (m/2) int (vpar-u)*vperp^2 f dv
-           = (m/2) [M3perp - u*M2perp].
-  gdatas has (in this order):
-    1. M0: zeroth moment (density).
-    2. M1: first moment.
-    3. M2par (name='par') or M2perp (name='perp').
-    4. M3par (name='par') or M3perp (name='perp').
-  """
-  is_par = name == "par"
-
-  def fetch(gdatas, **kwargs):
-    m0, m1, m2, m3 = gdatas
-    mass = _get_ctx_val(m0, "mass", **kwargs)
-
-    dgops = GkeyllDGops()
-
-    m0_inv = _empty_gdata_from_gdata(m0)
-    dgops.invert(0, m0_inv, 0, m0)
-
-    upar = _empty_gdata_from_gdata(m0)
-    dgops.multiply(0, upar, 0, m1, 0, m0_inv)
-
-    # u*M2par or u*M2perp.
-    u_m2 = _empty_gdata_from_gdata(m0)
-    dgops.multiply(0, u_m2, 0, upar, 0, m2)
-
-    if is_par:
-      # u^2*M1, which equals u^3*M0.
-      u_sq = _empty_gdata_from_gdata(m0)
-      dgops.multiply(0, u_sq, 0, upar, 0, upar)
-
-      u_sq_m1 = _empty_gdata_from_gdata(m0)
-      dgops.multiply(0, u_sq_m1, 0, u_sq, 0, m1)
-
-      vals = m3.get_values() - 3.0*u_m2.get_values() + 2.0*u_sq_m1.get_values()
-    else:
-      vals = m3.get_values() - u_m2.get_values()
-
-    out = _empty_gdata_from_gdata(m0)
-    out.set_values(0.5*mass*vals)
-    return out
-
-  fetch.__name__ = f"fetch_q{name}_fluid"
-  return fetch
-
-fetch_qpar_fluid = _make_fetch_q_fluid("par")
-fetch_qperp_fluid = _make_fetch_q_fluid("perp")
-
-def fetch_vt(gdatas, **kwargs):
-  """
-  Thermal speed vt = sqrt(T/m) (m/s), where T is the temperature of the
-  requested species and m its mass. gdatas has:
-    1. temp: temperature (in Joules).
-  """
-  temp = gdatas[0]
-  mass = _get_ctx_val(temp, "mass", **kwargs)
-
-  temp_over_m = _empty_gdata_from_gdata(temp)
-  temp_over_m.set_values(temp.get_values()/mass)
-
-  return _powsqrt_dg(temp_over_m, 1.0)
-
-def fetch_larmor_radius(gdatas, **kwargs):
-  """
-  Species Larmor (gyro-)radius: rho = sqrt(m*T)/(|q|*B). gdatas has:
-    1. B: magnetic field magnitude (bmag).
-    2. temp: temperature (in Joules).
-  """
-  bmag, temp = gdatas
-  mass = _get_ctx_val(temp, "mass", **kwargs)
-  charge = abs(_get_ctx_val(temp, "charge", **kwargs))
-
-  mT = _empty_gdata_from_gdata(temp)
-  mT.set_values(temp.get_values() * mass)
-  sqrt_mT = _powsqrt_dg(mT, 1.0)
-
-  qB = _empty_gdata_from_gdata(bmag)
-  qB.set_values(bmag.get_values() * charge)
-
-  dgops = GkeyllDGops()
-
-  qB_inv = _empty_gdata_from_gdata(bmag)
-  dgops.invert(0, qB_inv, 0, qB)
-
-  out = _empty_gdata_from_gdata(bmag)
-  dgops.multiply(0, out, 0, sqrt_mT, 0, qB_inv)
-
-  return out
-
-def fetch_debye_length(gdatas, **kwargs):
-  """
-  Species-wise Debye length: lambda_D = sqrt(eps0*T/(n*q^2)). gdatas has:
-    1. M0: zeroth moment (density).
-    2. temp: temperature (in Joules).
-  """
-  m0, temp = gdatas
-  charge = _get_ctx_val(temp, "charge", **kwargs)
-  eps0 = gkc.GKYL_EPSILON0
-
-  eps0T = _empty_gdata_from_gdata(temp)
-  eps0T.set_values(temp.get_values() * eps0)
-
-  nq2 = _empty_gdata_from_gdata(m0)
-  nq2.set_values(m0.get_values() * charge**2)
-
-  dgops = GkeyllDGops()
-
-  nq2_inv = _empty_gdata_from_gdata(m0)
-  dgops.invert(0, nq2_inv, 0, nq2)
-
-  sq = _empty_gdata_from_gdata(temp)
-  dgops.multiply(0, sq, 0, eps0T, 0, nq2_inv)
-
-  return _powsqrt_dg(sq, 1.0)
+  return _powsqrt_dg(_add(*(_mul_scalar(cov(i), contra(i)) for i in range(3))), 1.0)
+
+# ---------------
+# --- Species ---
+# ---------------
+
+def _mass_times_comp(gdatas, comp: int, **kwargs):
+  """mass * (comp-th component of the first source), e.g. T = m*(T/m)."""
+  src = gdatas[0]
+  return _scaled(_comp(src, comp), _get_ctx_val(src, "mass", **kwargs))
 
 def _split_elc_ions(gdatas, quantity: str, **kwargs):
   """
@@ -662,8 +306,7 @@ def _adiabatic_elc(ions, **kwargs):
   ti_over_te = float(kwargs.get("Ti_over_Te", 1.0))
 
   den = _weighted_sum(ions, [ion["charge"]/e for ion in ions], 0)
-  temp = _empty_gdata_from_gdata(ions[0]["srcs"][1])
-  temp.set_values(ions[0]["srcs"][1].get_values()/ti_over_te)
+  temp = _scaled(ions[0]["srcs"][1], 1.0/ti_over_te)
 
   return {
     "name": "adiabatic electrons",
@@ -680,107 +323,6 @@ def _weighted_sum(entries, weights, comp: int):
   total = sum(w*e["srcs"][comp].get_values() for e, w in zip(entries, weights))
   out.set_values(total)
   return out
-
-def fetch_c_s_cold_i(gdatas, **kwargs):
-  """
-  Cold-ion (ion-acoustic) sound speed (m/s), the wave perspective, for the
-  Bohm criterion and sheath/presheath matching:
-    c_s = sqrt( T_e * sum_j(n_j*Z_j^2/m_j) / sum_j(n_j*Z_j) )
-  summing over the ion species j, with Z_j = q_j/e the ion charge state.
-  """
-  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_cold_i", **kwargs)
-
-  e = gkc.GKYL_ELEMENTARY_CHARGE
-  charge_states = [ion["charge"]/e for ion in ions]
-
-  # sum_j n_j*Z_j^2/m_j and sum_j n_j*Z_j, both linear in the densities (M0).
-  numer = _weighted_sum(ions, [z**2/ion["mass"] for z, ion in zip(charge_states, ions)], 0)
-  denom = _weighted_sum(ions, charge_states, 0)
-
-  dgops = GkeyllDGops()
-
-  denom_inv = _empty_gdata_from_gdata(denom)
-  dgops.invert(0, denom_inv, 0, denom)
-
-  # T_e * numer/denom.
-  c_s_sq = _empty_gdata_from_gdata(numer)
-  dgops.multiply(0, c_s_sq, 0, numer, 0, denom_inv)
-  dgops.multiply(0, c_s_sq, 0, c_s_sq, 0, elc["srcs"][1])
-
-  return _powsqrt_dg(c_s_sq, 1.0)
-
-def fetch_c_s_hot_i(gdatas, **kwargs):
-  """
-  Hot-ion (thermodynamic) sound speed, the bulk fluid perspective, for
-  Mach numbers and acoustic propagation in the core/SOL:
-    c_s = sqrt( (gamma_e*n_e*T_e + sum_j(gamma_j*n_j*T_j)) / sum_j(n_j*m_j) )
-  summing over the ion species j.
-  Default: gamma_e=1, gamma_i=3, but these can be set via '--extra'.
-  """
-  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_hot_i", **kwargs)
-
-  gamma_e = float(kwargs.get("gamma_e", 1.0))
-  gamma_i = float(kwargs.get("gamma_i", 3.0))
-
-  dgops = GkeyllDGops()
-
-  # gamma_e*n_e*T_e + sum_j gamma_j*n_j*T_j. Each n*T is a weak product.
-  numer = _empty_gdata_from_gdata(elc["srcs"][0])
-  dgops.multiply(0, numer, 0, elc["srcs"][0], 0, elc["srcs"][1])
-  numer.set_values(gamma_e*numer.get_values())
-
-  press_j = _empty_gdata_from_gdata(elc["srcs"][0])
-  for ion in ions:
-    dgops.multiply(0, press_j, 0, ion["srcs"][0], 0, ion["srcs"][1])
-    numer.set_values(numer.get_values() + gamma_i*press_j.get_values())
-
-  # sum_j n_j*m_j, the ion mass density; linear in the densities.
-  denom = _weighted_sum(ions, [ion["mass"] for ion in ions], 0)
-
-  denom_inv = _empty_gdata_from_gdata(denom)
-  dgops.invert(0, denom_inv, 0, denom)
-
-  c_s_sq = _empty_gdata_from_gdata(numer)
-  dgops.multiply(0, c_s_sq, 0, numer, 0, denom_inv)
-
-  return _powsqrt_dg(c_s_sq, 1.0)
-
-def _fetch_mach(gdatas, fetch_c_s, **kwargs):
-  """
-  Parallel Mach number M = upar/c_s of the first requested species, with c_s
-  from fetch_c_s combining every listed species. gdatas has one
-  [M0, temp, upar] triplet per species, in the order they were requested.
-  """
-  c_s = fetch_c_s([srcs[:2] for srcs in gdatas], **kwargs)
-  upar = gdatas[0][2]
-
-  dgops = GkeyllDGops()
-
-  c_s_inv = _empty_gdata_from_gdata(c_s)
-  dgops.invert(0, c_s_inv, 0, c_s)
-
-  mach = _empty_gdata_from_gdata(upar)
-  dgops.multiply(0, mach, 0, upar, 0, c_s_inv)
-
-  return mach
-
-def fetch_mach_cold_i(gdatas, **kwargs):
-  """
-  Parallel Mach number upar/c_s of the first requested species, with the
-  cold-ion sound speed (fetch_c_s_cold_i):
-    pgkyl gk-load-quantity -q mach_cold_i -s ion,elc ...  (ion Mach number)
-    pgkyl gk-load-quantity -q mach_cold_i -s elc,ion ...  (electron Mach number)
-    pgkyl gk-load-quantity -q mach_cold_i -s ion -e Ti_over_Te=1 ...  (adiabatic electrons)
-  """
-  return _fetch_mach(gdatas, fetch_c_s_cold_i, **kwargs)
-
-def fetch_mach_hot_i(gdatas, **kwargs):
-  """
-  Parallel Mach number upar/c_s of the first requested species, with the
-  hot-ion sound speed (fetch_c_s_hot_i); species are listed as for
-  fetch_mach_cold_i.
-  """
-  return _fetch_mach(gdatas, fetch_c_s_hot_i, **kwargs)
 
 def _gkyl_coulomb_log(ns, nr, ms, mr, Ts, Tr, qs, qr, bmag, eps0, hbar, eV):
   """
@@ -799,6 +341,443 @@ def _gkyl_coulomb_log(ns, nr, ms, mr, Ts, Tr, qs, qr, bmag, eps0, hbar, eV):
   inner2 = max(abs(qs*qr)/(4*np.pi*eps0*msr*u*u), hbar/(2*np.sqrt(eV)*msr*u))
   inner = (1/inner1)*(1/inner2/inner2) + 1
   return 0.5*np.log(inner)
+
+# ---------------------
+# --- Radial fluxes ---
+# ---------------------
+
+# Directions averaged over to define a fluctuation, for '--extra fluct=<key>'.
+_FLUCT_DIRS = {"y": [1], "yz": [1, 2]}
+
+def _maybe_fluct(gdata, jacobgeo, qname: str, **kwargs):
+  """
+  Return gdata, or its fluctuation about the Jacobian-weighted average over
+  the directions selected with '--extra fluct=y|yz' (fluct=none disables it).
+  """
+  key = str(kwargs.get("fluct", "none")).lower()
+  if key in ("none", "0", "false", ""):
+    return gdata
+  if key not in _FLUCT_DIRS:
+    raise ValueError(f"{qname}: unknown '--extra fluct={key}'. Use one of: "
+                     f"none, {', '.join(_FLUCT_DIRS)}.")
+  return GkeyllDGops().fluctuation(_FLUCT_DIRS[key], gdata, weight=jacobgeo)
+
+def _radial_ExB_vel(phi, jacobtot_inv, b_i):
+  """Radial contravariant ExB velocity v_E^x = v_E.grad(x)."""
+  return _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, 0)
+
+def _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i):
+  """Radial contravariant magnetic flutter dB^x/B."""
+  return _div(fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], dir=0), bmag)
+
+def _radial_flux(moment, radial_vel, jacobgeo, factor, qname, **kwargs):
+  """
+  factor * moment * v^x, with both factors optionally replaced by fluctuations.
+  radial_vel() returns v^x; it is only evaluated once the data is known to be 3x,
+  since radial turbulent fluxes need the binormal direction.
+  """
+  if moment.get_num_dims() != 3:
+    raise ValueError(f"{qname}: radial fluxes need 3x (x,y,z) data, got "
+                     f"{moment.get_num_dims()} dimensions.")
+  vel_x = _maybe_fluct(radial_vel(), jacobgeo, qname, **kwargs)
+  moment = _maybe_fluct(moment, jacobgeo, qname, **kwargs)
+  return _mul_scalar(moment, vel_x, factor)
+
+def _warn_if_apar_dropped(qname: str, **kwargs):
+  """Warn when an electrostatic fallback is used although apar output exists."""
+  path, sim, frame = kwargs.get("path"), kwargs.get("name"), kwargs.get("frame")
+  if path is None or sim is None or frame is None:
+    return
+  if os.path.isfile(os.path.join(path, f"{sim}-apar_{frame}.gkyl")):
+    print(f"Warning: {qname}: apar output found but the moments needed for the magnetic "
+          f"flutter flux are missing; only the ExB contribution is included.")
+
+# ------------------------------
+# --- Transport coefficients ---
+# ------------------------------
+
+def _heat_flux(temp, part_flux, energy_flux, **kwargs):
+  """Heat flux q = Q - conv*T*Gamma ('--extra conv=', default 3/2)."""
+  conv = float(kwargs.get("conv", 1.5))
+  return _add(energy_flux, _mul_scalar(temp, part_flux, -conv))
+
+def _gyro_bohm_factors(gdatas, **kwargs):
+  """
+  rho_s^2 c_s = T_e^(3/2) m_i^(1/2)/(q_i^2 B^2), with c_s = sqrt(T_e/m_i) and
+  rho_s = c_s/Omega_i, as a list of DG fields and a scalar whose product it is.
+  gdatas has one source list per species, starting with [M0, temp] and ending
+  with B. m_i and q_i are those of the first ion species; T_e is the electron
+  temperature, or T_i/Ti_over_Te without an electron species (see
+  _split_elc_ions). '--extra Te_ref=,bmag_ref=' replace T_e and B by constants.
+  """
+  elc, ions = _split_elc_ions([srcs[:2] for srcs in gdatas], "gyro-Bohm diffusivity", **kwargs)
+  scalar = np.sqrt(ions[0]["mass"])/ions[0]["charge"]**2
+  fields = []
+  if kwargs.get("Te_ref") is not None:
+    scalar *= float(kwargs["Te_ref"])**1.5
+  else:
+    fields.append(_powsqrt_dg(elc["srcs"][1], 3.0))
+  if kwargs.get("bmag_ref") is not None:
+    scalar /= float(kwargs["bmag_ref"])**2
+  else:
+    bmag = gdatas[0][-1]
+    fields.append(_inv(_mul_scalar(bmag, bmag)))
+  return fields, scalar
+
+def _gyro_bohm_normalized(num, grad, gxx, other_den, gdatas, **kwargs):
+  """
+  num / (other_den g^xx^(3/2) grad^2 rho_s^2 c_s), which is -X L_X/(rho_s^2 c_s)
+  for a diffusivity X = -num/(other_den g^xx grad) and gradient length
+  L_X = -field/(sqrt(g^xx) grad), num carrying the field.
+  """
+  fields, scalar = _gyro_bohm_factors(gdatas, **kwargs)
+  den = _mul_scalar(_powsqrt_dg(gxx, 3.0), _mul_scalar(grad, grad))
+  if other_den is not None:
+    den = _mul_scalar(den, other_den)
+  for field in fields:
+    den = _mul_scalar(den, field)
+  return _div(num, den, 1.0/scalar)
+
+# ---------------------------------
+# --- Generic fetch factories ---
+# ---------------------------------
+
+def _make_fetch_comp(icomp: int):
+  """Return a fetch function that extracts the comp-th physical component (all if None)."""
+  def fetch(gdatas, **kw):
+    src = gdatas[0]
+    if icomp is not None:
+      return _comp(src, icomp)
+    out = GData(ctx=src.ctx)
+    out.push(src.get_grid(), src.get_values().copy())
+    return out
+  # end
+  fetch.__name__ = f"fetch_comp{icomp}" if icomp is not None else f"fetch_compAll"
+  return fetch
+
+# Weak DG binary operations of _make_fetch_sick_op_sjcl.
+_BINARY_OPS = {"add": _add, "sub": _sub, "mul": _mul_scalar, "div": _div}
+
+def _make_fetch_sick_op_sjcl(si: int, ck: int, op: str, sj: int, cl: int):
+  """
+  Return a fetch function that does
+    (k-th component of the i-th source) op (l-th component of the j-th source)
+  with op one of add, sub, mul (weak product) or div (weak quotient).
+  """
+  def fetch(gdatas, **kwargs):
+    gd_l, gd_r = gdatas[si], gdatas[sj]
+    if _get_num_basis_from_gdata(gd_l) != _get_num_basis_from_gdata(gd_r):
+      raise ValueError(f"Datasets have different basis")
+    return _BINARY_OPS[op](_comp(gd_l, ck), _comp(gd_r, cl))
+  # end
+  fetch.__name__ = f"fetch_s{si}c{ck}_{op}_s{sj}c{cl}"
+  return fetch
+
+# Functions to extract a components.
+fetch_s0cAll = _make_fetch_comp(None)
+fetch_s0c0 = _make_fetch_comp(0)
+fetch_s0c1 = _make_fetch_comp(1)
+fetch_s0c2 = _make_fetch_comp(2)
+fetch_s0c3 = _make_fetch_comp(3)
+
+# Functions to add two components.
+fetch_s0c0_add_s1c0 = _make_fetch_sick_op_sjcl(0,0,"add",1,0)
+fetch_s0c2_add_s0c3 = _make_fetch_sick_op_sjcl(0,2,"add",0,3)
+
+# Functions to subtract two components.
+fetch_s0c0_sub_s1c0 = _make_fetch_sick_op_sjcl(0,0,"sub",1,0)
+
+# Functions to multiply two components.
+fetch_s0c0_mul_s1c0 = _make_fetch_sick_op_sjcl(0,0,"mul",1,0)
+fetch_s0c0_mul_s0c1 = _make_fetch_sick_op_sjcl(0,0,"mul",0,1)
+
+# Functions to divide two components.
+fetch_s1c0_div_s0c0 = _make_fetch_sick_op_sjcl(1,0,"div",0,0)
+
+# ===========================================================================
+# ============================ Fetch functions ==============================
+# ===========================================================================
+
+# ------------------------------------------
+# --- Plasma moments (species-dependent) ---
+# ------------------------------------------
+
+def fetch_M1_from_H(gdatas, **kwargs):
+  """
+  M1 from the Hamiltonian moments (Hmom).
+  """
+  hmom = gdatas[0]
+  mass = _get_ctx_val(hmom, "mass", **kwargs)
+  return _mul_scalar(hmom, hmom, 1.0/mass, c_rop=1)
+
+def _make_fetch_M2_from_Max(par: bool, t_comp: int):
+  """
+  Return a fetch function for the second parallel (par=True) or perpendicular
+  moment from (Bi)Maxwellian moments.
+  """
+  def fetch(gdatas, **kwargs):
+    mom = gdatas[0]
+    out = _mul_scalar(mom, mom, c_rop=t_comp)  # n*T/m.
+    if not par:
+      return _scaled(out, 2.0)
+    # n*T/m + n*upar^2.
+    return _add(out, _mul_scalar(_mul_scalar(mom, mom, c_rop=1), mom, c_rop=1))
+  # end
+  fetch.__name__ = f"fetch_M2{'par' if par else 'perp'}_from_Max_c{t_comp}"
+  return fetch
+
+fetch_M2par_from_Max = _make_fetch_M2_from_Max(True, 2)
+fetch_M2perp_from_Max = _make_fetch_M2_from_Max(False, 2)
+fetch_M2par_from_BiMax = _make_fetch_M2_from_Max(True, 2)
+fetch_M2perp_from_BiMax = _make_fetch_M2_from_Max(False, 3)
+
+def fetch_Tpar_from_BiMax(gdatas, **kwargs):
+  """
+  Tpar from BiMaxwellian moments.
+  """
+  return _mass_times_comp(gdatas, 2, **kwargs)
+
+def fetch_Tpar_from_M0_M1_M2par(gdatas, **kwargs):
+  """
+  upar*M1 + M0*Tpar/m = M2par.
+  Tpar = m * (M2par - upar*M1) / M0.
+  """
+  m0, m1, m2par = gdatas
+  m0_inv = _inv(m0)
+  u_m1 = _mul_scalar(_mul_scalar(m1, m0_inv), m1)
+  mass = _get_ctx_val(m0, "mass", **kwargs)
+  return _mul_scalar(_scaled(_sub(m2par, u_m1), mass), m0_inv, like=m0)
+
+def fetch_Tperp_from_BiMax(gdatas, **kwargs):
+  """
+  Tperp from BiMaxwellian moments.
+  """
+  return _mass_times_comp(gdatas, 3, **kwargs)
+
+def fetch_Tperp_from_M0_M2perp(gdatas, **kwargs):
+  """
+  Tperp = 0.5 * mass * (M2perp / M0).
+  """
+  mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
+  return _scaled(fetch_s1c0_div_s0c0(gdatas), 0.5*mass)
+
+def fetch_temp_from_Max(gdatas, **kwargs):
+  """
+  temp from Maxwellian moments.
+  """
+  return _mass_times_comp(gdatas, 2, **kwargs)
+
+def fetch_temp_from_Tpar_Tperp(gdatas, **kwargs):
+  """
+  temp = (Tpar + 2*Tperp) / 3.
+  """
+  Tpar, Tperp = gdatas
+  temp = _empty_gdata_from_gdata(Tpar)
+  temp.set_values((Tpar.get_values() + 2.0*Tperp.get_values())/3.0)
+  return temp
+
+# ---------------------------------------------------
+# --- Combined plasma moments (species-dependent) ---
+# ---------------------------------------------------
+
+def fetch_press_from_Max(gdatas, **kwargs):
+  """
+  Pressure from Maxwellian moments.
+  press = den * temp.
+  """
+  maxmom = gdatas[0]
+  mass = _get_ctx_val(maxmom, "mass", **kwargs)
+  return _mul_scalar(maxmom, maxmom, mass, c_rop=2)
+
+def fetch_press_from_BiMax(gdatas, **kwargs):
+  """
+  Pressure from BiMaxwellian moments.
+  press = den * (Tpar + 2*Tperp) / 3.
+  """
+  bimax = gdatas[0]
+  mass = _get_ctx_val(bimax, "mass", **kwargs)
+  temp = _comp(bimax, 2)
+  temp.set_values(mass*(temp.get_values() + 2.0*_comp(bimax, 3).get_values())/3.0)
+  return _mul_scalar(bimax, temp)
+
+def fetch_press_p(gdatas, **kwargs):
+  """
+  Perpendicular/parallel pressure in J/m^3.
+  p_p = n * T_p.
+  """
+  m0, Tp = gdatas
+  return _mul_scalar(m0, Tp)
+
+def _make_fetch_q(name: str):
+  """
+  Return a fetch function for the lab-frame parallel flux of the parallel
+  (name='par') or perpendicular (name='perp') kinetic energy:
+    q_par  = (m/2)*M3par  = (m/2) int(vpar^3 f) dv,
+    q_perp = (m/2)*M3perp = (m/2) int(vpar*vperp^2 f) dv,
+  so that q_par + q_perp is the parallel flux of the total kinetic energy.
+  Both are in W/m^2 (kg/s^3). gdatas has:
+    1. M3par (name='par') or M3perp (name='perp').
+  """
+  def fetch(gdatas, **kwargs):
+    m3 = gdatas[0]
+    return _scaled(m3, 0.5*_get_ctx_val(m3, "mass", **kwargs))
+  # end
+  fetch.__name__ = f"fetch_q{name}"
+  return fetch
+
+fetch_qpar = _make_fetch_q("par")
+fetch_qperp = _make_fetch_q("perp")
+
+def _make_fetch_q_fluid(name: str):
+  """
+  Return a fetch function for the parallel heat flux in the fluid (drift)
+  frame, i.e. the energy carried by the random part of the parallel motion,
+  u = M1/M0 being the parallel drift speed:
+    q_par  = (m/2) int (vpar-u)^3 f dv
+           = (m/2) [M3par - 3*u*M2par + 3*u^2*M1 - u^3*M0]
+           = (m/2) [M3par - 3*u*M2par + 2*u^2*M1],
+    q_perp = (m/2) int (vpar-u)*vperp^2 f dv
+           = (m/2) [M3perp - u*M2perp].
+  gdatas has (in this order):
+    1. M0: zeroth moment (density).
+    2. M1: first moment.
+    3. M2par (name='par') or M2perp (name='perp').
+    4. M3par (name='par') or M3perp (name='perp').
+  """
+  is_par = name == "par"
+
+  def fetch(gdatas, **kwargs):
+    m0, m1, m2, m3 = gdatas
+    mass = _get_ctx_val(m0, "mass", **kwargs)
+
+    upar = _div(m1, m0)
+    u_m2 = _mul_scalar(upar, m2)  # u*M2par or u*M2perp.
+
+    if is_par:
+      # u^2*M1, which equals u^3*M0.
+      u_sq_m1 = _mul_scalar(_mul_scalar(upar, upar), m1)
+      vals = m3.get_values() - 3.0*u_m2.get_values() + 2.0*u_sq_m1.get_values()
+    else:
+      vals = m3.get_values() - u_m2.get_values()
+
+    out = _empty_gdata_from_gdata(m0)
+    out.set_values(0.5*mass*vals)
+    return out
+
+  fetch.__name__ = f"fetch_q{name}_fluid"
+  return fetch
+
+fetch_qpar_fluid = _make_fetch_q_fluid("par")
+fetch_qperp_fluid = _make_fetch_q_fluid("perp")
+
+def fetch_vt(gdatas, **kwargs):
+  """
+  Thermal speed vt = sqrt(T/m) (m/s), where T is the temperature of the
+  requested species and m its mass. gdatas has:
+    1. temp: temperature (in Joules).
+  """
+  temp = gdatas[0]
+  return _powsqrt_dg(_scaled(temp, 1.0/_get_ctx_val(temp, "mass", **kwargs)), 1.0)
+
+def fetch_larmor_radius(gdatas, **kwargs):
+  """
+  Species Larmor (gyro-)radius: rho = sqrt(m*T)/(|q|*B). gdatas has:
+    1. B: magnetic field magnitude (bmag).
+    2. temp: temperature (in Joules).
+  """
+  bmag, temp = gdatas
+  mass = _get_ctx_val(temp, "mass", **kwargs)
+  charge = abs(_get_ctx_val(temp, "charge", **kwargs))
+  sqrt_mT = _powsqrt_dg(_scaled(temp, mass), 1.0)
+  return _div(sqrt_mT, _scaled(bmag, charge), like=bmag)
+
+def fetch_debye_length(gdatas, **kwargs):
+  """
+  Species-wise Debye length: lambda_D = sqrt(eps0*T/(n*q^2)). gdatas has:
+    1. M0: zeroth moment (density).
+    2. temp: temperature (in Joules).
+  """
+  m0, temp = gdatas
+  charge = _get_ctx_val(temp, "charge", **kwargs)
+  sq = _div(_scaled(temp, gkc.GKYL_EPSILON0), _scaled(m0, charge**2))
+  return _powsqrt_dg(sq, 1.0)
+
+# The sound speeds combine the electrons and every ion species: gdatas has one
+# [M0, temp] pair per species, in the order they were requested, e.g.
+#   pgkyl gk-load-quantity -q c_s_cold_i -s elc,ion1,ion2 ...
+# Electrons and ions are told apart by the sign of each species' charge
+# attribute, so the species may be named anything. With only ion species listed
+# (e.g. adiabatic electrons), the electrons are taken quasineutral,
+# n_e = sum_j(n_j*Z_j), with T_e = T_i/Ti_over_Te, T_i the first ion's
+# temperature and '--extra Ti_over_Te=<value>' (default 1).
+
+def fetch_c_s_cold_i(gdatas, **kwargs):
+  """
+  Cold-ion (ion-acoustic) sound speed (m/s), the wave perspective, for the
+  Bohm criterion and sheath/presheath matching:
+    c_s = sqrt( T_e * sum_j(n_j*Z_j^2/m_j) / sum_j(n_j*Z_j) )
+  summing over the ion species j, with Z_j = q_j/e the ion charge state.
+  """
+  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_cold_i", **kwargs)
+
+  e = gkc.GKYL_ELEMENTARY_CHARGE
+  charge_states = [ion["charge"]/e for ion in ions]
+
+  # sum_j n_j*Z_j^2/m_j and sum_j n_j*Z_j, both linear in the densities (M0).
+  numer = _weighted_sum(ions, [z**2/ion["mass"] for z, ion in zip(charge_states, ions)], 0)
+  denom = _weighted_sum(ions, charge_states, 0)
+
+  # T_e * numer/denom.
+  return _powsqrt_dg(_mul_scalar(_div(numer, denom), elc["srcs"][1]), 1.0)
+
+def fetch_c_s_hot_i(gdatas, **kwargs):
+  """
+  Hot-ion (thermodynamic) sound speed, the bulk fluid perspective, for
+  Mach numbers and acoustic propagation in the core/SOL:
+    c_s = sqrt( (gamma_e*n_e*T_e + sum_j(gamma_j*n_j*T_j)) / sum_j(n_j*m_j) )
+  summing over the ion species j.
+  Default: gamma_e=1, gamma_i=3, but these can be set via '--extra'.
+  """
+  elc, ions = _split_elc_ions(gdatas, "fetch_c_s_hot_i", **kwargs)
+
+  gamma_e = float(kwargs.get("gamma_e", 1.0))
+  gamma_i = float(kwargs.get("gamma_i", 3.0))
+
+  # gamma_e*n_e*T_e + sum_j gamma_j*n_j*T_j. Each n*T is a weak product.
+  numer = _add(_mul_scalar(*elc["srcs"], gamma_e),
+               *(_mul_scalar(*ion["srcs"][:2], gamma_i) for ion in ions))
+
+  # sum_j n_j*m_j, the ion mass density; linear in the densities.
+  denom = _weighted_sum(ions, [ion["mass"] for ion in ions], 0)
+
+  return _powsqrt_dg(_div(numer, denom), 1.0)
+
+def _fetch_mach(gdatas, fetch_c_s, **kwargs):
+  """
+  Parallel Mach number M = upar/c_s of the first requested species, with c_s
+  from fetch_c_s combining every listed species. gdatas has one
+  [M0, temp, upar] triplet per species, in the order they were requested.
+  """
+  c_s = fetch_c_s([srcs[:2] for srcs in gdatas], **kwargs)
+  return _div(gdatas[0][2], c_s)
+
+def fetch_mach_cold_i(gdatas, **kwargs):
+  """
+  Parallel Mach number upar/c_s of the first requested species, with the
+  cold-ion sound speed (fetch_c_s_cold_i):
+    pgkyl gk-load-quantity -q mach_cold_i -s ion,elc ...  (ion Mach number)
+    pgkyl gk-load-quantity -q mach_cold_i -s elc,ion ...  (electron Mach number)
+    pgkyl gk-load-quantity -q mach_cold_i -s ion -e Ti_over_Te=1 ...  (adiabatic electrons)
+  """
+  return _fetch_mach(gdatas, fetch_c_s_cold_i, **kwargs)
+
+def fetch_mach_hot_i(gdatas, **kwargs):
+  """
+  Parallel Mach number upar/c_s of the first requested species, with the
+  hot-ion sound speed (fetch_c_s_hot_i); species are listed as for
+  fetch_mach_cold_i.
+  """
+  return _fetch_mach(gdatas, fetch_c_s_hot_i, **kwargs)
 
 def fetch_collision_freq(gdatas, **kwargs):
   """
@@ -842,38 +821,17 @@ def fetch_collision_freq(gdatas, **kwargs):
 
   (m0_s, temp_s), (m0_r, temp_r) = gdatas
 
-  # (v_ts^2 + v_tr^2)^(-3/2).
+  # norm_nu * n_r * (v_ts^2 + v_tr^2)^(-3/2).
   vtsq_sum = _empty_gdata_from_gdata(temp_s)
   vtsq_sum.set_values(temp_s.get_values()/m[0] + temp_r.get_values()/m[1])
-  nu = _powsqrt_dg(vtsq_sum, -3.0)
-
-  dgops = GkeyllDGops()
-  dgops.multiply(0, nu, 0, nu, 0, m0_r)
-  nu.set_values(norm_nu*nu.get_values())
-
-  return nu
+  return _mul_scalar(_powsqrt_dg(vtsq_sum, -3.0), m0_r, norm_nu)
 
 def fetch_beta_from_bmag_press(gdatas, **kwargs):
   """
   beta = 2*mu_0*press/bmag^2
   """
   bmag, press = gdatas
-
-  dgops = GkeyllDGops()
-
-  bmag_sq = _empty_gdata_from_gdata(bmag)
-  out = _empty_gdata_from_gdata(bmag)
-
-  dgops.multiply(0, bmag_sq, 0, bmag, 0, bmag)
-
-  dgops.invert(0, out, 0, bmag_sq)
-  dgops.multiply(0, out, 0, press, 0, out)
-
-  out_val = out.get_values()
-  
-  mu0 = gkc.GKYL_MU0
-  out.set_values(2.0*mu0*out_val)
-  return out
+  return _div(press, _mul_scalar(bmag, bmag), 2.0*gkc.GKYL_MU0, like=bmag)
 
 # ------------------------
 # --- Gradient lengths ---
@@ -888,24 +846,7 @@ def _get_fetch_inv_grad_length(name: str):
   """
   def fetch(gdatas, **kwargs):
     field = gdatas[0]
-    if field.get_num_dims() < 2:
-      raise ValueError(f"fetch_inv_L_{name}: a 1x simulation has no radial coordinate x.")
-
-    dgops = GkeyllDGops()
-    lower, upper = field.get_bounds()
-    cells = field.get_num_cells()
-
-    # dX/dx.
-    out = _empty_gdata_from_gdata(field)
-    dgops.differentiate(0, 1, (upper[0] - lower[0])/cells[0], 0, out, 0, field)
-
-    # Divide by X.
-    field_inv = _empty_gdata_from_gdata(field)
-    dgops.invert(0, field_inv, 0, field)
-    dgops.multiply(0, out, 0, out, 0, field_inv)
-
-    out.set_values(-out.get_values())
-    return out
+    return _div(_radial_derivative(field, f"fetch_inv_L_{name}"), field, -1.0)
   # end
   fetch.__name__ = f"fetch_inv_L_{name}"
   return fetch
@@ -930,18 +871,11 @@ def fetch_ExB_vel(gdatas, **kwargs):
 
   The k-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_ExB_vel: select the j-th component with '--extra dir=j' (0-index).")
-
-  bmag = gdatas[0]
-  jacobtot_inv = gdatas[1]
-  phi = gdatas[2]
-  b_i = gdatas[3]
+  comp = _select_dir(kwargs, "fetch_ExB_vel", "j")
+  _, jacobtot_inv, phi, b_i = gdatas
 
   # k-th component of b x grad(phi)/B.
-  out = _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, kwargs["dir"])
-
-  return out
+  return _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, comp)
 
 def fetch_gradB_vel(gdatas, **kwargs):
   """
@@ -956,31 +890,13 @@ def fetch_gradB_vel(gdatas, **kwargs):
 
   The k-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_gradB_vel: select the j-th component with '--extra dir=j' (0-index).")
-
-  bmag = gdatas[0]
-  jacobtot_inv = gdatas[1]
-  Tperp = gdatas[2]
-  b_i = gdatas[3]
-
-  # k-th component of b x grad(B)/B.
-  out = _b_cross_grad_div_B_component(bmag, jacobtot_inv, b_i, kwargs["dir"])
-
-  dgops = GkeyllDGops()
-  # Multiply by Tperp.
-  dgops.multiply(0, out, 0, Tperp, 0, out)
-
-  # Divide by B.
-  denom_inv = _empty_gdata_from_gdata(bmag)
-  dgops.invert(0, denom_inv, 0, bmag)
-  dgops.multiply(0, out, 0, out, 0, denom_inv)
-
-  # Divide by the species charge.
+  comp = _select_dir(kwargs, "fetch_gradB_vel", "j")
+  bmag, jacobtot_inv, Tperp, b_i = gdatas
   charge = _get_ctx_val(Tperp, "charge", **kwargs)
-  out.set_values(out.get_values()/charge)
 
-  return out
+  # Tperp/(q B) times the k-th component of b x grad(B)/B.
+  out = _b_cross_grad_div_B_component(bmag, jacobtot_inv, b_i, comp)
+  return _div(_mul_scalar(out, Tperp), bmag, 1.0/charge)
 
 def fetch_diamag_vel(gdatas, **kwargs):
   """
@@ -995,36 +911,17 @@ def fetch_diamag_vel(gdatas, **kwargs):
     b_i: covariant components of the magnetic field unit vector.
   The k-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_diamag_vel: select the j-th component with '--extra dir=j' (0-index).")
-
-  bmag = gdatas[0]
-  jacobtot_inv = gdatas[1]
-  m0 = gdatas[2]
-  pressperp = gdatas[3]
-  b_i = gdatas[4]
-
-  # k-th component of b x grad(p) / B.
-  out = _b_cross_grad_div_B_component(pressperp, jacobtot_inv, b_i, kwargs["dir"])
-
-  dgops = GkeyllDGops()
-  # Divide by n
-  denom_inv = _empty_gdata_from_gdata(bmag)
-  dgops.invert(0, denom_inv, 0, m0)
-  dgops.multiply(0, out, 0, out, 0, denom_inv)
-
-  # Divide by the species charge.
+  comp = _select_dir(kwargs, "fetch_diamag_vel", "j")
+  _, jacobtot_inv, m0, pressperp, b_i = gdatas
   charge = _get_ctx_val(pressperp, "charge", **kwargs)
-  out.set_values(out.get_values()/charge)
 
-  return out
+  # 1/(q n) times the k-th component of b x grad(p) / B.
+  out = _b_cross_grad_div_B_component(pressperp, jacobtot_inv, b_i, comp)
+  return _div(out, m0, 1.0/charge)
 
 # -------------------------------------
 # --- Magnetic field perturbations ----
 # -------------------------------------
-
-# Component of the metric tensor g_ij holding the (k,l) entry.
-_G_IJ_COMP = {(0,0): 0, (0,1): 1, (0,2): 2, (1,1): 3, (1,2): 4, (2,2): 5}
 
 def fetch_dB_perp_dual(gdatas, **kwargs):
   """
@@ -1039,25 +936,14 @@ def fetch_dB_perp_dual(gdatas, **kwargs):
 
   The i-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_dB_perp_dual: select the k-th component with '--extra dir=k' (0-index).")
-
+  comp = _select_dir(kwargs, "fetch_dB_perp_dual")
   apar, jacobgeo_inv, b_i = gdatas
-  comp = int(kwargs["dir"])
-  if not 0 <= comp < 3:
-    raise KeyError("fetch_dB_perp_dual: component must be >= 0 and < 3.")
 
   # Dimension holding each of x, y and z, or None where a reduced simulation
   # does not carry it: a 2x run holds (x,z) and a 1x run only z.
   cdim = apar.get_num_dims()
   axis = (0 if cdim > 1 else None, 1 if cdim > 2 else None, cdim-1)
 
-  dgops = GkeyllDGops()
-  lower, upper = apar.get_bounds()
-  cells = apar.get_num_cells()
-
-  prod = _empty_gdata_from_gdata(apar)
-  term = _empty_gdata_from_gdata(apar)
   out = _empty_gdata_from_gdata(apar)
   for diff_dir, b_comp, sign in (((comp+1) % 3, (comp+2) % 3,  1.0),
                                  ((comp+2) % 3, (comp+1) % 3, -1.0)):
@@ -1065,13 +951,11 @@ def fetch_dB_perp_dual(gdatas, **kwargs):
     if dim is None:
       continue
     # d(Apar*b_<b_comp>)/dx^<diff_dir>.
-    dgops.multiply(0, prod, 0, apar, b_comp, b_i)
-    dgops.differentiate(dim, 1, (upper[dim] - lower[dim])/cells[dim], 0, term, 0, prod)
+    term = _derivative(_mul_scalar(apar, b_i, c_rop=b_comp), dim)
     out.set_values(out.get_values() + sign*term.get_values())
 
   # Divide by the Jacobian factor of the curvilinear curl.
-  dgops.multiply(0, out, 0, out, 0, jacobgeo_inv)
-  return out
+  return _mul_scalar(out, jacobgeo_inv)
 
 def fetch_dB_perp(gdatas, **kwargs):
   """
@@ -1086,23 +970,14 @@ def fetch_dB_perp(gdatas, **kwargs):
 
   The i-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_dB_perp: select the k-th component with '--extra dir=k' (0-index).")
-
+  comp = _select_dir(kwargs, "fetch_dB_perp")
   apar, g_ij = gdatas[0], gdatas[3]
-  comp = int(kwargs["dir"])
-  if not 0 <= comp < 3:
-    raise KeyError("fetch_dB_perp: component must be >= 0 and < 3.")
 
-  dgops = GkeyllDGops()
-
-  term = _empty_gdata_from_gdata(apar)
   out = _empty_gdata_from_gdata(apar)
   for j in range(3):
-    dB_up = fetch_dB_perp_dual(gdatas[:3], dir=j)
-    dgops.multiply(0, term, _G_IJ_COMP[(min(comp,j), max(comp,j))], g_ij, 0, dB_up)
+    term = _mul_scalar(g_ij, fetch_dB_perp_dual(gdatas[:3], dir=j),
+                       c_lop=_G_IJ_COMP[(min(comp,j), max(comp,j))])
     out.set_values(out.get_values() + term.get_values())
-
   return out
 
 def fetch_dB_perp_mag(gdatas, **kwargs):
@@ -1118,18 +993,8 @@ def fetch_dB_perp_mag(gdatas, **kwargs):
     b_i: covariant components of the magnetic field unit vector.
     g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
   """
-  apar = gdatas[0]
-
-  dgops = GkeyllDGops()
-
-  buff = _empty_gdata_from_gdata(apar)
-  mag_sq = _empty_gdata_from_gdata(apar)
-  for comp in range(3):
-    dgops.multiply(0, buff, 0, fetch_dB_perp(gdatas, dir=comp),
-                   0, fetch_dB_perp_dual(gdatas[:3], dir=comp))
-    mag_sq.set_values(mag_sq.get_values() + buff.get_values())
-
-  return _powsqrt_dg(mag_sq, 1.0)
+  return _vector_magnitude(lambda i: fetch_dB_perp(gdatas, dir=i),
+                           lambda i: fetch_dB_perp_dual(gdatas[:3], dir=i))
 
 # ------------------------------
 # --- Total magnetic field -----
@@ -1146,17 +1011,9 @@ def fetch_B_equilibrium(gdatas, **kwargs):
 
   The i-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_B_equilibrium: select the k-th component with '--extra dir=k' (0-index).")
-
+  comp = _select_dir(kwargs, "fetch_B_equilibrium")
   bmag, b_i = gdatas
-  comp = int(kwargs["dir"])
-  if not 0 <= comp < 3:
-    raise KeyError("fetch_B_equilibrium: component must be >= 0 and < 3.")
-
-  out = _empty_gdata_from_gdata(bmag)
-  GkeyllDGops().multiply(0, out, comp, b_i, 0, bmag)
-  return out
+  return _mul_scalar(b_i, bmag, c_lop=comp, like=bmag)
 
 def fetch_B_tot(gdatas, **kwargs):
   """
@@ -1174,12 +1031,8 @@ def fetch_B_tot(gdatas, **kwargs):
   The i-th component is selected by the 'dir' optional argument.
   """
   apar, bmag, jacobgeo_inv, b_i, g_ij = gdatas
-
-  out = fetch_B_equilibrium([bmag, b_i], **kwargs)
-  dB = fetch_dB_perp([apar, jacobgeo_inv, b_i, g_ij], **kwargs)
-
-  out.set_values(out.get_values() + dB.get_values())
-  return out
+  return _add(fetch_B_equilibrium([bmag, b_i], **kwargs),
+              fetch_dB_perp([apar, jacobgeo_inv, b_i, g_ij], **kwargs))
 
 def fetch_B_dual_equilibrium(gdatas, **kwargs):
   """
@@ -1195,26 +1048,11 @@ def fetch_B_dual_equilibrium(gdatas, **kwargs):
 
   The i-th component is selected by the 'dir' optional argument.
   """
-  if "dir" not in kwargs:
-    raise KeyError("fetch_B_dual_equilibrium: select the k-th component with "
-                   "'--extra dir=k' (0-index).")
-
+  comp = _select_dir(kwargs, "fetch_B_dual_equilibrium")
   bmag, g_ij = gdatas
-  comp = int(kwargs["dir"])
-  if not 0 <= comp < 3:
-    raise KeyError("fetch_B_dual_equilibrium: component must be >= 0 and < 3.")
-
-  out = _empty_gdata_from_gdata(bmag)
   if comp != 2:
-    return out
-
-  nb = _get_num_basis_from_gdata(g_ij)
-  g_33_comp = _G_IJ_COMP[(2,2)]
-  g_33 = _empty_gdata_from_gdata(bmag)
-  g_33.set_values(g_ij.get_values()[..., g_33_comp*nb:(g_33_comp + 1)*nb])
-
-  GkeyllDGops().multiply(0, out, 0, bmag, 0, _powsqrt_dg(g_33, -1.0))
-  return out
+    return _empty_gdata_from_gdata(bmag)
+  return _mul_scalar(bmag, _powsqrt_dg(_comp(g_ij, _G_IJ_COMP[(2,2)]), -1.0))
 
 def fetch_B_tot_dual(gdatas, **kwargs):
   """
@@ -1231,12 +1069,8 @@ def fetch_B_tot_dual(gdatas, **kwargs):
   The i-th component is selected by the 'dir' optional argument.
   """
   apar, bmag, jacobgeo_inv, b_i, g_ij = gdatas
-
-  out = fetch_B_dual_equilibrium([bmag, g_ij], **kwargs)
-  dB = fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], **kwargs)
-
-  out.set_values(out.get_values() + dB.get_values())
-  return out
+  return _add(fetch_B_dual_equilibrium([bmag, g_ij], **kwargs),
+              fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], **kwargs))
 
 def fetch_B_tot_mag(gdatas, **kwargs):
   """
@@ -1252,89 +1086,12 @@ def fetch_B_tot_mag(gdatas, **kwargs):
     b_i: covariant components of the magnetic field unit vector.
     g_ij: covariant metric coefficients, in the order g_11,g_12,g_13,g_22,g_23,g_33.
   """
-  bmag = gdatas[1]
+  return _vector_magnitude(lambda i: fetch_B_tot(gdatas, dir=i),
+                           lambda i: fetch_B_tot_dual(gdatas, dir=i))
 
-  dgops = GkeyllDGops()
-
-  buff = _empty_gdata_from_gdata(bmag)
-  mag_sq = _empty_gdata_from_gdata(bmag)
-  for comp in range(3):
-    dgops.multiply(0, buff, 0, fetch_B_tot(gdatas, dir=comp),
-                   0, fetch_B_tot_dual(gdatas, dir=comp))
-    mag_sq.set_values(mag_sq.get_values() + buff.get_values())
-
-  return _powsqrt_dg(mag_sq, 1.0)
-
-# --------------------
+# ---------------------
 # --- Radial fluxes ---
-# --------------------
-
-# Directions averaged over to define a fluctuation, for '--extra fluct=<key>'.
-_FLUCT_DIRS = {"y": [1], "yz": [1, 2]}
-
-def _require_3x(gdata, qname: str):
-  """Radial turbulent fluxes need the binormal direction, i.e. a 3x simulation."""
-  if gdata.get_num_dims() != 3:
-    raise ValueError(f"{qname}: radial fluxes need 3x (x,y,z) data, got "
-                     f"{gdata.get_num_dims()} dimensions.")
-
-def _maybe_fluct(gdata, jacobgeo, qname: str, **kwargs):
-  """
-  Return gdata, or its fluctuation about the Jacobian-weighted average over
-  the directions selected with '--extra fluct=y|yz' (fluct=none disables it).
-  """
-  key = str(kwargs.get("fluct", "none")).lower()
-  if key in ("none", "0", "false", ""):
-    return gdata
-  if key not in _FLUCT_DIRS:
-    raise ValueError(f"{qname}: unknown '--extra fluct={key}'. Use one of: "
-                     f"none, {', '.join(_FLUCT_DIRS)}.")
-  return GkeyllDGops().fluctuation(_FLUCT_DIRS[key], gdata, weight=jacobgeo)
-
-def _mul_scalar(lop, rop, factor: float = 1.0):
-  """Weak DG product factor*lop*rop of two single-component fields."""
-  out = _empty_gdata_from_gdata(lop)
-  GkeyllDGops().multiply(0, out, 0, lop, 0, rop)
-  if factor != 1.0:
-    out.set_values(factor*out.get_values())
-  return out
-
-def _radial_ExB_vel(phi, jacobtot_inv, b_i):
-  """Radial contravariant ExB velocity v_E^x = v_E.grad(x)."""
-  return _b_cross_grad_div_B_component(phi, jacobtot_inv, b_i, 0)
-
-def _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i):
-  """Radial contravariant magnetic flutter dB^x/B."""
-  dB_x = fetch_dB_perp_dual([apar, jacobgeo_inv, b_i], dir=0)
-  bmag_inv = _empty_gdata_from_gdata(bmag)
-  GkeyllDGops().invert(0, bmag_inv, 0, bmag)
-  return _mul_scalar(dB_x, bmag_inv)
-
-def _flux_ExB(moment, phi, jacobgeo, jacobtot_inv, b_i, factor, qname, **kwargs):
-  """factor * moment * v_E^x, with both factors optionally replaced by fluctuations."""
-  _require_3x(moment, qname)
-  vE_x = _radial_ExB_vel(phi, jacobtot_inv, b_i)
-  moment = _maybe_fluct(moment, jacobgeo, qname, **kwargs)
-  vE_x = _maybe_fluct(vE_x, jacobgeo, qname, **kwargs)
-  return _mul_scalar(moment, vE_x, factor)
-
-def _flux_dB(moment, apar, bmag, jacobgeo, jacobgeo_inv, b_i, factor, qname, **kwargs):
-  """factor * moment * dB^x/B, with both factors optionally replaced by fluctuations."""
-  _require_3x(moment, qname)
-  dB_x = _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i)
-  moment = _maybe_fluct(moment, jacobgeo, qname, **kwargs)
-  dB_x = _maybe_fluct(dB_x, jacobgeo, qname, **kwargs)
-  return _mul_scalar(moment, dB_x, factor)
-
-def _warn_if_apar_dropped(qname: str, **kwargs):
-  """Warn when an electrostatic fallback is used although apar output exists."""
-  path, sim, frame = kwargs.get("path"), kwargs.get("name"), kwargs.get("frame")
-  if path is None or sim is None or frame is None:
-    return
-  import os
-  if os.path.isfile(os.path.join(path, f"{sim}-apar_{frame}.gkyl")):
-    print(f"Warning: {qname}: apar output found but the moments needed for the magnetic "
-          f"flutter flux are missing; only the ExB contribution is included.")
+# ---------------------
 
 def fetch_part_flux_ExB(gdatas, **kwargs):
   """
@@ -1348,7 +1105,8 @@ def fetch_part_flux_ExB(gdatas, **kwargs):
   With '--extra fluct=y|yz' the turbulent part <dn dv_E^x> is computed instead.
   """
   m0, phi, jacobgeo, jacobtot_inv, b_i = gdatas
-  return _flux_ExB(m0, phi, jacobgeo, jacobtot_inv, b_i, 1.0, "fetch_part_flux_ExB", **kwargs)
+  return _radial_flux(m0, lambda: _radial_ExB_vel(phi, jacobtot_inv, b_i), jacobgeo, 1.0,
+                      "fetch_part_flux_ExB", **kwargs)
 
 def fetch_energy_flux_ExB(gdatas, **kwargs):
   """
@@ -1364,8 +1122,8 @@ def fetch_energy_flux_ExB(gdatas, **kwargs):
   """
   m2, phi, jacobgeo, jacobtot_inv, b_i = gdatas
   mass = _get_ctx_val(m2, "mass", **kwargs)
-  return _flux_ExB(m2, phi, jacobgeo, jacobtot_inv, b_i, 0.5*mass,
-                   "fetch_energy_flux_ExB", **kwargs)
+  return _radial_flux(m2, lambda: _radial_ExB_vel(phi, jacobtot_inv, b_i), jacobgeo, 0.5*mass,
+                      "fetch_energy_flux_ExB", **kwargs)
 
 def fetch_part_flux_dB(gdatas, **kwargs):
   """
@@ -1380,8 +1138,8 @@ def fetch_part_flux_dB(gdatas, **kwargs):
   With '--extra fluct=y|yz' the turbulent part <dM1 d(dB^x/B)> is computed instead.
   """
   m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i = gdatas
-  return _flux_dB(m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i, 1.0,
-                  "fetch_part_flux_dB", **kwargs)
+  return _radial_flux(m1, lambda: _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i), jacobgeo,
+                      1.0, "fetch_part_flux_dB", **kwargs)
 
 def fetch_energy_flux_dB(gdatas, **kwargs):
   """
@@ -1398,8 +1156,8 @@ def fetch_energy_flux_dB(gdatas, **kwargs):
   """
   m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i = gdatas
   mass = _get_ctx_val(m3, "mass", **kwargs)
-  return _flux_dB(m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i, 0.5*mass,
-                  "fetch_energy_flux_dB", **kwargs)
+  return _radial_flux(m3, lambda: _radial_dB_over_B(apar, bmag, jacobgeo_inv, b_i), jacobgeo,
+                      0.5*mass, "fetch_energy_flux_dB", **kwargs)
 
 def fetch_part_flux_em(gdatas, **kwargs):
   """
@@ -1407,10 +1165,8 @@ def fetch_part_flux_em(gdatas, **kwargs):
   gdatas has (in this order): M0, M1, Apar, phi, B, J, 1/J, 1/(J*B), b_i.
   """
   m0, m1, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
-  out = fetch_part_flux_ExB([m0, phi, jacobgeo, jacobtot_inv, b_i], **kwargs)
-  flutter = fetch_part_flux_dB([m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs)
-  out.set_values(out.get_values() + flutter.get_values())
-  return out
+  return _add(fetch_part_flux_ExB([m0, phi, jacobgeo, jacobtot_inv, b_i], **kwargs),
+              fetch_part_flux_dB([m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs))
 
 def fetch_part_flux_es(gdatas, **kwargs):
   """
@@ -1426,10 +1182,8 @@ def fetch_energy_flux_em(gdatas, **kwargs):
   gdatas has (in this order): M2, M3, Apar, phi, B, J, 1/J, 1/(J*B), b_i.
   """
   m2, m3, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
-  out = fetch_energy_flux_ExB([m2, phi, jacobgeo, jacobtot_inv, b_i], **kwargs)
-  flutter = fetch_energy_flux_dB([m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs)
-  out.set_values(out.get_values() + flutter.get_values())
-  return out
+  return _add(fetch_energy_flux_ExB([m2, phi, jacobgeo, jacobtot_inv, b_i], **kwargs),
+              fetch_energy_flux_dB([m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs))
 
 def fetch_energy_flux_es(gdatas, **kwargs):
   """
@@ -1438,6 +1192,67 @@ def fetch_energy_flux_es(gdatas, **kwargs):
   """
   _warn_if_apar_dropped("energy_flux", **kwargs)
   return fetch_energy_flux_ExB(gdatas, **kwargs)
+
+# ------------------------------
+# --- Transport coefficients ---
+# ------------------------------
+# Local (pointwise) radial diffusivities, the ratio of the local radial flux to
+# the local radial gradient, normalized by <|grad x|^2> = g^xx so they are in
+# m^2/s whatever the radial coordinate x is:
+#   D = -Gamma/(g^xx dn/dx),  chi = -q/(n g^xx dT/dx),  q = Q - conv*T*Gamma,
+# with conv set by '--extra conv=' (default 3/2). gk-transport computes the same
+# coefficients from flux-surface and time averaged fluxes and profiles instead.
+
+def fetch_D(gdatas, **kwargs):
+  """
+  Local radial particle diffusivity D = -Gamma/(g^xx dn/dx) (m^2/s).
+  gdatas has: M0, part_flux, gij.
+  """
+  m0, part_flux, gij = gdatas
+  den = _mul_scalar(_comp(gij, 0), _radial_derivative(m0, "fetch_D"))
+  return _div(part_flux, den, -1.0)
+
+def fetch_chi(gdatas, **kwargs):
+  """
+  Local radial heat diffusivity chi = -q/(n g^xx dT/dx) (m^2/s), with
+  q = Q - conv*T*Gamma ('--extra conv=', default 3/2).
+  gdatas has: M0, temp, part_flux, energy_flux, gij.
+  """
+  m0, temp, part_flux, energy_flux, gij = gdatas
+  q = _heat_flux(temp, part_flux, energy_flux, **kwargs)
+  den = _mul_scalar(_mul_scalar(m0, _comp(gij, 0)), _radial_derivative(temp, "fetch_chi"))
+  return _div(q, den, -1.0)
+
+def fetch_D_gB(gdatas, **kwargs):
+  """
+  Local radial particle diffusivity normalized by the gyro-Bohm diffusivity,
+    D/D_gB = D L_n/(rho_s^2 c_s) = Gamma n/(g^xx^(3/2) (dn/dx)^2 rho_s^2 c_s),
+  with L_n = -n/(sqrt(g^xx) dn/dx), of the first requested species:
+    pgkyl gk-load-quantity -q D_gB -s ion,elc ...  (ions, kinetic electrons)
+    pgkyl gk-load-quantity -q D_gB -s ion -e Ti_over_Te=1 ...  (adiabatic electrons)
+  See _gyro_bohm_factors for rho_s^2 c_s. gdatas has one
+  [M0, temp, part_flux, gij, bmag] list per species.
+  """
+  m0, _, part_flux, gij, _ = gdatas[0]
+  return _gyro_bohm_normalized(_mul_scalar(part_flux, m0), _radial_derivative(m0, "fetch_D_gB"),
+                               _comp(gij, 0), None, gdatas, **kwargs)
+
+def fetch_chi_gB(gdatas, **kwargs):
+  """
+  Local radial heat diffusivity normalized by the gyro-Bohm diffusivity,
+    chi/chi_gB = chi L_T/(rho_s^2 c_s) = q T/(n g^xx^(3/2) (dT/dx)^2 rho_s^2 c_s),
+  with L_T = -T/(sqrt(g^xx) dT/dx) and q = Q - conv*T*Gamma ('--extra conv=',
+  default 3/2), of the first requested species (listed as for fetch_D_gB).
+  gdatas has one [M0, temp, part_flux, energy_flux, gij, bmag] list per species.
+  """
+  m0, temp, part_flux, energy_flux, gij, _ = gdatas[0]
+  num = _mul_scalar(_heat_flux(temp, part_flux, energy_flux, **kwargs), temp)
+  return _gyro_bohm_normalized(num, _radial_derivative(temp, "fetch_chi_gB"), _comp(gij, 0),
+                               m0, gdatas, **kwargs)
+
+# ------------------------------
+# --- Phase space quantities ---
+# ------------------------------
 
 def load_distf(gdatas, **kwargs) -> GData:
   """
@@ -1468,6 +1283,10 @@ def load_distf(gdatas, **kwargs) -> GData:
     interp=0,  # registry distf always works with non-interpolated DG data
   )
 
+# -----------------------------
+# --- Normalized quantities ---
+# -----------------------------
+
 def _make_fetch_q_norm(name: str):
   """
   Return a fetch function for a heat flux normalized by the free-streaming
@@ -1481,27 +1300,13 @@ def _make_fetch_q_norm(name: str):
   """
   def fetch(gdatas, **kwargs):
     m0, q, temp, vt = gdatas
-
-    dgops = GkeyllDGops()
-
-    # n*T*vt.
-    denom = _empty_gdata_from_gdata(m0)
-    dgops.multiply(0, denom, 0, m0, 0, temp)
-    dgops.multiply(0, denom, 0, denom, 0, vt)
-
-    denom_inv = _empty_gdata_from_gdata(m0)
-    dgops.invert(0, denom_inv, 0, denom)
-
-    out = _empty_gdata_from_gdata(m0)
-    dgops.multiply(0, out, 0, q, 0, denom_inv)
-    return out
+    return _div(q, _mul_scalar(_mul_scalar(m0, temp), vt), like=m0)
 
   fetch.__name__ = f"fetch_q{name}_norm"
   return fetch
 
 fetch_qpar_norm = _make_fetch_q_norm("par")
 fetch_qperp_norm = _make_fetch_q_norm("perp")
-
 
 def fetch_rho_over_lambda(gdatas, **kwargs):
   """
@@ -1511,16 +1316,7 @@ def fetch_rho_over_lambda(gdatas, **kwargs):
     2. rho: Larmor radius (m).
   """
   lambda_d, rho = gdatas
-
-  dgops = GkeyllDGops()
-
-  lambda_d_inv = _empty_gdata_from_gdata(lambda_d)
-  dgops.invert(0, lambda_d_inv, 0, lambda_d)
-
-  out = _empty_gdata_from_gdata(rho)
-  dgops.multiply(0, out, 0, rho, 0, lambda_d_inv)
-
-  return out
+  return _div(rho, lambda_d)
 
 def fetch_phi_norm(gdatas, **kwargs):
   """
@@ -1530,16 +1326,4 @@ def fetch_phi_norm(gdatas, **kwargs):
     2. temp: temperature (temp).
   """
   phi, temp = gdatas
-  e = gkc.GKYL_ELEMENTARY_CHARGE
-
-  dgops = GkeyllDGops()
-
-  temp_inv = _empty_gdata_from_gdata(temp)
-  dgops.invert(0, temp_inv, 0, temp)
-
-  out = _empty_gdata_from_gdata(phi)
-  dgops.multiply(0, out, 0, phi, 0, temp_inv)
-
-  out.set_values(out.get_values() * e)
-
-  return out
+  return _div(phi, temp, gkc.GKYL_ELEMENTARY_CHARGE)

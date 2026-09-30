@@ -74,6 +74,83 @@ class TestTransportCoefficients:
     assert np.all(np.isnan(res["chi"])), "a flat T profile has no chi"
 
 
+class TestGyroBohm:
+  """The gyro-Bohm normalization of D and chi, on nodal profiles."""
+
+  x = np.linspace(0.0, 1.0, 5)
+  m_i, q_i, m_e = 3.343e-27, 1.602e-19, 9.109e-31
+  gxx = 1.7
+
+  def _window(self, n, T, dn_dx, dT_dx, mass, charge, bmag=2.0, frames=(1, 2)):
+    res = {"frames": list(frames), "n": n, "T": T, "dn_dx": dn_dx, "dT_dx": dT_dx,
+           "gxx": self.gxx*np.ones_like(n), "bmag": bmag*np.ones_like(n),
+           "mass": mass, "charge": charge}
+    res.update(gkt.transport_coefficients(3.0e19*np.ones_like(n), 2.0e3*np.ones_like(n),
+                                          n, T, res["gxx"], dn_dx, dT_dx))
+    return res
+
+  def _ion(self, **kw):
+    n, T = 2.0e19*(1.0 - 0.3*self.x), 3.0e-17*(1.0 - 0.5*self.x)
+    return self._window(n, T, -0.6e19*np.ones_like(n), -1.5e-17*np.ones_like(n),
+                        self.m_i, self.q_i, **kw)
+
+  def _elc(self, **kw):
+    n, T = 2.0e19*(1.0 - 0.3*self.x), 5.0e-17*(1.0 - 0.2*self.x)
+    return self._window(n, T, -0.6e19*np.ones_like(n), -1.0e-17*np.ones_like(n),
+                        self.m_e, -self.q_i, **kw)
+
+  def _expected(self, res, Te, bmag=2.0):
+    c_s = np.sqrt(Te/self.m_i)
+    D0 = (c_s*self.m_i/(self.q_i*bmag))**2*c_s
+    L_n = -res["n"]/(np.sqrt(self.gxx)*res["dn_dx"])
+    L_T = -res["T"]/(np.sqrt(self.gxx)*res["dT_dx"])
+    return res["D"]*L_n/D0, res["chi"]*L_T/D0
+
+  def test_adiabatic_electrons_use_Ti_over_Te(self):
+    results = {"ion": [self._ion()]}
+    gkt.gyro_bohm_normalize(results, Ti_over_Te=2.0)
+    res = results["ion"][0]
+    D_gB, chi_gB = self._expected(res, res["T"]/2.0)
+    assert np.allclose(res["D_gB"], D_gB, rtol=1e-12)
+    assert np.allclose(res["chi_gB"], chi_gB, rtol=1e-12)
+
+  def test_kinetic_electrons_use_their_temperature_and_the_ion_mass(self):
+    """Every species is normalized by rho_s^2 c_s built on T_e and m_i,
+    over its own gradient lengths."""
+    results = {"elc": [self._elc()], "ion": [self._ion()]}
+    gkt.gyro_bohm_normalize(results, Ti_over_Te=7.0)  # Ignored: electrons are listed.
+    Te = results["elc"][0]["T"]
+    for species in ("elc", "ion"):
+      res = results[species][0]
+      D_gB, chi_gB = self._expected(res, Te)
+      assert np.allclose(res["D_gB"], D_gB, rtol=1e-12), species
+      assert np.allclose(res["chi_gB"], chi_gB, rtol=1e-12), species
+
+  def test_reference_values_replace_the_profiles(self):
+    results = {"ion": [self._ion(bmag=5.0)]}
+    gkt.gyro_bohm_normalize(results, Te_ref=4.0e-17, bmag_ref=2.0)
+    res = results["ion"][0]
+    D_gB, chi_gB = self._expected(res, 4.0e-17, bmag=2.0)
+    assert np.allclose(res["D_gB"], D_gB, rtol=1e-12)
+    assert np.allclose(res["chi_gB"], chi_gB, rtol=1e-12)
+
+  def test_needs_an_ion_species(self):
+    with pytest.raises(ValueError, match="ion species"):
+      gkt.gyro_bohm_normalize({"elc": [self._elc()]})
+
+  def test_needs_the_magnetic_field(self):
+    res = self._ion()
+    res["bmag"] = None
+    with pytest.raises(ValueError, match="geo_int_bmag"):
+      gkt.gyro_bohm_normalize({"ion": [res]})
+
+  def test_needs_the_mass(self):
+    res = self._ion()
+    res["mass"] = None
+    with pytest.raises(ValueError, match="--extra mass="):
+      gkt.gyro_bohm_normalize({"ion": [res]})
+
+
 # --- Synthetic 3x simulation ---------------------------------------------------
 
 _NAME = "gksynth"
@@ -93,6 +170,7 @@ _B_Y, _B_Z = 0.3, 0.95
 _JACOBGEO = 1.6
 _JACOBTOT_INV = 0.45
 _GXX = 2.2
+_BMAG = 1.9
 _VE_X = (_B_Y*_PHI_Z - _B_Z*_PHI_Y)*_JACOBTOT_INV
 
 
@@ -128,6 +206,7 @@ def _synthetic_files():
     "geo_int_jacobtot_inv": lambda f: _const(_JACOBTOT_INV),
     "geo_int_b_i": lambda f: _const(0.0, _B_Y, _B_Z),
     "geo_int_gij": lambda f: _const(_GXX, 0.0, 0.0, 1.0, 0.0, 1.0),
+    "geo_int_bmag": lambda f: _const(_BMAG),
     "field": lambda f: _linear([(0.0, (0.0, _PHI_Y, _PHI_Z))], _frame_scale(f)),
     "M0": lambda f: _linear([(_N0, (-_GN, 0.0, 0.0))]),
     "M2": lambda f: _linear([(_M20, (_GM2, 0.0, 0.0))]),
@@ -226,9 +305,83 @@ class TestComputeTransport:
                        rtol=1e-10)
     assert "D" in out["transport_D"].get_label()
 
+  def test_command_pushes_the_gyro_bohm_diffusivities(self, synthetic_sim):
+    """Adiabatic electrons (ion only): T_e = T_i/Ti_over_Te, B from geo_int_bmag."""
+    ctx = click.core.Context(cli)
+    ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
+    ctx.invoke(cmd.gk_transport, name=_NAME, species=_SPECIES, path=synthetic_sim,
+               outputs="D_gB,chi_gB", extra=f"mass={_MASS},Ti_over_Te=2")
+    out = {d.get_tag(): d for d in ctx.obj["data"].iterator()}
+    assert set(out) == {"transport_D_gB", "transport_chi_gB"}
+
+    x = _nodes(out["transport_D_gB"].get_grid()[0])
+    exp = _expected(x)
+    c_s = np.sqrt(0.5*exp["T"]/_MASS)
+    D0 = (c_s*_MASS/(1.0*_BMAG))**2*c_s  # The synthetic charge is 1.
+    L_n = exp["n"]/(np.sqrt(_GXX)*_GN)
+    L_T = exp["T"]/(np.sqrt(_GXX)*_GT)
+    assert np.allclose(out["transport_D_gB"].get_values()[..., 0], exp["D"]*L_n/D0, rtol=1e-8)
+    assert np.allclose(out["transport_chi_gB"].get_values()[..., 0], exp["chi"]*L_T/D0,
+                       rtol=1e-8)
+
   def test_command_rejects_unknown_outputs(self, synthetic_sim):
     ctx = click.core.Context(cli)
     ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
     with pytest.raises(click.exceptions.UsageError):
       ctx.invoke(cmd.gk_transport, name=_NAME, species=_SPECIES, path=synthetic_sim,
                  outputs="gamma,nope")
+
+
+@_needs_dgops
+class TestLocalTransportQuantities:
+  """The local D, chi, D_gB and chi_gB of gk-load-quantity on the synthetic simulation.
+
+  At frame 3 (scale 1), with uniform (y,z) and linear n, T profiles:
+    D = n vE/(gxx GN),  chi = q/(n gxx GT),  q = Q - 1.5*T*Gamma,
+    D_gB = D L_n/(rho_s^2 c_s),  chi_gB = chi L_T/(rho_s^2 c_s),
+  with L_n = n/(sqrt(gxx) GN), L_T = T/(sqrt(gxx) GT) and, for adiabatic
+  electrons, rho_s^2 c_s = (T/Ti_over_Te)^(3/2) sqrt(m)/(q^2 B^2) (q = 1 here).
+  D is a product of linear and constant fields, hence exact in p1; the others
+  involve weak inverses and powers of linear fields, so they are compared to
+  the exact values at the cell centers with a tolerance.
+  """
+  frame = _FRAMES[0]
+
+  def _load(self, path, quantity, extra):
+    ctx = click.core.Context(cli)
+    ctx.obj = {"data": cmd.DataSpace(), "verbose": False, "compgrid": None}
+    ctx.invoke(cmd.gk_load_quantity, quantity=quantity, name=_NAME, species=_SPECIES,
+               frame=str(self.frame), path=path, extra=extra)
+    (out,) = list(ctx.obj["data"].iterator())
+    assert out.get_num_dims() == 3
+    return out.get_values()[..., 0]*_PSI0  # Cell averages.
+
+  def _exact(self, ti_over_te=1.0):
+    x = _nodes(_grid()[0])[:, None, None]*np.ones(_CELLS)
+    exp = _expected(x)
+    scale = _frame_scale(self.frame)/np.mean([_frame_scale(f) for f in _FRAMES])
+    D, chi = scale*exp["D"], scale*exp["chi"]
+    D0 = (exp["T"]/ti_over_te)**1.5*np.sqrt(_MASS)/_BMAG**2
+    L_n = exp["n"]/(np.sqrt(_GXX)*_GN)
+    L_T = exp["T"]/(np.sqrt(_GXX)*_GT)
+    return {"D": D, "chi": chi, "D_gB": D*L_n/D0, "chi_gB": chi*L_T/D0}
+
+  def test_D_is_exact(self, synthetic_sim):
+    assert np.allclose(self._load(synthetic_sim, "D", f"mass={_MASS}"), self._exact()["D"],
+                       rtol=1e-10)
+
+  @pytest.mark.parametrize("quantity", ["chi", "D_gB", "chi_gB"])
+  def test_matches_the_closed_form(self, synthetic_sim, quantity):
+    vals = self._load(synthetic_sim, quantity, f"mass={_MASS},Ti_over_Te=2")
+    assert np.allclose(vals, self._exact(ti_over_te=2.0)[quantity], rtol=2e-2)
+
+  def test_gyro_bohm_references_replace_the_profiles(self, synthetic_sim):
+    """With Te_ref and bmag_ref, rho_s^2 c_s is a constant."""
+    Te_ref, bmag_ref = 3.0e-17, 2.5
+    vals = self._load(synthetic_sim, "D_gB",
+                      f"mass={_MASS},Te_ref={Te_ref},bmag_ref={bmag_ref}")
+    exact = self._exact()
+    x = _nodes(_grid()[0])[:, None, None]*np.ones(_CELLS)
+    L_n = _expected(x)["n"]/(np.sqrt(_GXX)*_GN)
+    D0 = Te_ref**1.5*np.sqrt(_MASS)/bmag_ref**2
+    assert np.allclose(vals, exact["D"]*L_n/D0, rtol=2e-2)

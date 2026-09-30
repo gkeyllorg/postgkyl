@@ -674,6 +674,58 @@ _energy_flux : GkQuantity = GkQuantity(
 gk_quant_registry.register(_energy_flux)
 
 # ------------------------------
+# --- Transport coefficients ---
+# ------------------------------
+# Local radial diffusivities, flux/gradient pointwise ('--extra conv=' sets the
+# convective part removed from Q, default 3/2).
+
+# Radial particle diffusivity.
+_D : GkQuantity = GkQuantity(
+  name = "D",
+  source = [[_M0, _part_flux, _geo_int_gij],],
+  fetch_func = [ff.fetch_D],
+  label = r"$D_{%s}$ (m$^2$/s)",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_D)
+
+# Radial heat diffusivity.
+_chi : GkQuantity = GkQuantity(
+  name = "chi",
+  source = [[_M0, _temp, _part_flux, _energy_flux, _geo_int_gij],],
+  fetch_func = [ff.fetch_chi],
+  label = r"$\chi_{%s}$ (m$^2$/s)",
+  is_time_dep = True,
+  is_species_dep = True,
+)
+gk_quant_registry.register(_chi)
+
+# Particle diffusivity over the gyro-Bohm one.
+_D_gB : GkQuantity = GkQuantity(
+  name = "D_gB",
+  source = [[_M0, _temp, _part_flux, _geo_int_gij, _geo_int_bmag],],
+  fetch_func = [ff.fetch_D_gB],
+  label = r"$D_{%s}/D_{gB}$",
+  is_time_dep = True,
+  is_species_dep = True,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_D_gB)
+
+# Heat diffusivity over the gyro-Bohm one.
+_chi_gB : GkQuantity = GkQuantity(
+  name = "chi_gB",
+  source = [[_M0, _temp, _part_flux, _energy_flux, _geo_int_gij, _geo_int_bmag],],
+  fetch_func = [ff.fetch_chi_gB],
+  label = r"$\chi_{%s}/\chi_{gB}$",
+  is_time_dep = True,
+  is_species_dep = True,
+  is_multi_species = True,
+)
+gk_quant_registry.register(_chi_gB)
+
+# ------------------------------
 # --- Phase space quantities ---
 # ------------------------------
 

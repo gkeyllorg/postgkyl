@@ -941,25 +941,36 @@ class PgkylSession(_Session):
       q:     heat flux q = Q - conv*<T>*Gamma,
       D:     particle diffusivity -Gamma/(<g^xx> d<n>/dx) (m^2/s),
       chi:   heat diffusivity -q/(<n> <g^xx> d<T>/dx) (m^2/s),
+      D_gB:  D normalized by the gyro-Bohm diffusivity, D L_n/(rho_s^2 c_s),
+      chi_gB: chi normalized by the gyro-Bohm diffusivity, chi L_T/(rho_s^2 c_s),
       n, T, gxx: the averaged density, temperature and <|grad x|^2>.
     The fluxes are contravariant radial components (.grad x).
 
     
+    The gyro-Bohm diffusivities rho_s^2 c_s/L use each species' own gradient
+    lengths L_n = -<n>/(sqrt(<g^xx>) d<n>/dx) and L_T = -<T>/(sqrt(<g^xx>) d<T>/dx),
+    c_s = sqrt(T_e/m_i) and rho_s = c_s/Omega_i with the first ion species' mass
+    and charge and the averaged <B>(x). T_e is the electron species' <T>(x) if
+    listed, else T_i/Ti_over_Te (adiabatic electrons, '--extra Ti_over_Te=',
+    default 1). '--extra Te_ref=,bmag_ref=' replace T_e and B by constants.
+
+    
     Command line example:
       pgkyl gk-transport -n gk_tcv_3x2v_p1 -s elc,ion -f 100:200 -o D,chi plot
+      pgkyl gk-transport -n cbc_adiabatic_3x2v_p1 -s ion -o chi_gB -e Ti_over_Te=1 plot
 
     Args:
       name: (--name, -n) Simulation name prefix (e.g. gk_tcv_3x2v_p1).
       species: (--species, -s) Species name, or a comma-separated list (e.g. elc,ion).
       frame: (--frame, -f) Frames to average over: a frame, a comma-separated list, or a range 'start:stop[:step]'. Default: every available frame.
       path: (--path, -p) Directory containing the simulation files.
-      outputs: (--outputs, -o) Comma-separated profiles to push to the stack, among: gamma, Q, q, D, chi, n, T, gxx.
+      outputs: (--outputs, -o) Comma-separated profiles to push to the stack, among: gamma, Q, q, D, chi, D_gB, chi_gB, n, T, gxx.
       fluct: (--fluct) 'none' for the total fluxes, 'y' or 'yz' for the turbulent part only, i.e. the correlation of the fluctuations about the y or (y,z) average.
       conv: (--conv) Coefficient c of the convective energy flux c*<T>*Gamma removed from Q to form q (0, 3/2 or 5/2).
       grad_tol: (--grad-tol) D (chi) is masked where |d<n>/dx| (|d<T>/dx|) is below grad-tol times its maximum.
       per_frame: (--per-frame) Push the flux-surface averaged profiles of each frame instead of their time average (e.g. to 'collect' them into a space-time diagram).
       interp: (--interp, -i) Number of radial nodes per cell (default poly_order+1).
-      extra: (--extra, -e) Extra key=value pairs for the fetch functions, e.g. mass=...,charge=... A key may be given one value per species, in the order of --species.
+      extra: (--extra, -e) Extra key=value pairs for the fetch functions, e.g. mass=...,charge=... A key may be given one value per species, in the order of --species. The gyro-Bohm outputs also take Ti_over_Te (default 1), Te_ref (J) and bmag_ref (T).
       tag: (--tag, -t) Tag prefix for the output datasets: <tag>_<output>[_<species>].
       label: (--label, -l) Label override for the output datasets.
     """

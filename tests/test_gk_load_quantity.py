@@ -56,7 +56,7 @@ _NEEDS_RADIAL_COORD = {"inv_L_n", "inv_L_T"}
 
 # Radial turbulent fluxes need the binormal direction y of a 3x simulation.
 _NEEDS_3X = {"part_flux_ExB", "energy_flux_ExB", "part_flux_dB", "energy_flux_dB",
-             "part_flux", "energy_flux"}
+             "part_flux", "energy_flux", "D", "chi", "D_gB", "chi_gB"}
 
 # Species names used in the test. Multi-species quantities (e.g. the sound speed)
 # combine an electron species with one or more ion species, so they are requested
