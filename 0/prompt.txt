@@ -1,0 +1,5 @@
+Remove all mentions of WSL from the documentation. We used to support WSL, but no longer test for it.
+
+---
+
+continue
