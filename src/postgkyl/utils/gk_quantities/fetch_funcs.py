@@ -186,6 +186,25 @@ def _select_dir(kwargs, qname: str, index: str = "k") -> int:
     raise KeyError(f"{qname}: component must be >= 0 and < 3.")
   return comp
 
+def _config_axis(cdim: int) -> tuple:
+  """
+  Dimension holding each of x, y and z, or None where a reduced simulation
+  does not carry it: a 2x run holds (x,z) and a 1x run only z.
+  """
+  return (0 if cdim > 1 else None, 1 if cdim > 2 else None, cdim-1)
+
+def _metric_contract(metric, comp: int, vec, like):
+  """
+  sum_j g_<comp>j * V_j: component comp of the vector V (whose j-th component
+  is vec(j)) with its index raised or lowered by the symmetric metric g
+  (6 components, see _G_IJ_COMP), with the grid/ctx of like.
+  """
+  out = _empty_gdata_from_gdata(like)
+  for j in range(3):
+    term = _mul_scalar(metric, vec(j), c_lop=_G_IJ_COMP[(min(comp,j), max(comp,j))])
+    out.set_values(out.get_values() + term.get_values())
+  return out
+
 def _b_cross_grad_div_B_component(scalar, jacobtot_inv, b_i, comp):
   """
   The comp-th component of the cross product b x grad(f)
@@ -939,10 +958,7 @@ def fetch_dB_perp_dual(gdatas, **kwargs):
   comp = _select_dir(kwargs, "fetch_dB_perp_dual")
   apar, jacobgeo_inv, b_i = gdatas
 
-  # Dimension holding each of x, y and z, or None where a reduced simulation
-  # does not carry it: a 2x run holds (x,z) and a 1x run only z.
-  cdim = apar.get_num_dims()
-  axis = (0 if cdim > 1 else None, 1 if cdim > 2 else None, cdim-1)
+  axis = _config_axis(apar.get_num_dims())
 
   out = _empty_gdata_from_gdata(apar)
   for diff_dir, b_comp, sign in (((comp+1) % 3, (comp+2) % 3,  1.0),
@@ -972,13 +988,7 @@ def fetch_dB_perp(gdatas, **kwargs):
   """
   comp = _select_dir(kwargs, "fetch_dB_perp")
   apar, g_ij = gdatas[0], gdatas[3]
-
-  out = _empty_gdata_from_gdata(apar)
-  for j in range(3):
-    term = _mul_scalar(g_ij, fetch_dB_perp_dual(gdatas[:3], dir=j),
-                       c_lop=_G_IJ_COMP[(min(comp,j), max(comp,j))])
-    out.set_values(out.get_values() + term.get_values())
-  return out
+  return _metric_contract(g_ij, comp, lambda j: fetch_dB_perp_dual(gdatas[:3], dir=j), apar)
 
 def fetch_dB_perp_mag(gdatas, **kwargs):
   """
@@ -1088,6 +1098,55 @@ def fetch_B_tot_mag(gdatas, **kwargs):
   """
   return _vector_magnitude(lambda i: fetch_B_tot(gdatas, dir=i),
                            lambda i: fetch_B_tot_dual(gdatas, dir=i))
+
+# ----------------------
+# --- Electric field ---
+# ----------------------
+
+def fetch_E_field(gdatas, **kwargs):
+  """
+  A covariant component of the electrostatic field, E_i = -d(phi)/dx^i, in
+  V per unit of the coordinate x^i. A direction that a reduced simulation does
+  not carry (y in 2x, x and y in 1x) has E_i = 0.
+
+  gdatas has:
+    phi: electrostatic potential.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  comp = _select_dir(kwargs, "fetch_E_field")
+  phi = gdatas[0]
+  dim = _config_axis(phi.get_num_dims())[comp]
+  if dim is None:
+    return _empty_gdata_from_gdata(phi)
+  return _scaled(_derivative(phi, dim), -1.0)
+
+def fetch_E_field_dual(gdatas, **kwargs):
+  """
+  A contravariant component of the electrostatic field, E^i = g^ij * E_j.
+
+  gdatas has (in this order):
+    phi: electrostatic potential.
+    g^ij: contravariant metric coefficients, in the order g^11,g^12,g^13,g^22,g^23,g^33.
+
+  The i-th component is selected by the 'dir' optional argument.
+  """
+  comp = _select_dir(kwargs, "fetch_E_field_dual")
+  phi, gij = gdatas
+  return _metric_contract(gij, comp, lambda j: fetch_E_field([phi], dir=j), phi)
+
+def fetch_E_field_mag(gdatas, **kwargs):
+  """
+  Magnitude of the electrostatic field (V/m),
+    |E| = sqrt(E_i * E^i) = sqrt(g^ij * E_i * E_j).
+  Warning: this product is of higher order and may introduce DG basis aliasing.
+
+  gdatas has (in this order):
+    phi: electrostatic potential.
+    g^ij: contravariant metric coefficients, in the order g^11,g^12,g^13,g^22,g^23,g^33.
+  """
+  return _vector_magnitude(lambda i: fetch_E_field(gdatas[:1], dir=i),
+                           lambda i: fetch_E_field_dual(gdatas, dir=i))
 
 # ---------------------
 # --- Radial fluxes ---

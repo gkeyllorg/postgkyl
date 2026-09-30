@@ -594,6 +594,42 @@ _B_tot_mag : GkQuantity = GkQuantity(
 )
 gk_quant_registry.register(_B_tot_mag)
 
+# ----------------------
+# --- Electric field ---
+# ----------------------
+
+# Covariant components of the electrostatic field.
+_E_field : GkQuantity = GkQuantity(
+  name = "E_field",
+  source = [[_field],],
+  fetch_func = [ff.fetch_E_field],
+  label = r"$E_{%s}$",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_E_field)
+
+# Contravariant components of the electrostatic field.
+_E_field_dual : GkQuantity = GkQuantity(
+  name = "E_field_dual",
+  source = [[_field, _geo_int_gij],],
+  fetch_func = [ff.fetch_E_field_dual],
+  label = r"$E^{%s}$",
+  is_time_dep = True,
+  is_vector = True
+)
+gk_quant_registry.register(_E_field_dual)
+
+# Electrostatic field magnitude.
+_E_field_mag : GkQuantity = GkQuantity(
+  name = "E_field_mag",
+  source = [[_field, _geo_int_gij],],
+  fetch_func = [ff.fetch_E_field_mag],
+  label = r"$|E|$ (V/m)",
+  is_time_dep = True,
+)
+gk_quant_registry.register(_E_field_mag)
+
 # ---------------------
 # --- Radial fluxes ---
 # ---------------------

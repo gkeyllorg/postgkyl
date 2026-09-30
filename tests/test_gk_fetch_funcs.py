@@ -1166,6 +1166,60 @@ class TestTotalMagneticField:
         fetch(fetch_srcs)
 
 
+@_needs_dgops
+class TestElectricField:
+  """E_i = -d(phi)/dx^i, E^i = g^ij E_j and |E| = sqrt(E_i E^i).
+
+  A linear phi = sum_d slope_d*x_d has the uniform gradient (slope_d), which
+  p1 represents exactly, as it does the products by a uniform metric.
+  """
+  _SLOPES = (1.3e3, -0.7e3, 2.1e3)
+
+  def _phi(self):
+    return _linear_gdata_3d([(5.0, self._SLOPES)])
+
+  def test_covariant_components_are_minus_the_gradient(self):
+    for comp, slope in enumerate(self._SLOPES):
+      E_i = ff.fetch_E_field([self._phi()], dir=comp)
+      assert np.allclose(_cell_avg_3d(E_i), -slope, rtol=1e-12)
+      # Uniform: every non-constant mode vanishes.
+      assert np.allclose(E_i.get_values()[..., 1:], 0.0, atol=1e-12*abs(slope))
+
+  def test_contravariant_components_raise_the_index_with_gij(self):
+    srcs = [self._phi(), _const_gdata_3d(_SKEW_METRIC)]
+    expected = _metric_matrix(_SKEW_METRIC) @ -np.array(self._SLOPES)
+    for comp in range(3):
+      assert np.allclose(_cell_avg_3d(ff.fetch_E_field_dual(srcs, dir=comp)),
+                         expected[comp], rtol=1e-12)
+
+  def test_magnitude(self):
+    srcs = [self._phi(), _const_gdata_3d(_SKEW_METRIC)]
+    E = -np.array(self._SLOPES)
+    expected = np.sqrt(E @ _metric_matrix(_SKEW_METRIC) @ E)
+    assert np.allclose(_cell_avg_3d(ff.fetch_E_field_mag(srcs)), expected, rtol=1e-10)
+
+  def test_2x_runs_hold_x_and_z(self):
+    """A 2x run has no y: E_y = 0, and z is its second dimension."""
+    slope_x, slope_z = 4.0e2, -9.0e2
+    cells, lengths = (3, 5), (0.6, 1.9)
+    psi0 = 0.5  # 2D constant mode.
+    grid = [np.linspace(0.0, L, n + 1) for L, n in zip(lengths, cells)]
+    values = np.zeros((*cells, 4))  # 2D p1 serendipity: 1, x, z, xz.
+    for d, slope in enumerate((slope_x, slope_z)):
+      values[..., 1 + d] = slope*(lengths[d]/cells[d])/(2.0*np.sqrt(3.0)*psi0)
+    phi = GData(ctx={"poly_order": _POLY_ORDER, "basis_type": _BASIS_TYPE})
+    phi.push(grid, values)
+
+    avg = lambda comp: ff.fetch_E_field([phi], dir=comp).get_values()[..., 0]*psi0
+    assert np.allclose(avg(0), -slope_x, rtol=1e-12)
+    assert np.all(ff.fetch_E_field([phi], dir=1).get_values() == 0.0)
+    assert np.allclose(avg(2), -slope_z, rtol=1e-12)
+
+  def test_a_component_must_be_selected(self):
+    with pytest.raises(KeyError, match="dir="):
+      ff.fetch_E_field([self._phi()])
+
+
 # --- The same, over real electromagnetic output ------------------------------
 #
 # The cases above are uniform in space, which is what makes them exact. These
