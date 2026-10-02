@@ -236,7 +236,9 @@ def _compile_movie(frame_files: list[str],
           ax.clear()
           ax.axis("off")
           with Image.open(frame_file) as frame:
-            ax.imshow(frame)
+            # A PNG's first row is its top; the packaged style's
+            # image.origin = lower would draw the movie upside down.
+            ax.imshow(frame, origin="upper")
           writer.grab_frame()
     finally:
       plt.close(fig)

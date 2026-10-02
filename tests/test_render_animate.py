@@ -371,9 +371,11 @@ class TestCompileMovie:
       def clear(self):
         events.append(("clear", ))
 
-      def imshow(self, image):
+      def imshow(self, image, origin=None):
         assert isinstance(image, FakeImage)
         assert not image.closed
+        # Frames keep their orientation whatever the image.origin rcParam.
+        assert origin == "upper"
         events.append(("imshow", ))
 
     class FakeFigure:
@@ -422,6 +424,39 @@ class TestCompileMovie:
     assert len(images) == (2 if fail_encoding else 3)
     assert all(image.closed for image in images)
     assert events[-1][0] == "close"
+
+  @needs_ffmpeg
+  @external_tool
+  def test_mp4_frames_stay_upright_under_the_packaged_style(self, tmp_path):
+    """The packaged style sets image.origin = lower; a frame red on top and
+    blue below must still decode red on top."""
+    from PIL import Image
+
+    from postgkyl.render.style import apply_style
+
+    apply_style("postgkyl")
+    assert matplotlib.rcParams["image.origin"] == "lower"
+    image = np.zeros((64, 64, 3), np.uint8)
+    image[:32, :, 0] = 255
+    image[32:, :, 2] = 255
+    frame = tmp_path / "frame.png"
+    Image.fromarray(image).save(frame)
+    movie = tmp_path / "movie.mp4"
+    anim_mod._compile_movie([str(frame)] * 2, str(movie), fps=2)
+
+    first = tmp_path / "first.png"
+    ffmpeg = _ffmpeg.resolve_ffmpeg()
+    subprocess.run([
+        ffmpeg, "-loglevel", "error", "-y", "-i",
+        str(movie), "-frames:v", "1",
+        str(first)
+    ],
+                   check=True)
+    decoded = np.asarray(Image.open(first).convert("RGB"))
+    top, bottom = decoded[decoded.shape[0] // 4], decoded[3 *
+                                                          decoded.shape[0] // 4]
+    assert top[:, 0].mean() > 200 and top[:, 2].mean() < 50
+    assert bottom[:, 2].mean() > 200 and bottom[:, 0].mean() < 50
 
   @needs_ffmpeg
   @external_tool
