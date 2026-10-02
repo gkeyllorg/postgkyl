@@ -965,3 +965,19 @@ def test_video_errors_restore_configuration_and_decode_stderr(codec, error):
       assert matplotlib.rcParams["animation.ffmpeg_path"] == "/test/ffmpeg"
       raise error
   assert matplotlib.rcParams["animation.ffmpeg_path"] == original
+
+
+def test_cmap_reaches_every_frame(monkeypatch, tmp_path):
+  """``cmap`` is forwarded to the per-frame plot like the other options."""
+  seen = []
+  plot = anim_mod.backend.plot
+
+  def recording_plot(*frame, **kwargs):
+    seen.append(kwargs.get("cmap"))
+    return plot(*frame, **kwargs)
+
+  monkeypatch.setattr(anim_mod.backend, "plot", recording_plot)
+  anim_mod.animate(_three_frames(),
+                   cmap="RdBu_r",
+                   saveas=str(tmp_path / "movie.gif"))
+  assert len(seen) >= 3 and set(seen) == {"RdBu_r"}

@@ -297,6 +297,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             color: str | None = None,
             style: str | None = None,
             diverging: bool = False,
+            cmap: str | None = None,
             arg: str | None = None,
             fixaspect: bool = False,
             logx: bool = False,
@@ -377,6 +378,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     color: Line or vector color.
     style: Matplotlib style name or file.
     diverging: Use a diverging colormap.
+    cmap: Matplotlib colormap name, overriding the default.
     arg: Matplotlib format string, for example ``*--``.
     fixaspect: Use equal scaling on the display axes.
     logx: Use logarithmic x scaling.
@@ -475,6 +477,7 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                      color=color,
                      style=style,
                      diverging=diverging,
+                     cmap=cmap,
                      fixaspect=fixaspect,
                      logx=logx,
                      logy=logy,
