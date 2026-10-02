@@ -9,6 +9,7 @@ available on the host, per the layer instructions.
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -252,3 +253,56 @@ class TestPyvistaValidation:
   def test_unsupported_saveas_extension_raises(self):
     with pytest.raises(ValueError, match="Unsupported"):
       pyvista(_volume(), no_show=True, saveas="out.bogus")
+
+
+class TestPyvistaIsosurfaces:
+
+  @pytest.mark.parametrize("spec, expected", [
+      ("0.0", [0.0]),
+      ("-0.5,0,0.75", [-0.5, 0.0, 0.75]),
+      ("-0.5:0.5:3", [-0.5, 0.0, 0.5]),
+  ])
+  def test_explicit_levels_extract_analytic_planes(self, monkeypatch, spec,
+                                                   expected):
+    # Keep real VTK contour extraction; only the window is replaced.
+    plotter = MagicMock()
+    monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+    data = _volume()
+    data.values[..., 0] -= 1.5
+    pyvista(data, clevels=spec, no_show=True, no_spin=True, hide_axes=True)
+    mesh = plotter.add_mesh.call_args.args[0]
+    assert mesh.n_points > 0
+    np.testing.assert_allclose(np.unique(mesh["f_plot"]),
+                               expected,
+                               rtol=0,
+                               atol=1e-7)
+    # Cell centers span [1/12, 11/12], normalized to [-1, 1].
+    # Thus f = x + y + z - 1.5 = (5/12) * sum(normalized coordinates).
+    np.testing.assert_allclose(mesh.points.sum(axis=1) * (5 / 12),
+                               mesh["f_plot"],
+                               rtol=0,
+                               atol=1e-7)
+
+  def test_log_levels_use_original_scalar_units(self, monkeypatch):
+    plotter = MagicMock()
+    monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+    pyvista(_volume(),
+            clevels="1,2",
+            is_log=True,
+            no_show=True,
+            no_spin=True,
+            hide_axes=True)
+    mesh = plotter.add_mesh.call_args.args[0]
+    np.testing.assert_allclose(np.unique(mesh["f_plot"]), [0, np.log10(2)],
+                               rtol=0,
+                               atol=1e-7)
+
+  @pytest.mark.parametrize("spec", ["", "nan", "inf", "0:1:0", "0:1:2.5"])
+  def test_invalid_levels(self, spec):
+    with pytest.raises(ValueError, match="clevels"):
+      pyvista(_volume(), clevels=spec, no_show=True)
+
+  @pytest.mark.parametrize("kwargs", [{"volume": True}, {"is_log": True}])
+  def test_incompatible_options(self, kwargs):
+    with pytest.raises(ValueError, match="clevels"):
+      pyvista(_volume(), clevels="0", no_show=True, **kwargs)

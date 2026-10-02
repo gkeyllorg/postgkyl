@@ -32,3 +32,18 @@ data.pyvista(volume=True,
              camera_elevation=10.0,
              camera_azimuth=20.0,
              saveas=str(OUTPUT_DIR / "09_volume.png"))
+
+# One explicit density level; CLI equivalent: --clevels 0.5.
+data.pyvista(clevels="0.5",
+             no_show=True,
+             no_spin=True,
+             hide_axes=True,
+             theme="document",
+             camera_elevation=10.0,
+             camera_azimuth=20.0,
+             title="Gaussian density = 0.5",
+             xlabel="x",
+             ylabel="y",
+             zlabel="z",
+             clabel="Density",
+             saveas=str(OUTPUT_DIR / "09_isosurface.png"))

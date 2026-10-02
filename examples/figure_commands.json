@@ -28,11 +28,13 @@
   },
   "08_plotly.py": {
     "08_surface.html": "pgkyl tests/test_data/generated/wave_surface_000.gkyl interpolate plotly --background light --title 'Travelling-wave height surface' --xlabel x --ylabel y --zlabel 'Density [normalized]' --clabel Density --saveas '{output}/08_surface.html'",
-    "08_volume.html": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate plotly --background light --title 'Gaussian density isosurfaces' --xlabel x --ylabel y --zlabel z --clabel Density --surface_count 8 --opacity 0.15 --cmin 0.1 --cmax 0.9 --saveas '{output}/08_volume.html'"
+    "08_volume.html": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate plotly --background light --title 'Gaussian density isosurfaces' --xlabel x --ylabel y --zlabel z --clabel Density --surface_count 8 --opacity 0.15 --cmin 0.1 --cmax 0.9 --saveas '{output}/08_volume.html'",
+    "08_isosurface.html": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate plotly --clevels 0.5 --background light --opacity 1.0 --title 'Gaussian density = 0.5' --xlabel x --ylabel y --zlabel z --clabel Density --saveas '{output}/08_isosurface.html'"
   },
   "09_pyvista.py": {
     "09_isosurfaces.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --contour_levels 5 --no_show --no_spin --title 'Gaussian density isosurfaces' --xlabel x --ylabel y --zlabel z --clabel Density --theme document --saveas '{output}/09_isosurfaces.png' --camera_elevation 10 --camera_azimuth 20 --hide_axes",
-    "09_volume.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --volume --no_show --no_spin --title 'Gaussian density volume' --xlabel x --ylabel y --zlabel z --clabel Density --theme document --saveas '{output}/09_volume.png' --camera_elevation 10 --camera_azimuth 20 --hide_axes --opacity linear"
+    "09_volume.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --volume --no_show --no_spin --title 'Gaussian density volume' --xlabel x --ylabel y --zlabel z --clabel Density --theme document --saveas '{output}/09_volume.png' --camera_elevation 10 --camera_azimuth 20 --hide_axes --opacity linear",
+    "09_isosurface.png": "pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate pyvista --clevels 0.5 --no_show --no_spin --hide_axes --theme document --camera_elevation 10 --camera_azimuth 20 --title 'Gaussian density = 0.5' --xlabel x --ylabel y --zlabel z --clabel Density --saveas '{output}/09_isosurface.png'"
   },
   "10_manual_arrays.py": {
     "10_manual.png": "pgkyl tests/test_data/generated/wave_surface_000.gkyl interpolate evaluate 'f 1 - 0.6 /' plot --title 'Normalized density perturbation' --xlabel x --ylabel y --clabel '(n - 1) / 0.6' --no_show --dpi 100 --saveas '{output}/10_manual.png'"

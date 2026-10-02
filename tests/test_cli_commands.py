@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from click.testing import CliRunner
 import numpy as np
@@ -265,3 +266,40 @@ def test_animation_plot_options_reach_saved_frames(tmp_path):
       prefix, "--no_show", "--scatter", "--color", "red", "--ylim", "-100",
       "100", "--figsize", "3", "2", "--notitle", "--dpi", "40")
   assert (tmp_path / "animation_0.png").is_file()
+
+
+def test_plotly_explicit_isosurface_cli(tmp_path):
+  output = tmp_path / "isosurface.html"
+  _ok(FIELD_3D, "plotly", "--clevels", "0.0", "--saveas", output)
+  html = output.read_text()
+  assert '"type":"isosurface"' in html
+  assert '"isomin":0.0' in html
+  assert '"isomax":0.0' in html
+
+
+def test_pyvista_explicit_isosurface_cli(monkeypatch):
+  import pyvista as pv
+
+  plotter = MagicMock()
+  monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+  _ok(FIELD_3D, "pyvista", "--clevels", "0.0", "--no_show", "--no_spin",
+      "--hide_axes")
+  mesh = plotter.add_mesh.call_args.args[0]
+  assert mesh.n_points > 0
+  np.testing.assert_allclose(mesh["f_plot"], 0.0, rtol=0, atol=1e-7)
+
+
+@pytest.mark.parametrize("opacity, expected", [("0", 0.0), ("1", 1.0),
+                                               ("0.5", 0.5),
+                                               ("sigmoid_4", "sigmoid_4")])
+@pytest.mark.parametrize("volume", [False, True])
+def test_pyvista_opacity_cli(monkeypatch, opacity, expected, volume):
+  import pyvista as pv
+
+  plotter = MagicMock()
+  monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+  options = ["--volume"] if volume else []
+  _ok(FIELD_3D, "pyvista", "-o", opacity, "--no_show", "--no_spin",
+      "--hide_axes", *options)
+  render = plotter.add_volume if volume else plotter.add_mesh
+  assert render.call_args.kwargs["opacity"] == expected

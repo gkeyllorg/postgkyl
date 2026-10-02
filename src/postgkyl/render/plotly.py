@@ -43,7 +43,8 @@ from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._ffmpeg import require_ffmpeg
 from ._prep import (default_value_label, materialize_plot_data,
-                    resolve_axis_labels, squeeze_collapsed_axes, subplot_grid)
+                    parse_isosurface_levels, resolve_axis_labels,
+                    squeeze_collapsed_axes, subplot_grid)
 from .labels import latex_to_html
 from .style import DEFAULT_STYLE, apply_style
 
@@ -498,6 +499,7 @@ def plotly(data: GDataState,
            scatter_opacity_log: bool = False,
            maximum_points_per_axis: int = 0,
            surface_count: int = 32,
+           clevels: str | None = None,
            xrange: tuple[float, float] | None = None,
            yrange: tuple[float, float] | None = None,
            zrange: tuple[float, float] | None = None,
@@ -517,6 +519,7 @@ def plotly(data: GDataState,
   a ``go.Surface`` (height map); 3-D data is drawn as a ``go.Volume`` or,
   with ``scatter=True``, a ``go.Scatter3d`` point cloud. Multi-component
   data lays out one scene per component unless ``squeeze`` is set.
+  With ``clevels``, 3-D data is drawn as exact ``go.Isosurface`` levels.
 
   ``save``/``saveas``/``show`` make this call self-sufficient without any CLI
   glue: ``show=True`` opens an auto-rotating HTML preview in the browser;
@@ -577,6 +580,10 @@ def plotly(data: GDataState,
     maximum_points_per_axis: Downsample 3-D data to this many points per axis;
       zero disables downsampling.
     surface_count: Number of isosurfaces used by volume rendering.
+    clevels: Explicit 3-D isosurfaces: a value, comma-separated values, or
+      ``start:end:count`` (inclusive). Levels use scaled/shifted color-value units
+      before logarithms. Overrides surface_count; incompatible with scatter
+      and 2-D surface plots.
     xrange: Explicit horizontal-axis range.
     yrange: Explicit vertical-axis range.
     zrange: Explicit third-axis range.
@@ -615,6 +622,18 @@ def plotly(data: GDataState,
         "plotly handles only 2D surface data or 3D volumetric data")
   if surface_mode and scatter:
     raise ValueError("Surface plots do not support scatter mode")
+
+  levels = None
+  if clevels is not None:
+    if surface_mode or scatter:
+      raise ValueError("clevels requires 3D data without scatter mode")
+    levels = parse_isosurface_levels(clevels)
+    # Follow the same logarithms as the rendered volume values.
+    for logarithmic in (logz, logc):
+      if logarithmic:
+        if np.any(levels <= 0):
+          raise ValueError("clevels must be positive before each logarithm")
+        levels = np.log10(levels)
 
   # In surface mode the vertical axis is the function value, not a
   # coordinate; default its label to empty unless the caller overrode it.
@@ -799,6 +818,28 @@ def plotly(data: GDataState,
                     colorbar=trace_colorbar_kwargs if show_colorbar else None),
                 name=trace_name,
                 showlegend=show_trace_legend)
+        ]
+      elif levels is not None:
+        trace_list = [
+            go.Isosurface(
+                x=render_x.ravel(),
+                y=render_y.ravel(),
+                z=render_z.ravel(),
+                value=render_color_value.ravel(),
+                isomin=float(level),
+                isomax=float(level),
+                surface_count=1,
+                caps=dict(x_show=False, y_show=False, z_show=False),
+                colorscale=trace_colorscale,
+                cmin=cmin_val,
+                cmax=cmax_val,
+                opacity=opacity,
+                showscale=show_colorbar and level_idx == 0,
+                colorbar=trace_colorbar_kwargs if show_colorbar else None,
+                name=trace_name,
+                legendgroup=f"component{comp}",
+                showlegend=show_trace_legend and level_idx == 0)
+            for level_idx, level in enumerate(levels)
         ]
       else:
         volume_opacity_scale = [[0.0, 0.0], [0.5, 0.2], [1.0, 0.8]]

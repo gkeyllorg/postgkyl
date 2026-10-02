@@ -20,4 +20,11 @@ CI uses Mesa/EGL software rendering. See the rendering dependencies in
 Failures are reported; a missing graphics backend does not silently remove
 these examples from the website.
 
+To draw one individual isosurface, pass ``--clevels 0.5`` on the CLI or
+``clevels="0.5"`` in Python. The single-surface example uses the generated
+``gaussian_volume.gkyl`` field, whose analytic density is
+``exp(-(x² + 2y² + 0.5z²))``. The density-0.5 surface approximates the
+ellipsoid ``x² + 2y² + 0.5z² = ln(2)`` on the sampled grid.
+An explicit level overrides the automatic surface count.
+
 .. include:: _pairs/09_pyvista.inc
