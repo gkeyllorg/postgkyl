@@ -12,7 +12,7 @@ Install Git, Make, a C compiler, and Python development headers first:
 - Other Linux distributions: install the equivalent development packages.
 
 ```bash
-git clone https://github.com/ammarhakim/postgkyl.git
+git clone https://github.com/gkeyllorg/postgkyl.git
 cd postgkyl
 python3 -m venv .venv
 source .venv/bin/activate
@@ -24,11 +24,11 @@ pgkyl --help
 pip installs build dependencies in an isolated environment and runtime dependencies
 in your active environment. No separate NumPy installation is required.
 Dependency versions live in
-[pyproject.toml](https://github.com/ammarhakim/postgkyl/blob/main/pyproject.toml).
+[pyproject.toml](https://github.com/gkeyllorg/postgkyl/blob/main/pyproject.toml).
 For an editable checkout, follow [Developer installation](#developer-installation).
 
 The first native build may take several minutes and downloads the Gkeyll branch named in
-[scripts/gkeyll-branch](https://github.com/ammarhakim/postgkyl/blob/main/scripts/gkeyll-branch)
+[scripts/gkeyll-branch](https://github.com/gkeyllorg/postgkyl/blob/main/scripts/gkeyll-branch)
 (currently `main`). Later builds reuse the existing checkout without fetching,
 switching branches, or discarding local edits. The core uses bundled LAPACK;
 MPI, CUDA, SuperLU, Lua, and system LAPACK are not required.
@@ -104,7 +104,7 @@ python -m pip install cibuildwheel
 ## Notebooks
 
 After installing Postgkyl, install Marimo in the same environment to use the
-[interactive notebooks](https://github.com/ammarhakim/postgkyl/tree/main/notebooks):
+[interactive notebooks](https://github.com/gkeyllorg/postgkyl/tree/main/notebooks):
 
 ```bash
 python -m pip install marimo

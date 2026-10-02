@@ -73,8 +73,8 @@ test = [
 
 [project.urls]
 Documentation = "https://gkeyll.readthedocs.io/"
-Repository = "https://github.com/ammarhakim/postgkyl"
-"Bug Tracker" = "https://github.com/ammarhakim/postgkyl/issues"
+Repository = "https://github.com/gkeyllorg/postgkyl"
+"Bug Tracker" = "https://github.com/gkeyllorg/postgkyl/issues"
 
 [project.scripts]
 pgkyl = "postgkyl.cli.app:cli"

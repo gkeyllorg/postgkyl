@@ -2,7 +2,7 @@
 # Obtain Gkeyll or explicitly fast-forward its configured upstream branch.
 set -eu
 
-REPO_URL="https://github.com/ammarhakim/gkeyll.git"
+REPO_URL="https://github.com/gkeyllorg/gkeyll.git"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)

@@ -34,7 +34,7 @@ def checkout(tmp_path):
   for name in ("build_gkeyll.sh", "update_gkeyll.sh"):
     source = (ROOT / "scripts" / name).read_text()
     (scripts / name).write_text(
-        source.replace("https://github.com/ammarhakim/gkeyll.git",
+        source.replace("https://github.com/gkeyllorg/gkeyll.git",
                        remote.as_uri()))
   shutil.copyfile(ROOT / "scripts/gkeyll-branch", scripts / "gkeyll-branch")
   binary_dir = tmp_path / "bin"

@@ -272,7 +272,7 @@ def prepare(root: Path, output: Path) -> None:
       f"This build used version ``{pg.__version__}``, commit ``{revision}``. "
       "Uncommitted local changes, if present, are included in local previews.\n\n"
       "`Edit the guides in Postgkyl "
-      "<https://github.com/ammarhakim/postgkyl/tree/main/docs/source>`_. "
+      "<https://github.com/gkeyllorg/postgkyl/tree/main/docs/source>`_. "
       "API descriptions are edited in the implementing Python functions.\n")
 
   # One download preserves the paths used by both the scripts and CLI tutorial.
