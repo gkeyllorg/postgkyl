@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3YV52EKECJCHED0V97DR0CN",
+  "session_id": "01a0fdab-ec8e-72b0-8c83-2a5e4241cc27",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-02T17:38:51.91889235Z",
+  "branch": "supress-metadata-assumption-print-warning",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "src/postgkyl/gdatastate/gdatastate.py",
+    "src/postgkyl/operations/info.py",
+    "tests/test_diagnostics_programs_trajectory.py",
+    "tests/test_metadata_info.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "75a796005f7a",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 36436,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 586880,
+    "output_tokens": 3218,
+    "api_call_count": 19,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-02T17:38:51.902613643Z",
+    "agent_lines": 41,
+    "agent_removed": 50,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 41,
+    "total_lines_changed": 91,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 272,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "gaussian_isosurface.html": 272
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+Please suppress this warning. Just put it in the info when showing everything, clearly showing some of the metadata was assumed. This shouldn't print to the terminal when loading the file though
+
+(main) postgkyl: pgkyl ~/Downloads/sdf_field.gkyl                                  
+/home/maxwell-rosen/postgkyl/src/postgkyl/gdata/load.py:117: UserWarning: /home/maxwell-rosen/Downloads/sdf_field.gkyl:
+basis_type, poly_order, value_form not resolvable (not present in the file header, and not given explicitly); defaulting to basis_type='serendipity', poly_order=0, value_form='nodal'. Pass basis_type=/poly_order=/value_form=... explicitly if this is wrong.
+  return GData(file_name,
