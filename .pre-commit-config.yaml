@@ -19,6 +19,8 @@ repos:
     rev: v0.43.0
     hooks:
       - id: yapf
+        # marimo owns the notebook's formatting and rewrites it on every edit.
+        exclude: ^src/postgkyl/gui/notebook\.py$
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v22.1.3

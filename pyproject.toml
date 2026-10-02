@@ -49,6 +49,9 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+gui = [
+    "marimo>=0.23.11",
+]
 docs = [
     "sphinx>=8,<9",
     "furo>=2024.8.6",
@@ -78,6 +81,7 @@ Repository = "https://github.com/ammarhakim/postgkyl"
 
 [project.scripts]
 pgkyl = "postgkyl.cli.app:cli"
+pgkyl-gui = "postgkyl.gui.launch:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "postgkyl.__version__"}
@@ -88,6 +92,7 @@ where = ["src/"]
 [tool.setuptools.package-data]
 "postgkyl" = ["py.typed"]
 "postgkyl.render" = ["*.mplstyle", "*.js"]
+"postgkyl.gui" = ["*.png"]
 "postgkyl.gpython" = ["csrc/*.c"]
 
 [tool.setuptools.exclude-package-data]
