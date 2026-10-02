@@ -1,0 +1,7 @@
+In '/home/maxwell-rosen/postgkyl/src/postgkyl/render/plotly.py' add an option so we can specify which isosurfaces are being plotted. For instance, pgkyl sdf_field.gkyl sel --z0 0.0 pl -c --clevels 0.0
+
+---
+
+<send_user_message_question_reply>
+[{"answer":"Plotly 3D isosurfaces","question":"Your example uses `pl`, which currently means Matplotlib `plot`. I’ll add `--clevels` to the Plotly command for 3D isosurfaces. Is that the intended renderer, or do you also need a change to the 2D `pl -c` workflow?","questionItemId":"[\"request_user_input_async\",\"REDACTED\",0]"}]
+</send_user_message_question_reply>
