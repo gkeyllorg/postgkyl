@@ -1,0 +1,1 @@
+Add isosurface selection to the pyvista command with an option clevels, for instance, similar to the plotly implementation pgkyl sdf_field.gkyl plotly --clevels 0.0

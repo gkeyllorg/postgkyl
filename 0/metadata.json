@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3YRC5B1KTJGTJZT6N1X2CZ0",
+  "session_id": "01a0fd77-6009-7402-b5e3-ba3fb28efb91",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-02T16:50:18.527469348Z",
+  "branch": "plotly-isosurfaces",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "src/postgkyl/render/_prep.py",
+    "src/postgkyl/render/plotly.py",
+    "src/postgkyl/render/pyvista.py",
+    "tests/test_cli_commands.py",
+    "tests/test_render_pyvista.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "dba670cfc828",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 84792,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1017856,
+    "output_tokens": 4570,
+    "api_call_count": 30,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-02T16:50:18.506015687Z",
+    "agent_lines": 134,
+    "agent_removed": 19,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 134,
+    "total_lines_changed": 153,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
