@@ -1,6 +1,7 @@
 """Info distinguishes source-file facts from the assumptions used to load them."""
 
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pytest
@@ -46,23 +47,30 @@ def test_info_separates_file_metadata_and_modal_assumption(
                  "File metadata (verbatim keys)", "basisType: 'serendipity'",
                  "polyOrder: 1", "Inferred from filename"):
     assert (detail in result.output) == verbose
-  assert "Inferred/defaulted" in result.output
-  assert "value_form: 'modal' (basis specified; value_form absent)" in result.output
+  assert ("Assumed metadata" in result.output) == verbose
+  assert ("value_form: 'modal' (basis specified; value_form absent)"
+          in result.output) == verbose
   assert "frame: 7" not in result.output  # header's frame=0 wins
 
 
-def test_missing_metadata_reports_each_fallback(reader, source):
-  with pytest.warns(UserWarning, match="not resolvable"):
+def test_missing_metadata_reports_each_fallback(reader, source, capsys):
+  with warnings.catch_warnings():
+    warnings.simplefilter("error")
     data = pg.load(source(no_metadata=True))
-  output = data.info()
-  assert "File metadata" not in output
-  assert "File metadata (verbatim keys): <none>" in data.info(all=True)
+  captured = capsys.readouterr()
+  assert captured.out == captured.err == ""
+  summary = data.info()
+  assert "File metadata" not in summary
+  assert "Assumed metadata" not in summary
+  output = data.info(all=True)
+  assert "Assumed metadata" in output
+  assert "File metadata (verbatim keys): <none>" in output
   for setting in ("basis_type: 'serendipity'", "poly_order: 0",
                   "value_form: 'nodal'"):
     assert setting + " (not specified; spatial data fallback)" in output
   assert data.ctx["frame"] == 7
   assert "Frame: 7" in output
-  assert "frame: 7" not in output
+  assert "frame: 7" not in summary
 
 
 def test_overrides_preserve_original_metadata(reader, source):
@@ -78,7 +86,7 @@ def test_overrides_preserve_original_metadata(reader, source):
   assert "Explicit load overrides" in output
   assert "basis_type: 'tensor'" in output
   assert "value_form: 'nodal'" in output
-  assert "Inferred/defaulted" not in output
+  assert "Assumed metadata" not in output
 
 
 def test_explicit_representation_is_not_reported_as_default(reader, source):
@@ -87,7 +95,7 @@ def test_explicit_representation_is_not_reported_as_default(reader, source):
   assert "DG: serendipity p1 (nodal)" in output
   assert "value_form:" not in output
   assert "Metadata sources" not in output
-  assert "Inferred/defaulted" not in output
+  assert "Assumed metadata" not in output
   assert "Explicit load overrides" not in output
 
 
@@ -95,7 +103,7 @@ def test_context_is_separate_from_file_and_defaults(reader, source):
   data = pg.load(source(), ctx={"value_form": "nodal", "custom": 3})
   output = data.info(all=True)
   assert "Explicit initial context" in output
-  assert "Inferred/defaulted" not in output
+  assert "Assumed metadata" not in output
   assert "value_form" not in data.ctx["_load_metadata"]["file_metadata"]
 
 
@@ -115,7 +123,7 @@ def test_quad_summary_does_not_repeat_explicit_metadata(reader, source):
   data = pg.load(source(metadata={"value_form": "quad", "num_quad": 2}))
   output = data.info()
   assert "DG: serendipity p1 (quad, num_quad=2)" in output
-  for detail in ("Metadata sources", "Inferred/defaulted", "basisType",
+  for detail in ("Metadata sources", "Assumed metadata", "basisType",
                  "polyOrder", "value_form:", "num_quad:"):
     assert detail not in output
 
@@ -134,7 +142,7 @@ def test_reload_discards_previous_source_snapshot(reader, source):
   data.load(source(metadata={"value_form": "modal"}))
   assert data.ctx["_load_metadata"]["overrides"] == {}
   assert data.ctx["_load_metadata"]["context"] == {}
-  assert "Inferred/defaulted" not in data.info()
+  assert "Assumed metadata" not in data.info(all=True)
 
 
 @pytest.mark.skipif(not gpython.available(),
@@ -142,10 +150,10 @@ def test_reload_discards_previous_source_snapshot(reader, source):
 def test_conversion_keeps_load_snapshot_but_save_does_not_write_it(
     source, tmp_path):
   data = pg.load(source()).represent(to="nodal")
-  output = data.info()
+  output = data.info(all=True)
   assert "DG: serendipity p1 (nodal)" in output
   assert "value_form: 'modal' (basis specified; value_form absent)" in output
-  assert "at load (summary above is current state)" in output
+  assert "at load; summary above is current state" in output
   path = data.save(str(tmp_path / "saved.gkyl"))
   raw = pg.load(path).ctx["_load_metadata"]["file_metadata"]
   assert "_load_metadata" not in raw
@@ -154,15 +162,16 @@ def test_conversion_keeps_load_snapshot_but_save_does_not_write_it(
 def test_dynvector_has_no_spatial_defaults():
   path = Path(__file__).parent / "test_data/generated/energy_dynvec.gkyl"
   data = pg.load(str(path))
-  assert "Inferred/defaulted" not in data.info()
+  assert "Assumed metadata" not in data.info(all=True)
 
 
-def test_warning_only_reports_defaults_that_were_applied(reader, source):
-  with pytest.warns(UserWarning) as caught:
+def test_info_only_reports_defaults_that_were_applied(reader, source):
+  with warnings.catch_warnings():
+    warnings.simplefilter("error")
     data = pg.load(source(no_metadata=True), basis_type="tensor")
-  message = str(caught[0].message)
-  assert "defaulting to poly_order=0" in message
-  assert "basis_type='serendipity'" not in message
+  output = data.info(all=True)
+  assert "poly_order: 0 (not specified; spatial data fallback)" in output
+  assert "basis_type: 'serendipity'" not in output
   defaults = data.ctx["_load_metadata"]["defaults"]
   assert set(defaults) == {"poly_order", "value_form"}
   assert defaults["value_form"][0] == "modal"
