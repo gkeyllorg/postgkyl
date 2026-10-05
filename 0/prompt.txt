@@ -1,0 +1,1 @@
+In '/home/maxwell-rosen/postgkyl/src/postgkyl/diagnostics/gk/particle_balance.py', add the options to detect a file like zzim-ion_fbardot_integrated_moms, which is another fdot, so conservation is src - bflux_tot - fdot - fbardot

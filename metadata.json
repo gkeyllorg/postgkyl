@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46K318AF7DX5K2VA7EN3Z0W",
+  "strategy": "manual-commit",
+  "branch": "fbardot-particle-balance",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/postgkyl/diagnostics/gk/particle_balance.py",
+    "tests/test_diagnostics_programs_particle_balance.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 51600,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 648576,
+    "output_tokens": 3827,
+    "api_call_count": 22
+  }
+}

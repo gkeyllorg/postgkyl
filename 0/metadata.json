@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46K318AF7DX5K2VA7EN3Z0W",
+  "session_id": "01a10d2c-76fb-7940-978a-c43ccc582443",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T17:51:51.978751451Z",
+  "branch": "fbardot-particle-balance",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/postgkyl/diagnostics/gk/particle_balance.py",
+    "tests/test_diagnostics_programs_particle_balance.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "ec648d3b42a7",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 51600,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 648576,
+    "output_tokens": 3827,
+    "api_call_count": 22
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T17:51:51.964783644Z",
+    "agent_lines": 90,
+    "agent_removed": 11,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 90,
+    "total_lines_changed": 101,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
