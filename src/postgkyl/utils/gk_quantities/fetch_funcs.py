@@ -751,7 +751,7 @@ def fetch_c_s_cold_i(gdatas, **kwargs):
 
 def fetch_c_s_hot_i(gdatas, **kwargs):
   """
-  Hot-ion (thermodynamic) sound speed, the bulk fluid perspective, for
+  Hot-ion (collisionless kinetic, valid in T_i/T_e << 1) sound speed, the bulk fluid perspective, for
   Mach numbers and acoustic propagation in the core/SOL:
     c_s = sqrt( (gamma_e*n_e*T_e + sum_j(gamma_j*n_j*T_j)) / sum_j(n_j*m_j) )
   summing over the ion species j.
