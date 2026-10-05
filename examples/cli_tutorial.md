@@ -168,6 +168,34 @@ every Python underscore remains an underscore in the CLI.
 pgkyl --help
 ```
 
+## 10. One isosurface with Plotly or PyVista
+
+Use the generated `tests/test_data/generated/gaussian_volume.gkyl` fixture
+(run `python tests/generate_test_data.py` if needed). Its density is
+`exp(-(x² + 2y² + 0.5z²))`; `--clevels 0.5` selects just the density-0.5
+ellipsoid. The Python equivalent is `clevels="0.5"`. Explicit levels override
+the automatic surface count (`surface_count` for Plotly, `contour_levels`
+for PyVista).
+
+Plotly saves an interactive HTML figure:
+
+```bash
+pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate \
+    plotly --clevels 0.5 --opacity 1.0 --background light \
+    --title 'Gaussian density = 0.5' --saveas gaussian_isosurface.html
+```
+
+PyVista saves a screenshot (a working OpenGL context is required):
+
+```bash
+pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate \
+    pyvista --clevels 0.5 --no_show --no_spin --theme document \
+    --title 'Gaussian density = 0.5' --saveas gaussian_isosurface.png
+```
+
+Omit `--no_show` from the PyVista command to open an interactive window.
+Use contour mode for this example; `--clevels` cannot be combined with `--volume`.
+
 ## See also
 
 - `pgkyl --help` lists every registered command, grouped by section

@@ -157,6 +157,45 @@ class TestPlotly3DVolume:
     assert isinstance(fig, go.Figure)
     assert fig.data[0].surface.count == 32
 
+  @pytest.mark.parametrize("spec, expected", [
+      ("0.0", [0.0]),
+      ("-0.5,0,0.75", [-0.5, 0.0, 0.75]),
+      ("-0.5:0.5:3", [-0.5, 0.0, 0.5]),
+  ])
+  def test_explicit_isosurfaces(self, spec, expected):
+    data = _volume_3d(fn=lambda x, y, z: x + y + z - 1.5)
+    fig = plotly(data, clevels=spec, label_prefix="field")
+    assert len(fig.data) == len(expected)
+    for trace, level in zip(fig.data, expected):
+      assert isinstance(trace, go.Isosurface)
+      assert trace.isomin == trace.isomax == level
+      assert trace.surface.count == 1
+      assert not any((trace.caps.x.show, trace.caps.y.show, trace.caps.z.show))
+      np.testing.assert_array_equal(trace.value, data.values.ravel())
+    assert sum(trace.showscale for trace in fig.data) == 1
+    assert sum(trace.showlegend for trace in fig.data) == 1
+
+  def test_isosurface_levels_use_color_units_before_logarithms(self):
+    fig = plotly(_volume_3d(), clevels="1,10", cscale=3, cshift=1, logc=True)
+    assert [trace.isomin for trace in fig.data] == [0.0, 1.0]
+    assert [trace.isomax for trace in fig.data] == [0.0, 1.0]
+    np.testing.assert_allclose(fig.data[0].value,
+                               np.log10(_volume_3d().values.ravel() * 3 + 1))
+
+  @pytest.mark.parametrize("spec", ["", "nan", "inf", "0:1:0", "0:1:2.5"])
+  def test_invalid_isosurface_levels(self, spec):
+    with pytest.raises(ValueError, match="clevels"):
+      plotly(_volume_3d(), clevels=spec)
+
+  @pytest.mark.parametrize("kwargs", [{"scatter": True}, {"logc": True}])
+  def test_incompatible_isosurface_options(self, kwargs):
+    with pytest.raises(ValueError, match="clevels"):
+      plotly(_volume_3d(), clevels="0", **kwargs)
+
+  def test_isosurfaces_require_three_dimensions(self):
+    with pytest.raises(ValueError, match="clevels"):
+      plotly(_surface_2d(), clevels="0")
+
   def test_axis_ranges_match_data_extent(self):
     fig = plotly(_volume_3d())
     np.testing.assert_allclose(fig.layout.scene.xaxis.range, (0.0, 1.0))

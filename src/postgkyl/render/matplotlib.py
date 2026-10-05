@@ -569,7 +569,7 @@ def plot(
     split_log_nonpositive: Handling of nonpositive logarithmic values.
     split_seam_ticklabels: Half owning labels at the split seam.
     fixaspect: Use equal physical scaling on coordinate axes.
-    aspect: Explicit axes aspect ratio.
+    aspect: Ratio of y-unit to x-unit display size; overrides ``fixaspect``.
     edgecolors: Mesh edge color.
     no_showgrid: Suppress plot grid lines.
     hashtag: Prefix labels with a hash marker.
@@ -603,6 +603,8 @@ def plot(
   states = flatten_datasets(datasets)
   if not states:
     raise ValueError("nothing to plot")
+  if aspect is None and fixaspect:
+    aspect = 1.0
   group_call = len(datasets) == 1 and isinstance(datasets[0], GDataStateGroup)
   families = ([states] if multiblock or group_call or figure is not None else
               group_blocks(states))
@@ -645,9 +647,6 @@ def plot(
       mpl.rcParams["lines.linestyle"] = linestyle
 
     with xkcd_cm(), mpl.rc_context(rc=xkcd_rc):
-
-      if not aspect:
-        aspect = 1.0
 
       # ---- Phase 1: figure/axes layout, from the first dataset ----
       ref = states[0]
@@ -1334,7 +1333,7 @@ def plot(
               side_ax.set_ylim(comp_ymin, comp_ymax)
             if side_ylim is not None:
               side_ax.set_ylim(*side_ylim)
-            if fixaspect and not (surface and num_dims == 2):
+            if aspect is not None and not (surface and num_dims == 2):
               plt.setp(side_ax, aspect=aspect)
 
         if num_axes and not overlay_axes:

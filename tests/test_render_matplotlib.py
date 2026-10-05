@@ -496,11 +496,23 @@ class TestValueRange:
 
 class TestAspect:
 
-  def test_aspect_applies_to_2d_axes(self):
-    # aspect only takes effect with fixaspect=True -- --aspect on the CLI
-    # implies --fix-aspect (see cli/commands/plot.py), but the render engine
-    # itself keeps the two independent, exactly as main's output.plot did.
-    fig = backend.plot(_field_2d(), no_show=True, fixaspect=True, aspect=1.0)
+  @pytest.mark.parametrize("aspect", [1.0, 1.6, 10.0])
+  @pytest.mark.parametrize("fixaspect", [False, True])
+  @pytest.mark.parametrize("contour", [False, True])
+  def test_aspect_applies_to_2d_axes(self, aspect, fixaspect, contour):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       fixaspect=fixaspect,
+                       aspect=aspect,
+                       contour=contour)
+    fig.canvas.draw()
+    ax = fig.axes[0]
+    origin, x_unit, y_unit = ax.transData.transform([(0, 0), (1, 0), (0, 1)])
+    unit_ratio = (y_unit[1] - origin[1]) / (x_unit[0] - origin[0])
+    assert unit_ratio == pytest.approx(aspect)
+
+  def test_fixaspect_alone_uses_equal_scaling(self):
+    fig = backend.plot(_field_2d(), no_show=True, fixaspect=True)
     assert fig.axes[0].get_aspect() == 1.0
 
   def test_aspect_none_leaves_default(self):

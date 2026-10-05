@@ -10,10 +10,12 @@ letting a VTK error surface from deep inside the library.
 from __future__ import annotations
 
 import os
+from typing import Annotated
 
 import numpy as np
 
 from postgkyl.cli_spec import (
+    CliType,
     CommandSpec,
     Execution,
     ResultPolicy,
@@ -24,7 +26,8 @@ from postgkyl.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._prep import (default_value_label, materialize_plot_data,
-                    resolve_axis_labels, squeeze_collapsed_axes)
+                    parse_isosurface_levels, resolve_axis_labels,
+                    squeeze_collapsed_axes)
 from .labels import latex_to_unicode
 
 
@@ -51,6 +54,7 @@ def pyvista(data: GDataState,
             no_spin: bool = False,
             max_points_per_axis: int = -1,
             contour_levels: int = 10,
+            clevels: str | None = None,
             is_log: bool = False,
             volume: bool = False,
             is_shaded: bool = False,
@@ -63,7 +67,7 @@ def pyvista(data: GDataState,
             aspect_ratio: tuple[float, float, float] = (1, 1, 1),
             camera_azimuth: float = 0.0,
             camera_elevation: float = -30.0,
-            opacity: str = "sigmoid_4",
+            opacity: Annotated[str | float, CliType(str)] = "sigmoid_4",
             cmap: str = "inferno",
             xlabel: str | None = None,
             ylabel: str | None = None,
@@ -94,7 +98,11 @@ def pyvista(data: GDataState,
     no_spin: Do not auto-rotate the camera in interactive windows.
     max_points_per_axis: downsample to at most this many points per axis;
       ``-1`` disables downsampling.
-    contour_levels: Number of isosurfaces extracted unless ``volume`` is set.
+    contour_levels: Number of isosurfaces extracted unless ``volume`` is set
+      or ``clevels`` is supplied.
+    clevels: Explicit isosurfaces: a value, comma-separated values, or
+      ``start:end:count``. Uses scalar units before ``is_log``; incompatible
+      with ``volume``.
     is_log: color by log10 of the scalar (non-positive values masked).
     volume: Render a volume instead of isosurface contours.
     is_shaded: enable shading on the volume render (volume mode only).
@@ -108,7 +116,8 @@ def pyvista(data: GDataState,
     camera_azimuth: Initial camera azimuth in degrees.
     camera_elevation: Initial camera elevation in degrees.
     opacity: a PyVista opacity preset string, ``"diverging"`` (opaque at
-      both ends, transparent in the middle), or a scalar opacity.
+      both ends, transparent in the middle), or a number from 0 (transparent)
+      to 1 (fully opaque). Numeric strings are also accepted.
     cmap: colormap name; overridden to ``"RdBu_r"`` when ``diverging``.
     xlabel: Horizontal-axis label; auto-derived when omitted.
     ylabel: Vertical-axis label; auto-derived when omitted.
@@ -135,10 +144,26 @@ def pyvista(data: GDataState,
 
   Raises:
     ValueError: ``data`` is not 3-D, or ``saveas`` has an unsupported
-      extension.
+      extension, or ``clevels`` is invalid or incompatible with the mode.
     RuntimeError: PyVista could not obtain a working OpenGL context.
   """
   import pyvista as pv
+
+  if isinstance(opacity, str):
+    try:
+      opacity = float(opacity)
+    except ValueError:
+      pass  # Preset names are interpreted below or by PyVista.
+
+  levels = contour_levels
+  if clevels is not None:
+    if volume:
+      raise ValueError("clevels is incompatible with volume mode")
+    levels = parse_isosurface_levels(clevels)
+    if is_log:
+      if np.any(levels <= 0):
+        raise ValueError("clevels must be positive before each logarithm")
+      levels = np.log10(levels)
 
   data = materialize_plot_data(data)
   clabel = default_value_label(data, clabel)
@@ -237,7 +262,7 @@ def pyvista(data: GDataState,
     scalar_bar_args = {"title": latex_to_unicode(clabel), "fmt": colorbarformat}
 
     if not volume:
-      contours = grid3d.contour(isosurfaces=contour_levels, scalars="f_plot")
+      contours = grid3d.contour(isosurfaces=levels, scalars="f_plot")
       if mesh_clip_plane:
         pl.add_mesh_clip_plane(contours,
                                cmap=cmap,

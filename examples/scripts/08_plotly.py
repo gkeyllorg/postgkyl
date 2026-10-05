@@ -25,3 +25,14 @@ volume.plotly(background="light",
               cmin=0.1,
               cmax=0.9,
               saveas=str(OUTPUT_DIR / "08_volume.html"))
+
+# One explicit density level; CLI equivalent: --clevels 0.5.
+volume.plotly(clevels="0.5",
+              background="light",
+              opacity=1.0,
+              title="Gaussian density = 0.5",
+              xlabel="x",
+              ylabel="y",
+              zlabel="z",
+              clabel="Density",
+              saveas=str(OUTPUT_DIR / "08_isosurface.html"))

@@ -23,8 +23,8 @@ of truth for "does the tutorial still work," not just this README.
 | [`05_map_to_rz.py`](scripts/05_map_to_rz.py) | Gkeyll geometry discovery with `pg.map_to_rz`, plus explicit projection reuse with `map_to_rz` |
 | [`06_growth.py`](scripts/06_growth.py) | Recover a known energy growth rate and inspect log-space residuals |
 | [`07_collect_animate.py`](scripts/07_collect_animate.py) | Load many frames, collect a space–time diagram, and animate 1D/2D travelling waves |
-| [`08_plotly.py`](scripts/08_plotly.py) | Interactive 2D height surfaces and 3D volume isosurfaces |
-| [`09_pyvista.py`](scripts/09_pyvista.py) | Off-screen VTK isosurface and volume screenshots |
+| [`08_plotly.py`](scripts/08_plotly.py) | Interactive 2D height surfaces, 3D volume isosurfaces, and one explicit `clevels` isosurface |
+| [`09_pyvista.py`](scripts/09_pyvista.py) | Off-screen VTK isosurface and volume screenshots, including one explicit `clevels` isosurface |
 | [`10_manual_arrays.py`](scripts/10_manual_arrays.py) | Copy grids/values, manipulate NumPy arrays, and wrap the result |
 | [`11_multiblock.py`](scripts/11_multiblock.py) | Plot all blocks of one field and frame on one figure with a shared color scale |
 | [`12_gk_load_quantity.py`](scripts/12_gk_load_quantity.py) | Load and check `vt`, `phi_norm`, and `larmor_radius` on generated electron moments, potential, and magnetic geometry |

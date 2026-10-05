@@ -219,3 +219,20 @@ def prep_plot_data(data: "GDataState",
                    xlabel=xlabel,
                    ylabel=ylabel,
                    clabel=clabel)
+
+
+def parse_isosurface_levels(clevels: str) -> np.ndarray:
+  """Parse finite scalar levels from a value, comma list, or start:end:count."""
+  try:
+    if ":" in clevels:
+      start, end, count = clevels.split(":")
+      levels = np.linspace(float(start), float(end), int(count))
+    else:
+      levels = np.array([float(level) for level in clevels.split(",")])
+    if not levels.size or not np.all(np.isfinite(levels)):
+      raise ValueError
+  except ValueError as error:
+    raise ValueError(
+        "clevels must contain finite values separated by commas or "
+        "start:end:count with a positive integer count") from error
+  return levels

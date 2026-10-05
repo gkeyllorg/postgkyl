@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 import numbers
-import warnings
 from typing import Tuple
 
 import numpy as np
@@ -73,16 +72,6 @@ class GDataState:
           for key in defaulted:
             defaults[key] = (self.ctx[key],
                              "not specified; spatial data fallback")
-          assignments = ", ".join(f"{key}={self.ctx[key]!r}"
-                                  for key in defaulted)
-          warnings.warn(
-              f"{self._file_name}:\n"
-              f"{', '.join(defaulted)} not resolvable (not present in the "
-              "file header, and not given explicitly); defaulting to "
-              f"{assignments}. Pass "
-              "basis_type=/poly_order=/value_form=... explicitly if this "
-              "is wrong.",
-              stacklevel=2)
 
       if (self.ctx.get("basis_type") in ("hybrid", "gkhybrid")
           and not self.ctx.get("interpolated", False)):
@@ -379,7 +368,7 @@ class GDataState:
            no_header: bool = False,
            *,
            all: bool = False) -> str:
-    """Print current state and load assumptions; ``all`` adds source metadata."""
+    """Print current state; ``all`` adds source metadata and load assumptions."""
     values, num_comps = self.get_values(), self.num_comps
     num_dims, num_cells = self.num_dims, self.num_cells
     lo, up = self.bounds
@@ -445,28 +434,22 @@ class GDataState:
     for key, val in self.ctx.items():
       if key not in self._INFO_HANDLED_CTX_KEYS:
         out += f"├─ {key}: {val}\n"
-    if provenance := self.ctx.get("_load_metadata"):
-      if all:
-        out += "├─ Metadata sources (at load; summary above is current state):\n"
+    if all and (provenance := self.ctx.get("_load_metadata")):
+      out += "├─ Metadata sources (at load; summary above is current state):\n"
       for key, title in (
           ("file_header", "File header (stored grid and array layout)"),
           ("file_metadata", "File metadata (verbatim keys)"),
           ("context", "Explicit initial context"),
           ("overrides", "Explicit load overrides"),
-          ("defaults", "Inferred/defaulted"),
+          ("defaults", "Assumed metadata (inferred/defaulted)"),
           ("filename", "Inferred from filename"),
       ):
-        if not all and key != "defaults":
-          continue
         entries = provenance.get(key, {})
         if not entries and key != "file_metadata":
           continue
         if key == "file_metadata" and key not in provenance:
           continue
-        if not all:
-          title += " at load (summary above is current state)"
-        prefix = "│  " if all else ""
-        out += f"{prefix}├─ {title}:"
+        out += f"│  ├─ {title}:"
         if not isinstance(entries, dict):
           out += f" {entries!r}\n"
         elif not entries:
@@ -476,9 +459,9 @@ class GDataState:
           for name, value in entries.items():
             if key == "defaults":
               value, reason = value
-              out += f"{prefix}│  ├─ {name}: {value!r} ({reason})\n"
+              out += f"│  │  ├─ {name}: {value!r} ({reason})\n"
             else:
-              out += f"{prefix}│  ├─ {name}: {value!r}\n"
+              out += f"│  │  ├─ {name}: {value!r}\n"
     out += "└─ File: " + (self._file_name or "<no file>") + "\n"
     print(out)
     return out
