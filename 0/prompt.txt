@@ -1,0 +1,5 @@
+The command pgkyl ../Downloads/sdf_field\ \(3\).gkyl pyvista --clevels 0.0 -o 0.8 defaults to a 1:1:1 aspect ratio for the figure. How do I get it to plot in the true aspect ratio of the data? Like, not using the forcing of the aspect ratio and scaling of the data
+
+---
+
+Add an option to disable coordinate normalization.

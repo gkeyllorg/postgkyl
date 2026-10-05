@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46STCGJCZXAHZ9806B3SZT9",
+  "session_id": "01a10d98-dca3-7100-a040-3585f6930a97",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T19:49:29.055313978Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/source/pyvista.rst",
+    "src/postgkyl/render/pyvista.py",
+    "tests/test_cli_commands.py",
+    "tests/test_render_pyvista.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "49e61756c862",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 40355,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 650752,
+    "output_tokens": 4068,
+    "api_call_count": 21
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T19:49:29.022349951Z",
+    "agent_lines": 99,
+    "agent_removed": 21,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 99,
+    "total_lines_changed": 120,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
