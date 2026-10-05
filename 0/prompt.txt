@@ -1,0 +1,4 @@
+It seems like the --aspect option for matplotlib is not working correctly. Please validate and fix this option. These three commands produce very similar looking figures, but the aspect ratio should be changing
+(master) Downloads: pgkyl sdf_field.gkyl sel --z1 0.0 pl -c --clevels 0.0 --aspect 1.6
+(master) Downloads: pgkyl sdf_field.gkyl sel --z1 0.0 pl -c --clevels 0.0 --aspect 10 
+(master) Downloads: pgkyl sdf_field.gkyl sel --z1 0.0 pl -c --clevels 0.0 --aspect 1.0

@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46AYVZ0J0H6N1V22V5014YS",
+  "strategy": "manual-commit",
+  "branch": "aspect-fixing",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/postgkyl/render/matplotlib.py",
+    "tests/test_cli_commands.py",
+    "tests/test_render_matplotlib.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 43746,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 407040,
+    "output_tokens": 3438,
+    "api_call_count": 15
+  }
+}
