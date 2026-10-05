@@ -1,0 +1,3 @@
+So when plotting
+pgkyl ../../gkeyll_v3/gkeyll/rt_gk_d3d_iwl_2x2v_p1-field_1.gkyl -l 'o' ./rt_gk_d3d_iwl_2x2v_p1-field_1.gkyl -l 'n' interp pl -f0 --num_axes 2
+I would expect the labels to translate directly into the legend in the plot. However, the plot has legends with the filenames in this. The figures should default to the legends having the filenames, but it should read from the label for a different value. Fix this issue in a robust manner. One way would be to have the label default to the filename. The solution must be robust, central, and clean.
