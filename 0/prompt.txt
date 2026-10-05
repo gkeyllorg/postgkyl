@@ -1,0 +1,87 @@
+A user is having issues with installing postgkeyll. They have a few versions of postgkeyll and it seems to be linking against a different one. Is this because the virtual environments are not constructed correctly? Is there a better way to contain the builds so that the C linking with gpython always links against the right version so that we can have multiple versions of postgkyl?
+
+Antoine  [2:35 PM]
+I cannot run pytest on main, is it normal?
+[2:36 PM](.venv) ahoffman@ahoffman-lt postgkyl % pytest
+INTERNALERROR> Traceback (most recent call last):
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/_pytest/main.py", line 326, in wrap_session
+INTERNALERROR>     config._do_configure()
+INTERNALERROR>     ~~~~~~~~~~~~~~~~~~~~^^
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/_pytest/config/__init__.py", line 1205, in _do_configure
+INTERNALERROR>     self.hook.pytest_configure.call_historic(kwargs=dict(config=self))
+INTERNALERROR>     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/pluggy/_hooks.py", line 534, in call_historic
+INTERNALERROR>     res = self._hookexec(self.name, self._hookimpls.copy(), kwargs, False)
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/pluggy/_manager.py", line 120, in _hookexec
+INTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+INTERNALERROR>            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/pluggy/_callers.py", line 167, in _multicall
+INTERNALERROR>     raise exception
+INTERNALERROR>   File "/Users/ahoffman/postgkyl/.venv/lib/python3.13/site-packages/pluggy/_callers.py", line 121, in _multicall
+INTERNALERROR>     res = hook_impl.function(*args)
+INTERNALERROR>   File "/Users/ahoffman/new_postgkyl/postgkyl/tests/conftest.py", line 156, in pytest_configure
+INTERNALERROR>     generate_all(GEN_DIR)
+INTERNALERROR>     ~~~~~~~~~~~~^^^^^^^^^
+INTERNALERROR>   File "/Users/ahoffman/new_postgkyl/postgkyl/tests/generate_test_data.py", line 710, in generate_all
+INTERNALERROR>     _generate_analytic_fields(out_dir)
+INTERNALERROR>     ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+INTERNALERROR>   File "/Users/ahoffman/new_postgkyl/postgkyl/tests/generate_test_data.py", line 349, in _generate_analytic_fields
+INTERNALERROR>     from postgkyl import gpython
+INTERNALERROR> ImportError: cannot import name 'gpython' from 'postgkyl' (/Users/ahoffman/postgkyl/src/postgkyl/__init__.py)Maxwell Rosen  [2:36 PM]
+This is not normal
+Antoine  [2:36 PM]
+I see the same issue on perlmutter
+Maxwell Rosen  [2:36 PM]
+Do you have multiple installations of postgkyl?
+Antoine  [2:36 PM]
+yes
+Maxwell Rosen  [2:36 PM]
+That's the problem
+Antoine  [2:36 PM]
+what do you mean
+Maxwell Rosen  [2:37 PM]
+postgkyl 2 needs to be the master postgkeyll so that the C libraries get linked correctly
+[2:37 PM]See the import error
+[2:38 PM]The import error is linking against a postgkyl that is not in the venv that you created because there is another pgkyl installed
+Antoine  [2:38 PM]
+you mean postgkyl 2 is not contained properly?
+Maxwell Rosen  [2:38 PM]
+I think it's that your environment is not constructed properly
+Antoine  [2:39 PM]
+ah1032@login10:~/new_postgkyl/postgkyl> pgkyl --version
+bash: pgkyl: command not found
+ah1032@login10:~/new_postgkyl/postgkyl> source .venv/bin/activate
+(.venv) ah1032@login10:~/new_postgkyl/postgkyl> pgkyl --version
+pgkyl, version 2.0.0
+postgkyl commit: 961ac8718cf6 (baked at build time, not a git checkout)
+Gkeyll:          5976b29068f6 (main, committed 2026-10-05T12:13:47-04:00)
+gpython bridge:  available (built 2026-10-05T18:33:13.383540+00:00, CC=cc, ARCH_FLAGS=compiler default)
+Python:          CPython 3.13.15
+Platform:        Linux-6.4.0-150600.23.125_15.0.29-cray_shasta_c-x86_64-with-glibc2.38
+Dependencies:    numpy 2.5.3, scipy 1.18.1, click 8.5.0, matplotlib 3.11.2, msgpack 1.2.3, plotly 7.1.0, pyvista 0.49.0
+(.venv) ah1032@login10:~/new_postgkyl/postgkyl>[2:39 PM]I don't have a postgkyl installed outside of an environment
+
+---
+
+The problem was that pytest was not installed. Please ensure that the system fails cleanly with a clear obvious error message that pytest is not installed. Add this to the --version option as well for clarity in what is built
+
+Antoine  [2:42 PM]
+you don't think it's better that pytest runs during the installation so that it checks that everything is working? pgkyl --version is very low verification
+Jimmy  [2:43 PM]
+back when Petr was experimenting with this we had some finickiness with pytest and so we assumed that pytest wouldn’t always be robust across different systems, and maybe that’s okay because python environment stuff is a black hole
+[2:43 PM]I mean, it’s entirely possible the agent era completely eliminates all the bullshit we used to deal with and it would be fine if this was a default
+[2:44 PM]but it’s really easy really fast for a python environment to become incredibly bloated
+Antoine  [2:44 PM]
+I think we need something like pytest to check that the library is sane
+Maxwell Rosen  [2:44 PM]
+We can put "environment does not contain pytest" inside pgkyl --version, if that would help diagnose this. Or more clear warnings (edited) 
+Jimmy  [2:45 PM]
+I think a “built with…” with pgkyl --version is a good idea
+Maxwell Rosen  [2:45 PM]
+The error Antoine posted also seemed difficult to diagnose, so maybe have a check when we run pytest that pytest is installed is good too
+Jimmy  [2:46 PM]
+there are a variety of ways to fubar a python environment, and so building in some information to postgkyl that is like “by the way here is your configuration” philosophically similar to when we run Gkeyll we say what we built with would be quite good
+
+---
+
+I don't want to have to run scripts/run_test.py. We should just call pytest. If it's not possible to include a clean warning from just executing pytest, then simply add details about the installation environment into pgkyl --version

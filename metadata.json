@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46PJ58QEMNDHWFF6YMYFVKF",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/source/development.md",
+    "setup.py",
+    "src/postgkyl/_version.py",
+    "tests/test_version_report.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 54822,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 917632,
+    "output_tokens": 7638,
+    "api_call_count": 21
+  }
+}

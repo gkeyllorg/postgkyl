@@ -1,0 +1,62 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M46PJ58QEMNDHWFF6YMYFVKF",
+  "session_id": "01a10d5d-6a52-7333-8597-dcf3f0f3094e",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-05T18:52:33.672924435Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/source/development.md",
+    "setup.py",
+    "src/postgkyl/_version.py",
+    "tests/test_version_report.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "f0842fa59bb4",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 54822,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 917632,
+    "output_tokens": 7638,
+    "api_call_count": 21
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-05T18:52:33.642184537Z",
+    "agent_lines": 15,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 1,
+    "total_committed": 15,
+    "total_lines_changed": 16,
+    "agent_percentage": 93.75,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 144,
+      "user_lines_removed": 1,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/source/development.md": 12,
+        "scripts/run_tests.py": 24,
+        "setup.py": 5,
+        "src/postgkyl/_version.py": 21,
+        "tests/conftest.py": 9,
+        "tests/test_test_launcher.py": 41,
+        "tests/test_version_report.py": 32
+      },
+      "user_removed_per_file": {
+        "docs/source/development.md": 1
+      }
+    }
+  ]
+}
