@@ -143,10 +143,64 @@ class TestGkParticleBalanceSynthetic:
     finally:
       plt.close(fig)
 
+  @pytest.mark.parametrize("relative_error", [False, True])
+  @pytest.mark.parametrize("override", [False, True])
+  @pytest.mark.parametrize("multib", ["-10", "0,1,2"])
+  def test_fbardot_conservation(self, stub, tmp_path, relative_error, override,
+                                multib):
+    # Each block has source=10, outward flux=2, and fdot=3. Background
+    # derivatives are 1 and 2 in the first two blocks, absent in the third.
+    time = np.array([0.0, 1.0, 2.0])
+    blocks = [0] if multib == "-10" else [0, 1, 2]
+    for block in blocks:
+      name = "zzim" if multib == "-10" else f"zzim_b{block}"
+      for suffix, value in (("fdot_integrated_moms",
+                             3.0), ("source_integrated_moms", 10.0),
+                            ("bflux_xlower_integrated_HamiltonianMoments",
+                             2.0), ("integrated_moms", 20.0)):
+        stub.add(str(tmp_path / f"{name}-ion_{suffix}.gkyl"), time,
+                 np.column_stack((np.full(3, value), np.full(3, 99.0))))
+      if block < 2:
+        filename = (f"background_{block}.gkyl"
+                    if override else f"{name}-ion_fbardot_integrated_moms.gkyl")
+        stub.add(str(tmp_path / filename), time,
+                 np.column_stack((np.full(3, block + 1.0), np.full(3, 99.0))))
+    stub.add(str(tmp_path / "zzim-dt.gkyl"), time[1:], [[0.5], [0.5]])
+
+    fig, traces = pb.particle_balance(
+        "zzim",
+        "ion",
+        path=str(tmp_path),
+        multib=multib,
+        fbardot_file="background_*.gkyl" if override else None,
+        relative_error=relative_error)
+    try:
+      if relative_error:
+        expected = [0.1, 0.1]  # (10 - 2 - 3 - 1) * 0.5 / 20, also summed.
+        np.testing.assert_allclose(traces.mom_err_norm,
+                                   expected,
+                                   rtol=1e-14,
+                                   atol=0)
+      else:
+        expected = [-6.0, 4.0, 4.0] if multib == "-10" else [-18.0, 12.0, 12.0]
+        np.testing.assert_allclose(traces.mom_err, expected, rtol=0, atol=0)
+        assert r"$-\dot{\bar{f}}$" in [
+            text.get_text() for text in fig.axes[0].get_legend().get_texts()
+        ]
+        background_line = fig.axes[0].lines[-2]
+        np.testing.assert_array_equal(background_line.get_ydata(),
+                                      -traces.fbardot)
+      np.testing.assert_array_equal(
+          traces.fbardot,
+          np.full(2 if relative_error else 3, 1.0 if multib == "-10" else 3.0))
+    finally:
+      plt.close(fig)
+
   def test_missing_source_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, with_src=False, with_bflux=False)
     fig, traces = pb.particle_balance("sim", "ion", path=path)
     try:
+      assert traces.fbardot is None
       assert traces.src is None
       assert traces.bflux_tot is None
     finally:

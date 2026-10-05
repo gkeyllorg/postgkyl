@@ -4,7 +4,7 @@ Ported from ``src_bak/postgkyl/apps/gk_particle_balance.py``. Same shape as
 :mod:`postgkyl.diagnostics.gk.energy_balance`, but for a single
 species and the M0 (density) moment, with no field/apar-energy terms::
 
-    N_err = S - bflux - df/dt
+    N_err = S - bflux - df/dt - dfbar/dt
 """
 
 from __future__ import annotations
@@ -36,6 +36,8 @@ class ParticleBalanceTraces:
   Attributes:
     time: Time stamps of the ``fdot`` trace.
     fdot: Rate of change of the M0 moment, summed over blocks.
+    fbardot: Rate of change of the background M0 moment, summed over blocks,
+      or ``None`` if none was found.
     src: Rate of change from sources, or ``None`` if none was found.
     bflux_tot: Rate of change from boundary particle fluxes, or ``None``.
     mom_err: The particle-balance residual (``None`` when ``relative_error``).
@@ -49,6 +51,7 @@ class ParticleBalanceTraces:
   bflux_tot: np.ndarray | None
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
+  fbardot: np.ndarray | None = None
 
 
 def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
@@ -58,10 +61,13 @@ def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
   return addend.copy() if target is None else target + addend
 
 
-def particle_balance_error(fdot: np.ndarray, src: np.ndarray,
-                           bflux_tot: np.ndarray) -> np.ndarray:
-  """The particle-balance residual: ``S - bflux - df/dt``."""
-  return src - bflux_tot - fdot
+def particle_balance_error(fdot: np.ndarray,
+                           src: np.ndarray,
+                           bflux_tot: np.ndarray,
+                           fbardot: np.ndarray | None = None) -> np.ndarray:
+  """The particle-balance residual: ``S - bflux - df/dt - dfbar/dt``."""
+  residual = src - bflux_tot - fdot
+  return residual if fbardot is None else residual - fbardot
 
 
 def _block_prefix(file_prefix: str, block_idx: int) -> str:
@@ -86,6 +92,7 @@ def particle_balance(
     relative_error: bool = False,
     multib: str = "-10",
     fdot_file: str | None = None,
+    fbardot_file: str | None = None,
     source_file: str | None = None,
     bflux_files: dict[str, str] | None = None,
     f_file: str | None = None,
@@ -106,7 +113,9 @@ def particle_balance(
   run had sources or non-periodic boundaries)
   ``<name>-<species>_source_integrated_moms.gkyl`` and
   ``<name>-<species>_bflux_<direction><side>_integrated_HamiltonianMoments
-  .gkyl`` files. If ``relative_error`` is requested,
+  .gkyl`` files. Optional
+  ``<name>-<species>_fbardot_integrated_moms.gkyl`` files contribute an
+  additional distribution derivative term. If ``relative_error`` is requested,
   ``<name>-<species>_integrated_moms.gkyl`` and ``<name>-dt.gkyl`` are also
   required.
 
@@ -119,6 +128,8 @@ def particle_balance(
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice
       of block indices.
     fdot_file: Explicit distribution derivative moments path override.
+    fbardot_file: Explicit background distribution derivative moments path
+      override; detected automatically when present.
     source_file: Explicit source moments path override.
     bflux_files: Optional per-boundary path overrides, keyed by
       ``"<direction><side>"``; unlisted boundaries use the naming
@@ -155,8 +166,8 @@ def particle_balance(
 
   absy_func = np.abs if absy else (lambda v: v)
 
-  fdot = src = bflux_tot = None
-  has_src = has_bflux = False
+  fdot = fbardot = src = bflux_tot = None
+  has_fbardot = has_src = has_bflux = False
   time_fdot = time_bflux_tot = None
 
   for block_idx in blocks:
@@ -170,6 +181,13 @@ def particle_balance(
       raise FileNotFoundError(f"Required file not found: {fdot_name}")
     time_fdot = t
     fdot_pb = v[:, _DENSITY_MOMENT]
+
+    fbardot_name = _resolve(
+        path, fbardot_file,
+        block_prefix + species + "_fbardot_integrated_moms.gkyl", block_idx)
+    found_fbardot, _, v, _ = utils.read_time_trace_if_present(fbardot_name)
+    has_fbardot |= found_fbardot
+    fbardot_pb = v[:, _DENSITY_MOMENT] if found_fbardot else 0.0 * fdot_pb
 
     src_name = _resolve(path, source_file,
                         block_prefix + species + "_source_integrated_moms.gkyl",
@@ -192,6 +210,7 @@ def particle_balance(
     bflux_pb = sum(bflux_terms) if bflux_terms else 0.0 * fdot_pb
 
     fdot = _accumulate(fdot, fdot_pb)
+    fbardot = _accumulate(fbardot, fbardot_pb)
     src = _accumulate(src, src_pb)
     bflux_tot = _accumulate(bflux_tot, bflux_pb)
 
@@ -202,7 +221,7 @@ def particle_balance(
     src = src.copy()
     src[0] = 0.0  # No fdot/bflux contribution at t=0.
 
-    mom_err = particle_balance_error(fdot, src, bflux_tot)
+    mom_err = particle_balance_error(fdot, src, bflux_tot, fbardot)
 
     if has_src:
       h, = ax.plot(time_fdot, absy_func(src), linestyle=_LINE_STYLES[2])
@@ -219,6 +238,10 @@ def particle_balance(
     h, = ax.plot(time_fdot, absy_func(-fdot), linestyle=_LINE_STYLES[0])
     legend_handles.append(h)
     legend_strings.append(r"$-\dot{f}$")
+    if has_fbardot:
+      h, = ax.plot(time_fdot, absy_func(-fbardot), linestyle=_LINE_STYLES[0])
+      legend_handles.append(h)
+      legend_strings.append(r"$-\dot{\bar{f}}$")
     h, = ax.plot(time_fdot, absy_func(mom_err), linestyle=_LINE_STYLES[3])
     legend_handles.append(h)
     legend_strings.append(r"$E_{\dot{\mathcal{N}}}=$" + "".join(legend_strings))
@@ -246,7 +269,8 @@ def particle_balance(
       distf = _accumulate(distf, v[:, _DENSITY_MOMENT])
 
     fdot, src, bflux_tot, distf = fdot[1:], src[1:], bflux_tot[1:], distf[1:]
-    mom_err = particle_balance_error(fdot, src, bflux_tot)
+    fbardot = fbardot[1:]
+    mom_err = particle_balance_error(fdot, src, bflux_tot, fbardot)
     mom_err_norm = mom_err * dt / distf
 
     ax.plot(time_dt, absy_func(mom_err_norm))
@@ -276,5 +300,6 @@ def particle_balance(
                                  src=src if has_src else None,
                                  bflux_tot=bflux_tot if has_bflux else None,
                                  mom_err=mom_err,
-                                 mom_err_norm=mom_err_norm)
+                                 mom_err_norm=mom_err_norm,
+                                 fbardot=fbardot if has_fbardot else None)
   return fig, traces
