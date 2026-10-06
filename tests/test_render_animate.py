@@ -432,17 +432,17 @@ class TestCompileMovie:
     blue below must still decode red on top."""
     from PIL import Image
 
-    from postgkyl.render.style import apply_style
+    from postgkyl.render.style import style_context
 
-    apply_style("postgkyl")
-    assert matplotlib.rcParams["image.origin"] == "lower"
     image = np.zeros((64, 64, 3), np.uint8)
     image[:32, :, 0] = 255
     image[32:, :, 2] = 255
     frame = tmp_path / "frame.png"
     Image.fromarray(image).save(frame)
     movie = tmp_path / "movie.mp4"
-    anim_mod._compile_movie([str(frame)] * 2, str(movie), fps=2)
+    with style_context("postgkyl"):
+      assert matplotlib.rcParams["image.origin"] == "lower"
+      anim_mod._compile_movie([str(frame)] * 2, str(movie), fps=2)
 
     first = tmp_path / "first.png"
     ffmpeg = _ffmpeg.resolve_ffmpeg()
