@@ -1,0 +1,6 @@
+approving, but note that previously the default label used to be chosen doing back the full path (starting from the end) until the two labels differed. That way if the datasets are
+
+my_folder/my_sim/data1.gkyl
+your_folder/your_sim/data1.gkyl
+
+I think the labels would've been "my_sim/data1.gkyl" and "your_sim/data1.gkyl" instead of data1.gkyl for both
