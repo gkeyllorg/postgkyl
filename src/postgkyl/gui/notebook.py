@@ -25,17 +25,21 @@ def _():
     import traceback
 
     import postgkyl as pg
+    from postgkyl.gui import launch
     from postgkyl.gui import pipeline as gp
 
-    return base64, dataclasses, gp, html, math, mo, os, pg, shutil, tempfile, traceback
+    return (
+        base64, dataclasses, gp, html, launch, math, mo, os, pg, shutil,
+        tempfile, traceback,
+    )
 
 
 @app.cell
-def _(mo, os):
-    # --- data directory, from 'pgkyl-gui --path <dir>' or the working one ----
+def _(launch, mo, os):
+    # --- data directory, from 'pgkyl-gui --path <dir>' or the default -------
     _cli_path = mo.cli_args().get("path")
     dir_input = mo.ui.text(
-        value=os.path.expanduser(str(_cli_path)) if _cli_path else os.getcwd(),
+        value=os.path.expanduser(str(_cli_path)) if _cli_path else launch.default_path(),
         label="Data directory",
         full_width=True,
     )
@@ -252,8 +256,8 @@ def _(base_grid, get_xidx, mo, set_xidx):
 
 @app.cell
 def _(
-    base_settings, gp, interp_pts, mapc2p_file, math, phi_tor_deg, replace,
-    settings_error, transform, weight_path, x_idx,
+    base_grid, base_settings, gp, interp_pts, mapc2p_file, math, phi_tor_deg,
+    replace, settings_error, transform, weight_path, x_idx,
 ):
     # --- settings through the transform, and the layout they produce --------
     def _transform_settings():
@@ -263,6 +267,7 @@ def _(
         return replace(
             base_settings,
             weight=weight_path,
+            source_ndim=base_grid.ndim if base_grid is not None else 0,
             transform="none" if base_settings.mode == "transport" else transform.value,
             num_interp=None if _geometry else _points,
             nz_interp=_points if _geometry else None,
@@ -352,18 +357,24 @@ def _(mo):
     # --- plot options (named as pg.plot's) ----------------------------------
     surface = mo.ui.checkbox(label="surface")
     contour = mo.ui.checkbox(label="contour")
+    contourf = mo.ui.checkbox(label="contourf")
     fixaspect = mo.ui.checkbox(label="fix aspect")
-    showgrid = mo.ui.checkbox(label="grid", value=True)
+    showgrid = mo.ui.checkbox(label="grid")
     logx = mo.ui.checkbox(label="logx")
     logy = mo.ui.checkbox(label="logy")
     logz = mo.ui.checkbox(label="logz")
     legend = mo.ui.checkbox(label="legend")
-    diverging = mo.ui.checkbox(label="symmetric about 0")
+    diverging = mo.ui.checkbox(label="diverging cmap")
+    # Contour levels: evenly spaced over the colour range with cbar bounds or a
+    # diverging cmap (centred on 0), else about this many automatic levels.
+    nlevels = mo.ui.number(start=2, stop=200, step=1, value=11,
+                           label="contour levels")
     cmap = mo.ui.dropdown(
         options=["(default)", "viridis", "plasma", "inferno", "cividis",
                  "twilight", "RdBu_r", "jet", "gray"],
         value="(default)", label="cmap")
-    texts = {
+    # A ui.dictionary, so marimo tracks every field (a plain dict is inert).
+    texts = mo.ui.dictionary({
         key: mo.ui.text(value="", label=label)
         for key, label in (("xlabel", "xlabel"), ("ylabel", "ylabel"),
                            ("clabel", "clabel"), ("title", "title"),
@@ -373,53 +384,61 @@ def _(mo):
                            ("xshift", "x shift"), ("yshift", "y shift"),
                            ("zshift", "z shift"), ("xscale", "x scale"),
                            ("yscale", "y scale"), ("zscale", "z scale"))
-    }
+    })
 
     def _row(*keys):
         return mo.hstack([texts[k] for k in keys], justify="start", gap=0.5,
                          wrap=True)
 
     plot_options_view = mo.vstack([
-        mo.hstack([surface, contour, fixaspect, showgrid, logx, logy, logz,
-                   legend, diverging], justify="start", gap=0.75, wrap=True),
+        mo.hstack([surface, contour, contourf, fixaspect, showgrid, logx,
+                   logy, logz, legend, diverging], justify="start", gap=0.75,
+                  wrap=True),
         cmap,
         _row("xlabel", "ylabel", "clabel", "title"),
         mo.md("**limits** _(blank = auto)_"),
         _row("xmin", "xmax", "ymin", "ymax"),
         _row("zmin", "zmax"),
+        nlevels,
         mo.md("**shift / scale** _(z = value or colour axis; blank = none)_"),
         _row("xshift", "yshift", "zshift"),
         _row("xscale", "yscale", "zscale"),
     ], gap=0.4)
     return (
-        cmap, contour, diverging, fixaspect, legend, logx, logy, logz,
-        plot_options_view, showgrid, surface, texts,
+        cmap, contour, contourf, diverging, fixaspect, legend, logx, logy,
+        logz, nlevels, plot_options_view, showgrid, surface, texts,
     )
 
 
 @app.cell
 def _(
-    cmap, contour, diverging, fixaspect, legend, logx, logy, logz, showgrid,
-    surface, texts,
+    cmap, contour, contourf, diverging, fixaspect, legend, logx, logy, logz,
+    nlevels, showgrid, surface, texts,
 ):
     # --- pg.plot keyword options from the widgets ---------------------------
     def plot_options(**overrides):
         def _num(key):
-            v = (texts[key].value or "").strip()
+            v = (texts.value[key] or "").strip()
             return float(v) if v else None
 
         def _text(key):
-            return (texts[key].value or "").strip() or None
+            return (texts.value[key] or "").strip() or None
 
         opts = dict(
             surface=surface.value, contour=contour.value,
+            contourf=contourf.value,
+            cnlevels=(int(nlevels.value) if contour.value or contourf.value
+                      else None),
             fixaspect=fixaspect.value, no_showgrid=not showgrid.value,
             logx=logx.value, logy=logy.value, logz=logz.value,
             no_legend=not legend.value, forcelegend=legend.value,
             diverging=diverging.value,
             cmap=None if cmap.value == "(default)" else cmap.value,
-            xlabel=_text("xlabel"), ylabel=_text("ylabel"),
-            clabel=_text("clabel"), title=_text("title"),
+            # Blank axes unless labels are typed, then on every subplot.
+            xlabel="", ylabel="",
+            subplot_xlabels=_text("xlabel"), subplot_ylabels=_text("ylabel"),
+            # Given (blank unless typed), so the z scale never changes it.
+            clabel=_text("clabel") or "", title=_text("title"),
             **{k: _num(k) for k in ("xmin", "xmax", "ymin", "ymax", "zmin",
                                     "zmax", "xshift", "yshift", "zshift",
                                     "xscale", "yscale", "zscale")},

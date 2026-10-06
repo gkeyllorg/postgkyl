@@ -50,6 +50,48 @@ def _curvilinear_coord_curve(grid_arr: np.ndarray, rel: int, d: int,
   return grid_arr[fixed]
 
 
+def _logical_grid(data: "GDataState", grid: list, mapped_axes: dict) -> list:
+  """Each dimension's logical coordinate array, or ``None`` where the
+  dataset records none (or a stale one, of the wrong length)."""
+  recorded = data.ctx.get("logical_grid") or []
+  out = []
+  for d, arr in enumerate(grid):
+    axis = None
+    if d < len(recorded) and recorded[d] is not None and arr.ndim > 1:
+      candidate = np.asarray(recorded[d], dtype=float)
+      if (candidate.ndim == 1
+          and candidate.size == arr.shape[d - mapped_axes.get(d, 0)]):
+        axis = candidate
+    out.append(axis)
+  return out
+
+
+def _collapse_profiles(grid: list, shape: tuple, block_dims: dict,
+                       mapped_axes: dict, logical: list) -> dict:
+  """Turn every mapped block with logical coordinates that the selection
+  left with at most one multi-cell axis into separable logical axes, in
+  place on ``grid``; return the matching ctx updates."""
+  if not any(axis is not None for axis in logical):
+    return {}
+  remaining = dict(mapped_axes)
+  for dims in block_dims.values():
+    if (sum(shape[dd] > 1 for dd in dims) <= 1
+        and all(logical[dd] is not None for dd in dims)):
+      for dd in dims:
+        grid[dd] = logical[dd]
+        logical[dd] = None
+        remaining.pop(dd)
+  updates = {
+      "mapped_axes":
+      remaining,
+      "logical_grid":
+      [axis if d in remaining else None for d, axis in enumerate(logical)],
+  }
+  if not remaining:
+    updates.update(grid_type="uniform", logical_grid=None)
+  return updates
+
+
 def select(data: "GDataState",
            *,
            comp: Annotated[int | float | str | None,
@@ -98,6 +140,15 @@ def select(data: "GDataState",
   -- pick an integer index for that sibling axis first (in the same call,
   or an earlier one in the chain).
 
+  A mapped block may also carry ``ctx["logical_grid"]``: one 1-D array per
+  axis giving the computational coordinate of that axis's points (an R-Z
+  map from ``map_to_rz`` records radial ``x`` and poloidal ``z``). Coordinate
+  values and slice strings then select on it -- at a constant minor radius
+  or poloidal angle -- with no cross-section search. Once every axis of
+  such a block but one is narrowed to a single cell, the result is a
+  profile along that one axis: the block's grid becomes its logical
+  coordinates, an ordinary separable grid.
+
   Args:
     data: Dataset whose cells or point values are selected.
     comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
@@ -134,6 +185,7 @@ def select(data: "GDataState",
   # same call -- lets a later axis's coordinate search skip the
   # separability check on a sibling the caller has deliberately pinned.
   touched: dict[int, set] = {}
+  logical = _logical_grid(data, grid, mapped_axes)
 
   for d, z in enumerate(zs):
     if d >= num_dims or z is None:
@@ -150,6 +202,8 @@ def select(data: "GDataState",
     is_matching = values.shape[d] == len_grid
     if curvilinear and isinstance(z, (int, np.integer)):
       idx = int(z)
+    elif curvilinear and logical[d] is not None:
+      idx = idx_parser(z, logical[d], logical[d].size == values.shape[d])
     elif curvilinear:
       coord_curve = _curvilinear_coord_curve(grid_arr, rel, d, offset,
                                              values.shape,
@@ -181,6 +235,8 @@ def select(data: "GDataState",
         arr = grid[dd]
         grid[dd] = arr[tuple(g_idx if k == rel else slice(None)
                              for k in range(arr.ndim))]
+      if logical[d] is not None:
+        logical[d] = logical[d][g_idx]
       touched.setdefault(offset, set()).add(rel)
     else:
       grid[d] = grid_arr[g_idx]
@@ -205,7 +261,8 @@ def select(data: "GDataState",
   if num_dims == values_out.ndim:  # restore the squeezed component axis
     values_out = values_out[..., np.newaxis]
 
-  ctx_updates = {}
+  ctx_updates = _collapse_profiles(grid, values_out.shape, block_dims,
+                                   mapped_axes, logical)
   if data.backend == "gkyl":
     # Copy the selected cells back into native storage, keeping their
     # representation and original-dimensional basis unchanged.

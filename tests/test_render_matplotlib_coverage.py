@@ -267,14 +267,15 @@ class TestLabelShiftScale:
     lbl = fig.axes[0].get_ylabel()
     assert r"\times" in lbl
 
-  def test_clabel_gets_zscale_annotation(self):
-    fig = backend.plot(_field_2d(),
-                       no_show=True,
-                       clabel="density",
-                       zscale=2.0,
-                       no_colorbar=False)
-    cbar_lbl = fig.axes[1].get_ylabel()
-    assert "density" in cbar_lbl and r"\times" in cbar_lbl
+  def test_default_clabel_gets_zscale_annotation(self):
+    fig = backend.plot(_field_2d(), no_show=True, zscale=2.0)
+    assert fig.axes[1].get_ylabel() == r"$\times$ 2.000e+00"
+
+  @pytest.mark.parametrize("clabel", ["density", ""])
+  def test_given_clabel_is_independent_of_zscale(self, clabel):
+    """As for the axis labels, a given colorbar label is shown verbatim."""
+    fig = backend.plot(_field_2d(), no_show=True, clabel=clabel, zscale=2.0)
+    assert fig.axes[1].get_ylabel() == clabel
 
 
 # --------------------------------------------------------------------------

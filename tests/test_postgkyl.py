@@ -549,7 +549,9 @@ _ALLOWED = {
     # reads gpython.available()/build_info())
     # -- both source files sit in the same ""
     # layer, so both edges are checked here
-    "cli": {"", "cli_spec"},  # top surface: facade + frozen metadata
+    # top surface: facade + frozen metadata; "gui" names the separate
+    # pgkyl-gui program in the help (its launcher imports only the stdlib)
+    "cli": {"", "cli_spec", "gui"},
     # notebook GUI, a top surface beside the CLI: the facade's verbs, the
     # file-naming convention for output discovery, and the transport
     # diagnostic's output vocabulary.

@@ -37,7 +37,7 @@ from postgkyl.gdatastate import (
 
 from . import matplotlib as backend
 from ._ffmpeg import resolve_video_encoder
-from ._prep import materialize_plot_data
+from ._prep import centred_range, materialize_plot_data
 
 if TYPE_CHECKING:
   from matplotlib.figure import Figure
@@ -105,7 +105,8 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
   When the caller hasn't given an explicit ``title``, it is generated from
   the first dataset's ``ctx`` (frame index and time) unless
   ``plot_kwargs['notitle']`` is set; an explicit ``title`` is always
-  respected and shown on every frame.
+  respected and shown on every frame, followed by that stamp when
+  ``plot_kwargs['stamp_title']`` is set.
   """
   kwargs = dict(plot_kwargs)
   if kwargs.pop("variable_range", False):
@@ -115,16 +116,20 @@ def _draw_frame(frame: list["GDataState"], fig: "Figure", plot_kwargs: dict):
     step = 2 if kwargs.get("quiver") or kwargs.get("streamline") else 1
     kwargs["num_axes"] = sum(dat.num_comps // step for dat in frame)
   notitle = kwargs.pop("notitle", False)
+  stamp_title = kwargs.pop("stamp_title", False)
   if notitle:
     kwargs["title"] = ""
-  if not notitle and kwargs.get("title") is None:
+  elif kwargs.get("title") is None or stamp_title:
     dat0 = frame[0]
     parts = []
     if dat0.ctx.get("frame") is not None:
       parts.append(f"frame: {dat0.ctx['frame']:d}")
     if dat0.ctx.get("time") is not None:
       parts.append(f"time: {dat0.ctx['time']:.4e}")
-    kwargs["title"] = " ".join(parts)
+    stamp = " ".join(parts)
+    title = kwargs.get("title")
+    kwargs["title"] = f"{title}   {stamp}" if title and stamp else (title
+                                                                    or stamp)
   return backend.plot(*frame, figure=fig, clear=True, no_show=True, **kwargs)
 
 
@@ -286,7 +291,9 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             num_subplot_col: int | None = None,
             transpose: bool = False,
             contour: bool = False,
+            contourf: bool = False,
             clevels: str | None = None,
+            cnlevels: int | None = None,
             quiver: bool = False,
             streamline: bool = False,
             sdensity: float = 1.0,
@@ -330,6 +337,9 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
             ylabel: str | None = None,
             clabel: str | None = None,
             title: str | None = None,
+            stamp_title: bool = False,
+            subplot_xlabels: str | None = None,
+            subplot_ylabels: str | None = None,
             edgecolors: str | None = None,
             no_showgrid: bool = False,
             hashtag: bool = False,
@@ -367,7 +377,9 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     num_subplot_col: Number of subplot columns.
     transpose: Transpose the display axes.
     contour: Draw contours.
+    contourf: Draw filled contours.
     clevels: Contour count or start:end:count levels.
+    cnlevels: Number of contour levels, overriding a count in ``clevels``.
     quiver: Draw vector arrows.
     streamline: Draw streamlines.
     sdensity: Streamline density.
@@ -408,6 +420,10 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
     ylabel: Override the y label.
     clabel: Override the c label.
     title: Title shown on every frame.
+    stamp_title: Follow an explicit ``title`` with the frame's number and
+      time, which otherwise only replace a missing title.
+    subplot_xlabels: Per-subplot horizontal labels, comma separated.
+    subplot_ylabels: Per-subplot vertical labels, comma separated.
     edgecolors: Mesh cell edge color.
     no_showgrid: Suppress grid lines.
     hashtag: Display the Postgkyl hashtag.
@@ -465,9 +481,11 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                      num_subplot_col=num_subplot_col,
                      transpose=transpose,
                      contour=contour,
+                     contourf=contourf,
                      clevels=clevels,
-                     cnlevels=int(clevels) +
-                     1 if clevels and clevels.isdigit() else None,
+                     cnlevels=cnlevels if cnlevels is not None else
+                     (int(clevels) +
+                      1 if clevels and clevels.isdigit() else None),
                      quiver=quiver,
                      streamline=streamline,
                      sdensity=sdensity,
@@ -503,6 +521,9 @@ def animate(data: Annotated[Iterable[GDataState | Iterable[GDataState]],
                      ylabel=ylabel,
                      clabel=clabel,
                      title=title,
+                     stamp_title=stamp_title,
+                     subplot_xlabels=subplot_xlabels,
+                     subplot_ylabels=subplot_ylabels,
                      edgecolors=edgecolors,
                      no_showgrid=no_showgrid,
                      hashtag=hashtag,
@@ -622,8 +643,9 @@ def _apply_value_range(frames, kwargs):
       continue
     low, high = limits
     if axis == "z" and kwargs.get("diverging"):
-      high = max(abs(low), abs(high))
-      low = -high
+      if kwargs.get("zmin") is not None or kwargs.get("zmax") is not None:
+        continue  # The plot centres the range on the typed bound.
+      low, high = centred_range(None, None, max(abs(low), abs(high)))
     for bound, value in (("min", low), ("max", high)):
       if kwargs.get(axis + bound) is None:
         bounds.setdefault(axis + bound, {})[panel] = value

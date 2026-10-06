@@ -762,6 +762,23 @@ def test_field_modes(mode):
   assert animation._fig.axes[0].has_data()
 
 
+def test_filled_contour_levels_are_shared_across_frames():
+  """The shared value range fixes the levels: frames 1 and 10 (0..73)
+  both get 5 levels from 1 to 73."""
+  animation = _draw_animation(
+      [_field_frame(1), _field_frame(10)],
+      contourf=True,
+      cnlevels=5,
+      no_colorbar=True)
+  levels = []
+  for index in (0, 1):
+    animation._func(index, *animation._args)
+    (cs, ) = [c for c in animation._fig.axes[0].collections if c.filled]
+    levels.append(cs.levels)
+  np.testing.assert_allclose(levels[0], np.linspace(1, 73, 5))
+  np.testing.assert_array_equal(levels[0], levels[1])
+
+
 def test_grouped_tags_keep_plot_controls():
   frames = _three_frames()
   frames[0].tag = "first"
@@ -836,7 +853,8 @@ def test_field_color_controls_and_coordinate_transforms():
   ax = animation._fig.axes[0]
   mesh = ax.collections[0]
   assert isinstance(mesh.norm, matplotlib.colors.SymLogNorm)
-  assert mesh.get_clim() == (1, 100)
+  # A diverging map centres on zero: the larger typed bound is the half-width.
+  assert mesh.get_clim() == (-100, 100)
   assert mesh.get_cmap().name == "RdBu_r"
   assert ax.get_xlim() == (36, 66)
   assert ax.get_ylim() == (68, 88)
@@ -865,6 +883,36 @@ def test_frame_options_match_sequential_and_parallel_output(tmp_path):
         second) as parallel_image:
       np.testing.assert_array_equal(np.asarray(serial_image),
                                     np.asarray(parallel_image))
+
+
+def test_diverging_shared_range_centres_on_a_typed_bound():
+  """_field_frame(10) reaches 73; a typed zmax of 30 wins on every frame."""
+  animation = _draw_animation(
+      [_field_frame(1), _field_frame(10)],
+      diverging=True,
+      zmax=30.0,
+      no_colorbar=True)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-30, 30)
+
+
+@pytest.mark.parametrize("title, stamp_title, expected", [
+    (None, False, "frame: 1 time: 1.0000e-01"),
+    ("n_e", False, "n_e"),
+    ("n_e", True, "n_e   frame: 1 time: 1.0000e-01"),
+    (None, True, "frame: 1 time: 1.0000e-01"),
+])
+def test_stamp_title_follows_a_typed_title(monkeypatch, title, stamp_title,
+                                           expected):
+  titles = []
+  plot = anim_mod.backend.plot
+
+  def recording_plot(*frame, **kwargs):
+    titles.append(kwargs.get("title"))
+    return plot(*frame, **kwargs)
+
+  monkeypatch.setattr(anim_mod.backend, "plot", recording_plot)
+  _draw_animation(_three_frames()[1:], title=title, stamp_title=stamp_title)
+  assert titles[-1] == expected
 
 
 def test_diverging_limits_are_fixed_across_frames():

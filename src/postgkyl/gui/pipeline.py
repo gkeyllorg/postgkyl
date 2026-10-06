@@ -318,6 +318,8 @@ class Settings:
     fluct: ``"y"``/``"yz"``: plot the fluctuation about that average (3x
       data); in ``"transport"`` mode, keep the turbulent fluxes only.
     weight: Jacobian file weighting fluctuations and averages, if any.
+    source_ndim: Dimensions of the data as loaded; fluctuations about
+      ``y`` or ``(y, z)`` need 3x ``(x, y, z)`` data.
     ndim: Dimensions of the data the averages and selections index (the
       probed layout, :func:`probe`).
     average: Dimensions averaged over, before the transform.
@@ -345,6 +347,7 @@ class Settings:
   transport_output: str = "D"
   fluct: str = "none"
   weight: str | None = None
+  source_ndim: int = 0
   ndim: int = 0
   average: tuple[int, ...] = ()
   transform: str = "interpolate"
@@ -434,6 +437,10 @@ def build_chain(settings: Settings, *, probe_only: bool = False) -> Chain:
   weight = WEIGHT if s.weight else None
   steps: list[Step] = []
   if s.fluct != "none":
+    if s.source_ndim != 3:
+      raise ValueError(
+          f"fluctuations about the {s.fluct} average need 3x (x, y, z) "
+          f"configuration-space data, not {s.source_ndim}-D data.")
     steps.append(
         Step.of("fluctuation", dims=_FLUCT_DIMS[s.fluct], weight=weight))
   if probe_only:
@@ -492,11 +499,13 @@ class GridInfo:
   """Selectable layout of a chain's result.
 
   Attributes:
-    lower, upper: Coordinate range per dimension; for a curvilinear
-      dimension (after ``map_to_rz``), the cell-index range instead.
+    lower, upper: Coordinate range per dimension: the logical coordinate
+      of a mapped dimension that records one (after ``map_to_rz``, minor
+      radius and poloidal angle), else the cell-index range of a
+      curvilinear dimension.
     cells: Values per dimension.
-    curvilinear: Whether each dimension has no 1-D coordinate of its own,
-      so it is selected by cell index.
+    curvilinear: Whether each dimension has no 1-D coordinate at all, so
+      it is selected by cell index.
     num_fields: Physical fields (components) per point.
   """
 
@@ -520,8 +529,11 @@ def probe(chain: Chain) -> GridInfo:
     fields = data.num_comps
   lower, upper, curvilinear = [], [], []
   cells = tuple(int(n) for n in data.values.shape[:-1])
+  logical = data.ctx.get("logical_grid") or []
   for d, coord in enumerate(data.grid):
     coord = np.asarray(coord)
+    if coord.ndim > 1 and d < len(logical) and logical[d] is not None:
+      coord = np.asarray(logical[d])  # select resolves values on it.
     if coord.ndim > 1:
       lower.append(0.0)
       upper.append(float(cells[d] - 1))
@@ -556,7 +568,8 @@ def make_movie(frames: list[pg.GDataGroup], file_name: str, *, fps: int,
   """Animate one processed group per frame into ``file_name`` with
   ``pg.animate``. The plot options ``pg.animate`` also takes are forwarded;
   with ``fixed_range`` every frame shares the y (1-D) or colour (2-D) range,
-  unless a limit is given. Returns ``file_name``."""
+  unless a limit is given. Every frame's title ends with its frame number
+  and time. Returns ``file_name``."""
   accepted = inspect.signature(pg.animate).parameters
   options = {k: v for k, v in plot_options.items() if k in accepted}
   pg.animate(frames,
@@ -564,5 +577,6 @@ def make_movie(frames: list[pg.GDataGroup], file_name: str, *, fps: int,
              fps=fps,
              no_show=True,
              variable_range=not fixed_range,
+             stamp_title=True,
              **options)
   return file_name

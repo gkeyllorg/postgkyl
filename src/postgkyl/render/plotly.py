@@ -42,7 +42,7 @@ from postgkyl.gdatastate import GDataState
 from postgkyl.numerics import downsample, nodal_to_cell_centered_grid
 
 from ._ffmpeg import require_ffmpeg
-from ._prep import (default_value_label, materialize_plot_data,
+from ._prep import (centred_range, default_value_label, materialize_plot_data,
                     parse_isosurface_levels, resolve_axis_labels,
                     squeeze_collapsed_axes, subplot_grid)
 from .labels import latex_to_html
@@ -736,14 +736,14 @@ def plotly(data: GDataState,
                  aspectratio=scene_aspectratio)
     fig.update_layout(**{scene_name: scene})
 
-    if diverging:
-      cmax_val = float(np.nanmax(np.abs(color_value)))
-      cmin_val = -cmax_val
+    if clim is not None:
+      cmin_local, cmax_local = clim
     else:
-      if clim is not None:
-        cmin_local, cmax_local = clim
-      else:
-        cmin_local, cmax_local = cmin, cmax
+      cmin_local, cmax_local = cmin, cmax
+    if diverging:
+      cmin_val, cmax_val = centred_range(cmin_local, cmax_local,
+                                         float(np.nanmax(np.abs(color_value))))
+    else:
       cmin_val = cmin_local if cmin_local is not None else value_min
       cmax_val = cmax_local if cmax_local is not None else value_max
 

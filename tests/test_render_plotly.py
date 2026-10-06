@@ -369,6 +369,11 @@ class TestPlotlyMisc:
     fig = plotly(_volume_3d(), diverging=True)
     assert fig.data[0].cmin == -fig.data[0].cmax
 
+  def test_diverging_range_is_centred_on_a_typed_bound(self):
+    """x+y+z spans 0..3; a typed upper bound of 1 gives +-1."""
+    fig = plotly(_volume_3d(), diverging=True, cmax=1.0)
+    assert (fig.data[0].cmin, fig.data[0].cmax) == (-1.0, 1.0)
+
   def test_title_is_set(self):
     fig = plotly(_volume_3d(), title="my title")
     assert fig.layout.title.text == "my title"

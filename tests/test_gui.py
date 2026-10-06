@@ -9,6 +9,7 @@ script it renders must reproduce them.
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 import numpy as np
@@ -109,6 +110,7 @@ def _file_settings(**overrides):
                   frames=(5, ),
                   output=_OUTPUT,
                   sim=_OUTPUT.sim,
+                  source_ndim=3,
                   ndim=3)
   return gp.Settings(**{**settings, **overrides})
 
@@ -137,6 +139,14 @@ class TestBuildChain:
     # Averaging dimension 1 moves dimension 2 to index 1.
     assert select.kwargs == {"z1": 0.5, "comp": 0}
     assert chain.weight == "w.gkyl"
+
+  def test_fluctuations_need_3x_data(self):
+    """'y' is the second of three axes only in a 3x run; on 2x data it
+    would be z."""
+    with pytest.raises(ValueError, match="need 3x"):
+      gp.build_chain(_file_settings(fluct="y", source_ndim=2, ndim=2))
+    with pytest.raises(ValueError, match="need 3x"):
+      gp.build_chain(_file_settings(fluct="yz", source_ndim=2), probe_only=True)
 
   def test_averaging_everything_is_a_full_average_without_transform(self):
     chain = gp.build_chain(_file_settings(average=(0, 1, 2)))
@@ -250,8 +260,10 @@ class TestRun:
     info = gp.probe(
         gp.build_chain(_file_settings(transform="map_to_rz", mapc2p=mapc2p),
                        probe_only=True))
-    assert info.curvilinear == (True, True)
-    assert info.upper == (info.cells[0] - 1, info.cells[1] - 1)
+    # The R-Z axes select on minor radius and poloidal angle, not by index.
+    assert info.curvilinear == (False, False)
+    np.testing.assert_allclose(info.lower, (0.0, -np.pi))
+    np.testing.assert_allclose(info.upper, (0.12, np.pi))
 
   def test_figure_and_movie(self, tmp_path):
     data = gp.run(gp.build_chain(_file_settings(select=((2, 0.0), ))))
@@ -269,10 +281,32 @@ class TestRun:
 
 
 # ------------------------------------------------------------------- launch
+@needs_gkeyll
+def test_movie_frames_carry_the_frame_after_a_typed_title(
+    monkeypatch, tmp_path):
+  titles = []
+  animate_module = importlib.import_module("postgkyl.render.animate")
+  plot = animate_module.backend.plot
+
+  def recording_plot(*frame, **kwargs):
+    titles.append(kwargs.get("title"))
+    return plot(*frame, **kwargs)
+
+  monkeypatch.setattr(animate_module.backend, "plot", recording_plot)
+  data = gp.run(gp.build_chain(_file_settings(select=((2, 0.0), ))))
+  gp.make_movie([data],
+                str(tmp_path / "m.gif"),
+                fps=5,
+                plot_options={"title": "n_e"},
+                fixed_range=True)
+  assert titles and all(t.startswith("n_e   frame: 5 time: ") for t in titles)
+
+
 def test_launch_command_serves_the_packaged_notebook(tmp_path):
   cmd = launch.command(str(tmp_path))
-  assert cmd[1:4] == ["-m", "marimo", "run"]
-  assert Path(cmd[4]).name == "notebook.py" and Path(cmd[4]).is_file()
+  # -y (a global marimo flag, before the subcommand): Ctrl+C quits at once.
+  assert cmd[1:5] == ["-m", "marimo", "-y", "run"]
+  assert Path(cmd[5]).name == "notebook.py" and Path(cmd[5]).is_file()
   assert cmd[-2:] == ["--path", str(tmp_path)]
 
 
@@ -282,11 +316,61 @@ def test_launch_without_marimo_explains_how_to_install(monkeypatch, capsys):
   assert "postgkyl[gui]" in capsys.readouterr().err
 
 
+def test_launch_defaults_to_the_sample_data(monkeypatch, tmp_path):
+  """Without --path the checkout's tests/test_data opens, from any working
+  directory; an installation without the tests opens the current one."""
+  calls = []
+  monkeypatch.setattr(launch.importlib.util, "find_spec", lambda name: True)
+  monkeypatch.setattr(launch, "serve", lambda cmd: calls.append(cmd) or 0)
+  monkeypatch.chdir(tmp_path)
+  assert launch.main([]) == 0
+  assert calls[-1][-2:] == ["--path", str(DATA)]
+
+  monkeypatch.setattr(launch, "SAMPLE_DATA", str(tmp_path / "missing"))
+  assert launch.main([]) == 0
+  assert calls[-1][-2:] == ["--path", str(tmp_path)]
+
+
+def test_pgkyl_help_lists_the_gui_program():
+  from click.testing import CliRunner
+
+  from postgkyl.cli.app import cli
+
+  result = CliRunner().invoke(cli, ["-h"])
+  assert result.exit_code == 0, result.output
+  programs = result.output.split("Programs:")[1]
+  assert launch.PROGRAM in programs and launch.DESCRIPTION in programs
+
+
+def test_serve_ignores_ctrl_c_only_while_marimo_runs(monkeypatch):
+  """The launcher must not die with a traceback when Ctrl+C reaches it with
+  marimo; marimo starts with the default handling, and the launcher's own
+  handler is restored once marimo has exited."""
+  import signal
+
+  seen = {}
+
+  class FakeProcess:
+
+    def __init__(self, cmd):
+      seen["at_start"] = signal.getsignal(signal.SIGINT)
+
+    def wait(self):
+      seen["while_waiting"] = signal.getsignal(signal.SIGINT)
+      return 3
+
+  before = signal.getsignal(signal.SIGINT)
+  monkeypatch.setattr(launch.subprocess, "Popen", FakeProcess)
+  assert launch.serve(["marimo"]) == 3
+  assert seen["at_start"] is before
+  assert seen["while_waiting"] is signal.SIG_IGN
+  assert signal.getsignal(signal.SIGINT) is before
+
+
 def test_launch_runs_marimo(monkeypatch, tmp_path):
   calls = []
   monkeypatch.setattr(launch.importlib.util, "find_spec", lambda name: True)
-  monkeypatch.setattr(launch.subprocess, "call",
-                      lambda cmd: calls.append(cmd) or 0)
+  monkeypatch.setattr(launch, "serve", lambda cmd: calls.append(cmd) or 0)
   assert launch.main(["-p", str(tmp_path)]) == 0
   assert calls == [launch.command(str(tmp_path))]
 
@@ -302,3 +386,18 @@ def test_notebook_runs_headless_and_draws_a_figure(monkeypatch):
   assert defs["field_dropdown"].value == "elc_M0"
   assert defs["grid_msg"] is None
   assert defs["figure_bytes"].startswith(b"\x89PNG")
+  # Blank axes unless labels are typed, then on every subplot.
+  # Text fields must live in a ui.dictionary: marimo ignores widgets kept in
+  # a plain dict, so typed limits and labels would never reach the plot.
+  import marimo
+  assert isinstance(defs["texts"], marimo.ui.dictionary)
+  options = defs["plot_options"]()
+  assert options["xlabel"] == options["ylabel"] == ""
+  # The colorbar label is always given, so a z scale never rewrites it.
+  assert options["clabel"] == ""
+  # Grid off by default; contour levels only with a contour plot.
+  assert options["no_showgrid"] is True
+  assert "cnlevels" not in options
+  assert "subplot_xlabels" not in options
+  typed = defs["plot_options"](subplot_xlabels="x (m)")
+  assert typed["subplot_xlabels"] == "x (m)"
