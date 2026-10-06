@@ -1,13 +1,14 @@
-"""Matplotlib style application -- the ``apply_style`` verb-adjacent helper.
+"""Matplotlib style scoping -- the ``style_context`` helper.
 
 The old ``utils/load_style.py`` hand-parsed an ``.mplstyle`` file line by
 line (with a special case for ``cycler(...)`` values) into a Typer context's
 ``rcParams`` dict. Matplotlib's own style-file parser already supports that
 exact ``cycler(...)`` syntax (see ``postgkyl.mplstyle``'s ``axes.prop_cycle``
 line), so re-implementing a parser here would be a second, hand-maintained
-copy of a fact Matplotlib already owns (DOCTRINE V). This module is a thin,
-context-free wrapper: ``apply_style`` resolves the packaged default/name and
-forwards to ``matplotlib.pyplot.style.use``.
+copy of a fact Matplotlib already owns (DOCTRINE V). This module is a thin
+wrapper: ``style_context`` resolves the packaged default/name and forwards to
+``matplotlib.pyplot.style.context``. Postgkyl never mutates global Matplotlib
+state; every style it applies is scoped to the figure being drawn.
 """
 
 from __future__ import annotations
@@ -25,23 +26,21 @@ _PACKAGED_STYLES = {
 DEFAULT_STYLE = "postgkyl"
 
 
-def apply_style(path_or_name: str | None = None) -> None:
-  """Apply a Matplotlib style, mutating ``matplotlib.rcParams`` in place.
+def style_context(path_or_name: str | None = None):
+  """A context manager applying a Matplotlib style for its duration only.
 
   Args:
     path_or_name: A packaged style name (currently only ``"postgkyl"``), a
       name Matplotlib recognizes (e.g. ``"dark_background"``), or a path to
       an ``.mplstyle`` file. ``None`` applies the packaged Postgkyl default.
 
-  This is the module's one documented effect: it mutates global Matplotlib
-  rc state (there is no other way to apply a style; see
-  ``matplotlib.pyplot.style.use``).
+  ``matplotlib.rcParams`` is restored on exit, so a styled plot never leaks
+  into figures drawn afterwards.
   """
   import matplotlib.pyplot as plt
 
   name = path_or_name or DEFAULT_STYLE
-  target = _PACKAGED_STYLES.get(name, name)
-  plt.style.use(target)
+  return plt.style.context(_PACKAGED_STYLES.get(name, name))
 
 
-__all__ = ["apply_style", "DEFAULT_STYLE"]
+__all__ = ["style_context", "DEFAULT_STYLE"]
