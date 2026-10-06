@@ -565,14 +565,24 @@ class TestColormap:
 class TestStyleAndRcParams:
 
   def test_style_kwarg_applies_named_style(self):
-    backend.plot(_line(), no_show=True, style="default")
-    import matplotlib as mpl
-    assert mpl.rcParams["image.cmap"] == "viridis"
+    fig = backend.plot(_field_2d(), no_show=True, style="default")
+    assert fig.axes[0].collections[0].get_cmap().name == "viridis"
 
   def test_rcparams_dict_overrides(self):
-    backend.plot(_line(), no_show=True, rcParams={"lines.linewidth": 5.0})
+    fig = backend.plot(_line(), no_show=True, rcParams={"lines.linewidth": 5.0})
+    assert fig.axes[0].lines[0].get_linewidth() == 5.0
+
+  @pytest.mark.parametrize("options", [
+      dict(),
+      dict(style="dark_background"),
+      dict(rcParams={"lines.linewidth": 5.0}),
+      dict(color="red", linewidth=4.0, linestyle="--"),
+  ])
+  def test_global_rcparams_are_untouched(self, options):
     import matplotlib as mpl
-    assert mpl.rcParams["lines.linewidth"] == 5.0
+    before = dict(mpl.rcParams)
+    backend.plot(_line(), no_show=True, **options)
+    assert dict(mpl.rcParams) == before
 
 
 # --------------------------------------------------------------------------

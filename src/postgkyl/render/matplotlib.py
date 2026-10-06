@@ -39,7 +39,7 @@ from postgkyl.gdatastate import (
 
 from ._prep import (centred_range, default_axis_labels, materialize_plot_data,
                     remaining_axes, squeeze_collapsed_axes, subplot_grid)
-from .style import apply_style
+from .style import style_context
 
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
@@ -661,29 +661,27 @@ def plot(
     line_colors = _normalize_line_colors(color)
     line_styles = _normalize_linestyles(linestyle, len(states))
 
-    # ---- Style / global rcParams novelties ----
-    apply_style(style) if style else apply_style("postgkyl")
-    if rcParams:
-      for key, value in rcParams.items():
-        mpl.rcParams[key] = value
+    # ---- Style: scoped to this figure, never global ----
+    rc = dict(rcParams or {})
     if cmap:
-      mpl.rcParams["image.cmap"] = cmap
+      rc["image.cmap"] = cmap
     elif diverging:
-      mpl.rcParams["image.cmap"] = "RdBu_r"
+      rc["image.cmap"] = "RdBu_r"
     if jet:  # not for general use -- only for comparing against literature
-      mpl.rcParams["image.cmap"] = "jet"
+      rc["image.cmap"] = "jet"
     if xkcd:
       xkcd_cm, xkcd_rc = get_xkcd_safely()
     else:
       xkcd_cm, xkcd_rc = nullcontext, {}
     if color is not None and line_colors is None:
-      mpl.rcParams["lines.color"] = color
+      rc["lines.color"] = color
     if linewidth:
-      mpl.rcParams["lines.linewidth"] = linewidth
+      rc["lines.linewidth"] = linewidth
     if linestyle is not None and line_styles is None:
-      mpl.rcParams["lines.linestyle"] = linestyle
+      rc["lines.linestyle"] = linestyle
 
-    with xkcd_cm(), mpl.rc_context(rc=xkcd_rc):
+    with style_context(style), mpl.rc_context(rc), xkcd_cm(), \
+        mpl.rc_context(rc=xkcd_rc):
 
       # ---- Phase 1: figure/axes layout, from the first dataset ----
       ref = states[0]
