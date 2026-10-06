@@ -11,9 +11,11 @@ without asking the user to gather it by hand.
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import pathlib
 import platform
 import subprocess
+import sys
 
 from postgkyl import gpython
 from postgkyl.cli_spec import hidden
@@ -68,6 +70,18 @@ def _dependency_versions() -> str:
   return ", ".join(versions)
 
 
+def _pytest_info() -> str:
+  spec = importlib.util.find_spec("pytest")
+  if spec is None:
+    return ("NOT INSTALLED in this Python environment; from the checkout run "
+            "python -m pip install -e '.[test]'")
+  try:
+    version = importlib.metadata.version("pytest")
+  except importlib.metadata.PackageNotFoundError:
+    version = "unknown version"
+  return f"{version} ({spec.origin})"
+
+
 def version_report(version: str) -> str:
   """Build the full ``pgkyl --version`` report.
 
@@ -79,15 +93,24 @@ def version_report(version: str) -> str:
   """
   build = gpython.build_info()
   bridge = "available" if gpython.available() else "unavailable"
+  built_with = "unknown (no build metadata)"
   if build is not None:
     arch = build["build_arch_flags"] or "compiler default"
     bridge += f" (built {build['build_date']}, CC={build['build_cc']}, ARCH_FLAGS={arch})"
+    built_with = (f"Python {build.get('build_python', 'unknown')}, "
+                  f"NumPy {build.get('build_numpy', 'unknown')}")
   return "\n".join([
       f"pgkyl, version {version}",
       f"postgkyl commit: {_postgkyl_commit()}",
       f"Gkeyll:          {_gkeyll_info()}",
       f"gpython bridge:  {bridge}",
+      f"Built with:      {built_with}",
       f"Python:          {platform.python_implementation()} {platform.python_version()}",
+      f"Interpreter:     {sys.executable}",
+      f"Environment:     {sys.prefix}",
+      f"Package:         {pathlib.Path(__file__).resolve().parent}",
+      f"Extension:       {gpython.lib_path() or 'unavailable'}",
+      f"pytest:          {_pytest_info()}",
       f"Platform:        {platform.platform()}",
       f"Dependencies:    {_dependency_versions()}",
   ])

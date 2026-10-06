@@ -2,6 +2,7 @@
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,8 @@ def _git(directory, *args):
 
 
 def _build_info():
+  import numpy
+
   branch = _git(GKEYLL, "symbolic-ref", "--short", "HEAD")
   if branch == "unknown":
     branch = "detached"
@@ -45,6 +48,8 @@ def _build_info():
       "build_date": datetime.now(timezone.utc).isoformat(),
       "build_cc": os.environ.get("CC", "cc"),
       "build_arch_flags": os.environ.get("ARCH_FLAGS", ""),
+      "build_python": platform.python_version(),
+      "build_numpy": numpy.__version__,
   }
 
 

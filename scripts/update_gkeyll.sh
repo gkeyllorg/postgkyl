@@ -1,6 +1,23 @@
 #!/bin/sh
-# Obtain Gkeyll or explicitly fast-forward its configured upstream branch.
 set -eu
+
+usage() {
+    cat <<EOF
+usage: sh $0 [-h]
+
+Obtain Gkeyll in gkeyll/, or explicitly fast-forward it to the branch named in
+scripts/gkeyll-branch. Refuses tracked edits and local commits on that branch.
+Reinstall Postgkyl afterwards to build the update.
+
+options:
+  -h, --help   show this help message and exit
+EOF
+}
+case "$#:${1:-}" in
+    0:) ;;
+    1:-h|1:--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+esac
 
 REPO_URL="https://github.com/ammarhakim/gkeyll.git"
 

@@ -41,7 +41,7 @@ including local edits. For just the core, use `sh scripts/build_gkeyll.sh`.
 
 `sh scripts/update_gkeyll.sh` explicitly fetches and fast-forwards the branch
 named in `scripts/gkeyll-branch`; it refuses tracked edits and local commits on
-that branch. `bash scripts/update_pgkyl.sh --editable` updates both repositories
+that branch. `bash scripts/update_pgkyl.sh` updates both repositories
 and reinstalls. Do not use either updater to build ongoing native edits or clear
 those edits to satisfy an updater.
 

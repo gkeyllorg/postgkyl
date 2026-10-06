@@ -10,8 +10,11 @@ up an editable checkout and development tools. For native changes, use the
 `postgkyl` folder, run:
 
 ```bash
-python -m pytest tests/
+pytest tests/
 ```
+
+`pgkyl --version` reports pytest availability, interpreter and package paths,
+and native build details.
 
 The suite treats unexpected warnings as errors and validates marker names and
 configuration. Add `-v` for individual results or `--durations=20` to find slow

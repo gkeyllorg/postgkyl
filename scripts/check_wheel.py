@@ -1,5 +1,6 @@
 """Check an installed wheel and run native contracts outside the source tree."""
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,7 @@ def test_installed_wheel():
 
 
 def main():
+  argparse.ArgumentParser(description=__doc__).parse_args()
   # Several tests add ../src to sys.path. Copying them ensures that even those
   # tests cannot accidentally import the checkout instead of the wheel.
   with tempfile.TemporaryDirectory(prefix="postgkyl-wheel-tests-") as directory:

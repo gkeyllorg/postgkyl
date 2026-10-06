@@ -1,13 +1,29 @@
 #!/bin/sh
-# Install one built wheel into a fresh environment and prove that its native
-# bridge loads from outside the source checkout.  Dependencies are installed
-# normally so the smoke test exercises the same NumPy ABI users receive.
 set -e
 
-if [ "$#" -ne 1 ]; then
-    echo "usage: $0 path/to/postgkyl.whl" >&2
-    exit 2
-fi
+usage() {
+    cat <<EOF
+usage: sh $0 [-h] path/to/postgkyl.whl
+
+Install one built wheel into a fresh environment and prove that its native
+bridge loads from outside the source checkout. Dependencies are installed
+normally so the smoke test exercises the same NumPy ABI users receive.
+
+options:
+  -h, --help   show this help message and exit
+
+environment:
+  PYTHON                    interpreter for the fresh venv (default: python3)
+  POSTGKYL_SMOKE_NO_DEPS=1  reuse the interpreter's installed dependencies
+                            (offline developer check; leave unset in CI)
+EOF
+}
+
+case "$#:${1:-}" in
+    1:-h|1:--help) usage; exit 0 ;;
+    1:*) ;;
+    *) usage >&2; exit 2 ;;
+esac
 
 PYTHON="${PYTHON:-python3}"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.metadata
 from importlib import import_module
 import subprocess
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -83,3 +85,55 @@ def test_version_report_without_build_metadata(monkeypatch):
   assert "pgkyl, version 2.0" in report
   assert "gpython bridge:  unavailable" in report
   assert "ARCH_FLAGS" not in report
+  assert f"Interpreter:     {sys.executable}" in report
+  assert f"Environment:     {sys.prefix}" in report
+
+
+def test_version_reports_missing_pytest_without_importing_it(monkeypatch):
+  monkeypatch.setattr(version.importlib.util, "find_spec", lambda _: None)
+  report = version.version_report("2.0")
+  assert "pytest:          NOT INSTALLED in this Python environment" in report
+  assert "python -m pip install -e '.[test]'" in report
+
+
+def test_pytest_reports_version_and_import_location(monkeypatch):
+  monkeypatch.setattr(
+      version.importlib.util, "find_spec",
+      lambda _: SimpleNamespace(origin="/env/pytest/__init__.py"))
+  monkeypatch.setattr(version.importlib.metadata, "version", lambda _: "9.0.3")
+  assert "9.0.3 (/env/pytest/__init__.py)" in version._pytest_info()
+
+
+@pytest.mark.parametrize("extra, expected", [
+    ({}, "Python unknown, NumPy unknown"),
+    ({
+        "build_python": "3.12.0",
+        "build_numpy": "2.0.0"
+    }, "Python 3.12.0, NumPy 2.0.0"),
+])
+def test_version_reports_build_environment(monkeypatch, extra, expected):
+  build = {
+      "build_date": "2026-10-05",
+      "build_cc": "cc",
+      "build_arch_flags": "",
+      **extra,
+  }
+  monkeypatch.setattr(version.gpython, "build_info", lambda: build)
+  monkeypatch.setattr(version, "_postgkyl_commit", lambda: "abc")
+  monkeypatch.setattr(version, "_gkeyll_info", lambda: "def")
+  report = version.version_report("2.0")
+  assert f"Built with:      {expected}" in report
+  assert "CC=cc, ARCH_FLAGS=compiler default" in report
+
+
+def test_pytest_without_distribution_metadata(monkeypatch):
+  monkeypatch.setattr(
+      version.importlib.util, "find_spec",
+      lambda _: SimpleNamespace(origin="/source/pytest/__init__.py"))
+
+  def missing(_):
+    raise importlib.metadata.PackageNotFoundError("pytest")
+
+  monkeypatch.setattr(version.importlib.metadata, "version", missing)
+  assert "unknown version (/source/pytest/__init__.py)" in version._pytest_info(
+  )

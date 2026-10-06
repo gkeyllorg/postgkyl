@@ -147,12 +147,12 @@ selection and [PyVista](pyvista.rst) for rendering examples.
 ## Updating and rebuilding
 
 With the environment active, update both Postgkyl and Gkeyll, rebuild, and
-reinstall:
+reinstall as an editable installation:
 
 ```bash
 bash scripts/update_pgkyl.sh
-# Developer installation:
-bash scripts/update_pgkyl.sh --editable
+# Install a copy of the checkout instead:
+bash scripts/update_pgkyl.sh --no-editable
 ```
 
 Updates use fast-forward-only Git operations and refuse tracked Gkeyll edits
