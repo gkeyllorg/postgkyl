@@ -307,6 +307,29 @@ class TestSaveFrames:
 # --------------------------------------------------------------------------
 
 
+def _decode_first_frame(movie, output, encoder_path):
+  """Decode a movie's first frame with any available ffmpeg, starting with
+  the one that encoded it; skip when none has the decoder (e.g. a distro
+  build without H.264, as on Perlmutter)."""
+  candidates = dict.fromkeys(path for path in (encoder_path,
+                                               _ffmpeg.resolve_ffmpeg(),
+                                               _ffmpeg._bundled_ffmpeg())
+                             if path is not None)
+  errors = []
+  for path in candidates:
+    result = subprocess.run([
+        path, "-loglevel", "error", "-y", "-i",
+        str(movie), "-frames:v", "1",
+        str(output)
+    ],
+                            capture_output=True,
+                            text=True)
+    if result.returncode == 0:
+      return
+    errors.append(f"{path}: {result.stderr.strip()}")
+  pytest.skip("no ffmpeg can decode the movie: " + "; ".join(errors))
+
+
 class TestCompileMovie:
 
   def test_unsupported_extension_raises(self, tmp_path):
@@ -440,18 +463,16 @@ class TestCompileMovie:
     frame = tmp_path / "frame.png"
     Image.fromarray(image).save(frame)
     movie = tmp_path / "movie.mp4"
+    encoder = _ffmpeg.resolve_video_encoder("test")
     with style_context("postgkyl"):
       assert matplotlib.rcParams["image.origin"] == "lower"
-      anim_mod._compile_movie([str(frame)] * 2, str(movie), fps=2)
+      anim_mod._compile_movie([str(frame)] * 2,
+                              str(movie),
+                              fps=2,
+                              encoder=encoder)
 
     first = tmp_path / "first.png"
-    ffmpeg = _ffmpeg.resolve_ffmpeg()
-    subprocess.run([
-        ffmpeg, "-loglevel", "error", "-y", "-i",
-        str(movie), "-frames:v", "1",
-        str(first)
-    ],
-                   check=True)
+    _decode_first_frame(movie, first, encoder[0])
     decoded = np.asarray(Image.open(first).convert("RGB"))
     top, bottom = decoded[decoded.shape[0] // 4], decoded[3 *
                                                           decoded.shape[0] // 4]
