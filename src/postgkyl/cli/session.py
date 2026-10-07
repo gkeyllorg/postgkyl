@@ -7,7 +7,7 @@ command on the session's working set exactly as the ``pgkyl`` pipeline would::
     s = PostgkylSession()
     s.load("f.gkyl").interpolate(num_interp=3)
     s.select(z0=0.5)
-    s.print_cmd()  # pgkyl f.gkyl interpolate --num_interp 3 select --z0 0.5
+    s.print_cli()  # pgkyl f.gkyl interpolate --num_interp 3 select --z0 0.5
 
 Each command returns the session, so calls chain or stand alone alike; what
 the last command returned (a figure, a printed value) is ``s.result``.
@@ -157,7 +157,7 @@ class PostgkylSession:
     return shlex.join(
         ["pgkyl", *(token for step in self._steps for token in step)])
 
-  def print_cmd(self) -> None:
+  def print_cli(self) -> None:
     """Print :meth:`command`."""
     print(self.command())
 

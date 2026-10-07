@@ -57,9 +57,9 @@ gyrokinetic simulation along the first coordinate and plots it:
    s.interpolate()
    s.select(z1=0.0, z2=0.0)
    s.plot(title="Electron density", saveas="density.png")
-   s.print_cmd()
+   s.print_cli()
 
-``s.print_cmd()`` prints the command line that draws the same figure:
+``s.print_cli()`` prints the command line that draws the same figure:
 
 .. code-block:: bash
 
@@ -76,7 +76,7 @@ Each command returns the session, so the same pipeline can also be chained:
      .interpolate()
      .select(z1=0.0, z2=0.0)
      .plot(title="Electron density", saveas="density.png"))
-   s.print_cmd()
+   s.print_cli()
 
 What the last command returned, here ``plot``'s figure, is ``s.result``.
 

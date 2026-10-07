@@ -91,7 +91,7 @@ def test_a_call_that_would_break_the_command_line_is_refused():
 
 def test_methods_are_derived_from_the_cli_models():
   s = PostgkylSession()
-  own = {"command", "print_cmd", "datasets"}
+  own = {"command", "print_cli", "datasets"}
   names = {model.name for model in MODELS}
   assert not own & names
   assert names <= set(dir(s))

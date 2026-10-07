@@ -25,7 +25,7 @@ class PostgkylSession:
         r"""The ``pgkyl`` command line equivalent to the calls made so far.
         """
 
-    def print_cmd(self) -> None:
+    def print_cli(self) -> None:
         r"""Print :meth:`command`.
         """
 
