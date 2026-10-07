@@ -552,10 +552,9 @@ _ALLOWED = {
     # top surface: facade + frozen metadata; "gui" names the separate
     # pgkyl-gui program in the help (its launcher imports only the stdlib)
     "cli": {"", "cli_spec", "gui"},
-    # notebook GUI, a top surface beside the CLI: the facade's verbs, the
-    # file-naming convention for output discovery, and the transport
-    # diagnostic's output vocabulary.
-    "gui": {"", "io", "diagnostics"},
+    # notebook GUI, a top surface beside the CLI: the facade's verbs and the
+    # file-naming convention for output discovery.
+    "gui": {"", "io"},
 }
 _LAYERS = set(_ALLOWED)
 

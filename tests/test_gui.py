@@ -187,27 +187,6 @@ class TestBuildChain:
         "conv": 2.5
     }
 
-  def test_transport_source(self):
-    settings = gp.Settings(directory="d",
-                           mode="transport",
-                           frames=(3, 4),
-                           sim="s",
-                           species="ion",
-                           transform="none",
-                           fluct="y",
-                           collect=True)
-    chain = gp.build_chain(settings)
-    assert chain.source.kwargs["per_frame"] is True
-    assert chain.source.kwargs["fluct"] == "y"
-    assert _verbs(chain) == ["collect"]
-    with pytest.raises(ValueError, match="already flux-surface"):
-      gp.build_chain(
-          gp.Settings(directory="d",
-                      mode="transport",
-                      frames=(3, ),
-                      sim="s",
-                      species="ion"))
-
 
 # --------------------------------------------------------------- execution
 @needs_gkeyll
