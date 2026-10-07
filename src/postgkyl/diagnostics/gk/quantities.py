@@ -995,8 +995,7 @@ def fetch_energy_flux_es(gdatas: list["GData"], **kwargs):
 #
 #   D = -Gamma/(g^xx dn/dx),  chi = -q/(n g^xx dT/dx),  q = Q - conv*T*Gamma,
 #
-# conv defaulting to 3/2. ``transport`` computes the same coefficients from
-# flux-surface and time averaged fluxes and profiles instead.
+# conv defaulting to 3/2.
 
 
 def _heat_flux(temp: "GData", part_flux: "GData", energy_flux: "GData",
