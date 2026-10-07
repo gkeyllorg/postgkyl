@@ -28,6 +28,13 @@ to the first parameter with each initial in signature order; reserve `-h` for
 help. Aliases/abbreviations change spelling only. Bare filenames expand to
 `load --file_name`; they do not define different loading semantics.
 
+`cli/session.py`'s `PostgkylSession` runs the CLI from Python and records its
+command line. Its methods are derived from `MODELS`; `compiler.command_tokens`
+is the only inverse of the CLI parsing (value to argv). Never add per-command
+session code; `tests/test_cli_session_tokens.py` round-trips every command.
+After changing a public command, regenerate the IDE stub `cli/session.pyi`
+with `python scripts/generate_session_stub.py`; never edit it by hand.
+
 Use native Click chaining and callback-before-dispatch. Help groups the flat
 inventory into Verbs, Diagnostics, Render, and Utility. The console entry point
 is `postgkyl.cli.app:cli`. Version reporting is owned by `_version.py`, exported

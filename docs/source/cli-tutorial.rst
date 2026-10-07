@@ -39,3 +39,38 @@ an array entry, for example ``--legend_labels '["[reference]"]'``.
 Array items use the option's declared type, so numeric list options accept
 numeric arrays and reject invalid numbers. Fixed-length tuple options such as
 ``--figsize 12 10`` retain their existing syntax.
+
+Building a command line from Python
+-----------------------------------
+
+``PostgkylSession`` runs the CLI from Python, one command per call, and
+records the equivalent ``pgkyl`` command line. Run from the repository root
+(or the extracted example bundle), this takes the electron density of a 3x2v
+gyrokinetic simulation along the first coordinate and plots it:
+
+.. code-block:: python
+
+   from postgkyl.cli import PostgkylSession
+
+   s = PostgkylSession()
+   s.load("tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
+   s.interpolate()
+   s.select(z1=0.0, z2=0.0)
+   s.plot(title="Electron density", saveas="density.png")
+   s.print_cmd()
+
+``s.print_cmd()`` prints the command line that draws the same figure:
+
+.. code-block:: bash
+
+   pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl interpolate select --z1 0.0 --z2 0.0 plot --title 'Electron density' --saveas density.png
+
+Every command is a method with that command's options, so ``help(s.select)``
+lists them. Each call parses and runs the very tokens it records, on the same
+working set as the command line, so ``s.command()`` is exactly what ran. The
+current datasets are ``s.datasets``; after the ``select`` above it holds one
+dataset of 96 cells along the first coordinate. A dataset passed to an option
+such as ``average --weight`` is named by its ``tag``. A value with no
+command-line spelling, such as a NumPy array or a ``slice``, is refused with a
+``TypeError``; use the string selector ``"1:3"`` instead. A failed call is not
+recorded.
