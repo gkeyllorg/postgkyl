@@ -16,6 +16,11 @@ class PostgkylSession:
         r"""The working set: the datasets the next command applies to.
         """
 
+    @property
+    def result(self) -> Any:
+        r"""What the last command returned, e.g. ``plot``'s figure.
+        """
+
     def command(self) -> str:
         r"""The ``pgkyl`` command line equivalent to the calls made so far.
         """
@@ -24,7 +29,7 @@ class PostgkylSession:
         r"""Print :meth:`command`.
         """
 
-    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> Any:
+    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
         r"""Animate a sequence of frames, one frame per dataset (or dataset group).
 
         Each panel uses its own value range across all frames. Datasets overlaid
@@ -126,7 +131,7 @@ class PostgkylSession:
           RuntimeError: saving to a video container without ffmpeg on ``PATH``.
         """
 
-    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``int f w dx^dims / int w dx^dims`` over the directions in ``dims``.
 
         Args:
@@ -153,7 +158,7 @@ class PostgkylSession:
             ``data``'s, or dataset-only options are used for a full average.
         """
 
-    def collect(self, *, sumdata: bool = False, period: float | None = None, offset: float = 0.0, chunk: int | None = None, tag: str | None = None, label: str | None = None) -> Any:
+    def collect(self, *, sumdata: bool = False, period: float | None = None, offset: float = 0.0, chunk: int | None = None, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Collect many single-frame datasets into one with a new leading time axis.
 
         Accepts ``collect(a, b)`` or ``collect([a, b])`` (flattened via
@@ -192,7 +197,7 @@ class PostgkylSession:
             (gkyl-backed).
         """
 
-    def differentiate(self, *, direction: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def differentiate(self, *, direction: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Differentiate within DG cells or take a numerical gradient of point values.
 
         Native modal inputs stay modal and use local polynomial derivatives on a
@@ -226,7 +231,7 @@ class PostgkylSession:
             or native modal data lacks uniform cell edges.
         """
 
-    def discovery_available_frames(self, stem: str, *, frames: list[int] | tuple[int, ...] | None = None) -> Any:
+    def discovery_available_frames(self, stem: str, *, frames: list[int] | tuple[int, ...] | None = None) -> PostgkylSession:
         r"""Set of available frame numbers for a ``<stem><frame>.gkyl`` file family.
 
         Args:
@@ -240,7 +245,7 @@ class PostgkylSession:
           The set of frame numbers for which ``<stem><frame>.gkyl`` exists.
         """
 
-    def discovery_find_output_stems(self, extensions: str = 'gkyl', path: str = '.') -> Any:
+    def discovery_find_output_stems(self, extensions: str = 'gkyl', path: str = '.') -> PostgkylSession:
         r"""Map each extension to the sorted unique Gkeyll filename stems in ``path``.
 
         Frame indices and a trailing ``_restart`` are stripped from each stem by
@@ -255,7 +260,7 @@ class PostgkylSession:
           A dict mapping each extension to a sorted list of unique stems.
         """
 
-    def eval_at_coord_proj(self, eval_dirs: list[int] | tuple[int, ...], eval_coords: list[float] | tuple[float, ...], *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def eval_at_coord_proj(self, eval_dirs: list[int] | tuple[int, ...], eval_coords: list[float] | tuple[float, ...], *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Evaluate ``data`` at ``eval_coords`` in ``eval_dirs`` and project onto
         the surviving directions' target basis.
 
@@ -291,7 +296,7 @@ class PostgkylSession:
             range.
         """
 
-    def evaluate(self, chain: str, *, tag: str | None = None, label: str | None = None) -> Any:
+    def evaluate(self, chain: str, *, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Evaluate an RPN expression over an explicit list of datasets.
 
         ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
@@ -314,7 +319,7 @@ class PostgkylSession:
             is unrecognized, or an operator fails.
         """
 
-    def extract_flux_surface(self, *, mapc2p: str | None = None, nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def extract_flux_surface(self, *, mapc2p: str | None = None, nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sample a field component on a toroidal surface.
 
         Args:
@@ -333,7 +338,7 @@ class PostgkylSession:
           label: Optional result label.
         """
 
-    def extract_input(self) -> Any:
+    def extract_input(self) -> PostgkylSession:
         r"""Decode the input file embedded in a Gkeyll output file's ``ctx``.
 
         Args:
@@ -343,7 +348,7 @@ class PostgkylSession:
           The decoded input-file text, or an empty string when none is embedded.
         """
 
-    def fft(self, *, psd: bool = False, iso: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def fft(self, *, psd: bool = False, iso: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Fourier transform (or power spectral density) of field-domain data.
 
         Wraps ``numerics.fft``: each component is transformed over the spatial
@@ -375,7 +380,7 @@ class PostgkylSession:
             binning is requested for data that is not 2D/3D.
         """
 
-    def fit(self, fit_type: str, *, guess: str | None = None, window: bool = False, min_n: int | None = None, print_coeffs: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def fit(self, fit_type: str, *, guess: str | None = None, window: bool = False, min_n: int | None = None, print_coeffs: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Fit a model to data and return the fitted curve.
 
         Fits the model named (or expressed) by ``fit_type`` to each component of
@@ -429,7 +434,7 @@ class PostgkylSession:
             ``window=True`` and the data is not 1D.
         """
 
-    def gk_energy_balance(self, name: str, species: list[str] | tuple[str, ...], *, path: str = './', relative_error: bool = False, multib: str = '-10', field_dot_file: str | None = None, apar_dot_file: str | None = None, fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, field_file: str | None = None, apar_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> Any:
+    def gk_energy_balance(self, name: str, species: list[str] | tuple[str, ...], *, path: str = './', relative_error: bool = False, multib: str = '-10', field_dot_file: str | None = None, apar_dot_file: str | None = None, fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, field_file: str | None = None, apar_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
 
         Requires, per species (named ``<name>-<species_name>``): an
@@ -480,7 +485,7 @@ class PostgkylSession:
           FileNotFoundError: if a required file family is missing.
         """
 
-    def gk_load_distf(self, name: str, species: str, frame: str | float, *, tag: str = 'f', suffix: str = '', use_c2p_vel: bool = False, use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None, num_interp: int | None = None, jf_file: str | None = None, mapc2p_vel_file: str | None = None, jacobvel_file: str | None = None, mc2nu_file: str | None = None, mapc2p_file: str | None = None, jacobtot_inv_file: str | None = None) -> Any:
+    def gk_load_distf(self, name: str, species: str, frame: str | float, *, tag: str = 'f', suffix: str = '', use_c2p_vel: bool = False, use_mc2nu: bool = False, use_mapc2p: bool = False, block_idx: int | None = None, num_interp: int | None = None, jf_file: str | None = None, mapc2p_vel_file: str | None = None, jacobvel_file: str | None = None, mc2nu_file: str | None = None, mapc2p_file: str | None = None, jacobtot_inv_file: str | None = None) -> PostgkylSession:
         r"""Build real distribution functions from saved ``Jf`` data.
 
         A scalar frame returns one :class:`~postgkyl.gdata.gdata.GData`. A list,
@@ -516,7 +521,7 @@ class PostgkylSession:
           group holding one distribution function per requested frame.
         """
 
-    def gk_load_quantity(self, quantity: Literal['ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'beta', 'c_s', 'debye_length', 'diamag_vel', 'distf', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'larmor_radius', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, kind: str | None = None, read_options: Mapping[str, str] | None = None) -> Any:
+    def gk_load_quantity(self, quantity: Literal['ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'beta', 'c_s', 'debye_length', 'diamag_vel', 'distf', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'larmor_radius', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, kind: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Load and compute a pre-named gyrokinetic quantity.
 
         Modal source files retain their DG representation through the calculation:
@@ -550,7 +555,7 @@ class PostgkylSession:
             ``is_multi_species`` quantity requested without a species list.
         """
 
-    def gk_nodes(self, name: str, *, path: str = './', multib: str = '-10', nodes_file: str | None = None, psi_file: str | None = None, wall_file: str | None = None, contour: bool = False, clevels: str | None = None, cnlevels: int = 11, fixaspect: bool = False, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, xlabel: str = 'R (m)', ylabel: str = 'Z (m)', zlabel: str = '$\\psi$', title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, multib_unicolor: bool = False, show: bool = False, saveas: str | None = None) -> Any:
+    def gk_nodes(self, name: str, *, path: str = './', multib: str = '-10', nodes_file: str | None = None, psi_file: str | None = None, wall_file: str | None = None, contour: bool = False, clevels: str | None = None, cnlevels: int = 11, fixaspect: bool = False, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, xlabel: str = 'R (m)', ylabel: str = 'Z (m)', zlabel: str = '$\\psi$', title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, multib_unicolor: bool = False, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot the nodes of a (possibly multiblock) grid, with optional overlays.
 
         Args:
@@ -589,7 +594,7 @@ class PostgkylSession:
           The populated Figure.
         """
 
-    def gk_particle_balance(self, name: str, species: str, *, path: str = './', relative_error: bool = False, multib: str = '-10', fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> Any:
+    def gk_particle_balance(self, name: str, species: str, *, path: str = './', relative_error: bool = False, multib: str = '-10', fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot (and compute) the particle balance of a single species.
 
         Requires ``<name>-<species>_fdot_integrated_moms.gkyl``; and (only if the
@@ -633,7 +638,7 @@ class PostgkylSession:
           FileNotFoundError: if a required file family is missing.
         """
 
-    def grid(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def grid(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Turn a dataset's grid into a dataset of coordinate values.
 
         Builds a new dataset whose values, at each grid node, are the physical
@@ -657,7 +662,7 @@ class PostgkylSession:
             not have one entry per dimension reported by ``num_cells``.
         """
 
-    def growth(self, *, guess: str | None = None, min_n: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def growth(self, *, guess: str | None = None, min_n: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Fit exponential growth on the best leading data window.
 
         Args:
@@ -672,7 +677,7 @@ class PostgkylSession:
           The fitted curve; rate, uncertainty, and R-squared are in its fit context.
         """
 
-    def info(self, *, no_header: bool = False, all: bool = False) -> Any:
+    def info(self, *, no_header: bool = False, all: bool = False) -> PostgkylSession:
         r"""Print a summary for each dataset; return the list of summary strings.
 
         Accepts ``info(a, b)`` or ``info([a, b])``. Each dataset's own ``info`` method
@@ -687,7 +692,7 @@ class PostgkylSession:
           all: Include all source metadata, load assumptions, and explicit load options.
         """
 
-    def integrate(self, axis: str | float | None = None, *, op: Literal['none', 'abs', 'sq'] = 'none', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def integrate(self, axis: str | float | None = None, *, op: Literal['none', 'abs', 'sq'] = 'none', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Integrate over all or a subset of a dataset's spatial axes.
 
         Integrating every axis is terminal and returns one number per field.
@@ -729,7 +734,7 @@ class PostgkylSession:
             dataset-only result options are used for a terminal integration.
         """
 
-    def interpolate(self, *, num_interp: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def interpolate(self, *, num_interp: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Interpolate DG (modal/nodal) data at uniformly spaced points in each cell.
 
         Basis, polynomial order, and value_form are properties of ``data`` itself,
@@ -746,7 +751,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def load(self, file_name: str, *, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> Any:
+    def load(self, file_name: str, *, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -803,7 +808,7 @@ class PostgkylSession:
           read_options: Reader-specific options as repeated key/value entries.
         """
 
-    def local_poly(self, *, npoints: int = 2, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def local_poly(self, *, npoints: int = 2, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Evaluate the DG polynomial cell-by-cell onto a plotting mesh that keeps
         every inter-cell discontinuity visible, instead of the continuous refined
         mesh ``interpolate`` produces.
@@ -824,7 +829,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def magsq(self, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def magsq(self, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Magnitude squared of a vector field.
 
         Sums the squares of the selected components (``numerics.mag_sq``),
@@ -845,7 +850,7 @@ class PostgkylSession:
           ValueError: if ``data`` is unevaluated modal coefficients.
         """
 
-    def map(self, mapping: str, *, space: str = 'conf', basis_type: str | None = None, poly_order: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def map(self, mapping: str, *, space: str = 'conf', basis_type: str | None = None, poly_order: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Replace a block of ``data``'s grid axes with mapped coordinates.
 
         Evaluates the mapping's DG coefficients at ``data``'s existing grid
@@ -898,7 +903,7 @@ class PostgkylSession:
             count does not match the expected ``m * num_basis``.
         """
 
-    def map_to_rz(self, *, mapc2p: str | None = None, nodes_file: str | None = None, z_axis: float = 0.0, phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def map_to_rz(self, *, mapc2p: str | None = None, nodes_file: str | None = None, z_axis: float = 0.0, phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Map a modal field component onto a physical R-Z slice.
 
         Two-dimensional input deforms the interpolated grid. Three-dimensional
@@ -927,7 +932,7 @@ class PostgkylSession:
           projection; set them when building that projection instead.
         """
 
-    def mask(self, mask_data: str | None = None, *, lower: float | None = None, upper: float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mask(self, mask_data: str | None = None, *, lower: float | None = None, upper: float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Mask out values using a mask dataset or numeric thresholds.
 
         Returns a dataset whose values are a ``numpy.ma`` masked array. Exactly
@@ -971,7 +976,7 @@ class PostgkylSession:
             ``np.ma.masked_where`` rejects the mismatched condition array.
         """
 
-    def mom_enstrophy_enstrophy(self, stem: str, init_frame: int, final_frame: int, *, extension: str = 'gkyl') -> Any:
+    def mom_enstrophy_enstrophy(self, stem: str, init_frame: int, final_frame: int, *, extension: str = 'gkyl') -> PostgkylSession:
         r"""Integrate squared curl and density-weighted velocity gradients per frame.
 
         Native DG data uses weak velocity division, local polynomial derivatives
@@ -992,7 +997,7 @@ class PostgkylSession:
           One value of each integral per frame.
         """
 
-    def mom_five_moment_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Mass density (component 0 of fluid moment data).
 
         Args:
@@ -1008,7 +1013,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_five_moment_ke(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_ke(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Kinetic (bulk-flow) energy density from fluid moment data.
 
         Native data retains its representation and uses semantic component
@@ -1033,7 +1038,7 @@ class PostgkylSession:
             lacks native arithmetic support.
         """
 
-    def mom_five_moment_mach(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_mach(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sonic Mach number ``M = |v| / c_s``.
 
         Args:
@@ -1053,7 +1058,7 @@ class PostgkylSession:
             ``None`` and cannot be inferred.
         """
 
-    def mom_five_moment_pressure(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_pressure(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Scalar pressure from fluid moment data (5- or 10-moment).
 
         Args:
@@ -1073,7 +1078,7 @@ class PostgkylSession:
             ``None`` and cannot be inferred.
         """
 
-    def mom_five_moment_sound(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_sound(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
         Args:
@@ -1093,7 +1098,7 @@ class PostgkylSession:
             ``None`` and cannot be inferred.
         """
 
-    def mom_five_moment_temp(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_temp(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Temperature ``T = p / rho`` from fluid moment data.
 
         Args:
@@ -1113,7 +1118,7 @@ class PostgkylSession:
             ``None`` and cannot be inferred.
         """
 
-    def mom_five_moment_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Velocity vector ``(vx, vy, vz)``: momentum (1:4) over density.
 
         Args:
@@ -1129,7 +1134,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_five_moment_velocity(self, density: str, momentum: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_velocity(self, density: str, momentum: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Velocity from separate density and momentum moments.
 
         Computes the flow velocity by dividing the ``momentum`` moments by the
@@ -1152,7 +1157,7 @@ class PostgkylSession:
           ValueError: if either input contains unevaluated modal coefficients.
         """
 
-    def mom_five_moment_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""x velocity: x momentum (component 1) over density.
 
         Args:
@@ -1168,7 +1173,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_five_moment_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""y velocity: y momentum (component 2) over density.
 
         Args:
@@ -1184,7 +1189,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_five_moment_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_five_moment_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""z velocity: z momentum (component 3) over density.
 
         Args:
@@ -1200,7 +1205,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_ke_dke_ke_dke(self, root_file_name: str, init_frame: int, final_frame: int, dim: int, vol: float, init_time: float, final_time: float, *, extension: str = 'gkyl') -> Any:
+    def mom_ke_dke_ke_dke(self, root_file_name: str, init_frame: int, final_frame: int, dim: int, vol: float, init_time: float, final_time: float, *, extension: str = 'gkyl') -> PostgkylSession:
         r"""Integrate kinetic energy and compute its negative rate of change.
 
         The first four fluid components are ``rho, px, py, pz``; total energy
@@ -1230,7 +1235,7 @@ class PostgkylSession:
             the intervening physical time intervals.
         """
 
-    def mom_mhd_bi(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_bi(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Magnetic-field vector ``(Bx, By, Bz)`` (components 5:8).
 
         Args:
@@ -1246,7 +1251,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_bx(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_bx(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""x magnetic-field component (component 5 of MHD data).
 
         Args:
@@ -1262,7 +1267,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_by(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_by(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""y magnetic-field component (component 6 of MHD data).
 
         Args:
@@ -1278,7 +1283,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_bz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_bz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""z magnetic-field component (component 7 of MHD data).
 
         Args:
@@ -1294,7 +1299,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Mass density (component 0 of fluid moment data).
 
         Args:
@@ -1310,7 +1315,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_mhd_mach(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_mach(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sonic Mach number ``M = |v| / c_s``.
 
         Args:
@@ -1328,7 +1333,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_mag_pressure(self, *, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_mag_pressure(self, *, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Magnetic pressure ``p_B = 0.5 * (Bx**2 + By**2 + Bz**2) / mu_0``.
 
         Args:
@@ -1345,7 +1350,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_pressure(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_pressure(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Thermal (gas) pressure
         ``p = (gas_gamma - 1) * (E - 0.5*rho*|v|**2 - p_B)``.
 
@@ -1364,7 +1369,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_sound(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_sound(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sound speed ``c_s = sqrt(gas_gamma * p / rho)``.
 
         Args:
@@ -1382,7 +1387,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_temp(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_temp(self, *, gas_gamma: float = 1.6666666666666667, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Temperature ``T = p / rho``.
 
         Args:
@@ -1400,7 +1405,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_mhd_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Velocity vector ``(vx, vy, vz)``: momentum (1:4) over density.
 
         Args:
@@ -1416,7 +1421,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_mhd_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""x velocity: x momentum (component 1) over density.
 
         Args:
@@ -1432,7 +1437,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_mhd_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""y velocity: y momentum (component 2) over density.
 
         Args:
@@ -1448,7 +1453,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_mhd_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_mhd_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""z velocity: z momentum (component 3) over density.
 
         Args:
@@ -1464,7 +1469,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_multispecies_accumulate_current(self, *, qbym: bool = False, charge: float | None = None, mass: float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_multispecies_accumulate_current(self, *, qbym: bool = False, charge: float | None = None, mass: float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Accumulate current from species moments.
 
         Scales the species' momentum/flow moments by a per-species factor to
@@ -1492,7 +1497,7 @@ class PostgkylSession:
             True and ``charge``/``mass`` are not both given (a nonzero ``mass``).
         """
 
-    def mom_multispecies_energetics(self, elc: str, ion: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_multispecies_energetics(self, elc: str, ion: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Decompose energy (kinetic, thermal, EM) for a two-species plasma.
 
         Splits the plasma energy into its constituent parts for a two-species
@@ -1531,7 +1536,7 @@ class PostgkylSession:
           ValueError: if any input contains unevaluated modal coefficients.
         """
 
-    def mom_plasma_beta(self, species: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_beta(self, species: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Plasma beta ``v_th**2 / v_A**2``.
 
         Args:
@@ -1555,7 +1560,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def mom_plasma_d(self, *, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_d(self, *, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Inertial (skin-depth) length ``d = c / omega_p``.
 
         Args:
@@ -1575,7 +1580,7 @@ class PostgkylSession:
           ValueError: if ``species`` is modal DG coefficients.
         """
 
-    def mom_plasma_lambdaD(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_lambdaD(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Debye length ``lambda_D = v_th / omega_p``.
 
         Args:
@@ -1599,7 +1604,7 @@ class PostgkylSession:
           ValueError: if ``species`` is modal DG coefficients.
         """
 
-    def mom_plasma_magB(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_magB(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Magnitude of the magnetic field ``|B|``.
 
         Args:
@@ -1616,7 +1621,7 @@ class PostgkylSession:
           ValueError: if ``field`` is modal DG coefficients.
         """
 
-    def mom_plasma_omegaC(self, *, mass: float = 1.0, charge: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_omegaC(self, *, mass: float = 1.0, charge: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Cyclotron (gyro) frequency ``omega_c = |q| * |B| / m``.
 
         Args:
@@ -1634,7 +1639,7 @@ class PostgkylSession:
           ValueError: if ``field`` is modal DG coefficients.
         """
 
-    def mom_plasma_omegaP(self, *, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_omegaP(self, *, mass: float = 1.0, charge: float = 1.0, epsilon_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Plasma frequency ``omega_p = sqrt(q**2 * n / (m**2 * epsilon_0))``.
 
         Args:
@@ -1653,7 +1658,7 @@ class PostgkylSession:
           ValueError: if ``species`` is modal DG coefficients.
         """
 
-    def mom_plasma_rho(self, species: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, charge: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_rho(self, species: str, field: str, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, charge: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Gyroradius (Larmor radius) ``rho = v_th / omega_c``.
 
         Args:
@@ -1678,7 +1683,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def mom_plasma_vA(self, species: str, field: str, *, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_vA(self, species: str, field: str, *, mu_0: float = 1.0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Alfven velocity ``v_A = |B| / sqrt(mu_0 * rho)``.
 
         Args:
@@ -1697,7 +1702,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def mom_plasma_vt(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, mhd: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_plasma_vt(self, *, gas_gamma: float = 1.6666666666666667, num_moms: int | None = None, mass: float = 1.0, mu_0: float = 1.0, no_sqrt2: bool = False, mhd: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Thermal velocity ``v_th = sqrt(2 T/m)`` of a species.
 
         Args:
@@ -1722,7 +1727,7 @@ class PostgkylSession:
           ValueError: if ``species`` is modal DG coefficients.
         """
 
-    def mom_rotations_bparrotate(self, array: str, field: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_rotations_bparrotate(self, array: str, field: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Project an array parallel to the magnetic field.
 
         Args:
@@ -1733,7 +1738,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def mom_rotations_bperprotate(self, array: str, field: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_rotations_bperprotate(self, array: str, field: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Project an array perpendicular to the magnetic field.
 
         Args:
@@ -1744,7 +1749,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def mom_rotations_parrotate(self, array: str, rotator: str, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_rotations_parrotate(self, array: str, rotator: str, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Component of ``array`` parallel to ``rotator``: ``(u . v_hat) v_hat``.
 
         Projects the three-component vector field ``array`` (u) onto the unit
@@ -1772,7 +1777,7 @@ class PostgkylSession:
             component counts do not match a three-component field.
         """
 
-    def mom_rotations_perprotate(self, array: str, rotator: str, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_rotations_perprotate(self, array: str, rotator: str, *, coords: str = '0:3', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Component of ``array`` perpendicular to ``rotator``:
         ``u - (u . v_hat) v_hat``.
 
@@ -1799,7 +1804,7 @@ class PostgkylSession:
             component counts do not match a three-component field.
         """
 
-    def mom_ten_moment_agyro(self, ptensor: str, bfield: str, *, measure: Literal['swisdak', 'frobenius'] = 'frobenius', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_agyro(self, ptensor: str, bfield: str, *, measure: Literal['swisdak', 'frobenius'] = 'frobenius', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Agyrotropy from a pressure tensor and an EM field.
 
         Measures how far the pressure tensor departs from gyrotropy about the
@@ -1826,7 +1831,7 @@ class PostgkylSession:
             ``measure`` is not 'frobenius' or 'swisdak'.
         """
 
-    def mom_ten_moment_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_density(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Mass density (component 0 of fluid moment data).
 
         Args:
@@ -1842,7 +1847,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_ten_moment_ke(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_ke(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Kinetic (bulk-flow) energy density from 10-moment fluid data.
 
         Args:
@@ -1859,7 +1864,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_mach(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_mach(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sonic Mach number ``M = |v| / c_s`` from 10-moment data.
 
         Args:
@@ -1876,7 +1881,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_mom_agyro(self, species: str, field: str, *, measure: Literal['swisdak', 'frobenius'] = 'frobenius', inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_mom_agyro(self, species: str, field: str, *, measure: Literal['swisdak', 'frobenius'] = 'frobenius', inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Agyrotropy from raw 10-moment species data and an EM field.
 
         Convenience wrapper that first forms the pressure tensor from raw
@@ -1903,7 +1908,7 @@ class PostgkylSession:
             ``measure`` is not 'frobenius' or 'swisdak'.
         """
 
-    def mom_ten_moment_p_par(self, ptensor: str, bfield: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_p_par(self, ptensor: str, bfield: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Pressure parallel to the magnetic field: ``(b . P . b) / |B|**2``.
 
         Args:
@@ -1922,7 +1927,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def mom_ten_moment_p_perp(self, ptensor: str, bfield: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_p_perp(self, ptensor: str, bfield: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Pressure perpendicular to the magnetic field:
         ``(P_xx + P_yy + P_zz - p_par) / 2``.
 
@@ -1942,7 +1947,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def mom_ten_moment_pressure(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pressure(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Scalar pressure (trace of the pressure tensor over three) from
         10-moment fluid data.
 
@@ -1960,7 +1965,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pressure_tensor(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pressure_tensor(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Full symmetric pressure tensor
         ``(P_xx, P_xy, P_xz, P_yy, P_yz, P_zz)``.
 
@@ -1977,7 +1982,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pxx(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pxx(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_xx`` pressure-tensor component.
 
         Args:
@@ -1993,7 +1998,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pxy(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pxy(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_xy`` pressure-tensor component.
 
         Args:
@@ -2009,7 +2014,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pxz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pxz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_xz`` pressure-tensor component.
 
         Args:
@@ -2025,7 +2030,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pyy(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pyy(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_yy`` pressure-tensor component.
 
         Args:
@@ -2041,7 +2046,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pyz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pyz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_yz`` pressure-tensor component.
 
         Args:
@@ -2057,7 +2062,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_pzz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_pzz(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``P_zz`` pressure-tensor component.
 
         Args:
@@ -2073,7 +2078,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_sound(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_sound(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Sound speed ``c_s = sqrt(gas_gamma * p / rho)`` from 10-moment data.
 
         Args:
@@ -2090,7 +2095,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_temp(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_temp(self, *, gas_gamma: float = 1.6666666666666667, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Temperature ``T = p / rho`` from 10-moment fluid data.
 
         Args:
@@ -2107,7 +2112,7 @@ class PostgkylSession:
           ValueError: if ``data`` is modal DG coefficients.
         """
 
-    def mom_ten_moment_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_vel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Velocity vector ``(vx, vy, vz)``: momentum (1:4) over density.
 
         Args:
@@ -2123,7 +2128,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_ten_moment_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_xvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""x velocity: x momentum (component 1) over density.
 
         Args:
@@ -2139,7 +2144,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_ten_moment_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_yvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""y velocity: y momentum (component 2) over density.
 
         Args:
@@ -2155,7 +2160,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def mom_ten_moment_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def mom_ten_moment_zvel(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""z velocity: z momentum (component 3) over density.
 
         Args:
@@ -2171,7 +2176,7 @@ class PostgkylSession:
           ValueError: if ``data`` contains unevaluated modal coefficients.
         """
 
-    def pkpm_laguerre_compose(self, distribution: str, variables: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def pkpm_laguerre_compose(self, distribution: str, variables: str, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Compose PKPM Laguerre coefficients into a full distribution function.
 
         Reconstructs the full distribution function ``f(x, v_par, v_perp)`` from
@@ -2195,7 +2200,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def pkpm_load_pkpm(self, name: str, species: str, idx: str, poly_order: int, *, tag: str | None = None, label: str | None = None) -> Any:
+    def pkpm_load_pkpm(self, name: str, species: str, idx: str, poly_order: int, *, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Load, interpolate, and frame-transform Gkeyll PKPM data.
 
         Loads the PKPM distribution (its two Laguerre coefficients ``F0``/``G``)
@@ -2218,7 +2223,7 @@ class PostgkylSession:
           :class:`~postgkyl.gdata.gdata.GData`.
         """
 
-    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> Any:
+    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> PostgkylSession:
         r"""Plot one or more datasets onto a shared figure and return it.
 
         Accepts ``plot(a)`` or ``plot(a, b, multiblock=True)``. The first dataset sets
@@ -2409,7 +2414,7 @@ class PostgkylSession:
             figure does not have enough axes for the panel count.
         """
 
-    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, style: str | None = None, rcParams: Mapping[str, str] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> Any:
+    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, style: str | None = None, rcParams: Mapping[str, str] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> PostgkylSession:
         r"""Render 2-D surface or 3-D volumetric data with Plotly.
 
         2-D data (``num_dims == 2``, after squeezing any size-1 axis) is drawn as
@@ -2499,7 +2504,7 @@ class PostgkylSession:
           plotly.graph_objects.Figure: the assembled figure.
         """
 
-    def plotly_animate(self, *, frame_labels: list[str] | tuple[str, ...] | None = None, frame_duration: int = 50, transition_duration: int = 0, from_start: bool = False, no_redraw: bool = False, save: bool = False, saveas: str | None = None, show: bool = False) -> Any:
+    def plotly_animate(self, *, frame_labels: list[str] | tuple[str, ...] | None = None, frame_duration: int = 50, transition_duration: int = 0, from_start: bool = False, no_redraw: bool = False, save: bool = False, saveas: str | None = None, show: bool = False) -> PostgkylSession:
         r"""Build a Plotly animation figure from a sequence of datasets.
 
         Renders the first dataset with :func:`plotly` to create the base figure,
@@ -2531,7 +2536,7 @@ class PostgkylSession:
           plotly.graph_objects.Figure: the assembled animation.
         """
 
-    def print(self, *, use: str | None = None, grid: bool = False) -> Any:
+    def print(self, *, use: str | None = None, grid: bool = False) -> PostgkylSession:
         r"""Print the values (or grid) of the selected datasets.
 
         Values are printed as stored, with singleton dimensions squeezed and
@@ -2544,7 +2549,7 @@ class PostgkylSession:
           grid: Print each grid axis instead of the values.
         """
 
-    def pyvista(self, *, no_show: bool = False, no_spin: bool = False, max_points_per_axis: int = -1, contour_levels: int = 10, clevels: str | None = None, is_log: bool = False, volume: bool = False, is_shaded: bool = False, hide_axes: bool = False, mesh_clip_plane: bool = False, mesh_slice_plane: bool = False, volume_clip_plane: bool = False, cmin: float | None = None, cmax: float | None = None, aspect_ratio: tuple[float, float, float] = (1, 1, 1), no_normalize: bool = False, camera_azimuth: float = 0.0, camera_elevation: float = -30.0, opacity: str | float = 'sigmoid_4', cmap: str = 'inferno', xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str = '', title: str = '', diverging: bool = False, cylindrical_to_cartesian: bool = False, theme: str = 'default', saveas: str = '', xscale: float = 1.0, yscale: float = 1.0, zscale: float = 1.0, xshift: float = 0.0, yshift: float = 0.0, zshift: float = 0.0, hide_zeros: bool = False) -> Any:
+    def pyvista(self, *, no_show: bool = False, no_spin: bool = False, max_points_per_axis: int = -1, contour_levels: int = 10, clevels: str | None = None, is_log: bool = False, volume: bool = False, is_shaded: bool = False, hide_axes: bool = False, mesh_clip_plane: bool = False, mesh_slice_plane: bool = False, volume_clip_plane: bool = False, cmin: float | None = None, cmax: float | None = None, aspect_ratio: tuple[float, float, float] = (1, 1, 1), no_normalize: bool = False, camera_azimuth: float = 0.0, camera_elevation: float = -30.0, opacity: str | float = 'sigmoid_4', cmap: str = 'inferno', xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str = '', title: str = '', diverging: bool = False, cylindrical_to_cartesian: bool = False, theme: str = 'default', saveas: str = '', xscale: float = 1.0, yscale: float = 1.0, zscale: float = 1.0, xshift: float = 0.0, yshift: float = 0.0, zshift: float = 0.0, hide_zeros: bool = False) -> PostgkylSession:
         r"""Render a 3-D scalar field with PyVista.
 
         Builds a structured grid from the (single-component) scalar values and
@@ -2612,7 +2617,7 @@ class PostgkylSession:
           RuntimeError: PyVista could not obtain a working OpenGL context.
         """
 
-    def relchange(self, data0: str, data: str, *, comp: str | float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def relchange(self, data0: str, data: str, *, comp: str | float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Relative change of ``data`` with respect to the baseline ``data0``.
 
         Computes ``(data - data0) / data0`` component-wise (``numerics.rel_change``).
@@ -2637,7 +2642,7 @@ class PostgkylSession:
           ValueError: if either operand is unevaluated modal coefficients.
         """
 
-    def represent(self, *, to: Literal['modal', 'nodal', 'quad'], num_quad: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def represent(self, *, to: Literal['modal', 'nodal', 'quad'], num_quad: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Convert a native dataset to the ``to`` value_form (explicitly).
 
         By default, ``quad`` uses Gkeyll's basis-owned quadrature nodes and
@@ -2655,7 +2660,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def save(self, out_name: str = '', extension: Literal['gkyl', 'txt', 'npy', 'vtk'] = 'gkyl', var_name: str = 'CartGridField') -> Any:
+    def save(self, out_name: str = '', extension: Literal['gkyl', 'txt', 'npy', 'vtk'] = 'gkyl', var_name: str = 'CartGridField') -> PostgkylSession:
         r"""Write ``data`` to ``out_name`` in the requested ``extension``.
 
         The ``gkyl`` format preserves all dataset metadata, including
@@ -2677,7 +2682,7 @@ class PostgkylSession:
           The path actually written.
         """
 
-    def select(self, *, comp: str | float | None = None, z0: str | float | None = None, z1: str | float | None = None, z2: str | float | None = None, z3: str | float | None = None, z4: str | float | None = None, z5: str | float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def select(self, *, comp: str | float | None = None, z0: str | float | None = None, z1: str | float | None = None, z2: str | float | None = None, z3: str | float | None = None, z4: str | float | None = None, z5: str | float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Select part of a dataset by coordinate (``z0``-``z5``) and/or component.
 
         Each selector accepts an int index, a float coordinate value, or a slice
@@ -2726,7 +2731,7 @@ class PostgkylSession:
             physical coordinate still varies along an unresolved sibling axis.
         """
 
-    def sort(self, *, reverse: bool = False) -> Any:
+    def sort(self, *, reverse: bool = False) -> PostgkylSession:
         r"""Reorder datasets by the natural/numeric sort of their source filename.
 
         Fixes the shell-glob/lexicographic-sort trap where ``field_10.gkyl`` sorts
@@ -2747,7 +2752,7 @@ class PostgkylSession:
           The same datasets, reordered by their source filename's natural sort key.
         """
 
-    def val2coord(self, *, x: str, y: str, periodic: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def val2coord(self, *, x: str, y: str, periodic: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Build new (x, y) datasets from columns of a DynVector.
 
         Reinterprets columns of ``data`` (typically a DynVector / diagnostic
@@ -2778,7 +2783,7 @@ class PostgkylSession:
             number of y-components.
         """
 
-    def vm_kinetic_transform_frame(self, distribution: str, bulk: str, *, cdim: int, inplace: bool = False, tag: str | None = None, label: str | None = None) -> Any:
+    def vm_kinetic_transform_frame(self, distribution: str, bulk: str, *, cdim: int, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Shift a distribution function to a moving frame of reference.
 
         Shifts the velocity-space grid of ``distribution`` by the local ``bulk``
@@ -2804,7 +2809,7 @@ class PostgkylSession:
           ValueError: if either input is modal DG coefficients.
         """
 
-    def vm_trajectory_trajectory(self, *, fixaspect: bool = False, interval: int = 100, no_velocity: bool = False, numframes: int | None = None, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, elevation: float | None = None, azimuth: float | None = None) -> Any:
+    def vm_trajectory_trajectory(self, *, fixaspect: bool = False, interval: int = 100, no_velocity: bool = False, numframes: int | None = None, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, elevation: float | None = None, azimuth: float | None = None) -> PostgkylSession:
         r"""Animate one or more particle trajectories in 3-D.
 
         Args:

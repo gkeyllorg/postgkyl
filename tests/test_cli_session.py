@@ -120,24 +120,52 @@ def test_the_stub_declares_every_command_with_its_docstring():
   assert "def select(self, *, comp: str | float | None = None" in stub
 
 
+def test_commands_chain_or_stand_alone_alike():
+  chained = PostgkylSession()
+  assert chained.load(DISTF).interpolate().select(z0=0.5, comp=0) is chained
+  stepwise = PostgkylSession()
+  stepwise.load(DISTF)
+  stepwise.interpolate()
+  stepwise.select(z0=0.5, comp=0)
+  assert chained.command() == stepwise.command()
+  np.testing.assert_array_equal(chained.datasets[0].values,
+                                stepwise.datasets[0].values)
+
+
+def test_result_is_what_the_last_command_returned():
+  s = PostgkylSession()
+  assert s.result is None
+  s.load(DISTF)
+  assert s.result is s.datasets[0]
+  figure = s.interpolate().plot(no_show=True).result
+  try:
+    assert figure.axes
+  finally:
+    plt.close(figure)
+
+
 def test_repr_shows_the_command_line():
   s = PostgkylSession()
   s.load(DISTF)
   assert repr(s) == f"PostgkylSession('pgkyl {DISTF}')"
 
 
-def _code_block(text: str, language: str) -> str:
-  """The body of the first ``.. code-block:: language`` in ``text``."""
-  match = re.search(rf"\.\. code-block:: {language}\n\n((?:   .*\n|\n)+)", text)
-  return textwrap.dedent(match.group(1)).strip() + "\n"
+def _code_blocks(text: str, language: str) -> list[str]:
+  """The bodies of the ``.. code-block:: language`` directives in ``text``."""
+  return [
+      textwrap.dedent(body).strip() + "\n" for body in re.findall(
+          rf"\.\. code-block:: {language}\n\n((?:   .*\n|\n)+)", text)
+  ]
+
+
+_SECTION = TUTORIAL.read_text().split("Building a command line from Python")[1]
 
 
 @pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
-def test_the_tutorial_example_prints_a_command_drawing_the_same_figure(
-    tmp_path, monkeypatch, capsys):
-  section = TUTORIAL.read_text().split("Building a command line from Python")[1]
-  script = _code_block(section, "python")
-  command = _code_block(section, "bash")
+@pytest.mark.parametrize("script", _code_blocks(_SECTION, "python"))
+def test_the_tutorial_examples_print_a_command_drawing_the_same_figure(
+    script, tmp_path, monkeypatch, capsys):
+  (command, ) = _code_blocks(_SECTION, "bash")
   (tmp_path / "tests").mkdir()
   (tmp_path / "tests" / "test_data").symlink_to(ROOT / "tests" / "test_data")
   monkeypatch.chdir(tmp_path)

@@ -65,6 +65,21 @@ gyrokinetic simulation along the first coordinate and plots it:
 
    pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl interpolate select --z1 0.0 --z2 0.0 plot --title 'Electron density' --saveas density.png
 
+Each command returns the session, so the same pipeline can also be chained:
+
+.. code-block:: python
+
+   from postgkyl.cli import PostgkylSession
+
+   s = PostgkylSession()
+   (s.load("tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
+     .interpolate()
+     .select(z1=0.0, z2=0.0)
+     .plot(title="Electron density", saveas="density.png"))
+   s.print_cmd()
+
+What the last command returned, here ``plot``'s figure, is ``s.result``.
+
 Every command is a method with that command's options, so ``help(s.select)``
 lists them. Each call parses and runs the very tokens it records, on the same
 working set as the command line, so ``s.command()`` is exactly what ran. The

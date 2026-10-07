@@ -5,10 +5,12 @@ command is a method with the command's own options, and each call runs the
 command on the session's working set exactly as the ``pgkyl`` pipeline would::
 
     s = PostgkylSession()
-    s.load("f.gkyl")
-    s.interpolate(num_interp=3)
+    s.load("f.gkyl").interpolate(num_interp=3)
     s.select(z0=0.5)
     s.print_cmd()  # pgkyl f.gkyl interpolate --num_interp 3 select --z0 0.5
+
+Each command returns the session, so calls chain or stand alone alike; what
+the last command returned (a figure, a printed value) is ``s.result``.
 
 Nothing here is per-command. Methods are derived from ``MODELS``; a call is
 spelled by ``command_tokens`` and those tokens are parsed and executed by the
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import inspect
 import shlex
+from typing import Any
 
 import click
 
@@ -98,7 +101,7 @@ def _signature(model: CommandModel) -> inspect.Signature:
                                  else _default(parameter.default)))
       for parameter in model.parameters if not parameter.injected
   ],
-                           return_annotation=_Source("Any"))
+                           return_annotation=_Source("PostgkylSession"))
 
 
 def _doc(model: CommandModel) -> str:
@@ -114,6 +117,7 @@ class PostgkylSession:
     # The group's own callback creates the working set, as on the CLI.
     self._context.invoke(cli.callback)
     self._steps: list[list[str]] = []
+    self._result: Any = None
 
   def __getattr__(self, name: str):
     model = _MODELS.get(name)
@@ -143,6 +147,11 @@ class PostgkylSession:
     """The working set: the datasets the next command applies to."""
     return tuple(self._context.obj.datasets)
 
+  @property
+  def result(self) -> Any:
+    """What the last command returned, e.g. ``plot``'s figure."""
+    return self._result
+
   def command(self) -> str:
     """The ``pgkyl`` command line equivalent to the calls made so far."""
     return shlex.join(
@@ -152,8 +161,12 @@ class PostgkylSession:
     """Print :meth:`command`."""
     print(self.command())
 
-  def _run(self, model: CommandModel, values: dict):
-    """Execute one command from the tokens it is recorded as."""
+  def _run(self, model: CommandModel, values: dict) -> PostgkylSession:
+    """Execute one command from the tokens it is recorded as.
+
+    Returns the session, so commands chain; the command's own return value
+    is :attr:`result`.
+    """
     args = self._spelling(model, command_tokens(model, values))
     _check_round_trip([*self._steps, args])
     command, context = _parse(self._context, args)
@@ -161,7 +174,8 @@ class PostgkylSession:
     result = command.invoke(context)
     # Recorded only once it has run, so a failed call leaves no trace.
     self._steps.append(args)
-    return result
+    self._result = result
+    return self
 
   def _spelling(self, model: CommandModel, tokens: list[str]) -> list[str]:
     """``[name, *tokens]``, or the bare file name the CLI loads, if any."""
