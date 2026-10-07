@@ -18,11 +18,13 @@ import pytest
 import postgkyl as pg
 from postgkyl.cli import PostgkylSession
 from postgkyl.cli.app import MODELS, cli
+from postgkyl.cli.session import render_stub
 
 ROOT = Path(__file__).parents[1]
 DATA = ROOT / "tests" / "test_data" / "generated"
 DISTF = DATA / "distf_p2_0.gkyl"
 TUTORIAL = ROOT / "docs" / "source" / "cli-tutorial.rst"
+STUB = ROOT / "src" / "postgkyl" / "cli" / "session.pyi"
 
 
 def _pgkyl(command_line: str) -> str:
@@ -97,9 +99,25 @@ def test_methods_are_derived_from_the_cli_models():
     method = getattr(s, model.name)
     exposed = [p.name for p in model.parameters if not p.injected]
     assert list(inspect.signature(method).parameters) == exposed
-    assert method.__doc__.startswith(model.long_help)
+    assert method.__doc__ == (inspect.getdoc(model.canonical)
+                              or model.long_help)
   with pytest.raises(AttributeError, match="no command or attribute"):
     s.not_a_command
+
+
+def test_the_ide_stub_is_generated_from_the_current_commands():
+  assert STUB.read_text() == render_stub(), (
+      "session.pyi is out of date: run "
+      "`python scripts/generate_session_stub.py`")
+
+
+def test_the_stub_declares_every_command_with_its_docstring():
+  stub = render_stub()
+  compile(stub, str(STUB), "exec")
+  for model in MODELS:
+    assert f"    def {model.name}(self" in stub
+  assert "Interpolate DG (modal/nodal) data" in stub
+  assert "def select(self, *, comp: str | float | None = None" in stub
 
 
 def test_repr_shows_the_command_line():
