@@ -102,6 +102,7 @@ class GData(GDataState):
   select = operations.select
   integrate = operations.integrate
   average = operations.average
+  fluctuation = operations.fluctuation
   eval_at_coord_proj = operations.eval_at_coord_proj
   fft = operations.fft
   magsq = operations.magsq

@@ -10,7 +10,9 @@ on the container backend (Gkeyll kernels for modal data, NumPy for field data);
 ``integrate`` performs full or partial integration inside Gkeyll on modal
 data (full is terminal; partial stays native and lower-dimensional);
 ``average`` reduces modal data over a dimension subset via
-``gkyl_array_average``, producing a new lower-dimensional modal dataset.
+``gkyl_array_average``, producing a new lower-dimensional modal dataset;
+``fluctuation`` subtracts that average, lifted back onto the full basis, so
+the result keeps the input's dimensions.
 
 Coordinate transformations have their own flat verb modules. ``geometry``
 assembles point coordinates using I/O's shared Gkeyll file conventions;
@@ -31,6 +33,7 @@ from .info import info
 from .print import print
 from .integrate import integrate
 from .average import average
+from .fluctuation import fluctuation
 from .eval_at_coord_proj import eval_at_coord_proj
 from postgkyl.render import animate, plot, plotly, plotly_animate, pyvista
 from .represent import apply, represent
@@ -78,7 +81,7 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
 
 for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
                   magsq, grid, differentiate, map, map_to_rz,
-                  extract_flux_surface):
+                  extract_flux_surface, fluctuation):
   command(_MAP)(_function)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
@@ -115,7 +118,7 @@ for _function in (resolve_geometry, resolve_rz_projection,
 
 __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
-    "average", "eval_at_coord_proj", "plot", "animate", "plotly",
+    "average", "fluctuation", "eval_at_coord_proj", "plot", "animate", "plotly",
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
     "extract_input", "fit", "differentiate", "evaluate",

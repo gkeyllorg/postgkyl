@@ -38,9 +38,9 @@ from postgkyl.gdatastate import (
     group_blocks,
 )
 
-from ._prep import (default_axis_labels, materialize_plot_data, remaining_axes,
-                    squeeze_collapsed_axes, subplot_grid)
-from .style import apply_style
+from ._prep import (centred_range, default_axis_labels, materialize_plot_data,
+                    remaining_axes, squeeze_collapsed_axes, subplot_grid)
+from .style import style_context
 
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
@@ -258,6 +258,37 @@ def _point_mesh_edges(points: np.ndarray, cell_edges: np.ndarray) -> np.ndarray:
   return np.append(edges.ravel(), cell_edges[-1])
 
 
+_DEFAULT_NUM_LEVELS = 11  # Odd, so centred levels include zero.
+
+
+def _contour_levels(z: np.ndarray, *, clevels: str | None, cnlevels: int | None,
+                    zmin: float | None, zmax: float | None, diverging: bool):
+  """Contour levels for ``contour``/``contourf``.
+
+  Explicit ``clevels`` apply unless ``cnlevels`` is given (the order
+  ``pg.animate`` relies on). Otherwise a typed ``zmin``/``zmax`` or a
+  diverging map fix ``cnlevels`` evenly spaced levels over the colour range,
+  centred on zero for a diverging map (:func:`centred_range`); without
+  either, Matplotlib chooses about ``cnlevels`` levels itself.
+  """
+  if clevels and not cnlevels:
+    if ":" in clevels:
+      start, stop, num = clevels.split(":")
+      return np.linspace(float(start), float(stop), int(num))
+    return np.array([float(v) for v in clevels.split(",") if v.strip()])
+  if diverging or zmin is not None or zmax is not None:
+    finite = z[np.isfinite(z)]
+    if finite.size:
+      if diverging:
+        lower, upper = centred_range(zmin, zmax, float(np.abs(finite).max()))
+      else:
+        lower = zmin if zmin is not None else float(finite.min())
+        upper = zmax if zmax is not None else float(finite.max())
+      if upper > lower:  # A flat field has no range to divide.
+        return np.linspace(lower, upper, int(cnlevels or _DEFAULT_NUM_LEVELS))
+  return int(cnlevels) - 1 if cnlevels else 10
+
+
 def _shared_component_range(states, zshift: float, zscale: float) -> list:
   """Per-component ``(vmin, vmax)`` across *every* dataset drawn on one figure.
 
@@ -350,6 +381,7 @@ def plot(
     scatter: bool = False,
     quiver: bool = False,
     contour: bool = False,
+    contourf: bool = False,
     clevels: str | None = None,
     cnlevels: int | None = None,
     cont_label: bool = False,
@@ -534,9 +566,13 @@ def plot(
     arrowstyle: Streamline arrow style.
     scatter: Draw markers without connecting lines.
     quiver: Draw two-component fields as arrows.
-    contour: Draw two-dimensional values as contours.
-    clevels: Explicit contour-level specification.
-    cnlevels: Number of contour levels.
+    contour: Draw two-dimensional values as contour lines.
+    contourf: Draw two-dimensional values as filled contours.
+    clevels: Explicit contour levels, ``'a,b,c'`` or ``'start:stop:num'``,
+      used unless ``cnlevels`` is given.
+    cnlevels: Number of contour levels. With ``zmin``/``zmax`` or
+      ``diverging``, that many evenly spaced levels span the colour range
+      (11 by default); otherwise Matplotlib picks about that many.
     cont_label: Label contour lines.
     surface: Draw two-dimensional values as a three-dimensional surface.
     comparison: Distinguish overlaid two-dimensional datasets.
@@ -570,7 +606,8 @@ def plot(
     no_colorbar: Suppress color bars for field plots.
     xlabel: Horizontal-axis label override.
     ylabel: Vertical-axis label override.
-    clabel: Color-bar label override.
+    clabel: Color-bar label, shown as given; only the default label
+      records a ``zscale`` other than 1.
     title: Figure-title override.
     subplot_titles: Per-subplot title specification.
     subplot_xlabels: Per-subplot horizontal-label specification.
@@ -646,29 +683,27 @@ def plot(
     line_colors = _normalize_line_colors(color)
     line_styles = _normalize_linestyles(linestyle, len(states))
 
-    # ---- Style / global rcParams novelties ----
-    apply_style(style) if style else apply_style("postgkyl")
-    if rcParams:
-      for key, value in rcParams.items():
-        mpl.rcParams[key] = value
+    # ---- Style: scoped to this figure, never global ----
+    rc = dict(rcParams or {})
     if cmap:
-      mpl.rcParams["image.cmap"] = cmap
+      rc["image.cmap"] = cmap
     elif diverging:
-      mpl.rcParams["image.cmap"] = "RdBu_r"
+      rc["image.cmap"] = "RdBu_r"
     if jet:  # not for general use -- only for comparing against literature
-      mpl.rcParams["image.cmap"] = "jet"
+      rc["image.cmap"] = "jet"
     if xkcd:
       xkcd_cm, xkcd_rc = get_xkcd_safely()
     else:
       xkcd_cm, xkcd_rc = nullcontext, {}
     if color is not None and line_colors is None:
-      mpl.rcParams["lines.color"] = color
+      rc["lines.color"] = color
     if linewidth:
-      mpl.rcParams["lines.linewidth"] = linewidth
+      rc["lines.linewidth"] = linewidth
     if linestyle is not None and line_styles is None:
-      mpl.rcParams["lines.linestyle"] = linestyle
+      rc["lines.linestyle"] = linestyle
 
-    with xkcd_cm(), mpl.rc_context(rc=xkcd_rc):
+    with style_context(style), mpl.rc_context(rc), xkcd_cm(), \
+        mpl.rc_context(rc=xkcd_rc):
 
       # ---- Phase 1: figure/axes layout, from the first dataset ----
       ref = states[0]
@@ -772,9 +807,10 @@ def plot(
           layout_ylabel = rf"{layout_ylabel:s} + {yshift:.2e}"
         elif xscale != 1.0:
           layout_ylabel = rf"{layout_ylabel:s} $\times$ {yscale:.2e}"
-      if zscale != 1.0:
-        layout_clabel = (rf"{layout_clabel:s} $\times$ {zscale:.3e}"
-                         if layout_clabel else rf"$\times$ {zscale:.3e}")
+      if zscale != 1.0 and clabel is None:
+        # Like the axis labels, only the default colorbar label records the
+        # scale; a given clabel (even "") is shown as given.
+        layout_clabel = rf"$\times$ {zscale:.3e}"
       if transpose and ref_num_dims == 1:
         # The coordinate moves to the vertical axis, so the (resolved) labels
         # follow it -- including the shift/scale annotation, which travels with
@@ -1094,23 +1130,21 @@ def plot(
                 cax.set_zlim(comp_zmin, comp_zmax)
               comp_colorbar = False
 
-            elif contour:  # ------------------------------------------------------
-              levels = 10
-              if cnlevels:
-                levels = int(cnlevels) - 1
-              elif clevels:
-                if ":" in clevels:
-                  s = clevels.split(":")
-                  levels = np.linspace(float(s[0]), float(s[1]), int(s[2]))
-                else:
-                  levels = np.array(clevels.split(","))
-                  levels = np.array(list(filter(None, levels)))
-              if isinstance(levels, np.ndarray) and len(levels) == 1:
-                comp_colorbar = False
+            elif contour or contourf:  # --------------------------------------
               nodal_grid = _nodal_grid(grid, cells)
               x = (nodal_grid[0] + xshift) * xscale
               y = (nodal_grid[1] + yshift) * yscale
               z = (values[..., comp].transpose() + zshift) * zscale
+              if x.ndim > 1:  # Curvilinear (e.g. map_to_rz): match z's order.
+                x, y = x.transpose(), y.transpose()
+              levels = _contour_levels(z,
+                                       clevels=clevels,
+                                       cnlevels=cnlevels,
+                                       zmin=comp_zmin,
+                                       zmax=comp_zmax,
+                                       diverging=diverging)
+              if isinstance(levels, np.ndarray) and len(levels) == 1:
+                comp_colorbar = False
               cont_colors = color
               if comparison and not bool(color):
                 # Give each overlaid dataset a distinct, single color + legend entry.
@@ -1123,16 +1157,33 @@ def plot(
                       patches.Patch(color=cont_colors, label=comp_label))
                   cax._pgkyl_handles = handles
                 comp_colorbar = False
-              im = cax.contour(x,
-                               y,
-                               z,
-                               levels,
-                               *plot_args,
-                               origin="lower",
-                               colors=cont_colors,
-                               linewidths=linewidth)
+              if contourf:
+                # Values beyond typed bounds keep their end colours.
+                im = cax.contourf(
+                    x,
+                    y,
+                    z,
+                    levels,
+                    *plot_args,
+                    origin="lower",
+                    colors=cont_colors,
+                    extend=("both" if comp_zmin is not None
+                            or comp_zmax is not None else "neither"))
+              if contour:
+                lines = cax.contour(
+                    x,
+                    y,
+                    z,
+                    levels,
+                    *plot_args,
+                    origin="lower",
+                    colors=("k" if contourf and cont_colors is None else
+                            cont_colors),
+                    linewidths=linewidth)
+                # The filled set, when drawn, carries the colorbar.
+                im = im if contourf else lines
               if cont_label:
-                cax.clabel(im, inline=1)
+                cax.clabel(lines if contour else im, inline=1)
 
             elif quiver:  # -----------------------------------------------------
               skip = max(1, int(np.max((len(grid[0]), len(grid[1]))) // 15))
@@ -1221,9 +1272,10 @@ def plot(
               if x.ndim > 1:
                 x, y = x.transpose(), y.transpose()
               if diverging:
-                extent = np.abs(z).max()
-                comp_zmax = comp_zmax if comp_zmax is not None else extent
-                comp_zmin = comp_zmin if comp_zmin is not None else -extent
+                if comp_zmin is not None or comp_zmax is not None:
+                  extend = "both"  # A typed bound clips both ends.
+                comp_zmin, comp_zmax = centred_range(comp_zmin, comp_zmax,
+                                                     np.abs(z).max())
               elif (len(states) > 1 and comp_zmin is None
                     and comp_zmax is None):
                 if shared_z is None:

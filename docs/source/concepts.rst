@@ -72,7 +72,11 @@ Partial ``average`` and ``integrate`` reduce dimensionality while keeping
 a modal dataset for further operations. Averaging or integrating every axis
 returns a physical scalar (one field) or an array (multiple fields); the CLI
 prints these values directly. For example, ``average --dims 0 --dims 1``
-returns the genuine mean of a 2D field, not its expansion coefficient. ``eval_at_coord_proj`` evaluates at
+returns the genuine mean of a 2D field, not its expansion coefficient.
+``fluctuation`` subtracts that average from the field instead: the mean is
+lifted back onto the full basis, constant along the averaged directions, so
+``fluctuation --dims 1`` keeps every dimension and averages to zero along
+``--dims 1``. ``eval_at_coord_proj`` evaluates at
 specified coordinates and projects into the basis of the surviving directions.
 
 After interpolation, ``select(comp=...)`` selects components and

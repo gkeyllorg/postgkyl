@@ -221,3 +221,117 @@ def test_mapping_accepts_filename_free_fields_and_explicit_geometry(num_dims):
     result = data.extract_flux_surface(fs_grid=surface)
     assert result.values.shape == (5, 8, 1)
     np.testing.assert_allclose(result.values, 7.0)
+
+
+# ------------------------------------------------- selecting on R-Z axes
+@needs_gkeyll
+@pytest.mark.parametrize("path, geometry", [(F2D, F2D_GEO), (F3D, None)])
+def test_map_to_rz_records_the_logical_coordinates_of_its_axes(path, geometry):
+  """The R-Z points sit on the computational grid: radial x edges (the
+  source's own x extent) and poloidal z edges, one array per axis."""
+  data = pg.load(path)
+  rz = data.map_to_rz(mapc2p=geometry, nz_interp=2)
+  x, z = rz.ctx["logical_grid"]
+  assert (x.size, z.size) == rz.grid[0].shape
+  np.testing.assert_allclose(x[[0, -1]], data.grid[0][[0, -1]])
+  np.testing.assert_allclose(z[[0, -1]], data.grid[-1][[0, -1]])
+  assert np.all(np.diff(x) > 0) and np.all(np.diff(z) > 0)
+
+
+@needs_gkeyll
+def test_selecting_rz_axes_takes_minor_radius_and_poloidal_angle():
+  """Selecting a coordinate on an R-Z axis is selecting the matching
+  logical cell of the unmapped field, here at constant x then constant z."""
+  data = pg.load(F2D)
+  rz = data.map_to_rz(mapc2p=F2D_GEO, nz_interp=2)
+  x, z = rz.ctx["logical_grid"]
+  i = 7
+  profile = rz.select(z0=float(0.5 * (x[i] + x[i + 1])))
+  np.testing.assert_array_equal(profile.values[0], rz.values[i])
+  np.testing.assert_array_equal(profile.grid[0], x[i:i + 2])
+  np.testing.assert_array_equal(profile.grid[1], z)
+  assert profile.ctx["mapped_axes"] == {}
+  j = 3
+  radial = rz.select(z1=float(0.5 * (z[j] + z[j + 1])))
+  np.testing.assert_array_equal(radial.values[:, 0], rz.values[:, j])
+  np.testing.assert_array_equal(radial.grid[0], x)
+
+
+def _polar_map(nx=4, nt=6):
+  """A synthetic R-Z map: R = x cos(theta), Z = x sin(theta) on logical
+  edges x in [1, 2], theta in [-pi, pi]; the field is
+  f = x_c + 10 theta_c at cell centres, so each cell is identifiable."""
+  x = np.linspace(1.0, 2.0, nx + 1)
+  theta = np.linspace(-np.pi, np.pi, nt + 1)
+  xx, tt = np.meshgrid(x, theta, indexing="ij")
+  xc, tc = 0.5 * (x[1:] + x[:-1]), 0.5 * (theta[1:] + theta[:-1])
+  values = (xc[:, None] + 10.0 * tc[None, :])[..., None]
+  data = pg.GData(
+      ctx={
+          "grid_type": "mapped",
+          "mapped_axes": {
+              0: 0,
+              1: 0
+          },
+          "logical_grid": [x, theta]
+      })
+  data.push([xx * np.cos(tt), xx * np.sin(tt)], values)
+  return data, x, theta, xc, tc
+
+
+class TestLogicalSelection:
+
+  def test_constant_minor_radius_gives_a_poloidal_profile(self):
+    data, x, theta, xc, tc = _polar_map()
+    out = data.select(z0=1.6)  # Nearest centre: x_c = 1.625 (cell 2).
+    np.testing.assert_allclose(out.values[0, :, 0], xc[2] + 10.0 * tc)
+    np.testing.assert_array_equal(out.grid[0], x[2:4])
+    np.testing.assert_array_equal(out.grid[1], theta)
+    assert out.ctx["mapped_axes"] == {}
+    assert out.ctx["logical_grid"] is None
+    assert out.get_grid_type() == "uniform"
+
+  def test_constant_poloidal_angle_gives_a_radial_profile(self):
+    data, x, theta, xc, tc = _polar_map()
+    out = data.select(z1=0.5)  # Nearest centre: theta_c = pi/6 (cell 3).
+    np.testing.assert_allclose(out.values[:, 0, 0], xc + 10.0 * tc[3])
+    np.testing.assert_array_equal(out.grid[0], x)
+    np.testing.assert_array_equal(out.grid[1], theta[3:5])
+
+  def test_a_range_keeps_the_map_and_narrows_its_coordinates(self):
+    data, x, theta, xc, tc = _polar_map()
+    # Ends snap to the nearest centres (1.375, 1.875); the stop is exclusive,
+    # as on any axis, leaving the cells centred at 1.375 and 1.625.
+    band = data.select(z0="1.3:1.9")
+    assert band.values.shape == (2, 6, 1)
+    assert band.ctx["mapped_axes"] == {0: 0, 1: 0}
+    np.testing.assert_array_equal(band.ctx["logical_grid"][0], x[1:4])
+    np.testing.assert_array_equal(band.grid[0], data.grid[0][1:4])
+    out = band.select(z1=-2.0)  # Nearest centre: theta_c = -pi/2 (cell 1).
+    np.testing.assert_allclose(out.values[:, 0, 0], xc[1:3] + 10.0 * tc[1])
+    np.testing.assert_array_equal(out.grid[0], x[1:4])
+
+  def test_integer_indices_still_select_cells(self):
+    data, x, theta, xc, tc = _polar_map()
+    out = data.select(z0=3)
+    np.testing.assert_allclose(out.values[0, :, 0], xc[3] + 10.0 * tc)
+    np.testing.assert_array_equal(out.grid[1], theta)
+
+  def test_profiles_collect_into_a_space_time_map(self):
+    data, x, theta, xc, tc = _polar_map()
+    frames = []
+    for t in (0.0, 1.0):
+      frame = data.select(z0=1.1)
+      frame.ctx["time"] = t
+      frames.append(frame)
+    stacked = pg.collect(frames)
+    assert stacked.values.shape == (2, 1, 6, 1)
+    np.testing.assert_array_equal(stacked.grid[0], [0.0, 1.0])
+
+  def test_stale_logical_coordinates_are_ignored(self):
+    """A record of the wrong length (e.g. after a reducing operation) must
+    not be trusted: coordinates fall back to the curvilinear search."""
+    data, *_ = _polar_map()
+    data.ctx["logical_grid"] = [np.linspace(0, 1, 3), np.linspace(0, 1, 3)]
+    with pytest.raises(ValueError, match="varies along another axis"):
+      data.select(z0=1.6)

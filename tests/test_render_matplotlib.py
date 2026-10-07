@@ -577,6 +577,25 @@ class TestColormap:
     im = fig.axes[0].collections[0]
     assert im.get_cmap().name == "RdBu_r"
 
+  @pytest.mark.parametrize("bounds, expected", [
+      ({}, (-63.0, 63.0)),
+      ({
+          "zmax": 20.0
+      }, (-20.0, 20.0)),
+      ({
+          "zmin": -5.0
+      }, (-5.0, 5.0)),
+      ({
+          "zmin": -40.0,
+          "zmax": 10.0
+      }, (-40.0, 40.0)),
+  ])
+  def test_diverging_range_is_centred_on_zero(self, bounds, expected):
+    """The data span 0..63: without bounds the range is +-63; a typed bound
+    sets the half-width (the larger magnitude when both are typed)."""
+    fig = backend.plot(_field_2d(), no_show=True, diverging=True, **bounds)
+    assert fig.axes[0].collections[0].get_clim() == expected
+
 
 # --------------------------------------------------------------------------
 # style / rcParams
@@ -586,14 +605,24 @@ class TestColormap:
 class TestStyleAndRcParams:
 
   def test_style_kwarg_applies_named_style(self):
-    backend.plot(_line(), no_show=True, style="default")
-    import matplotlib as mpl
-    assert mpl.rcParams["image.cmap"] == "viridis"
+    fig = backend.plot(_field_2d(), no_show=True, style="default")
+    assert fig.axes[0].collections[0].get_cmap().name == "viridis"
 
   def test_rcparams_dict_overrides(self):
-    backend.plot(_line(), no_show=True, rcParams={"lines.linewidth": 5.0})
+    fig = backend.plot(_line(), no_show=True, rcParams={"lines.linewidth": 5.0})
+    assert fig.axes[0].lines[0].get_linewidth() == 5.0
+
+  @pytest.mark.parametrize("options", [
+      dict(),
+      dict(style="dark_background"),
+      dict(rcParams={"lines.linewidth": 5.0}),
+      dict(color="red", linewidth=4.0, linestyle="--"),
+  ])
+  def test_global_rcparams_are_untouched(self, options):
     import matplotlib as mpl
-    assert mpl.rcParams["lines.linewidth"] == 5.0
+    before = dict(mpl.rcParams)
+    backend.plot(_line(), no_show=True, **options)
+    assert dict(mpl.rcParams) == before
 
 
 # --------------------------------------------------------------------------
@@ -827,6 +856,113 @@ class TestSurface:
     fig = backend.plot(_field_2d(), no_show=True, surface=True, alpha=0.3)
     poly3d = fig.axes[0].collections[0]
     assert poly3d.get_alpha() == pytest.approx(0.3)
+
+
+# --------------------------------------------------------------------------
+# contour levels
+# --------------------------------------------------------------------------
+
+
+def _contour_sets(fig):
+  return [c for ax in fig.axes for c in ax.collections if hasattr(c, "levels")]
+
+
+class TestContourLevels:
+  """_field_2d spans 0..63."""
+
+  @pytest.mark.parametrize("filled", [False, True])
+  def test_bounds_fix_evenly_spaced_levels(self, filled):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=not filled,
+                       contourf=filled,
+                       zmin=10.0,
+                       zmax=30.0,
+                       cnlevels=5)
+    (cs, ) = _contour_sets(fig)
+    assert cs.filled is filled
+    np.testing.assert_allclose(cs.levels, [10.0, 15.0, 20.0, 25.0, 30.0])
+
+  @pytest.mark.parametrize("bounds, half_width", [({}, 63.0),
+                                                  ({
+                                                      "zmax": 20.0
+                                                  }, 20.0)])
+  def test_diverging_levels_are_centred_on_zero(self, bounds, half_width):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contourf=True,
+                       diverging=True,
+                       **bounds)
+    (cs, ) = _contour_sets(fig)
+    np.testing.assert_allclose(cs.levels,
+                               np.linspace(-half_width, half_width, 11))
+    assert 0.0 in cs.levels
+
+  def test_typed_bounds_extend_the_filled_colours(self):
+    fig = backend.plot(_field_2d(), no_show=True, contourf=True, zmax=20.0)
+    assert _contour_sets(fig)[0].extend == "both"
+    fig = backend.plot(_field_2d(), no_show=True, contourf=True)
+    assert _contour_sets(fig)[0].extend == "neither"
+
+  def test_contour_lines_over_filled_contours_share_levels(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=True,
+                       contourf=True,
+                       diverging=True)
+    filled, lines = _contour_sets(fig)
+    assert filled.filled and not lines.filled
+    np.testing.assert_array_equal(filled.levels, lines.levels)
+
+  def test_explicit_levels_and_the_count_precedence(self):
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=True,
+                       clevels="5,20,40")
+    np.testing.assert_allclose(_contour_sets(fig)[0].levels, [5, 20, 40])
+    # pg.animate passes a count in both forms; the count wins.
+    fig = backend.plot(_field_2d(),
+                       no_show=True,
+                       contour=True,
+                       clevels="4",
+                       cnlevels=5,
+                       zmin=0.0,
+                       zmax=40.0)
+    np.testing.assert_allclose(
+        _contour_sets(fig)[0].levels, [0, 10, 20, 30, 40])
+
+  @pytest.mark.parametrize("filled", [False, True])
+  def test_curvilinear_grids_keep_points_and_values_aligned(self, filled):
+    """A sheared, non-square curvilinear grid (as map_to_rz produces) whose
+    field is its own horizontal coordinate, f = x: linear interpolation is
+    exact, so every contour at level L lies on x = L."""
+    i, j = np.meshgrid(np.arange(5.0), np.arange(9.0), indexing="ij")
+    x, y = i + 0.3 * j, j  # Cell-edge coordinates, shape (5, 9).
+    centre = lambda a: (a[:-1, :-1] + a[1:, :-1] + a[:-1, 1:] + a[1:, 1:]) / 4
+    data = GDataState(ctx={"mapped_axes": {0: 0, 1: 0}})
+    data.push([x, y], centre(x)[..., None])
+    fig = backend.plot(data,
+                       no_show=True,
+                       contour=not filled,
+                       contourf=filled,
+                       clevels="2,3,4")
+    (cs, ) = _contour_sets(fig)
+    paths = cs.get_paths()
+    if filled:  # Band k lies between levels k and k + 1.
+      assert len(paths) == 2
+      for (lower, upper), path in zip(zip(cs.levels, cs.levels[1:]), paths):
+        assert np.all((path.vertices[:, 0] >= lower - 1e-12)
+                      & (path.vertices[:, 0] <= upper + 1e-12))
+    else:
+      assert len(paths) == 3
+      for level, path in zip(cs.levels, paths):
+        np.testing.assert_allclose(path.vertices[:, 0], level, atol=1e-12)
+
+  def test_flat_field_falls_back_to_automatic_levels(self):
+    flat = GDataState()
+    flat.push([np.linspace(0, 1, 5), np.linspace(0, 1, 5)], np.zeros((4, 4, 1)))
+    fig = backend.plot(flat, no_show=True, contourf=True, diverging=True)
+    assert len(_contour_sets(fig)) == 1
 
 
 # --------------------------------------------------------------------------

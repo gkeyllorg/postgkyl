@@ -2,8 +2,9 @@
 
 The whole gyrokinetic-quantity stack -- naming-convention file resolution
 (``quantity.py``), the derived-quantity physics (``quantities.py``), the
-registry (``registry.py``), and the "physics-ready data by name" entry point
-(``load_quantity.py``) -- lives together in this subpackage (see the layer-12
+registry (``registry.py``), the "physics-ready data by name" entry point
+(``load_quantity.py``), and the flux-surface averaged radial transport built
+on it (``transport.py``) -- lives together in this subpackage (see the layer-12
 instruction file's decision record): splitting resolution from physics would
 give gyrokinetics two homes for one piece of equation knowledge. Only the
 equation-blind stem/frame discovery is shared, via
@@ -32,6 +33,7 @@ from .quantities import (
     fetch_Tperp_from_M0_M2perp,
 )
 from .registry import gk_quant_registry
+from .transport import transport
 
 # Layer 13: program-scale diagnostics ported from src_bak's apps/gk_*.py.
 from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_balance
@@ -55,6 +57,7 @@ _REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS,
                            result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_distf)
 command(_LOAD_SPEC)(load_quantity)
+command(_LOAD_SPEC)(transport)
 energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                           KeyValue()]
 particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
@@ -68,6 +71,7 @@ __all__ = [
     "resolve_frames",
     "available_quantities",
     "load_quantity",
+    "transport",
     "gk_quant_registry",
     "fetch_beta_from_bmag_press",
     "fetch_diamag_vel",

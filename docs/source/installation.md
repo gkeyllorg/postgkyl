@@ -110,6 +110,17 @@ After installing Postgkyl, install Marimo in the same environment to use the
 python -m pip install marimo
 ```
 
+The `gui` extra installs Marimo for the notebook GUI, which browses a data
+directory, loads files, gyrokinetic quantities, or transport profiles, and
+shows each figure with the equivalent Python script:
+
+```bash
+python -m pip install '.[gui]'
+pgkyl-gui --path /path/to/simulation/output
+```
+
+`python -m postgkyl.gui` is equivalent to `pgkyl-gui`.
+
 ## Rendering dependencies
 
 PyVista requires an OpenGL context even for off-screen screenshots. On headless
