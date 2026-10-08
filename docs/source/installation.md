@@ -111,8 +111,8 @@ python -m pip install marimo
 ```
 
 The `gui` extra installs Marimo for the notebook GUI, which browses a data
-directory, loads files, gyrokinetic quantities, or transport profiles, and
-shows each figure with the equivalent Python script:
+directory, loads files or gyrokinetic quantities, and shows each figure with
+the equivalent Python script:
 
 ```bash
 python -m pip install '.[gui]'

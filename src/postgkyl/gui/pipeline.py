@@ -23,14 +23,12 @@ import numpy as np
 
 import postgkyl as pg
 from postgkyl import io
-from postgkyl.diagnostics.gk.transport import TRANSPORT_OUTPUTS
 
 __all__ = [
-    "Output", "Step", "Chain", "GridInfo", "WEIGHT", "TRANSPORT_OUTPUTS",
-    "scan_outputs", "list_simulations", "weight_file", "pick_frames",
-    "frame_option", "full_average", "run", "probe", "python_script",
-    "figure_png", "make_movie", "Settings", "TRANSFORMS", "parse_options",
-    "build_chain", "quantity_frames"
+    "Output", "Step", "Chain", "GridInfo", "WEIGHT", "scan_outputs",
+    "list_simulations", "weight_file", "pick_frames", "frame_option",
+    "full_average", "run", "probe", "python_script", "figure_png", "make_movie",
+    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
 ]
 
 # Fluctuations and averages of gyrokinetic fields are weighted by the
@@ -182,8 +180,8 @@ WEIGHT = _WeightRef()
 @dataclass(frozen=True)
 class Step:
   """One public call: a fluent verb (``"interpolate"``), a loader
-  (``"load"``, ``"gk.load_quantity"``, ``"gk.transport"``), ``"collect"``,
-  or ``"full_average"`` (:func:`full_average`), with keyword options."""
+  (``"load"``, ``"gk.load_quantity"``), ``"collect"``, or
+  ``"full_average"`` (:func:`full_average`), with keyword options."""
 
   verb: str
   options: tuple[tuple[str, object], ...] = ()
@@ -211,7 +209,6 @@ class Chain:
 # Loaders other than ``load``, which ``run`` applies to each file.
 _LOADERS = {
     "gk.load_quantity": pg.gk.load_quantity,
-    "gk.transport": pg.gk.transport,
 }
 
 
@@ -305,18 +302,16 @@ class Settings:
 
   Attributes:
     directory: Data directory.
-    mode: ``"file"`` (plot an output), ``"quantity"``
-      (``pg.gk.load_quantity``) or ``"transport"`` (``pg.gk.transport``).
+    mode: ``"file"`` (plot an output) or ``"quantity"``
+      (``pg.gk.load_quantity``).
     frames: Frames to load; ``(None,)`` for a frame-less file.
     output: The output plotted in ``"file"`` mode.
-    sim: Simulation prefix of the GK modes.
+    sim: Simulation prefix of the loaded data.
     quantity: Registered quantity of ``"quantity"`` mode.
-    species: Species, or comma-separated species, of the GK modes.
+    species: Species, or comma-separated species, of ``"quantity"`` mode.
     direction: Vector component of ``"quantity"`` mode.
     options: Further keyword options of the GK loader.
-    transport_output: Profile plotted in ``"transport"`` mode.
-    fluct: ``"y"``/``"yz"``: plot the fluctuation about that average (3x
-      data); in ``"transport"`` mode, keep the turbulent fluxes only.
+    fluct: ``"y"``/``"yz"``: plot the fluctuation about that average (3x data).
     weight: Jacobian file weighting fluctuations and averages, if any.
     source_ndim: Dimensions of the data as loaded; fluctuations about
       ``y`` or ``(y, z)`` need 3x ``(x, y, z)`` data.
@@ -344,7 +339,6 @@ class Settings:
   species: str | None = None
   direction: int | None = None
   options: tuple[tuple[str, object], ...] = ()
-  transport_output: str = "D"
   fluct: str = "none"
   weight: str | None = None
   source_ndim: int = 0
@@ -411,26 +405,6 @@ def build_chain(settings: Settings, *, probe_only: bool = False) -> Chain:
                      path=s.directory,
                      direction=s.direction,
                      **options)
-  elif s.mode == "transport":
-    source = Step.of("gk.transport",
-                     name=s.sim,
-                     species=s.species,
-                     frame=frame_option(numbered) if numbered else None,
-                     path=s.directory,
-                     outputs=[s.transport_output],
-                     fluct=s.fluct,
-                     per_frame=s.collect and len(frames) > 1 or None,
-                     **options)
-    steps = ()
-    if not probe_only:
-      steps = _select_steps(s, average=())
-      if s.collect and len(frames) > 1:
-        steps += (Step.of("collect"), )
-    if s.average or s.transform != "none":
-      raise ValueError("transport profiles are already flux-surface and "
-                       "time averaged on radial points: set the transform "
-                       "to 'none' and average nothing.")
-    return Chain(source, None, steps)
   else:
     raise ValueError(f"unknown mode {s.mode!r}")
 

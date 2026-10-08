@@ -101,8 +101,7 @@ def _(dir_input, get_field, gp, mo, set_field):
 def _(dir_input, gp, mo, pg):
     # --- load mode and the gyrokinetic loaders' controls --------------------
     load_mode = mo.ui.dropdown(
-        options={"file": "file", "GK quantity": "quantity",
-                 "GK transport": "transport"},
+        options={"file": "file", "GK quantity": "quantity"},
         value="file", label="load")
     _quantities = pg.gk.available_quantities()
     quantity = mo.ui.dropdown(options=_quantities,
@@ -117,9 +116,6 @@ def _(dir_input, gp, mo, pg):
     direction = mo.ui.text(value="", label="direction", placeholder="0, 1 or 2")
     gk_options = mo.ui.text(value="", label="options", full_width=True,
                             placeholder="mass=... ti_over_te=2 den_ref=1e19,1e19")
-    tr_output = mo.ui.dropdown(options=list(gp.TRANSPORT_OUTPUTS), value="D",
-                               label="profile")
-    # In transport mode this keeps the turbulent fluxes only.
     fluct = mo.ui.dropdown(options=["none", "y", "yz"], value="none",
                            label="fluctuation about")
     frame_range = mo.ui.text(value="", label="frame range",
@@ -127,7 +123,7 @@ def _(dir_input, gp, mo, pg):
     collect_chk = mo.ui.checkbox(label="collect (time series)")
     return (
         collect_chk, direction, fluct, frame_range, gk_options, load_mode,
-        quantity, simprefix, species, tr_output,
+        quantity, simprefix, species,
     )
 
 
@@ -140,10 +136,9 @@ def _(
     output = outputs.get(field_dropdown.value)
     if load_mode.value == "file":
         frames = output.frames if output else []
-    elif simprefix.value:
-        _qname = quantity.value if load_mode.value == "quantity" else "part_flux"
-        frames = gp.quantity_frames(dir_input.value, simprefix.value, _qname,
-                                    species.value.strip() or None) if _qname else []
+    elif simprefix.value and quantity.value:
+        frames = gp.quantity_frames(dir_input.value, simprefix.value,
+                                    quantity.value, species.value.strip() or None)
     else:
         frames = []
 
@@ -180,7 +175,7 @@ def _(mo):
 def _(
     collect_chk, dataclasses, dir_input, direction, fluct, frame_range,
     frame_slider, frames, gk_options, gp, load_mode, output, quantity,
-    simprefix, species, tr_output,
+    simprefix, species,
 ):
     # --- the settings every later cell refines ------------------------------
     def _base_settings():
@@ -205,7 +200,6 @@ def _(
             species=species.value.strip() or None,
             direction=int(_dir) if _dir else None,
             options=tuple(gp.parse_options(gk_options.value).items()),
-            transport_output=tr_output.value,
             fluct=fluct.value,
             collect=collect_chk.value,
         )
@@ -225,7 +219,7 @@ def _(base_settings, gp, pg, replace):
     # --- the raw layout: weight compatibility and the flux-surface index ----
     base_grid = None
     weight_path = None
-    if base_settings is not None and base_settings.mode != "transport":
+    if base_settings is not None:
         try:
             base_grid = gp.probe(gp.build_chain(
                 replace(base_settings, fluct="none", transform="none"),
@@ -268,7 +262,7 @@ def _(
             base_settings,
             weight=weight_path,
             source_ndim=base_grid.ndim if base_grid is not None else 0,
-            transform="none" if base_settings.mode == "transport" else transform.value,
+            transform=transform.value,
             num_interp=None if _geometry else _points,
             nz_interp=_points if _geometry else None,
             mapc2p=_mapc2p,
@@ -611,7 +605,7 @@ def _(
     interp_pts, load_mode, mapc2p_file, mo, movie_button, movie_file,
     movie_fixed, movie_fps, movie_frames, movie_msg, phi_tor_deg, plot_options_view,
     plot_view, quantity, save_button, save_msg, save_name, sel_enables,
-    sel_modes, sel_sliders, simprefix, species, tr_output, transform, x_idx,
+    sel_modes, sel_sliders, simprefix, species, transform, x_idx,
 ):
     # --- layout: controls on a resizable left pane, the figure on the right -
     if grid_info is not None:
@@ -632,14 +626,6 @@ def _(
         _source = mo.vstack([quantity, simprefix,
                              mo.hstack([species, direction], justify="start",
                                        gap=0.5, wrap=True), gk_options], gap=0.4)
-    elif load_mode.value == "transport":
-        _source = mo.vstack([
-            simprefix,
-            mo.hstack([species, tr_output], justify="start", gap=0.5, wrap=True),
-            gk_options,
-            mo.md("_Radial profiles averaged over the flux surface and the "
-                  "frames; tick **collect** for one profile per frame._"),
-        ], gap=0.4)
     else:
         _source = field_dropdown
 
