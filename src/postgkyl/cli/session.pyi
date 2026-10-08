@@ -2369,6 +2369,9 @@ class PostgkylSession:
         mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
         normalization range (typically the min/max of the ``cval`` values across
         all curves), so several curves drawn into the same axes share one scale.
+        Without ``cval`` or ``color``, several 1-D datasets drawn with ``cmap``
+        are colored by their frame (by their order when frames do not tell them
+        apart) on one colorbar labelled ``frame``, unless ``clabel`` is given.
         ``color`` accepts either one Matplotlib color, applied to every line, or a
         sequence containing one color per dataset (reused for all its components).
         A sequence with one color per individual line is also accepted, in

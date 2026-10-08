@@ -29,8 +29,8 @@ from postgkyl.cli import PostgkylSession
 __all__ = [
     "Output", "Step", "GridInfo", "scan_outputs", "list_simulations",
     "weight_file", "pick_frames", "frame_option", "apply", "run", "processed",
-    "probe", "python_script", "figure_png", "make_movie", "Settings",
-    "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
+    "probe", "plot_step", "python_script", "figure_png", "make_movie",
+    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
 ]
 
 # Fluctuations and averages of gyrokinetic fields are weighted by the
@@ -209,6 +209,18 @@ def run(steps: tuple[Step, ...]) -> PostgkylSession:
 def processed(steps: tuple[Step, ...]) -> pg.GDataGroup:
   """The datasets ``steps`` produce, as one group."""
   return pg.GDataGroup(list(run(steps).datasets))
+
+
+def plot_step(plot_options: dict, datasets) -> Step:
+  """The ``plot`` call drawing every one of ``datasets`` on one figure.
+
+  ``pgkyl`` gives each dataset (e.g. each frame) its own figure;
+  ``--figure 0`` overlays them, which is what the GUI shows.
+  """
+  options = dict(plot_options)
+  if len(datasets) > 1:
+    options.setdefault("figure", 0)
+  return Step.of("plot", **options)
 
 
 def python_script(steps: tuple[Step, ...]) -> str:

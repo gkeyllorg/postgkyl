@@ -487,7 +487,7 @@ def _(base64, gp, grid_msg, html, mo, plot_options, settings, traceback):
                 _err = (f"This data is **{_dims}D** and plots are 1D or 2D: enable "
                         f"**{_dims - 2}** more dimension(s) to select or average.")
             else:
-                _plot = gp.Step.of("plot", **plot_options())
+                _plot = gp.plot_step(plot_options(), _data)
                 gp.apply(_session, _plot)
                 _script = gp.python_script(_steps + (_plot,))
                 _command = _session.command()

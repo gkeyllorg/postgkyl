@@ -1038,6 +1038,55 @@ class TestCvalColoring:
     assert fig.axes[0].lines[0].get_color() == "red"
 
 
+def _frame(frame, offset=0.0):
+  data = _line(offset=offset)
+  data.ctx["frame"] = frame
+  return data
+
+
+class TestFrameColoring:
+  """Several 1-D curves drawn with a colormap are colored by their frame."""
+
+  def test_curves_are_colored_by_frame_on_one_colorbar(self):
+    fig = backend.plot(_frame(3),
+                       _frame(5, 1),
+                       _frame(7, 2),
+                       figure=0,
+                       no_show=True,
+                       cmap="viridis")
+    lines, (colorbar, ) = fig.axes[0].lines, fig.axes[1:]
+    assert [line.get_color() for line in lines
+            ] == [plt.get_cmap("viridis")(t) for t in (0.0, 0.5, 1.0)]
+    assert colorbar.get_ylabel() == "frame"
+    assert colorbar.get_ylim() == (3.0, 7.0)
+    ticks = colorbar.get_yticks()
+    np.testing.assert_array_equal(ticks, np.round(ticks))
+
+  def test_curves_without_distinct_frames_are_colored_by_order(self):
+    fig = backend.plot(_frame(4),
+                       _frame(4, 1),
+                       figure=0,
+                       no_show=True,
+                       cmap="viridis",
+                       clabel="run")
+    colors = [line.get_color() for line in fig.axes[0].lines]
+    assert colors == [plt.get_cmap("viridis")(t) for t in (0.0, 1.0)]
+    assert fig.axes[1].get_ylabel() == "run"
+
+  def test_one_curve_or_an_explicit_color_keeps_its_color(self):
+    single = backend.plot(_frame(3), no_show=True, cmap="viridis")
+    assert len(single.axes) == 1
+    plt.close(single)
+    red = backend.plot(_frame(3),
+                       _frame(5, 1),
+                       figure=0,
+                       no_show=True,
+                       cmap="viridis",
+                       color="red")
+    assert [line.get_color() for line in red.axes[0].lines] == ["red", "red"]
+    assert len(red.axes) == 1
+
+
 # --------------------------------------------------------------------------
 # Explicit colors for 1D lines
 # --------------------------------------------------------------------------

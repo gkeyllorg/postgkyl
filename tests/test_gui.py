@@ -286,6 +286,25 @@ class TestRun:
     np.testing.assert_allclose(info.lower, (0.0, -np.pi))
     np.testing.assert_allclose(info.upper, (0.12, np.pi))
 
+  def test_several_frames_are_overlaid_on_one_figure(self):
+    output = gp.Output(label="elc_M0",
+                       files=((5, str(M0_3X)), (6, str(M0_3X))),
+                       sim=_OUTPUT.sim)
+    session = gp.run(
+        gp.build_chain(
+            _file_settings(frames=(5, 6),
+                           output=output,
+                           select=((1, 0.0), (2, 0.0)))))
+    plot = gp.plot_step({"title": "t"}, session.datasets)
+    assert plot == gp.Step.of("plot", title="t", figure=0)
+    gp.apply(session, plot)
+    figure = session.result
+    try:
+      assert len(figure.axes[0].lines) == 2
+    finally:
+      gp.figure_png(figure)
+    assert gp.plot_step({}, session.datasets[:1]) == gp.Step.of("plot")
+
   def test_figure_and_movie(self, tmp_path):
     steps = gp.build_chain(_file_settings(select=((2, 0.0), )))
     session = gp.run(steps)

@@ -18,7 +18,7 @@ import matplotlib.font_manager as fm
 # Importing the toolkit registers Matplotlib's ``3d`` projection.
 import mpl_toolkits.mplot3d  # noqa: F401
 import numpy as np
-from matplotlib import cm, colors, patches
+from matplotlib import cm, colors, patches, ticker
 from matplotlib.figure import Figure
 from matplotlib.typing import ColorType
 
@@ -128,6 +128,18 @@ def _output_paths(save, saveas, states) -> tuple[str, ...]:
                        "are: .png, .pdf")
     normalized.append(path)
   return tuple(normalized)
+
+
+def _frame_values(states) -> tuple[list[float], str]:
+  """Each dataset's frame, to color its curve, and the colorbar label.
+
+  The datasets' order stands in when frames are missing or repeated, since
+  they would not tell the curves apart.
+  """
+  frames = [data.ctx.get("frame") for data in states]
+  if None not in frames and len(set(frames)) == len(frames):
+    return [float(frame) for frame in frames], "frame"
+  return [float(index) for index in range(len(states))], "dataset"
 
 
 def _normalize_line_colors(color):
@@ -513,6 +525,9 @@ def plot(
   mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
   normalization range (typically the min/max of the ``cval`` values across
   all curves), so several curves drawn into the same axes share one scale.
+  Without ``cval`` or ``color``, several 1-D datasets drawn with ``cmap``
+  are colored by their frame (by their order when frames do not tell them
+  apart) on one colorbar labelled ``frame``, unless ``clabel`` is given.
   ``color`` accepts either one Matplotlib color, applied to every line, or a
   sequence containing one color per dataset (reused for all its components).
   A sequence with one color per individual line is also accepted, in
@@ -954,6 +969,17 @@ def plot(
               f"'legend_subplot' must be between 0 and {num_legend_subplots - 1}"
           )
 
+      # Colormap values of 1-D curves: the given ``cval``, else each
+      # dataset's frame when several curves share the figure.
+      curve_values, curve_label = None, None
+      curve_range = (cval_min, cval_max)
+      if cmap and cval is not None:
+        curve_values = [cval] * len(states)
+      elif cmap and color is None and ref_num_dims == 1 and len(states) > 1:
+        curve_values, curve_label = _frame_values(states)
+        curve_range = (min(curve_values) if cval_min is None else cval_min,
+                       max(curve_values) if cval_max is None else cval_max)
+
       # ---- Phase 2: draw each dataset ----
       im = None
       cur_start_axes = start_axes
@@ -1044,9 +1070,10 @@ def plot(
             else:
               line_color = line_colors[line_color_idx]
             line_color_idx += 1
-            if cmap and cval is not None:
-              if cval_max is not None and cval_min is not None and cval_max != cval_min:
-                t = (cval - cval_min) / (cval_max - cval_min)
+            if curve_values is not None:
+              low, high = curve_range
+              if low is not None and high is not None and high != low:
+                t = (curve_values[ds_i] - low) / (high - low)
               else:
                 t = 0.5
               line_color = plt.get_cmap(cmap)(t)
@@ -1068,15 +1095,23 @@ def plot(
                     split_ax.plot(x[mask], y[mask], *plot_args, **line_kwargs))
             else:
               im = cax.plot(x, y, *plot_args, **line_kwargs)
-            # Add a colorbar describing the cval-to-color mapping once per axes.
-            if (cmap and cval is not None and comp_colorbar
-                and cval_max is not None and cval_min is not None
-                and cval_max != cval_min
+            # Add a colorbar describing the value-to-color mapping once per
+            # axes; frames (or dataset positions) get integer ticks.
+            low, high = curve_range
+            if (curve_values is not None and comp_colorbar and low is not None
+                and high is not None and high != low
                 and not getattr(cax, "_pgkyl_cval_cbar", False)):
-              mappable = cm.ScalarMappable(norm=colors.Normalize(vmin=cval_min,
-                                                                 vmax=cval_max),
+              mappable = cm.ScalarMappable(norm=colors.Normalize(vmin=low,
+                                                                 vmax=high),
                                            cmap=plt.get_cmap(cmap))
-              _pgkyl_colorbar(mappable, mpl_fig, cax, label=layout_clabel)
+              cbar = _pgkyl_colorbar(mappable,
+                                     mpl_fig,
+                                     cax,
+                                     label=(layout_clabel if curve_label is None
+                                            else clabel or curve_label))
+              if curve_label is not None:
+                cbar.ax.yaxis.set_major_locator(
+                    ticker.MaxNLocator(integer=True))
               cax._pgkyl_cval_cbar = True
 
           elif num_dims == 2:
