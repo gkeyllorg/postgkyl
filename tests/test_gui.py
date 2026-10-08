@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+import shlex
 
+from click.testing import CliRunner
 import numpy as np
 import pytest
 
 import postgkyl as pg
 from postgkyl import gpython
-from postgkyl.gui import launch
+from postgkyl.cli import gui_launch as launch
+from postgkyl.cli.app import cli
 from postgkyl.gui import pipeline as gp
 
 needs_gkeyll = pytest.mark.skipif(not gpython.available(),
@@ -115,14 +118,14 @@ def _file_settings(**overrides):
   return gp.Settings(**{**settings, **overrides})
 
 
-def _verbs(chain):
-  return [step.verb for step in chain.steps]
+def _verbs(steps):
+  return [step.verb for step in steps]
 
 
 class TestBuildChain:
 
   def test_order_is_fluctuation_average_transform_select_collect(self):
-    chain = gp.build_chain(
+    steps = gp.build_chain(
         _file_settings(frames=(5, 6),
                        fluct="yz",
                        weight="w.gkyl",
@@ -130,15 +133,27 @@ class TestBuildChain:
                        select=((2, 0.5), ),
                        comp=0,
                        collect=True))
-    assert _verbs(chain) == [
-        "fluctuation", "average", "interpolate", "select", "collect"
+    assert _verbs(steps) == [
+        "load", "load", "load", "activate", "fluctuation", "average",
+        "interpolate", "select", "collect"
     ]
-    fluct, average, _, select, _ = chain.steps
-    assert fluct.kwargs == {"dims": [1, 2], "weight": gp.WEIGHT}
-    assert average.kwargs == {"dims": [1], "weight": gp.WEIGHT}
+    weight, first, second, activate, fluct, average, _, select, _ = steps
+    # The weight is loaded, then set aside so only the data is transformed.
+    assert weight.kwargs == {"file_name": "w.gkyl", "tag": "weight"}
+    assert [first.kwargs, second.kwargs] == [{
+        "file_name": str(M0_3X)
+    }, {
+        "file_name": "frame_6.gkyl"
+    }]
+    assert activate.kwargs == {"tags": ["default"]}
+    assert fluct.kwargs == {"dims": "1,2", "weight": "weight"}
+    assert average.kwargs == {"dims": "1", "weight": "weight"}
     # Averaging dimension 1 moves dimension 2 to index 1.
     assert select.kwargs == {"z1": 0.5, "comp": 0}
-    assert chain.weight == "w.gkyl"
+
+  def test_an_unused_weight_is_not_loaded(self):
+    assert _verbs(gp.build_chain(
+        _file_settings(weight="w.gkyl"))) == ["load", "interpolate"]
 
   def test_fluctuations_need_3x_data(self):
     """'y' is the second of three axes only in a 3x run; on 2x data it
@@ -148,88 +163,115 @@ class TestBuildChain:
     with pytest.raises(ValueError, match="need 3x"):
       gp.build_chain(_file_settings(fluct="yz", source_ndim=2), probe_only=True)
 
-  def test_averaging_everything_is_a_full_average_without_transform(self):
-    chain = gp.build_chain(_file_settings(average=(0, 1, 2)))
-    assert _verbs(chain) == ["full_average"]
+  def test_averaging_everything_keeps_each_mean_as_a_dataset(self):
+    steps = gp.build_chain(_file_settings(average=(0, 1, 2)))
+    assert _verbs(steps) == ["load", "average"]
+    assert steps[1].kwargs == {"dims": "0,1,2", "as_dataset": True}
 
   def test_probe_chain_stops_after_the_transform_on_one_frame(self):
-    chain = gp.build_chain(_file_settings(frames=(5, 6),
+    steps = gp.build_chain(_file_settings(frames=(5, 6),
                                           average=(1, ),
                                           select=((2, 0.5), ),
                                           transform="local_poly",
                                           num_interp=3),
                            probe_only=True)
-    assert chain.source.kwargs["file_name"] == (str(M0_3X), )
-    assert [(s.verb, s.kwargs) for s in chain.steps] == [("local_poly", {
-        "npoints": 3
-    })]
+    assert steps == (gp.Step.of("load", file_name=str(M0_3X)),
+                     gp.Step.of("local_poly", npoints=3))
 
   def test_geometry_transforms_refuse_averages(self):
     with pytest.raises(ValueError, match="full configuration space"):
       gp.build_chain(_file_settings(average=(1, ), transform="map_to_rz"))
 
   def test_quantity_source(self):
-    chain = gp.build_chain(
+    steps = gp.build_chain(
         gp.Settings(directory="d",
                     mode="quantity",
                     frames=(3, 4),
                     sim="s",
                     quantity="D",
                     species="ion",
-                    options=(("conv", 2.5), )))
-    assert chain.source.verb == "gk.load_quantity"
-    assert chain.source.kwargs == {
-        "quantity": "D",
-        "species": "ion",
-        "name": "s",
-        "frame": "3,4",
-        "path": "d",
-        "conv": 2.5
-    }
+                    options=(("conv", 2.5), ),
+                    transform="none"))
+    assert steps == (gp.Step.of("gk_load_quantity",
+                                quantity="D",
+                                species="ion",
+                                name="s",
+                                frame="3,4",
+                                path="d",
+                                conv=2.5), )
+
+
+def test_script_makes_the_session_calls():
+  steps = (gp.Step.of("load", file_name="f.gkyl"),
+           gp.Step.of("fluctuation", dims="1",
+                      weight="weight"), gp.Step.of("plot", title="t"))
+  assert gp.python_script(steps).splitlines() == [
+      "from postgkyl.cli import PostgkylSession", "", "s = PostgkylSession()",
+      "s.load(file_name='f.gkyl')", "s.fluctuation(dims='1', weight='weight')",
+      "s.plot(title='t')"
+  ]
 
 
 # --------------------------------------------------------------- execution
+def _pgkyl_prints(command_line):
+  """What running ``command_line`` (``pgkyl ...``) and then ``print`` prints."""
+  program, *args = shlex.split(command_line)
+  assert program == "pgkyl"
+  result = CliRunner().invoke(cli, args + ["print"])
+  assert result.exit_code == 0, result.output
+  return result.output
+
+
+def _printed(data):
+  return np.array2string(data.values.squeeze(), precision=16) + "\n"
+
+
 @needs_gkeyll
 class TestRun:
 
-  def test_chain_matches_the_direct_api_and_its_script(self):
-    chain = gp.build_chain(
+  def test_steps_match_the_python_api_their_script_and_their_command(self):
+    steps = gp.build_chain(
         _file_settings(average=(1, ), select=((2, 0.0), ), num_interp=3))
-    (data, ) = gp.run(chain)
+    session = gp.run(steps)
+    (data, ) = session.datasets
     direct = pg.load(str(M0_3X)).average(
         [1]).interpolate(num_interp=3).select(z1=0.0)
     np.testing.assert_array_equal(data.values, direct.values)
 
     namespace = {}
-    exec(gp.python_script(chain), namespace)  # noqa: S102 - our own script.
-    np.testing.assert_array_equal(namespace["data"][0].values, direct.values)
+    exec(gp.python_script(steps), namespace)  # noqa: S102 - our own script.
+    assert namespace["s"].command() == session.command()
+    np.testing.assert_array_equal(namespace["s"].datasets[0].values,
+                                  direct.values)
+    assert _pgkyl_prints(session.command()) == _printed(direct)
 
-  def test_script_states_the_weight_and_the_plot(self):
-    chain = gp.Chain(gp.Step.of("load", file_name=("f.gkyl", )),
-                     weight="w.gkyl",
-                     steps=(gp.Step.of("fluctuation",
-                                       dims=[1],
-                                       weight=gp.WEIGHT), ))
-    script = gp.python_script(chain, {"title": "t"})
-    assert script.splitlines() == [
-        "import postgkyl as pg", "", "weight = pg.load('w.gkyl')",
-        "data = pg.GDataGroup([pg.load(f) for f in ['f.gkyl']])",
-        "data = data.fluctuation(dims=[1], weight=weight)",
-        "pg.plot(data, title='t')"
-    ]
+  def test_a_weighted_fluctuation_never_transforms_the_weight(self):
+    # The density, as its own single-field weight on the same grid.
+    steps = gp.build_chain(
+        _file_settings(fluct="yz", weight=str(M0_3X), select=((2, 0.0), )))
+    session = gp.run(steps)
+    (data, ) = session.datasets
+    direct = pg.load(str(M0_3X)).fluctuation("1,2", weight=pg.load(
+        str(M0_3X))).interpolate().select(z2=0.0)
+    np.testing.assert_array_equal(data.values, direct.values)
+    assert " activate --tags default fluctuation " in session.command()
+    assert _pgkyl_prints(session.command()) == _printed(direct)
 
   def test_full_averages_collect_into_a_time_trace(self):
     """Every direction averaged: one mean per frame, stamped with the
     frame's time, which collect stacks into a 1-D trace."""
-    data = pg.GDataGroup([pg.load(str(M0_3X)), pg.load(str(M0_3X))])
-    data[1].ctx["time"] = 2.0 * data[0].ctx["time"]
-    traces = gp.full_average(data, [0, 1, 2])
-    mean = data[0].average([0, 1, 2])
-    np.testing.assert_allclose([t.values[0, 0] for t in traces], [mean, mean],
-                               rtol=1e-14)
-    trace = traces.collect()
-    np.testing.assert_allclose(trace.grid[0],
-                               [data[0].ctx["time"], data[1].ctx["time"]])
+    output = gp.Output(label="elc_M0",
+                       files=((5, str(M0_3X)), (6, str(M0_3X))),
+                       sim=_OUTPUT.sim)
+    steps = gp.build_chain(
+        _file_settings(frames=(5, 6),
+                       output=output,
+                       average=(0, 1, 2),
+                       collect=True))
+    (trace, ) = gp.run(steps).datasets
+    mean = pg.load(str(M0_3X)).average([0, 1, 2])
+    assert len(trace.grid[0]) == 2
+    np.testing.assert_allclose(trace.values.ravel(), [mean, mean], rtol=1e-14)
 
   def test_probe_counts_fields_and_curvilinear_axes(self):
     info = gp.probe(gp.build_chain(_file_settings(), probe_only=True))
@@ -245,9 +287,13 @@ class TestRun:
     np.testing.assert_allclose(info.upper, (0.12, np.pi))
 
   def test_figure_and_movie(self, tmp_path):
-    data = gp.run(gp.build_chain(_file_settings(select=((2, 0.0), ))))
-    png = gp.figure_png(data, {"title": "t", "cmap": "RdBu_r"})
+    steps = gp.build_chain(_file_settings(select=((2, 0.0), )))
+    session = gp.run(steps)
+    gp.apply(session, gp.Step.of("plot", title="t", cmap="RdBu_r"))
+    assert session.command().endswith(" plot --title t --cmap RdBu_r")
+    png = gp.figure_png(session.result)
     assert png.startswith(b"\x89PNG")
+    data = gp.processed(steps)
     movie = gp.make_movie([data, data],
                           str(tmp_path / "m.gif"),
                           fps=5,
@@ -272,7 +318,7 @@ def test_movie_frames_carry_the_frame_after_a_typed_title(
     return plot(*frame, **kwargs)
 
   monkeypatch.setattr(animate_module.backend, "plot", recording_plot)
-  data = gp.run(gp.build_chain(_file_settings(select=((2, 0.0), ))))
+  data = gp.processed(gp.build_chain(_file_settings(select=((2, 0.0), ))))
   gp.make_movie([data],
                 str(tmp_path / "m.gif"),
                 fps=5,
@@ -380,3 +426,10 @@ def test_notebook_runs_headless_and_draws_a_figure(monkeypatch):
   assert "subplot_xlabels" not in options
   typed = defs["plot_options"](subplot_xlabels="x (m)")
   assert typed["subplot_xlabels"] == "x (m)"
+  # Below the figure: the session Python, then the command line it ran.
+  view = defs["plot_view"].text
+  python, command = (view.index("Equivalent Python"),
+                     view.index("Equivalent command line"))
+  assert python < command
+  assert "s = PostgkylSession()" in view
+  assert "pgkyl " in view[command:]

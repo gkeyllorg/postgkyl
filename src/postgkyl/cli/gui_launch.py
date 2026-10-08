@@ -1,4 +1,9 @@
-"""The ``pgkyl-gui`` console entry point: serve the notebook with marimo."""
+"""The ``pgkyl-gui`` console entry point: serve the notebook with marimo.
+
+It lives beside ``pgkyl`` because the CLI owns the console programs: the
+notebook (``postgkyl.gui``) is built on the CLI session, and is reached here
+by path, never imported.
+"""
 
 from __future__ import annotations
 
@@ -10,12 +15,13 @@ import subprocess
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-NOTEBOOK = os.path.join(_HERE, "notebook.py")
+NOTEBOOK = os.path.normpath(os.path.join(_HERE, os.pardir, "gui",
+                                         "notebook.py"))
 
 PROGRAM = "pgkyl-gui"
 DESCRIPTION = "Open the Postgkyl GUI."
 
-# The sample data of a source checkout (src/postgkyl/gui -> tests/test_data).
+# The sample data of a source checkout (src/postgkyl/cli -> tests/test_data).
 SAMPLE_DATA = os.path.normpath(
     os.path.join(_HERE, os.pardir, os.pardir, os.pardir, "tests", "test_data"))
 

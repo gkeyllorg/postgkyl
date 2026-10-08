@@ -2,6 +2,6 @@
 
 import sys
 
-from .launch import main
+from postgkyl.cli.gui_launch import main
 
 sys.exit(main())

@@ -28,7 +28,7 @@ from postgkyl.cli.compiler import (
 )
 from postgkyl.cli.discovery import discover_public_surface
 from postgkyl.cli.state import DataSpace
-from postgkyl.gui import launch as gui_launch
+from postgkyl.cli import gui_launch
 
 # Compilation validates the complete discovered surface before registration.
 # These aliases add spellings only; they never replace a generated command or

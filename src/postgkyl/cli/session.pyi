@@ -167,13 +167,14 @@ class PostgkylSession:
           RuntimeError: saving to a video container without ffmpeg on ``PATH``.
         """
 
-    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, as_dataset: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def average(self, dims: str | float, *, weight: str | None = None, as_dataset: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``int f w dx^dims / int w dx^dims`` over the directions in ``dims``.
 
         Args:
           data: gkyl-backed (native modal) dataset in the modal value_form.
-          dims: iterable of 0-based direction indices to average over (repeat
-            ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+          dims: 0-based direction(s) to average over: an integer, an iterable of
+            integers, a comma-separated string (``"0,1"``), or a colon slice
+            string (``"0:2"``); ``--dims 0,1`` at the CLI.
           weight: optional gkyl-backed dataset in the modal value_form, same
             ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
             field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -195,7 +196,8 @@ class PostgkylSession:
         Raises:
           ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
             missing basis metadata, or ``weight``'s grid/basis doesn't match
-            ``data``'s, or dataset-only options are used for a full average.
+            ``data``'s, ``dims`` is empty, repeated, or out of range, or
+            dataset-only options are used for a full average.
         """
 
     def collect(self, *, sumdata: bool = False, period: float | None = None, offset: float = 0.0, chunk: int | None = None, tag: str | None = None, label: str | None = None) -> PostgkylSession:
@@ -474,7 +476,7 @@ class PostgkylSession:
             ``window=True`` and the data is not 1D.
         """
 
-    def fluctuation(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def fluctuation(self, dims: str | float, *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``f - <f>_dims``: the field minus its average over the directions in
         ``dims``, where ``<f>_dims = int f w dx^dims / int w dx^dims``.
 
@@ -485,8 +487,9 @@ class PostgkylSession:
 
         Args:
           data: gkyl-backed (native modal) dataset in the modal value_form.
-          dims: iterable of 0-based direction indices to average over (repeat
-            ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+          dims: 0-based direction(s) to average over, in ``average``'s grammar:
+            an integer, an iterable of integers, ``"0,1"``, or ``"0:2"``;
+            ``--dims 0,1`` at the CLI.
           weight: optional gkyl-backed dataset in the modal value_form, same
             ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
             field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -502,7 +505,7 @@ class PostgkylSession:
         Raises:
           ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
             missing basis metadata, ``weight``'s grid/basis doesn't match
-            ``data``'s, or ``dims`` is empty or out of range.
+            ``data``'s, or ``dims`` is empty, repeated, or out of range.
         """
 
     def gk_energy_balance(self, name: str, species: list[str] | tuple[str, ...], *, path: str = './', relative_error: bool = False, multib: str = '-10', field_dot_file: str | None = None, apar_dot_file: str | None = None, fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, field_file: str | None = None, apar_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> PostgkylSession:
@@ -725,73 +728,6 @@ class PostgkylSession:
 
         Raises:
           FileNotFoundError: if a required file family is missing.
-        """
-
-    def gk_transport(self, name: str, species: str, frame: str | None = None, *, path: str = './', outputs: list[Literal['gamma', 'Q', 'q', 'D', 'chi', 'D_gB', 'chi_gB', 'n', 'T', 'gxx']] | tuple[Literal['gamma', 'Q', 'q', 'D', 'chi', 'D_gB', 'chi_gB', 'n', 'T', 'gxx'], ...] | None = None, fluct: Literal['none', 'y', 'yz'] = 'none', conv: float = 1.5, grad_tol: float = 0.001, per_frame: bool = False, num_interp: int | None = None, mass: list[float] | tuple[float, ...] | None = None, charge: list[float] | tuple[float, ...] | None = None, ti_over_te: float = 1.0, te_ref: float | None = None, bmag_ref: float | None = None, tag: str = 'transport', label: str | None = None) -> PostgkylSession:
-        r"""Radial turbulent transport of a 3x gyrokinetic simulation.
-
-        Flux-surface (``y``, ``z``, Jacobian-weighted) and time averaged radial
-        profiles, one dataset per species, window and output:
-
-        * ``gamma``: particle flux ``<Gamma^x>`` (ExB, plus flutter with ``apar``).
-
-        * ``Q``: energy flux ``<Q^x> = <(m/2) M2 v^x>``.
-
-        * ``q``: heat flux ``Q - conv <T> Gamma``.
-
-        * ``D``: particle diffusivity ``-Gamma/(<g^xx> d<n>/dx)`` (m^2/s).
-
-        * ``chi``: heat diffusivity ``-q/(<n> <g^xx> d<T>/dx)`` (m^2/s).
-
-        * ``D_gB``, ``chi_gB``: those over the gyro-Bohm diffusivity
-          ``rho_s^2 c_s/L``, with the species' own gradient length.
-
-        * ``n``, ``T``, ``gxx``: the averaged density, temperature and
-          ``<|grad x|^2>``.
-
-        The fluxes are contravariant radial components (``.grad x``). For the
-        gyro-Bohm outputs, ``c_s = sqrt(T_e/m_i)`` and ``rho_s = c_s/Omega_i`` use
-        the first ion species' mass and charge and the averaged ``<B>(x)``;
-        ``T_e`` is the electron species' ``<T>(x)`` if listed, else
-        ``T_i/ti_over_te`` (adiabatic electrons).
-
-        Args:
-          name: Simulation name prefix (e.g. ``'gk_tcv_3x2v_p1'``).
-          species: Species name, or a comma-separated list (e.g. ``'elc,ion'``).
-          frame: Frames to average over: a frame, a comma-separated list, or a
-            ``'start:stop[:step]'`` range; every available frame by default.
-          path: Directory containing the simulation files.
-          outputs: Profiles to return (repeat the option); default
-            ``gamma, q, D, chi``.
-          fluct: ``none`` for the total fluxes, ``y`` or ``yz`` for the turbulent
-            part only, the correlation of the fluctuations about the ``y`` or
-            ``(y, z)`` average.
-          conv: Coefficient ``c`` of the convective energy flux ``c <T> Gamma``
-            removed from ``Q`` to form ``q`` (e.g. 0, 3/2 or 5/2).
-          grad_tol: ``D`` (``chi``) is NaN where ``|d<n>/dx|`` (``|d<T>/dx|``) is
-            at most this fraction of its maximum.
-          per_frame: Return each frame's flux-surface averaged profiles instead of
-            their time average (e.g. to collect a space-time diagram).
-          num_interp: Radial points per cell (default ``poly_order + 1``).
-          mass: Species mass, one value or one per species, when the files lack
-            it.
-          charge: Species charge, one value or one per species, when the files
-            lack it.
-          ti_over_te: Ion-to-electron temperature ratio of adiabatic electrons
-            (gyro-Bohm outputs without an electron species).
-          te_ref: Constant electron temperature (J) replacing ``T_e(x)`` in the
-            gyro-Bohm outputs.
-          bmag_ref: Constant magnetic field (T) replacing ``<B>(x)`` in the
-            gyro-Bohm outputs.
-          tag: Tag prefix of the datasets, ``<tag>_<output>[_<species>]``.
-          label: Label override for the datasets.
-
-        Returns:
-          A list of NumPy-backed 1-D datasets on the radial points.
-
-        Raises:
-          ValueError: an output name is unknown, or the data are not 3x.
-          FileNotFoundError: a needed geometry file or quantity is missing.
         """
 
     def grid(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:

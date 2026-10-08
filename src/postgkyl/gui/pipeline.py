@@ -1,9 +1,10 @@
 """The GUI's processing chain, as plain functions the notebook wires to widgets.
 
-A :class:`Chain` is a frozen record of what to load and which public fluent
-verbs to apply, in order. :func:`run` executes it on a ``GDataGroup`` (every
-member verb broadcasts) and :func:`python_script` renders the same record as
-the equivalent Python, so the script the GUI shows is what it computed.
+A chain is a tuple of :class:`Step` records, each one ``PostgkylSession``
+call (a ``pgkyl`` command and its options). :func:`run` executes the steps in
+a session and :func:`python_script` renders the same steps as session Python,
+so the Python the GUI shows, and the command line the session records, are
+what it computed.
 
 Nothing here imports marimo: the notebook only turns widget values into a
 chain and figures into pixels.
@@ -12,7 +13,7 @@ chain and figures into pixels.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import glob
 import inspect
 import io as _bytes_io
@@ -23,12 +24,13 @@ import numpy as np
 
 import postgkyl as pg
 from postgkyl import io
+from postgkyl.cli import PostgkylSession
 
 __all__ = [
-    "Output", "Step", "Chain", "GridInfo", "WEIGHT", "scan_outputs",
-    "list_simulations", "weight_file", "pick_frames", "frame_option",
-    "full_average", "run", "probe", "python_script", "figure_png", "make_movie",
-    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
+    "Output", "Step", "GridInfo", "scan_outputs", "list_simulations",
+    "weight_file", "pick_frames", "frame_option", "apply", "run", "processed",
+    "probe", "python_script", "figure_png", "make_movie", "Settings",
+    "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
 ]
 
 # Fluctuations and averages of gyrokinetic fields are weighted by the
@@ -167,21 +169,9 @@ def frame_option(frames: list[int]) -> str:
 
 
 # ------------------------------------------------------------------- chains
-class _WeightRef:
-  """Placeholder for the weight dataset in a step's options."""
-
-  def __repr__(self) -> str:
-    return "weight"
-
-
-WEIGHT = _WeightRef()
-
-
 @dataclass(frozen=True)
 class Step:
-  """One public call: a fluent verb (``"interpolate"``), a loader
-  (``"load"``, ``"gk.load_quantity"``), ``"collect"``, or
-  ``"full_average"`` (:func:`full_average`), with keyword options."""
+  """One ``PostgkylSession`` call: a ``pgkyl`` command and its options."""
 
   verb: str
   options: tuple[tuple[str, object], ...] = ()
@@ -196,104 +186,47 @@ class Step:
     return dict(self.options)
 
 
-@dataclass(frozen=True)
-class Chain:
-  """What to load (``source``), the optional weight file that a ``WEIGHT``
-  option refers to, and the steps applied in order."""
-
-  source: Step
-  weight: str | None = None
-  steps: tuple[Step, ...] = field(default_factory=tuple)
+# The weight file joins the session under this tag; ``activate`` then sets it
+# aside, so later commands skip it while ``--weight`` still finds it.
+_WEIGHT_TAG = "weight"
+# The tag the loaders give the data they load.
+_DATA_TAG = inspect.signature(pg.load).parameters["tag"].default
 
 
-# Loaders other than ``load``, which ``run`` applies to each file.
-_LOADERS = {
-    "gk.load_quantity": pg.gk.load_quantity,
-}
+def apply(session: PostgkylSession, step: Step) -> PostgkylSession:
+  """Make ``step``'s call on ``session``."""
+  return getattr(session, step.verb)(**step.kwargs)
 
 
-def full_average(data: pg.GDataGroup, dims, *, weight=None) -> pg.GDataGroup:
-  """Average every member over all of its ``dims``, keeping each mean as a
-  one-point dataset with the member's time and frame, so that ``collect``
-  turns a frame series of volume averages into a time trace."""
-  out = []
-  for member in data:
-    mean = np.atleast_1d(member.average(dims, weight=weight))
-    trace = pg.GData(tag=member.tag,
-                     label=member.label,
-                     ctx={
-                         key: member.ctx[key]
-                         for key in ("time", "frame")
-                         if member.ctx.get(key) is not None
-                     })
-    trace.push([np.array([0.0, 1.0])], mean.reshape(1, -1))
-    out.append(trace)
-  return pg.GDataGroup(out)
+def run(steps: tuple[Step, ...]) -> PostgkylSession:
+  """A session, opening no window, that has made every call of ``steps``."""
+  session = PostgkylSession(no_show=True)
+  for step in steps:
+    apply(session, step)
+  return session
 
 
-def _resolve(options: dict, weight):
-  return {k: weight if v is WEIGHT else v for k, v in options.items()}
+def processed(steps: tuple[Step, ...]) -> pg.GDataGroup:
+  """The datasets ``steps`` produce, as one group."""
+  return pg.GDataGroup(list(run(steps).datasets))
 
 
-def run(chain: Chain) -> pg.GDataGroup:
-  """Execute ``chain`` and return the resulting datasets as one group."""
-  source = chain.source
-  if source.verb == "load":
-    files = source.kwargs["file_name"]
-    data = pg.GDataGroup([pg.load(f) for f in files])
-  else:
-    data = pg.GDataGroup(_LOADERS[source.verb](**source.kwargs))
-  weight = pg.load(chain.weight) if chain.weight else None
-  for step in chain.steps:
-    options = _resolve(step.kwargs, weight)
-    if step.verb == "collect":
-      data = pg.GDataGroup([data.collect(**options)])
-    elif step.verb == "full_average":
-      data = full_average(data, **options)
-    else:
-      data = getattr(data, step.verb)(**options)
-  return data
-
-
-def _call(name: str, options: dict, positional: str = "") -> str:
-  args = [positional] if positional else []
-  args += [f"{k}={v!r}" for k, v in options.items()]
-  return f"{name}({', '.join(args)})"
-
-
-def python_script(chain: Chain, plot_options: dict | None = None) -> str:
-  """The Python that :func:`run` (then :func:`figure_png`) executes."""
-  lines = ["import postgkyl as pg"]
-  if any(step.verb == "full_average" for step in chain.steps):
-    lines.append("from postgkyl.gui.pipeline import full_average")
-  lines.append("")
-  if chain.weight:
-    lines.append(f"weight = pg.load({chain.weight!r})")
-  source = chain.source
-  if source.verb == "load":
-    files = list(source.kwargs["file_name"])
-    lines.append(f"data = pg.GDataGroup([pg.load(f) for f in {files!r}])")
-  else:
-    lines.append(
-        f"data = pg.GDataGroup({_call('pg.' + source.verb, source.kwargs)})")
-  for step in chain.steps:
-    if step.verb == "collect":
-      lines.append(
-          f"data = pg.GDataGroup([{_call('data.collect', step.kwargs)}])")
-    elif step.verb == "full_average":
-      lines.append(f"data = {_call('full_average', step.kwargs, 'data')}")
-    else:
-      lines.append(f"data = {_call('data.' + step.verb, step.kwargs)}")
-  if plot_options is not None:
-    lines.append(_call("pg.plot", plot_options, "data"))
-  return "\n".join(lines)
+def python_script(steps: tuple[Step, ...]) -> str:
+  """The session Python making the calls :func:`run` makes."""
+  calls = [
+      f"s.{step.verb}({', '.join(f'{k}={v!r}' for k, v in step.options)})"
+      for step in steps
+  ]
+  return "\n".join(
+      ["from postgkyl.cli import PostgkylSession", "", "s = PostgkylSession()"
+       ] + calls)
 
 
 # --------------------------------------------------------- GUI settings
 TRANSFORMS = ("interpolate", "local_poly", "map_to_rz", "extract_flux_surface",
               "none")
 _GEOMETRY_TRANSFORMS = ("map_to_rz", "extract_flux_surface")
-_FLUCT_DIMS = {"y": [1], "yz": [1, 2]}
+_FLUCT_DIMS = {"y": "1", "yz": "1,2"}
 
 
 @dataclass(frozen=True)
@@ -380,35 +313,40 @@ def _number(text: str):
   return text
 
 
-def build_chain(settings: Settings, *, probe_only: bool = False) -> Chain:
-  """The chain computing ``settings``' figure: load, fluctuation, average,
-  transform, select, collect. With ``probe_only`` it stops after the
-  transform and loads the first frame only, which is what the selection
+def build_chain(settings: Settings,
+                *,
+                probe_only: bool = False) -> tuple[Step, ...]:
+  """The steps computing ``settings``' data: load, fluctuation, average,
+  transform, select, collect. With ``probe_only`` they stop after the
+  transform and load the first frame only, which is what the selection
   sliders are sized from.
+
+  A weighted fluctuation or average first loads the weight, then activates
+  the data alone, so the weight is never transformed or plotted.
 
   Raises:
     ValueError: the settings combine choices that do not apply together.
   """
   s = settings
   frames = s.frames[:1] if probe_only else s.frames
-  options = dict(s.options)
   numbered = [f for f in frames if f is not None]
   if s.mode == "file":
-    source = Step.of("load",
-                     file_name=tuple(s.output.file_name(f) for f in frames))
+    loads = [Step.of("load", file_name=s.output.file_name(f)) for f in frames]
   elif s.mode == "quantity":
-    source = Step.of("gk.load_quantity",
-                     quantity=s.quantity,
-                     species=s.species,
-                     name=s.sim,
-                     frame=frame_option(numbered) if numbered else None,
-                     path=s.directory,
-                     direction=s.direction,
-                     **options)
+    loads = [
+        Step.of("gk_load_quantity",
+                quantity=s.quantity,
+                species=s.species,
+                name=s.sim,
+                frame=frame_option(numbered) if numbered else None,
+                path=s.directory,
+                direction=s.direction,
+                **dict(s.options))
+    ]
   else:
     raise ValueError(f"unknown mode {s.mode!r}")
 
-  weight = WEIGHT if s.weight else None
+  weight = _WEIGHT_TAG if s.weight else None
   steps: list[Step] = []
   if s.fluct != "none":
     if s.source_ndim != 3:
@@ -418,22 +356,31 @@ def build_chain(settings: Settings, *, probe_only: bool = False) -> Chain:
     steps.append(
         Step.of("fluctuation", dims=_FLUCT_DIMS[s.fluct], weight=weight))
   if probe_only:
-    return Chain(source, s.weight, tuple(steps) + _transform_steps(s))
-
-  average = sorted(s.average)
-  if average and s.transform in _GEOMETRY_TRANSFORMS:
-    raise ValueError(f"averaging does not apply before {s.transform}, "
-                     "which needs the full configuration space.")
-  if average and len(average) == s.ndim:
-    steps.append(Step.of("full_average", dims=average, weight=weight))
-  else:
-    if average:
-      steps.append(Step.of("average", dims=average, weight=weight))
     steps.extend(_transform_steps(s))
-    steps.extend(_select_steps(s, average=average))
-  if s.collect and len(frames) > 1:
-    steps.append(Step.of("collect"))
-  return Chain(source, s.weight, tuple(steps))
+  else:
+    average = sorted(s.average)
+    if average and s.transform in _GEOMETRY_TRANSFORMS:
+      raise ValueError(f"averaging does not apply before {s.transform}, "
+                       "which needs the full configuration space.")
+    dims = ",".join(map(str, average))
+    if average and len(average) == s.ndim:
+      # One mean per frame, kept as a dataset so collect makes a trace.
+      steps.append(Step.of("average", dims=dims, weight=weight,
+                           as_dataset=True))
+    else:
+      if average:
+        steps.append(Step.of("average", dims=dims, weight=weight))
+      steps.extend(_transform_steps(s))
+      steps.extend(_select_steps(s, average=average))
+    if s.collect and len(frames) > 1:
+      steps.append(Step.of("collect"))
+
+  if any(step.kwargs.get("weight") for step in steps):
+    loads = [
+        Step.of("load", file_name=s.weight, tag=_WEIGHT_TAG), *loads,
+        Step.of("activate", tags=[_DATA_TAG])
+    ]
+  return tuple(loads + steps)
 
 
 def _transform_steps(s: Settings) -> tuple[Step, ...]:
@@ -494,9 +441,9 @@ class GridInfo:
     return len(self.cells)
 
 
-def probe(chain: Chain) -> GridInfo:
-  """The layout of the first dataset ``chain`` produces."""
-  data = run(chain)[0]
+def probe(steps: tuple[Step, ...]) -> GridInfo:
+  """The layout of the first dataset ``steps`` produce."""
+  data = run(steps).datasets[0]
   if data.ctx.get("basis_type") and not data.is_interpolated:
     fields = data.interpolate().num_comps  # Count fields, not coefficients.
   else:
@@ -521,19 +468,21 @@ def probe(chain: Chain) -> GridInfo:
 
 
 # --------------------------------------------------------------- rendering
-def figure_png(data: pg.GDataGroup,
-               plot_options: dict,
-               *,
-               dpi: int = 110) -> bytes:
-  """``pg.plot`` the datasets with ``plot_options`` and return PNG bytes."""
+def figure_png(figure, *, dpi: int = 110) -> bytes:
+  """The PNG bytes of ``plot``'s result, then closed.
+
+  ``plot`` returns a list when it draws one figure per multiblock family;
+  the first is shown.
+  """
   import matplotlib.pyplot as plt
 
-  fig = pg.plot(data, no_show=True, **plot_options)
+  figures = figure if isinstance(figure, list) else [figure]
   try:
     buffer = _bytes_io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=dpi)
+    figures[0].savefig(buffer, format="png", dpi=dpi)
   finally:
-    plt.close(fig)
+    for each in figures:
+      plt.close(each)
   return buffer.getvalue()
 
 

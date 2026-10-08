@@ -25,7 +25,7 @@ def _():
     import traceback
 
     import postgkyl as pg
-    from postgkyl.gui import launch
+    from postgkyl.cli import gui_launch as launch
     from postgkyl.gui import pipeline as gp
 
     return (
@@ -469,37 +469,48 @@ def _(
 
 @app.cell
 def _(base64, gp, grid_msg, html, mo, plot_options, settings, traceback):
-    # --- run the chain and show the figure with its Python ------------------
-    figure_bytes, _script, _err, _tb, _status = None, "", None, "", ""
+    # --- run the chain; show the figure, its Python and its command line ----
+    figure_bytes, _err, _tb, _status = None, None, "", ""
+    _script, _command = "", ""
     if settings is None:
         _err = grid_msg or "Choose data to plot."
     else:
         try:
-            _chain = gp.build_chain(settings)
-            _script = gp.python_script(_chain, plot_options())
-            _data = gp.run(_chain)
+            _steps = gp.build_chain(settings)
+            _script = gp.python_script(_steps)
+            _session = gp.run(_steps)
+            _command = _session.command()
+            _data = _session.datasets
             _dims = max(len([n for n in d.values.shape[:-1] if n > 1]) for d in _data)
             _status = f"{len(_data)} dataset(s) · {_dims}D after processing"
             if _dims > 2:
                 _err = (f"This data is **{_dims}D** and plots are 1D or 2D: enable "
                         f"**{_dims - 2}** more dimension(s) to select or average.")
             else:
-                figure_bytes = gp.figure_png(_data, plot_options())
+                _plot = gp.Step.of("plot", **plot_options())
+                gp.apply(_session, _plot)
+                _script = gp.python_script(_steps + (_plot,))
+                _command = _session.command()
+                figure_bytes = gp.figure_png(_session.result)
         except Exception as _exc:
             _err = f"**{type(_exc).__name__}:** {_exc}"
             _tb = traceback.format_exc()
 
-    _script_view = mo.Html(
-        "<div style='margin-top:0.5rem'><b>Equivalent Python</b>"
-        "<pre style='white-space:pre-wrap;word-break:break-word;"
-        "background:var(--gray-2,#f3f3f3);padding:0.6rem 0.8rem;"
-        "border-radius:6px;font-size:0.85em;'>"
-        f"{html.escape(_script)}</pre></div>") if _script else mo.md("")
+    def _code_view(title, code):
+        return mo.Html(
+            f"<div style='margin-top:0.5rem'><b>{title}</b>"
+            "<pre style='white-space:pre-wrap;word-break:break-word;"
+            "background:var(--gray-2,#f3f3f3);padding:0.6rem 0.8rem;"
+            "border-radius:6px;font-size:0.85em;'>"
+            f"{html.escape(code)}</pre></div>") if code else mo.md("")
+
+    _code = [_code_view("Equivalent Python", _script),
+             _code_view("Equivalent command line", _command)]
     if _err:
         _parts = [mo.callout(mo.md(_err), kind="warn")]
         if _tb:
             _parts.append(mo.accordion({"Full traceback": mo.md(f"```\n{_tb}\n```")}))
-        plot_view = mo.vstack(_parts + [_script_view])
+        plot_view = mo.vstack(_parts + _code)
     else:
         _b64 = base64.b64encode(figure_bytes).decode()
         plot_view = mo.vstack([
@@ -507,7 +518,7 @@ def _(base64, gp, grid_msg, html, mo, plot_options, settings, traceback):
             mo.Html(f'<img src="data:image/png;base64,{_b64}" style="max-width:100%;'
                     'max-height:82vh;height:auto;object-fit:contain;display:block;'
                     'margin:0 auto;" />'),
-            _script_view,
+            *_code,
         ])
     return figure_bytes, plot_view
 
@@ -572,7 +583,7 @@ def _(
         with mo.status.progress_bar(total=len(_picked), title="Processing frames",
                                     remove_on_exit=True) as _bar:
             for _frame in _picked:
-                _groups.append(gp.run(gp.build_chain(
+                _groups.append(gp.processed(gp.build_chain(
                     replace(settings, frames=(_frame,), collect=False))))
                 _bar.update()
         gp.make_movie(_groups, _dest, fps=int(movie_fps.value),

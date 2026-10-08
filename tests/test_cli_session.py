@@ -65,7 +65,7 @@ def test_a_failed_call_is_neither_recorded_nor_applied():
   s.load(DISTF)
   before = s.datasets
   with pytest.raises(click.UsageError, match="no dataset tagged 'missing'"):
-    s.average([0], weight="missing")
+    s.average("0", weight="missing")
   with pytest.raises(TypeError, match="no command-line spelling"):
     s.select(z0=slice(1, 2))
   assert s.command() == f"pgkyl {DISTF}"

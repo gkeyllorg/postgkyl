@@ -549,12 +549,13 @@ _ALLOWED = {
     # reads gpython.available()/build_info())
     # -- both source files sit in the same ""
     # layer, so both edges are checked here
-    # top surface: facade + frozen metadata; "gui" names the separate
-    # pgkyl-gui program in the help (its launcher imports only the stdlib)
-    "cli": {"", "cli_spec", "gui"},
-    # notebook GUI, a top surface beside the CLI: the facade's verbs and the
-    # file-naming convention for output discovery.
-    "gui": {"", "io"},
+    # top surface: facade + frozen metadata; it also owns the console
+    # programs, including the pgkyl-gui launcher (which reaches the notebook
+    # by path, never by import)
+    "cli": {"", "cli_spec"},
+    # notebook GUI, built on the CLI session: the facade's verbs, the
+    # file-naming convention for output discovery, and PostgkylSession.
+    "gui": {"", "io", "cli"},
 }
 _LAYERS = set(_ALLOWED)
 
