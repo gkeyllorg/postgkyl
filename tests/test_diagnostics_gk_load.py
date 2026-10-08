@@ -678,11 +678,11 @@ class TestDriftVelocities:
     assert np.all(np.isfinite(out.values))
 
   def test_gradB_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_gradB_vel([None, None, None, None])
 
   def test_diamag_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_diamag_vel([None, None, None, None, None])
 
 
@@ -761,7 +761,7 @@ class TestCrossGradDivB:
       ff._b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, 3)
 
   def test_ExB_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_ExB_vel([None, None, None, None])
 
 
@@ -801,6 +801,18 @@ class TestLoadQuantity:
   def test_geo_quantity_missing_file_raises(self):
     with pytest.raises(FileNotFoundError):
       load_quantity("geo_int_bmag", None, GK_NAME, path=DATA)
+
+  @pytest.mark.parametrize("quantity, species, direction, expected", [
+      ("flux_particle", "ion", 1, r"$\Gamma^{y}_{i}$"),
+      ("inv_L_T", "elc", 2, r"$1/L^{z}_{T,e}$ (1/m)"),
+      ("ExB_vel", None, 0, r"$v_{E,x}$ (m/s)"),
+      ("M0", "ion", None, r"$M_{0i}$ (m$^{-3}$)"),
+  ])
+  def test_labels_name_the_direction_and_species(self, quantity, species,
+                                                 direction, expected):
+    label = gk_quant_registry.get(quantity).get_label(species=species,
+                                                      direction=direction)
+    assert label == expected
 
   def test_label_and_tag_override(self, tmp_path, monkeypatch):
     # A species-independent geo quantity needs only its own marker file.
@@ -875,20 +887,20 @@ def _collect_source_files(quant, path, name, species, frame) -> set:
 
 
 def _extra_for(quant) -> dict:
-  extra = {}
-  if quant.is_vector:
-    extra["direction"] = 0
+  # No quantity assumes a direction; the others ignore it. z is the one
+  # direction the 1x synthetic data carry.
+  extra = {"direction": 2}
   if quant.name == "collision_freq":
     extra.update(den_ref=[1e19], temp_ref=[1e-17], bmag_ref=1.0)
   return extra
 
 
-# The synthetic data are 1x: quantities differentiating along the radial
-# coordinate x, or needing the binormal direction y of a 3x run, must refuse.
-_NEEDS_RADIAL_COORD = {"inv_L_n", "inv_L_T"}
+# The synthetic data are 1x: cross-field fluxes, and the diffusivities built
+# on them, need the binormal direction y of a 3x run and must refuse.
 _NEEDS_3X = {
-    "part_flux_ExB", "energy_flux_ExB", "part_flux_dB", "energy_flux_dB",
-    "part_flux", "energy_flux", "D", "chi", "D_gB", "chi_gB"
+    "flux_particle_ExB", "flux_energy_ExB", "flux_particle_dB",
+    "flux_energy_dB", "flux_particle", "flux_energy", "particle_D", "heat_chi",
+    "particle_D_gB", "heat_chi_gB"
 }
 
 
@@ -921,10 +933,8 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
 
   monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-  if quantity in _NEEDS_RADIAL_COORD | _NEEDS_3X:
-    match = ("no radial coordinate"
-             if quantity in _NEEDS_RADIAL_COORD else "need 3x")
-    with pytest.raises(ValueError, match=match):
+  if quantity in _NEEDS_3X:
+    with pytest.raises(ValueError, match="need 3x"):
       load_quantity(quantity,
                     species,
                     name,

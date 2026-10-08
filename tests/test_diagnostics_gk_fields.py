@@ -231,20 +231,32 @@ class TestCollisionFrequency:
 
 # --------------------------------------------------------- gradient lengths
 class TestInverseGradientLength:
+  _SLOPES = (-2.2, 0.7, 1.3)
 
   @pytest.mark.parametrize("fetch", [ff.fetch_inv_L_n, ff.fetch_inv_L_T])
-  def test_minus_the_radial_gradient_over_the_field(self, fetch):
-    """``1/L * X = -dX/dx`` exactly, the x derivative of a linear field
-    being constant; the z slope must not enter."""
-    grad_x = -2.2
-    field = _linear([(50.0, (grad_x, 0.0, 1.3))])
-    out = fetch([field]) * field
-    np.testing.assert_allclose(_avg(out), -grad_x, **ROUND_OFF)
+  @pytest.mark.parametrize("direction", [0, 1, 2])
+  def test_minus_the_gradient_over_the_field(self, fetch, direction):
+    """``1/L * X = -dX/dx^k`` exactly, the derivative of a linear field
+    being constant; the slopes along the other directions must not enter."""
+    field = _linear([(50.0, self._SLOPES)])
+    out = fetch([field], dir=direction) * field
+    np.testing.assert_allclose(_avg(out), -self._SLOPES[direction], **ROUND_OFF)
 
-  def test_1x_has_no_radial_coordinate(self):
-    field = _linear([(1.0, (0.5, ))], cells=(3, ), lengths=(1.0, ))
-    with pytest.raises(ValueError, match="no radial coordinate"):
-      ff.fetch_inv_L_n([field])
+  def test_direction_must_be_requested(self):
+    with pytest.raises(ValueError, match="direction="):
+      ff.fetch_inv_L_T([_linear([(50.0, self._SLOPES)])])
+
+  def test_reduced_runs_carry_only_their_directions(self):
+    """A 1x run holds z alone, so 1/L along z uses its only dimension; x is
+    refused. A 2x run holds x and z, so y is refused."""
+    field_1x = _linear([(1.0, (0.5, ))], cells=(3, ), lengths=(1.0, ))
+    out = ff.fetch_inv_L_n([field_1x], dir=2) * field_1x
+    np.testing.assert_allclose(_avg(out, ndim=1), -0.5, **ROUND_OFF)
+    with pytest.raises(ValueError, match="1x simulation has no x direction"):
+      ff.fetch_inv_L_n([field_1x], dir=0)
+    field_2x = _linear([(1.0, (0.5, 0.2))], cells=(3, 5), lengths=(0.6, 1.9))
+    with pytest.raises(ValueError, match="2x simulation has no y direction"):
+      ff.fetch_inv_L_n([field_2x], dir=1)
 
 
 # --------------------------------------------------- magnetic perturbations
@@ -266,11 +278,11 @@ class TestMagneticPerturbation:
     a, c = 2.5, -1.75
     srcs = _dB_sources((a, c, 0.0))
     for comp, expected in enumerate((c, -a, 0.0)):
-      np.testing.assert_allclose(_avg(ff.fetch_dB_perp_dual(srcs[:3],
-                                                            dir=comp)),
+      np.testing.assert_allclose(_avg(
+          ff.fetch_dB_perp_contra(srcs[:3], dir=comp)),
                                  expected,
                                  atol=1e-12)
-      np.testing.assert_allclose(_avg(ff.fetch_dB_perp(srcs, dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_dB_perp_cov(srcs, dir=comp)),
                                  expected,
                                  atol=1e-12)
 
@@ -278,8 +290,8 @@ class TestMagneticPerturbation:
     flat, tilted = _dB_sources((2.5, -1.75, 0.0)), _dB_sources(
         (2.5, -1.75, 9.0))
     for comp in range(3):
-      np.testing.assert_allclose(_avg(ff.fetch_dB_perp(flat, dir=comp)),
-                                 _avg(ff.fetch_dB_perp(tilted, dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_dB_perp_cov(flat, dir=comp)),
+                                 _avg(ff.fetch_dB_perp_cov(tilted, dir=comp)),
                                  atol=1e-12)
 
   def test_metric_lowers_the_index(self):
@@ -289,7 +301,7 @@ class TestMagneticPerturbation:
     srcs = _dB_sources((a, c, 0.0), metric=_SKEW, b_hat=(0.0, 0.0, 1.0))
     expected = _metric(_SKEW) @ np.array([c, -a, 0.0])
     for comp in range(3):
-      np.testing.assert_allclose(_avg(ff.fetch_dB_perp(srcs, dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_dB_perp_cov(srcs, dir=comp)),
                                  expected[comp], **ROUND_OFF)
 
   def test_general_geometry_magnitude(self):
@@ -302,7 +314,7 @@ class TestMagneticPerturbation:
     np.testing.assert_allclose(_avg(ff.fetch_dB_perp_mag(srcs)),
                                np.sqrt(dB @ _metric(_SKEW) @ dB),
                                rtol=1e-10)
-    np.testing.assert_allclose(_avg(ff.fetch_dB_perp(srcs, dir=2)),
+    np.testing.assert_allclose(_avg(ff.fetch_dB_perp_cov(srcs, dir=2)),
                                0.0,
                                atol=1e-12)
 
@@ -314,7 +326,7 @@ class TestMagneticPerturbation:
                    (1.0, (0.0, 0.0, 0.0))])
     srcs = [_const(apar), _const(1.0 / jacob), b_i, _const(*_EUCLIDEAN)]
     for comp, expected in enumerate((0.0, 0.0, -apar * s / jacob)):
-      np.testing.assert_allclose(_avg(ff.fetch_dB_perp(srcs, dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_dB_perp_cov(srcs, dir=comp)),
                                  expected,
                                  atol=1e-12)
 
@@ -330,9 +342,9 @@ class TestTotalMagneticField:
     """``B_i = B b_i`` and ``B^i = (B/sqrt(g_33)) delta^i_3`` share
     nothing, so ``B_i B^i = B^2`` checks both and the g_33 component."""
     _apar, bmag, _jinv, b_i, g_ij = self._srcs((0.0, 0.0, 0.0))
-    cov = [ff.fetch_B_equilibrium([bmag, b_i], dir=i) for i in range(3)]
+    cov = [ff.fetch_B_equilibrium_cov([bmag, b_i], dir=i) for i in range(3)]
     contra = [
-        ff.fetch_B_dual_equilibrium([bmag, g_ij], dir=i) for i in range(3)
+        ff.fetch_B_equilibrium_contra([bmag, g_ij], dir=i) for i in range(3)
     ]
     for i in (0, 1):
       np.testing.assert_array_equal(contra[i].values, 0.0)
@@ -344,19 +356,20 @@ class TestTotalMagneticField:
     apar, bmag, jinv, b_i, g_ij = srcs
     for i in range(3):
       np.testing.assert_allclose(
-          _avg(ff.fetch_B_tot(srcs, dir=i)),
-          _avg(ff.fetch_B_equilibrium([bmag, b_i], dir=i)) +
-          _avg(ff.fetch_dB_perp([apar, jinv, b_i, g_ij], dir=i)), **ROUND_OFF)
+          _avg(ff.fetch_B_tot_cov(srcs, dir=i)),
+          _avg(ff.fetch_B_equilibrium_cov([bmag, b_i], dir=i)) +
+          _avg(ff.fetch_dB_perp_cov([apar, jinv, b_i, g_ij], dir=i)),
+          **ROUND_OFF)
       np.testing.assert_allclose(
-          _avg(ff.fetch_B_tot_dual(srcs, dir=i)),
-          _avg(ff.fetch_B_dual_equilibrium([bmag, g_ij], dir=i)) +
-          _avg(ff.fetch_dB_perp_dual([apar, jinv, b_i], dir=i)),
+          _avg(ff.fetch_B_tot_contra(srcs, dir=i)),
+          _avg(ff.fetch_B_equilibrium_contra([bmag, g_ij], dir=i)) +
+          _avg(ff.fetch_dB_perp_contra([apar, jinv, b_i], dir=i)),
           rtol=1e-12,
           atol=1e-14)
 
   def test_direction_must_be_requested(self):
-    with pytest.raises(KeyError, match="dir="):
-      ff.fetch_B_tot(self._srcs((1.0, 1.0, 0.0)))
+    with pytest.raises(ValueError, match="direction="):
+      ff.fetch_B_tot_cov(self._srcs((1.0, 1.0, 0.0)))
 
 
 # ---------------------------------------------------------- electric field
@@ -370,9 +383,9 @@ class TestElectricField:
     E = -np.array(self._SLOPES)
     srcs = [self._phi(), _const(*_SKEW)]
     for comp in range(3):
-      np.testing.assert_allclose(_avg(ff.fetch_E_field(srcs[:1], dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_E_field_cov(srcs[:1], dir=comp)),
                                  E[comp], **ROUND_OFF)
-      np.testing.assert_allclose(_avg(ff.fetch_E_field_dual(srcs, dir=comp)),
+      np.testing.assert_allclose(_avg(ff.fetch_E_field_contra(srcs, dir=comp)),
                                  (_metric(_SKEW) @ E)[comp], **ROUND_OFF)
     np.testing.assert_allclose(_avg(ff.fetch_E_field_mag(srcs)),
                                np.sqrt(E @ _metric(_SKEW) @ E),
@@ -381,25 +394,28 @@ class TestElectricField:
   def test_2x_runs_hold_x_and_z(self):
     """A 2x run has no y: ``E_y = 0`` and z is its second dimension."""
     phi = _linear([(0.0, (4.0e2, -9.0e2))], cells=(3, 5), lengths=(0.6, 1.9))
-    avg = lambda comp: _avg(ff.fetch_E_field([phi], dir=comp), ndim=2)
+    avg = lambda comp: _avg(ff.fetch_E_field_cov([phi], dir=comp), ndim=2)
     np.testing.assert_allclose(avg(0), -4.0e2, **ROUND_OFF)
-    np.testing.assert_array_equal(ff.fetch_E_field([phi], dir=1).values, 0.0)
+    np.testing.assert_array_equal(
+        ff.fetch_E_field_cov([phi], dir=1).values, 0.0)
     np.testing.assert_allclose(avg(2), 9.0e2, **ROUND_OFF)
 
 
-# ------------------------------------------------------------ radial fluxes
-# phi = a y + e z and b_i = (0, b_y, b_z) give the uniform
-#   v_E^x = (b_y dphi/dz - b_z dphi/dy)/(J B) = (b_y e - b_z a) jacobtot_inv.
-_A, _EZ = 3.7, -1.9
+# ------------------------------------------------------- cross-field fluxes
+# phi = g x + a y + e z and b_i = (0, b_y, b_z) give the uniform
+#   v_E^x = (b_y dphi/dz - b_z dphi/dy)/(J B) = (b_y e - b_z a) jacobtot_inv,
+#   v_E^y = (b_z dphi/dx - b_x dphi/dz)/(J B) = b_z g jacobtot_inv.
+_GX, _A, _EZ = 2.3, 3.7, -1.9
 _BY, _BZ = 0.4, 0.9
 _JTOT_INV, _JGEO, _BMAG = 0.37, 1.6, 2.3
 _VE_X = (_BY * _EZ - _BZ * _A) * _JTOT_INV
+_VE_Y = _BZ * _GX * _JTOT_INV
 _DENS, _UPAR, _VT2 = 2.0e19, 1.0e4, 3.0e9
 
 
 def _es_sources(moment, phi=None):
   """``[moment, phi, J, 1/(J B), b_i]`` of the ExB fluxes."""
-  phi = phi if phi is not None else _linear([(0.0, (0.0, _A, _EZ))])
+  phi = phi if phi is not None else _linear([(0.0, (_GX, _A, _EZ))])
   return [moment, phi, _const(_JGEO), _const(_JTOT_INV), _const(0.0, _BY, _BZ)]
 
 
@@ -419,30 +435,44 @@ def _random(seed) -> pg.GData:
   return _native(np.random.default_rng(seed).standard_normal((*_CELLS, 8)))
 
 
-class TestRadialFluxes:
+class TestCrossFieldFluxes:
 
-  def test_ExB_fluxes(self):
+  @pytest.mark.parametrize("direction, vel", [(0, _VE_X), (1, _VE_Y)])
+  def test_ExB_fluxes(self, direction, vel):
     np.testing.assert_allclose(
-        _avg(ff.fetch_part_flux_ExB(_es_sources(_const(_DENS)))), _DENS * _VE_X,
+        _avg(
+            ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)),
+                                       dir=direction)), _DENS * vel,
         **ROUND_OFF)
     np.testing.assert_allclose(
-        _avg(ff.fetch_energy_flux_ExB(_es_sources(_const(_DENS * _VT2)))),
-        0.5 * _MASS * _DENS * _VT2 * _VE_X, **ROUND_OFF)
+        _avg(
+            ff.fetch_flux_energy_ExB(_es_sources(_const(_DENS * _VT2)),
+                                     dir=direction)),
+        0.5 * _MASS * _DENS * _VT2 * vel, **ROUND_OFF)
 
-  def test_flutter_fluxes(self):
-    """With b along z, ``dB^x = (d apar/dy)/J``."""
-    slope_y = 0.21
-    expected = _DENS * _UPAR * slope_y / _JGEO / _BMAG
+  @pytest.mark.parametrize("direction", [0, 1])
+  def test_flutter_fluxes(self, direction):
+    """With b along z and ``apar = s_x x + s_y y``, ``dB^x = s_y/J`` and
+    ``dB^y = -s_x/J``."""
+    slopes = (0.13, 0.21, 0.0)
+    dB = (slopes[1], -slopes[0])[direction] / _JGEO
+    expected = _DENS * _UPAR * dB / _BMAG
+    srcs = _em_sources(_const(_DENS * _UPAR), slopes)
     np.testing.assert_allclose(
-        _avg(
-            ff.fetch_part_flux_dB(
-                _em_sources(_const(_DENS * _UPAR), (0.0, slope_y, 0.0)))),
-        expected, **ROUND_OFF)
+        _avg(ff.fetch_flux_particle_dB(srcs, dir=direction)), expected,
+        **ROUND_OFF)
     np.testing.assert_allclose(
-        _avg(
-            ff.fetch_energy_flux_dB(
-                _em_sources(_const(_DENS * _UPAR), (0.0, slope_y, 0.0)))),
+        _avg(ff.fetch_flux_energy_dB(srcs, dir=direction)),
         0.5 * _MASS * expected, **ROUND_OFF)
+
+  def test_direction_is_required_and_cross_field(self):
+    """No direction is assumed, and z is refused: it would miss the
+    parallel streaming flux."""
+    srcs = _es_sources(_const(_DENS))
+    with pytest.raises(ValueError, match="direction="):
+      ff.fetch_flux_particle_ExB(srcs)
+    with pytest.raises(ValueError, match="parallel streaming"):
+      ff.fetch_flux_particle_ExB(srcs, dir=2)
 
   def test_total_flux_is_ExB_plus_flutter(self):
     m0, m1 = _random(1), _random(2)
@@ -450,15 +480,18 @@ class TestRadialFluxes:
     em = _em_sources(m1, (0.3, -0.2, 0.1))
     phi, jgeo, jtot_inv, b_i = es[1:]
     apar, bmag, _jgeo, jgeo_inv, _b = em[1:]
-    total = ff.fetch_part_flux_em(
-        [m0, m1, apar, phi, bmag, jgeo, jgeo_inv, jtot_inv, b_i])
-    expected = (
-        ff.fetch_part_flux_ExB([m0, phi, jgeo, jtot_inv, b_i]).values +
-        ff.fetch_part_flux_dB([m1, apar, bmag, jgeo, jgeo_inv, b_i]).values)
+    total = ff.fetch_flux_particle_em(
+        [m0, m1, apar, phi, bmag, jgeo, jgeo_inv, jtot_inv, b_i], dir=0)
+    expected = (ff.fetch_flux_particle_ExB([m0, phi, jgeo, jtot_inv, b_i],
+                                           dir=0).values +
+                ff.fetch_flux_particle_dB([m1, apar, bmag, jgeo, jgeo_inv, b_i],
+                                          dir=0).values)
     np.testing.assert_allclose(total.values, expected, rtol=1e-12, atol=1e-14)
 
   def test_uniform_fields_have_no_turbulent_flux(self):
-    gamma = ff.fetch_part_flux_ExB(_es_sources(_const(_DENS)), fluct="yz")
+    gamma = ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)),
+                                       dir=0,
+                                       fluct="yz")
     np.testing.assert_allclose(gamma.values,
                                0.0,
                                atol=1e-12 * _DENS * abs(_VE_X))
@@ -470,9 +503,9 @@ class TestRadialFluxes:
     m0, phi = _random(3), _random(4)
     srcs = _es_sources(m0, phi=phi)
     jgeo = srcs[2]
-    total = ff.fetch_part_flux_ExB(srcs)
-    turb = ff.fetch_part_flux_ExB(srcs, fluct=fluct)
-    v_x = ff._radial_ExB_vel(phi, srcs[3], srcs[4])
+    total = ff.fetch_flux_particle_ExB(srcs, dir=0)
+    turb = ff.fetch_flux_particle_ExB(srcs, dir=0, fluct=fluct)
+    v_x = ff._b_cross_grad_div_b_component(phi, srcs[3], srcs[4], 0)
     mean_n = m0 - m0.fluctuation(dims, weight=jgeo)
     mean_v = v_x - v_x.fluctuation(dims, weight=jgeo)
 
@@ -488,44 +521,62 @@ class TestRadialFluxes:
   def test_fluxes_need_3x_and_a_known_fluct(self):
     flat = _linear([(_DENS, (0.0, ))], cells=(3, ), lengths=(1.0, ))
     with pytest.raises(ValueError, match="need 3x"):
-      ff.fetch_part_flux_ExB([flat] * 5)
+      ff.fetch_flux_particle_ExB([flat] * 5, dir=0)
     with pytest.raises(ValueError, match="fluct"):
-      ff.fetch_part_flux_ExB(_es_sources(_const(_DENS)), fluct="x")
+      ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)), dir=0, fluct="x")
 
 
 # --------------------------------------------------- transport coefficients
-_GXX, _N0, _GN, _T0, _GT = 2.2, 3.0e19, 1.2e19, 4.0e-17, 1.5e-17
+_GXX, _GYY, _N0, _GN, _T0, _GT = 2.2, 0.6, 3.0e19, 1.2e19, 4.0e-17, 1.5e-17
 _GAMMA, _Q = 4.0e19, 2.0e3
 
 
 def _gij():
-  return _const(_GXX, 0.0, 0.0, 1.0, 0.0, 1.0)
+  return _const(_GXX, 0.0, 0.0, _GYY, 0.0, 1.0)
 
 
 class TestTransportCoefficients:
   """Uniform fluxes over linear profiles keep every denominator constant,
   so the diffusivities are exact."""
 
-  def test_particle_diffusivity(self):
-    m0 = _linear([(_N0, (-_GN, 0.0, 0.0))])
-    D = ff.fetch_D([m0, _const(_GAMMA), _gij()])
-    np.testing.assert_allclose(_avg(D), _GAMMA / (_GXX * _GN), **ROUND_OFF)
+  @pytest.mark.parametrize("direction, g_kk", [(0, _GXX), (1, _GYY)])
+  def test_particle_diffusivity(self, direction, g_kk):
+    """``D^k = -Gamma^k/(g^kk dn/dx^k)``, the density falling along x^k
+    only, so the metric entry and slope of the other direction must not
+    enter."""
+    slopes = [0.0, 0.0, 0.0]
+    slopes[direction] = -_GN
+    m0 = _linear([(_N0, tuple(slopes))])
+    particle_D = ff.fetch_particle_D(
+        [m0, _const(_GAMMA), _gij()], dir=direction)
+    np.testing.assert_allclose(_avg(particle_D), _GAMMA / (g_kk * _GN),
+                               **ROUND_OFF)
+
+  def test_diffusivities_are_cross_field(self):
+    m0 = _linear([(_N0, (0.0, 0.0, -_GN))])
+    with pytest.raises(ValueError, match="direction="):
+      ff.fetch_particle_D([m0, _const(_GAMMA), _gij()])
+    with pytest.raises(ValueError, match="parallel streaming"):
+      ff.fetch_particle_D([m0, _const(_GAMMA), _gij()], dir=2)
 
   @pytest.mark.parametrize("conv", [None, 0.0, 2.5])
   def test_heat_diffusivity_removes_the_convective_flux(self, conv):
     """``chi = -(Q - conv T Gamma)/(n g^xx dT/dx)``, here with a uniform T
     slope and density; ``conv`` defaults to 3/2."""
     temp = _linear([(_T0, (-_GT, 0.0, 0.0))])
-    chi = ff.fetch_chi(
+    heat_chi = ff.fetch_heat_chi(
         [_const(_N0), temp,
          _const(_GAMMA), _const(_Q),
-         _gij()], conv=conv)
-    c = 1.5 if conv is None else conv
-    x = (_grid()[0][:-1] + _grid()[0][1:]) / 2
-    q = _Q - c * (_T0 - _GT * x) * _GAMMA
-    np.testing.assert_allclose(
-        _avg(chi), (q / (_N0 * _GXX * _GT))[:, None, None] * np.ones(_CELLS),
-        rtol=1e-12)
+         _gij()],
+        dir=0,
+        conv=conv)
+    conv_coeff = 1.5 if conv is None else conv
+    x_centers = (_grid()[0][:-1] + _grid()[0][1:]) / 2
+    heat_flux = _Q - conv_coeff * (_T0 - _GT * x_centers) * _GAMMA
+    np.testing.assert_allclose(_avg(heat_chi),
+                               (heat_flux / (_N0 * _GXX * _GT))[:, None, None] *
+                               np.ones(_CELLS),
+                               rtol=1e-12)
 
   def test_gyro_Bohm_normalization_with_reference_values(self):
     """With constant ``te_ref``/``bmag_ref``, ``rho_s^2 c_s =
@@ -534,10 +585,11 @@ class TestTransportCoefficients:
     te_ref, bmag_ref = 3.0e-17, 2.5
     m0 = _linear([(_N0, (-_GN, 0.0, 0.0))])
     sources = [m0, _const(_T0), _const(_GAMMA), _gij(), _const(_BMAG)]
-    out = ff.fetch_D_gB([sources],
-                        species=["ion"],
-                        te_ref=te_ref,
-                        bmag_ref=bmag_ref)
+    out = ff.fetch_particle_D_gB([sources],
+                                 species=["ion"],
+                                 dir=0,
+                                 te_ref=te_ref,
+                                 bmag_ref=bmag_ref)
     rho_s2_c_s = te_ref**1.5 * np.sqrt(_MASS) / (_CHARGE**2 * bmag_ref**2)
     x = (_grid()[0][:-1] + _grid()[0][1:]) / 2
     expected = _GAMMA * (_N0 - _GN * x) / (_GXX**1.5 * _GN**2 * rho_s2_c_s)
@@ -557,11 +609,12 @@ class TestTransportCoefficients:
         _gij(),
         _const(_BMAG)
     ]
-    out = ff.fetch_D_gB([ion, elc], species=["ion", "elc"])
-    reference = ff.fetch_D_gB([ion],
-                              species=["ion"],
-                              te_ref=2.0 * _T0,
-                              bmag_ref=_BMAG)
+    out = ff.fetch_particle_D_gB([ion, elc], species=["ion", "elc"], dir=0)
+    reference = ff.fetch_particle_D_gB([ion],
+                                       species=["ion"],
+                                       dir=0,
+                                       te_ref=2.0 * _T0,
+                                       bmag_ref=_BMAG)
     # Modes that vanish analytically hold round-off; scale atol to the field.
     np.testing.assert_allclose(out.values,
                                reference.values,

@@ -65,7 +65,9 @@ def load_quantity(
     tag: Tag for the output dataset(s); suffixed with the species when more
       than one species is requested.
     label: Label override; defaults to the quantity's registered label.
-    direction: Vector direction for quantities that expose components.
+    direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
+      component of a vector, or the direction of a gradient length, flux, or
+      diffusivity. Required by those quantities, which assume no direction.
     mass: Species mass used by quantities that require it.
     charge: Species charge used by quantities that require it.
     gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -86,9 +88,9 @@ def load_quantity(
       (default 1).
     conv: Coefficient ``c`` of the convective energy flux ``c*T*Gamma``
       removed from the energy flux to form the heat flux (default 3/2).
-    fluct: For radial fluxes, keep only the turbulent part: the correlation
-      of the fluctuations about the Jacobian-weighted ``y`` or ``(y, z)``
-      average; ``none`` (default) keeps the total flux.
+    fluct: For cross-field fluxes, keep only the turbulent part: the
+      correlation of the fluctuations about the Jacobian-weighted ``y`` or
+      ``(y, z)`` average; ``none`` (default) keeps the total flux.
     read_options: Additional provider options as repeated key/value entries.
 
   Returns:
@@ -139,7 +141,7 @@ def load_quantity(
                                 **extra)
 
       out_label = (label if label is not None else gkquant.get_label(
-          species=species_list[0]))
+          species=species_list[0], direction=extra.get("dir")))
       if len(frames) > 1:
         out_label += f" f{fr}"
       out.set_label(out_label)
