@@ -71,7 +71,7 @@ Integrating a modal field uses the DG representation directly.
 Partial ``average`` and ``integrate`` reduce dimensionality while keeping
 a modal dataset for further operations. Averaging or integrating every axis
 returns a physical scalar (one field) or an array (multiple fields); the CLI
-prints these values directly. For example, ``average --dims 0 --dims 1``
+prints these values directly. For example, ``average --dims 0,1``
 returns the genuine mean of a 2D field, not its expansion coefficient.
 ``fluctuation`` subtracts that average from the field instead: the mean is
 lifted back onto the full basis, constant along the averaged directions, so

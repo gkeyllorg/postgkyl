@@ -9,6 +9,8 @@ expressed the same way, over ``(grid, values)`` pairs.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import numpy as np
 
 
@@ -29,19 +31,19 @@ def _split_axis_string(axis: str) -> tuple:
   return (int(axis), )
 
 
-def parse_axis(axis: int | tuple | str | None, num_dims: int) -> tuple:
+def parse_axis(axis: int | Iterable[int] | str | None, num_dims: int) -> tuple:
   """Turn an axis selector into a tuple of integer axes."""
   if axis is None:
     return tuple(range(num_dims))
   if isinstance(axis, int):
     return (axis, )
-  if isinstance(axis, tuple):
-    return axis
   if isinstance(axis, str):
     return _split_axis_string(axis)
+  if isinstance(axis, Iterable):
+    return tuple(axis)
   raise TypeError(
-      "'axis' needs to be integer, tuple, string of comma separated "
-      "integers, or a slice ('int:int')")
+      "'axis' needs to be integer, iterable of integers, string of comma "
+      "separated integers, or a slice ('int:int')")
 
 
 def integrate(

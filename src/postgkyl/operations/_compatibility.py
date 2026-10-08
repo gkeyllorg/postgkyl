@@ -1,10 +1,33 @@
 """Shared physical collocation contract for multi-dataset operations."""
 
+from collections.abc import Iterable
+
 import numpy as np
 
 from postgkyl import numerics
 from postgkyl.gdatastate.guards import require_same_quadrature
 from postgkyl.gdatastate.layout import dg_layout, require_kernel_basis
+from postgkyl.numerics import calculus
+
+
+def parse_axes(axis: int | Iterable[int] | str | None, ndim: int,
+               verb: str) -> tuple[int, ...]:
+  """Distinct, in-range, sorted axes from a selector: an integer, an iterable
+  of integers, a comma-separated (``"0,1"``) or colon-sliced (``"0:2"``)
+  string, or ``None`` for every axis -- the one grammar shared by the verbs
+  that reduce over a subset of directions.
+
+  Raises:
+    ValueError: no axis is selected, an axis repeats, or one is out of range.
+  """
+  axes = tuple(int(a) for a in calculus.parse_axis(axis, ndim))
+  if not axes:
+    raise ValueError(f"{verb} needs at least one axis")
+  if len(set(axes)) != len(axes):
+    raise ValueError(f"{verb} axes must be distinct, got {axes}")
+  if min(axes) < 0 or max(axes) >= ndim:
+    raise ValueError(f"{verb} axes {axes} out of range for a {ndim}D field")
+  return tuple(sorted(axes))
 
 
 def uniform_cartesian_grid(data) -> dict:

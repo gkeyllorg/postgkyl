@@ -14,13 +14,14 @@ from postgkyl.cli_spec import CliType, DatasetRef
 import numpy as np
 
 from postgkyl import dg
-from ._compatibility import average_operands
+from ._compatibility import average_operands, parse_axes
 
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def average(data: "GDataState",
-            dims: Annotated[Iterable[int], CliType(list[int])],
+            dims: Annotated[int | Iterable[int] | str,
+                            CliType(str)],
             *,
             weight: Annotated[GDataState | None,
                               DatasetRef()] = None,
@@ -32,8 +33,9 @@ def average(data: "GDataState",
 
   Args:
     data: gkyl-backed (native modal) dataset in the modal value_form.
-    dims: iterable of 0-based direction indices to average over (repeat
-      ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+    dims: 0-based direction(s) to average over: an integer, an iterable of
+      integers, a comma-separated string (``"0,1"``), or a colon slice
+      string (``"0:2"``); ``--dims 0,1`` at the CLI.
     weight: optional gkyl-backed dataset in the modal value_form, same
       ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
       field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -55,8 +57,10 @@ def average(data: "GDataState",
   Raises:
     ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
       missing basis metadata, or ``weight``'s grid/basis doesn't match
-      ``data``'s, or dataset-only options are used for a full average.
+      ``data``'s, ``dims`` is empty, repeated, or out of range, or
+      dataset-only options are used for a full average.
   """
+  dims = parse_axes(dims, data.num_dims, "average")
   basis_type, poly_order, grid, weight_native = average_operands(
       data, weight, "average")
   keep_dirs, cells_avg, out_native = dg.modal.average(grid,

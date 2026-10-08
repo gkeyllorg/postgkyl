@@ -13,14 +13,14 @@ from typing import Annotated
 from postgkyl.cli_spec import CliType, DatasetRef
 
 from postgkyl import dg
-from ._compatibility import average_operands
+from ._compatibility import average_operands, parse_axes
 
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
 def fluctuation(data: "GDataState",
-                dims: Annotated[Iterable[int],
-                                CliType(list[int])],
+                dims: Annotated[int | Iterable[int] | str,
+                                CliType(str)],
                 *,
                 weight: Annotated[GDataState | None,
                                   DatasetRef()] = None,
@@ -37,8 +37,9 @@ def fluctuation(data: "GDataState",
 
   Args:
     data: gkyl-backed (native modal) dataset in the modal value_form.
-    dims: iterable of 0-based direction indices to average over (repeat
-      ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+    dims: 0-based direction(s) to average over, in ``average``'s grammar:
+      an integer, an iterable of integers, ``"0,1"``, or ``"0:2"``;
+      ``--dims 0,1`` at the CLI.
     weight: optional gkyl-backed dataset in the modal value_form, same
       ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
       field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -54,11 +55,12 @@ def fluctuation(data: "GDataState",
   Raises:
     ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
       missing basis metadata, ``weight``'s grid/basis doesn't match
-      ``data``'s, or ``dims`` is empty or out of range.
+      ``data``'s, or ``dims`` is empty, repeated, or out of range.
   """
+  ndim = data.num_dims
+  dims = parse_axes(dims, ndim, "fluctuation")
   basis_type, poly_order, grid, weight_native = average_operands(
       data, weight, "fluctuation")
-  ndim = data.num_dims
   _keep_dirs, _cells_avg, mean = dg.modal.average(grid,
                                                   basis_type,
                                                   ndim,

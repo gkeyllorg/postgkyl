@@ -260,10 +260,28 @@ def test_rejects_numpy_backed_and_non_modal_inputs():
 
 def test_rejects_empty_and_out_of_range_dims():
   field = _random(1, seed=9)
-  with pytest.raises(ValueError, match="out of range"):
+  with pytest.raises(ValueError, match="at least one axis"):
     field.fluctuation([])
   with pytest.raises(ValueError, match="out of range"):
     field.fluctuation([3])
+  with pytest.raises(ValueError, match="distinct"):
+    field.fluctuation("1,1")
+
+
+@pytest.mark.parametrize("spelling, dims", [("0,1", [0, 1]), ("0:2", [0, 1]),
+                                            ((1, 0), [0, 1]),
+                                            (range(2), [0, 1]), ("2", [2]),
+                                            (2, [2])])
+def test_dims_spellings_select_the_same_directions(spelling, dims):
+  """``dims`` takes ``integrate``'s axis grammar -- an integer, any iterable,
+  ``"0,1"``, or ``"0:2"`` -- for both reducing verbs."""
+  field = _random(1, seed=13)
+  np.testing.assert_array_equal(
+      field.fluctuation(spelling).values,
+      field.fluctuation(dims).values)
+  np.testing.assert_array_equal(
+      field.average(spelling).values,
+      field.average(dims).values)
 
 
 def test_rejects_a_mismatched_weight():
@@ -280,7 +298,7 @@ def _run(*args):
 
 
 def test_cli_fluctuation_runs_on_a_file():
-  result = _run(FIELD_3D, "fluctuation", "--dims", "1", "info")
+  result = _run(FIELD_3D, "fluctuation", "--dims", "0,1", "info")
   assert result.exit_code == 0, result.output
   assert "Number of dimensions: 3" in result.output
   assert "serendipity p1 (modal)" in result.output
@@ -308,7 +326,7 @@ def test_cli_command_is_the_canonical_verb():
   space = DataSpace(datasets=[field, weight])
   with click.Context(command, obj=space) as context:
     context.invoke(command,
-                   dims=[[1]],
+                   dims="1",
                    weight="w",
                    inplace=False,
                    tag="out",
