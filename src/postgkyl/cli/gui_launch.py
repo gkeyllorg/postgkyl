@@ -33,17 +33,20 @@ def default_path() -> str:
   return SAMPLE_DATA if os.path.isdir(SAMPLE_DATA) else os.getcwd()
 
 
-def command(path: str) -> list[str]:
-  """The command serving the notebook on the data directory ``path``.
+def command(path: str | None, state: str | None = None) -> list[str]:
+  """The command serving the notebook on the data directory ``path`` and the
+  saved GUI ``state`` file, each when given.
 
   Everything after ``--`` reaches the notebook through ``mo.cli_args()``.
   marimo's global ``-y`` makes Ctrl+C stop the server at once instead of
   asking for confirmation (``marimo run`` has no other prompt it answers).
   """
-  return [
-      sys.executable, "-m", "marimo", "-y", "run", NOTEBOOK, "--", "--path",
-      os.path.abspath(os.path.expanduser(path))
-  ]
+  notebook_args = []
+  for option, value in (("--path", path), ("--state", state)):
+    if value is not None:
+      notebook_args += [option, os.path.abspath(os.path.expanduser(value))]
+  return [sys.executable, "-m", "marimo", "-y", "run", NOTEBOOK, "--"
+          ] + notebook_args
 
 
 def serve(cmd: list[str]) -> int:
@@ -63,19 +66,30 @@ def serve(cmd: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-  """Parse ``--path`` and serve the notebook; return the exit status."""
+  """Parse ``--path`` and ``--state``, serve the notebook; return the exit
+  status."""
   parser = argparse.ArgumentParser(prog=PROGRAM, description=DESCRIPTION)
   parser.add_argument(
       "--path",
       "-p",
       default=None,
-      help="Gkeyll data directory (default: the source checkout's "
-      "tests/test_data, or the current directory without it).")
+      help="Gkeyll data directory (default: the state's directory, else the "
+      "source checkout's tests/test_data, or the current directory).")
+  parser.add_argument(
+      "--state",
+      "-s",
+      default=None,
+      help="GUI state file saved with 'Save state', reopened as it was.")
   args = parser.parse_args(argv)
+  if args.state and not os.path.isfile(os.path.expanduser(args.state)):
+    print(f"pgkyl-gui: no state file {args.state!r}", file=sys.stderr)
+    return 2
   if importlib.util.find_spec("marimo") is None:
     print(
         "pgkyl-gui needs marimo; install it with "
         "\"pip install 'postgkyl[gui]'\".",
         file=sys.stderr)
     return 1
-  return serve(command(args.path or default_path()))
+  # A state file brings its own directory; --path still overrides it.
+  path = args.path or (None if args.state else default_path())
+  return serve(command(path, args.state))

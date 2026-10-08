@@ -35,11 +35,31 @@ def _():
 
 
 @app.cell
-def _(launch, mo, os):
-    # --- data directory, from 'pgkyl-gui --path <dir>' or the default -------
+def _(gp, mo, os):
+    # --- a saved GUI state, from 'pgkyl-gui --state <file>' -----------------
+    _state_file = mo.cli_args().get("state")
+    state_error = None
+    try:
+        _saved = gp.load_state(os.path.expanduser(str(_state_file))) if _state_file else {}
+    except (OSError, ValueError) as _exc:
+        _saved, state_error = {}, f"State not restored: {_exc}"
+
+    def initial(name, default, options=None):
+        """Widget `name`'s saved value, else `default`; also `default` when
+        the saved value is no longer one of `options`."""
+        value = _saved.get(name, default)
+        return value if options is None or value in options else default
+
+    return initial, state_error
+
+
+@app.cell
+def _(initial, launch, mo, os):
+    # --- data directory: 'pgkyl-gui --path <dir>', the state, or the default
     _cli_path = mo.cli_args().get("path")
     dir_input = mo.ui.text(
-        value=os.path.expanduser(str(_cli_path)) if _cli_path else launch.default_path(),
+        value=(os.path.expanduser(str(_cli_path)) if _cli_path
+               else initial("directory", launch.default_path())),
         label="Data directory",
         full_width=True,
     )
@@ -63,16 +83,16 @@ def _(base64, gp, mo, os):
 
 
 @app.cell
-def _(mo):
+def _(initial, mo):
     # --- selections that survive a change of field or directory -------------
-    get_field, set_field = mo.state(None)
-    get_frame, set_frame = mo.state(None)
-    get_sel_en, set_sel_en = mo.state([])
-    get_sel_val, set_sel_val = mo.state([])
-    get_sel_mode, set_sel_mode = mo.state([])
-    get_comp_en, set_comp_en = mo.state(False)
-    get_comp_val, set_comp_val = mo.state(0)
-    get_xidx, set_xidx = mo.state(0)
+    get_field, set_field = mo.state(initial("field", None))
+    get_frame, set_frame = mo.state(initial("frame", None))
+    get_sel_en, set_sel_en = mo.state(initial("sel_enables", []))
+    get_sel_val, set_sel_val = mo.state(initial("sel_values", []))
+    get_sel_mode, set_sel_mode = mo.state(initial("sel_modes", []))
+    get_comp_en, set_comp_en = mo.state(initial("comp_enable", False))
+    get_comp_val, set_comp_val = mo.state(initial("comp_value", 0))
+    get_xidx, set_xidx = mo.state(initial("x_idx", 0))
     return (
         get_comp_en, get_comp_val, get_field, get_frame, get_sel_en,
         get_sel_mode, get_sel_val, get_xidx, set_comp_en, set_comp_val,
@@ -98,29 +118,39 @@ def _(dir_input, get_field, gp, mo, set_field):
 
 
 @app.cell
-def _(dir_input, gp, mo, pg):
+def _(dir_input, gp, initial, mo, pg):
     # --- load mode and the gyrokinetic loaders' controls --------------------
-    load_mode = mo.ui.dropdown(
-        options={"file": "file", "GK quantity": "quantity"},
-        value="file", label="load")
+    _modes = {"file": "file", "GK quantity": "quantity"}
+    load_mode = mo.ui.dropdown(options=_modes,
+                               value=initial("load_mode", "file", _modes),
+                               label="load")
     _quantities = pg.gk.available_quantities()
-    quantity = mo.ui.dropdown(options=_quantities,
-                              value="M0" if "M0" in _quantities else None,
-                              label="quantity", searchable=True)
+    quantity = mo.ui.dropdown(
+        options=_quantities,
+        value=initial("quantity", "M0" if "M0" in _quantities else None,
+                      _quantities),
+        label="quantity", searchable=True)
     _sims = gp.list_simulations(dir_input.value)
-    simprefix = mo.ui.dropdown(options=_sims,
-                               value=_sims[0] if _sims else None,
-                               label="simulation", searchable=True)
-    species = mo.ui.text(value="ion", label="species",
+    simprefix = mo.ui.dropdown(
+        options=_sims,
+        value=initial("simulation", _sims[0] if _sims else None, _sims),
+        label="simulation", searchable=True)
+    species = mo.ui.text(value=initial("species", "ion"), label="species",
                          placeholder="ion, or elc,ion")
-    direction = mo.ui.text(value="", label="direction", placeholder="0, 1 or 2")
-    gk_options = mo.ui.text(value="", label="options", full_width=True,
+    direction = mo.ui.text(value=initial("direction", ""), label="direction",
+                           placeholder="0, 1 or 2")
+    gk_options = mo.ui.text(value=initial("gk_options", ""), label="options",
+                            full_width=True,
                             placeholder="mass=... ti_over_te=2 den_ref=1e19,1e19")
-    fluct = mo.ui.dropdown(options=["none", "y", "yz"], value="none",
+    _flucts = ["none", "y", "yz"]
+    fluct = mo.ui.dropdown(options=_flucts,
+                           value=initial("fluct", "none", _flucts),
                            label="fluctuation about")
-    frame_range = mo.ui.text(value="", label="frame range",
+    frame_range = mo.ui.text(value=initial("frame_range", ""),
+                             label="frame range",
                              placeholder=": | ::2 | -10: | -1")
-    collect_chk = mo.ui.checkbox(label="collect (time series)")
+    collect_chk = mo.ui.checkbox(value=initial("collect", False),
+                                 label="collect (time series)")
     return (
         collect_chk, direction, fluct, frame_range, gk_options, load_mode,
         quantity, simprefix, species,
@@ -154,17 +184,20 @@ def _(
 
 
 @app.cell
-def _(mo):
+def _(initial, mo):
     # --- transform controls -------------------------------------------------
+    _transforms = ["interpolate", "local_poly", "map_to_rz",
+                   "extract_flux_surface", "none"]
     transform = mo.ui.dropdown(
-        options=["interpolate", "local_poly", "map_to_rz",
-                 "extract_flux_surface", "none"],
-        value="interpolate", label="transform")
-    interp_pts = mo.ui.number(start=1, stop=32, value=2,
+        options=_transforms,
+        value=initial("transform", "interpolate", _transforms),
+        label="transform")
+    interp_pts = mo.ui.number(start=1, stop=32, value=initial("interp_pts", 2),
                               label="points per cell")
-    mapc2p_file = mo.ui.text(value="", label="mapc2p file (optional)",
-                             full_width=True)
-    phi_tor_deg = mo.ui.slider(start=0, stop=360, step=1, value=0,
+    mapc2p_file = mo.ui.text(value=initial("mapc2p", ""),
+                             label="mapc2p file (optional)", full_width=True)
+    phi_tor_deg = mo.ui.slider(start=0, stop=360, step=1,
+                               value=initial("phi_tor_deg", 0),
                                label="toroidal angle (degrees)",
                                show_value=True, include_input=True,
                                full_width=True)
@@ -348,29 +381,34 @@ def _(
 
 
 @app.cell
-def _(mo):
+def _(initial, mo):
     # --- plot options (named as pg.plot's) ----------------------------------
-    surface = mo.ui.checkbox(label="surface")
-    contour = mo.ui.checkbox(label="contour")
-    contourf = mo.ui.checkbox(label="contourf")
-    fixaspect = mo.ui.checkbox(label="fix aspect")
-    showgrid = mo.ui.checkbox(label="grid")
-    logx = mo.ui.checkbox(label="logx")
-    logy = mo.ui.checkbox(label="logy")
-    logz = mo.ui.checkbox(label="logz")
-    legend = mo.ui.checkbox(label="legend")
-    diverging = mo.ui.checkbox(label="diverging cmap")
+    def _check(name, label):
+        return mo.ui.checkbox(value=initial(name, False), label=label)
+
+    surface = _check("surface", "surface")
+    contour = _check("contour", "contour")
+    contourf = _check("contourf", "contourf")
+    fixaspect = _check("fixaspect", "fix aspect")
+    showgrid = _check("showgrid", "grid")
+    logx = _check("logx", "logx")
+    logy = _check("logy", "logy")
+    logz = _check("logz", "logz")
+    legend = _check("legend", "legend")
+    diverging = _check("diverging", "diverging cmap")
     # Contour levels: evenly spaced over the colour range with cbar bounds or a
     # diverging cmap (centred on 0), else about this many automatic levels.
-    nlevels = mo.ui.number(start=2, stop=200, step=1, value=11,
-                           label="contour levels")
-    cmap = mo.ui.dropdown(
-        options=["(default)", "viridis", "plasma", "inferno", "cividis",
-                 "twilight", "RdBu_r", "jet", "gray"],
-        value="(default)", label="cmap")
+    nlevels = mo.ui.number(start=2, stop=200, step=1,
+                           value=initial("nlevels", 11), label="contour levels")
+    _cmaps = ["(default)", "viridis", "plasma", "inferno", "cividis",
+              "twilight", "RdBu_r", "jet", "gray"]
+    cmap = mo.ui.dropdown(options=_cmaps,
+                          value=initial("cmap", "(default)", _cmaps),
+                          label="cmap")
     # A ui.dictionary, so marimo tracks every field (a plain dict is inert).
+    _saved_texts = initial("texts", {})
     texts = mo.ui.dictionary({
-        key: mo.ui.text(value="", label=label)
+        key: mo.ui.text(value=str(_saved_texts.get(key, "")), label=label)
         for key, label in (("xlabel", "xlabel"), ("ylabel", "ylabel"),
                            ("clabel", "clabel"), ("title", "title"),
                            ("xmin", "x min"), ("xmax", "x max"),
@@ -528,21 +566,27 @@ def _(base64, gp, grid_msg, mo, plot_options, settings, traceback):
 
 
 @app.cell
-def _(mo):
-    # --- save and movie controls --------------------------------------------
-    save_name = mo.ui.text(value="", label="save as", placeholder="figure.png",
-                           full_width=True)
+def _(initial, mo):
+    # --- save controls: figure, movie and state -----------------------------
+    save_name = mo.ui.text(value=initial("save_name", ""), label="save as",
+                           placeholder="figure.png", full_width=True)
     save_button = mo.ui.run_button(label="Save figure")
-    movie_frames = mo.ui.text(value=":", label="movie frames",
+    state_name = mo.ui.text(value="", label="state file",
+                            placeholder="pgkyl_gui_state.json", full_width=True)
+    state_button = mo.ui.run_button(label="Save state")
+    movie_frames = mo.ui.text(value=initial("movie_frames", ":"),
+                              label="movie frames",
                               placeholder=": | -100: | ::2")
-    movie_fps = mo.ui.number(start=1, stop=60, value=10, label="fps")
-    movie_file = mo.ui.text(value="", label="movie file", full_width=True,
-                            placeholder="movie.mp4 (or .gif)")
-    movie_fixed = mo.ui.checkbox(value=True, label="same y / colour range on "
+    movie_fps = mo.ui.number(start=1, stop=60, value=initial("movie_fps", 10),
+                             label="fps")
+    movie_file = mo.ui.text(value=initial("movie_file", ""), label="movie file",
+                            full_width=True, placeholder="movie.mp4 (or .gif)")
+    movie_fixed = mo.ui.checkbox(value=initial("movie_fixed", True),
+                                 label="same y / colour range on "
                                  "every frame (blank limits only)")
     movie_button = mo.ui.run_button(label="Make movie")
     return (movie_button, movie_file, movie_fixed, movie_fps, movie_frames,
-            save_button, save_name)
+            save_button, save_name, state_button, state_name)
 
 
 @app.cell
@@ -569,6 +613,55 @@ def _(dir_input, figure_bytes, mo, os, save_button, save_name):
             except OSError as _exc:
                 save_msg = mo.callout(mo.md(f"Save failed: {_exc}"), kind="danger")
     return save_msg, destination
+
+
+@app.cell
+def _(
+    cmap, collect_chk, comp_enable, comp_slider, contour, contourf,
+    destination, diverging, dir_input, direction, field_dropdown, fixaspect,
+    fluct, frame_range, frame_slider, gk_options, gp, interp_pts, legend,
+    load_mode, logx, logy, logz, mapc2p_file, mo, movie_file, movie_fixed,
+    movie_fps, movie_frames, nlevels, os, phi_tor_deg, quantity, save_name,
+    sel_enables, sel_modes, sel_sliders, showgrid, simprefix, species,
+    state_button, state_name, surface, texts, transform, x_idx,
+):
+    # --- the GUI state: every widget's value, saved on request --------------
+    gui_state = {
+        # Absolute, so the state reopens from any working directory.
+        "directory": os.path.abspath(os.path.expanduser(dir_input.value.strip())),
+        "load_mode": load_mode.selected_key,
+        "field": field_dropdown.value, "quantity": quantity.value,
+        "simulation": simprefix.value, "species": species.value,
+        "direction": direction.value, "gk_options": gk_options.value,
+        "fluct": fluct.value, "frame_range": frame_range.value,
+        "collect": collect_chk.value, "frame": frame_slider.value,
+        "transform": transform.value, "interp_pts": interp_pts.value,
+        "mapc2p": mapc2p_file.value, "phi_tor_deg": phi_tor_deg.value,
+        "x_idx": x_idx.value, "sel_enables": list(sel_enables.value),
+        "sel_values": list(sel_sliders.value),
+        "sel_modes": list(sel_modes.value), "comp_enable": comp_enable.value,
+        "comp_value": comp_slider.value, "surface": surface.value,
+        "contour": contour.value, "contourf": contourf.value,
+        "fixaspect": fixaspect.value, "showgrid": showgrid.value,
+        "logx": logx.value, "logy": logy.value, "logz": logz.value,
+        "legend": legend.value, "diverging": diverging.value,
+        "nlevels": nlevels.value, "cmap": cmap.value,
+        "texts": dict(texts.value), "save_name": save_name.value,
+        "movie_frames": movie_frames.value, "movie_fps": movie_fps.value,
+        "movie_file": movie_file.value, "movie_fixed": movie_fixed.value,
+    }
+
+    state_msg = mo.md("")
+    if state_button.value:
+        _dest = destination(state_name.value, "pgkyl_gui_state.json")
+        try:
+            gp.save_state(_dest, gui_state)
+            state_msg = mo.callout(
+                mo.md(f"Saved to `{_dest}`. Reopen with "
+                      f"`pgkyl-gui --state {_dest}`"), kind="success")
+        except OSError as _exc:
+            state_msg = mo.callout(mo.md(f"Save failed: {_exc}"), kind="danger")
+    return gui_state, state_msg
 
 
 @app.cell
@@ -620,7 +713,8 @@ def _(
     interp_pts, load_mode, mapc2p_file, mo, movie_button, movie_file,
     movie_fixed, movie_fps, movie_frames, movie_msg, phi_tor_deg, plot_options_view,
     plot_view, quantity, save_button, save_msg, save_name, sel_enables,
-    sel_modes, sel_sliders, simprefix, species, transform, x_idx,
+    sel_modes, sel_sliders, simprefix, species, state_button, state_error,
+    state_msg, state_name, transform, x_idx,
 ):
     # --- layout: controls on a resizable left pane, the figure on the right -
     if grid_info is not None:
@@ -646,6 +740,7 @@ def _(
 
     _controls = mo.vstack([
         header,
+        mo.callout(mo.md(state_error), kind="warn") if state_error else mo.md(""),
         dir_input,
         load_mode,
         _source,
@@ -661,10 +756,12 @@ def _(
         _select_block,
         mo.md("#### Plot options"),
         plot_options_view,
+        mo.md("#### Save"),
+        mo.md("**Figure**"),
         save_name,
         save_button,
         save_msg,
-        mo.md("#### Movie"),
+        mo.md("**Movie**"),
         mo.md("_Replays the figure over the selected frames (a slice of the "
               "available frames, like the frame range)._"),
         mo.hstack([movie_frames, movie_fps], justify="start", gap=0.5, wrap=True),
@@ -672,6 +769,12 @@ def _(
         movie_fixed,
         movie_button,
         movie_msg,
+        mo.md("**State**"),
+        mo.md("_Saves every choice above; reopen with "
+              "`pgkyl-gui --state <file>`._"),
+        state_name,
+        state_button,
+        state_msg,
     ], gap=0.6)
 
     mo.Html(

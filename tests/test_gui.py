@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import html
 import importlib
+import os
 from pathlib import Path
 import re
 import shlex
+import sys
 
 from click.testing import CliRunner
 import numpy as np
@@ -518,3 +520,81 @@ def test_notebook_runs_headless_and_draws_a_figure(monkeypatch):
   assert python < command
   assert "s = PostgkylSession()" in text[python:command]
   assert "pgkyl " in text[command:]
+
+
+# -------------------------------------------------------------- state files
+def test_state_files_round_trip_and_refuse_other_files(tmp_path):
+  widgets = {"cmap": "viridis", "texts": {"title": "t"}, "sel_values": [0.5]}
+  path = gp.save_state(str(tmp_path / "state.json"), widgets)
+  assert gp.load_state(path) == widgets
+  (tmp_path / "other.json").write_text('{"widgets": {}}')
+  (tmp_path / "broken.json").write_text("{")
+  for name in ("other.json", "broken.json"):
+    with pytest.raises(ValueError, match="GUI state file"):
+      gp.load_state(str(tmp_path / name))
+
+
+def test_launch_reopens_a_state_in_its_own_directory(monkeypatch, tmp_path):
+  calls = []
+  monkeypatch.setattr(launch.importlib.util, "find_spec", lambda name: True)
+  monkeypatch.setattr(launch, "serve", lambda cmd: calls.append(cmd) or 0)
+  state = tmp_path / "state.json"
+  state.write_text("{}")
+  assert launch.main(["--state", str(state)]) == 0
+  assert calls[-1][-3:] == ["--", "--state", str(state)]
+  assert launch.main(["-s", str(state), "-p", str(tmp_path)]) == 0
+  assert calls[-1][-4:] == ["--path", str(tmp_path), "--state", str(state)]
+  assert launch.main(["--state", str(tmp_path / "missing.json")]) == 2
+
+
+def _run_notebook(monkeypatch, *args):
+  from postgkyl.gui.notebook import app
+
+  monkeypatch.setattr(sys, "argv", ["notebook.py", *args])
+  return app.run()[1]
+
+
+@needs_gkeyll
+def test_a_saved_state_reopens_every_choice(monkeypatch, tmp_path):
+  pytest.importorskip("marimo")
+  monkeypatch.chdir(DATA)
+  state = dict(_run_notebook(monkeypatch)["gui_state"])
+  assert os.path.isabs(state["directory"])
+  state.update(cmap="viridis",
+               transform="local_poly",
+               legend=True,
+               texts={
+                   **state["texts"], "title": "saved"
+               },
+               sel_enables=[True, True, False],
+               sel_modes=["select", "average", "select"],
+               sel_values=[0.06, 0.0, 0.0],
+               movie_fps=5)
+  path = gp.save_state(str(tmp_path / "state.json"), state)
+
+  defs = _run_notebook(monkeypatch, "--state", path)
+  assert defs["state_error"] is None
+  assert defs["gui_state"] == state
+  options = defs["plot_options"]()
+  assert options["cmap"] == "viridis" and options["title"] == "saved"
+  assert defs["settings"].transform == "local_poly"
+  assert defs["settings"].average == (1, )
+  assert defs["figure_bytes"].startswith(b"\x89PNG")
+
+
+@needs_gkeyll
+def test_a_stale_or_broken_state_falls_back_to_defaults(monkeypatch, tmp_path):
+  pytest.importorskip("marimo")
+  monkeypatch.chdir(DATA)
+  stale = gp.save_state(str(tmp_path / "stale.json"), {
+      "cmap": "no-such-cmap",
+      "field": "no-such-field"
+  })
+  defs = _run_notebook(monkeypatch, "--state", stale)
+  assert defs["gui_state"]["cmap"] == "(default)"
+  assert defs["field_dropdown"].value == "elc_M0"
+  broken = tmp_path / "broken.json"
+  broken.write_text("{")
+  defs = _run_notebook(monkeypatch, "--state", str(broken))
+  assert "State not restored" in defs["state_error"]
+  assert defs["figure_bytes"].startswith(b"\x89PNG")

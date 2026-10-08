@@ -112,13 +112,22 @@ python -m pip install marimo
 
 The `gui` extra installs Marimo for the notebook GUI, which browses a data
 directory, loads files or gyrokinetic quantities, and shows each figure with
-the equivalent Python script:
+the equivalent `PostgkylSession` Python and `pgkyl` command line, each with a
+copy button:
 
 ```bash
 python -m pip install '.[gui]'
 pgkyl-gui --path /path/to/simulation/output
 ```
 
+"Save state" writes every choice to a file; reopen the GUI exactly as it was
+with:
+
+```bash
+pgkyl-gui --state pgkyl_gui_state.json
+```
+
+The state remembers its data directory; `--path` overrides it.
 `python -m postgkyl.gui` is equivalent to `pgkyl-gui`.
 
 ## Rendering dependencies

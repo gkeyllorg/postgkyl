@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import glob
 import inspect
 import io as _bytes_io
+import json
 import os
 import re
 
@@ -30,7 +31,8 @@ __all__ = [
     "Output", "Step", "GridInfo", "scan_outputs", "list_simulations",
     "weight_file", "pick_frames", "apply", "run", "processed", "probe",
     "plot_step", "python_script", "frame_spec", "figure_png", "make_movie",
-    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
+    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames",
+    "save_state", "load_state"
 ]
 
 # Fluctuations and averages of gyrokinetic fields are weighted by the
@@ -555,3 +557,41 @@ def make_movie(frames: list[pg.GDataGroup], file_name: str, *, fps: int,
              stamp_title=True,
              **options)
   return file_name
+
+
+# ---------------------------------------------------------------- state files
+# A state file records every widget's value, to reopen the GUI as it was with
+# ``pgkyl-gui --state <file>``. The version guards against reading a file
+# whose widgets meant something else.
+_STATE_VERSION = 1
+
+
+def save_state(file_name: str, widgets: dict) -> str:
+  """Write the GUI's widget values to ``file_name``; return it."""
+  with open(file_name, "w") as f:
+    json.dump({
+        "postgkyl_gui_state": _STATE_VERSION,
+        "widgets": widgets
+    },
+              f,
+              indent=2)
+  return file_name
+
+
+def load_state(file_name: str) -> dict:
+  """The widget values a :func:`save_state` file holds.
+
+  Raises:
+    OSError: the file cannot be read.
+    ValueError: it is not a GUI state file of this version.
+  """
+  with open(file_name) as f:
+    try:
+      data = json.load(f)
+    except json.JSONDecodeError as exc:
+      raise ValueError(f"{file_name} is not a GUI state file: {exc}") from None
+  if not (isinstance(data, dict) and data.get("postgkyl_gui_state")
+          == _STATE_VERSION and isinstance(data.get("widgets"), dict)):
+    raise ValueError(f"{file_name} is not a version-{_STATE_VERSION} GUI "
+                     "state file")
+  return data["widgets"]
