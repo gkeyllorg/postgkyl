@@ -81,7 +81,7 @@ Repository = "https://github.com/ammarhakim/postgkyl"
 
 [project.scripts]
 pgkyl = "postgkyl.cli.app:cli"
-pgkyl-gui = "postgkyl.gui.launch:main"
+pgkyl-gui = "postgkyl.cli.gui_launch:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "postgkyl.__version__"}
