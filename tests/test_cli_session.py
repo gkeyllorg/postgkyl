@@ -144,6 +144,18 @@ def test_result_is_what_the_last_command_returned():
     plt.close(figure)
 
 
+def test_no_show_opens_no_window_but_the_command_line_does(monkeypatch):
+  shown = []
+  monkeypatch.setattr(plt, "show", lambda *args, **kwargs: shown.append(1))
+  quiet = PostgkylSession(no_show=True)
+  quiet.load(DISTF).interpolate().plot()
+  assert shown == []
+  assert quiet.command() == f"pgkyl {DISTF} interpolate plot"
+  PostgkylSession().load(DISTF).interpolate().plot()
+  assert shown == [1]
+  plt.close("all")
+
+
 def test_repr_shows_the_command_line():
   s = PostgkylSession()
   s.load(DISTF)

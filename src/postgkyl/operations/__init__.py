@@ -44,6 +44,7 @@ from .relchange import relchange
 from .mask import mask
 from .collect import collect
 from .sort import sort
+from .activate import activate
 from .grid import grid
 from .val2coord import val2coord
 from .extract_input import extract_input
@@ -88,6 +89,7 @@ command(_COMBINE)(relchange)
 command(_COMBINE)(collect)
 command(CommandSpec(Section.VERBS, Execution.COMBINE,
                     consumes_inputs=True))(sort)
+command(CommandSpec(Section.UTILITY, Execution.ACTIVATE))(activate)
 command(_COMBINE)(evaluate)
 command(_MAP)(mask)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
@@ -120,8 +122,8 @@ __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
     "average", "fluctuation", "eval_at_coord_proj", "plot", "animate", "plotly",
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
-    "magsq", "relchange", "mask", "collect", "sort", "grid", "val2coord",
-    "extract_input", "fit", "differentiate", "evaluate",
+    "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
+    "val2coord", "extract_input", "fit", "differentiate", "evaluate",
     "available_evaluate_operators", "map", "growth", "map_to_rz",
     "resolve_rz_projection", "extract_flux_surface",
     "resolve_flux_surface_grid", "resolve_geometry", "Geometry", "RzProjection",

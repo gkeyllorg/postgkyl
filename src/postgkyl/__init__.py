@@ -55,6 +55,7 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
 
 from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, relchange, sort
 from postgkyl.operations import (
+    activate,
     apply,
     available_evaluate_operators,
     average,
@@ -102,7 +103,7 @@ __all__ = [
     "represent", "apply", "Geometry", "RzProjection", "FluxSurfaceGrid",
     "map_to_rz", "resolve_rz_projection", "resolve_geometry",
     "extract_flux_surface", "resolve_flux_surface_grid", "save", "collect",
-    "evaluate", "relchange", "animate", "plotly_animate", "sort",
+    "evaluate", "relchange", "animate", "plotly_animate", "sort", "activate",
     "available_evaluate_operators", "plotly", "pyvista", "gk", "__version__",
     "version_report"
 ]

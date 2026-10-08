@@ -278,9 +278,34 @@ def test_cli_full_average_prints_genuine_mean():
 def test_full_average_rejects_dataset_options(options):
   data = pg.load(GEN / "polynomial_2d_ms_p1.gkyl")
   before = data.values.copy()
-  with pytest.raises(ValueError, match="only to partial averaging"):
+  with pytest.raises(ValueError, match="only to a dataset result"):
     data.average([0, 1], **options)
   np.testing.assert_array_equal(data.values, before)
+
+
+@pytest.mark.parametrize("weighted", [False, True])
+def test_full_average_as_dataset_holds_the_mean_as_point_values(
+    integrable_case, weighted):
+  data, _, _ = integrable_case
+  weight = data.select(comp=1) if weighted else None
+  dims = range(data.num_dims)
+  result = data.average(dims, weight=weight, as_dataset=True, tag="mean")
+  np.testing.assert_allclose(result.values[0],
+                             data.average(dims, weight=weight), **ROUND_OFF)
+  assert result.tag == "mean" and result.is_interpolated
+  assert result.ctx.get("basis_type") is None
+  assert result.ctx.get("time") == data.ctx.get("time")
+
+
+def test_full_averages_as_datasets_collect_into_a_time_trace():
+  frames = [pg.load(GEN / "polynomial_2d_ms_p1.gkyl") for _ in range(2)]
+  for time, frame in zip((1.0, 2.0), frames):
+    frame.ctx["time"] = time
+  means = [frame.average([0, 1], as_dataset=True) for frame in frames]
+  trace = pg.collect(means)
+  np.testing.assert_allclose(trace.grid[0], [1.0, 2.0])
+  np.testing.assert_allclose(trace.values.reshape(2, -1),
+                             [[11.25, 13.078125]] * 2, **ROUND_OFF)
 
 
 def _coordinate_projection(data, directions, coordinates, tmp_path):

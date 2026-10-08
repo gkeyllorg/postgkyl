@@ -8,8 +8,14 @@ class PostgkylSession:
     r"""A ``pgkyl`` pipeline built from Python that records its command line.
     """
 
-    def __init__(self) -> None:
-        ...
+    def __init__(self, *, no_show: bool = False) -> None:
+        r"""Start an empty session.
+
+        Args:
+          no_show: Run every command that can open a window with ``no_show``,
+            without recording it, so a GUI or a test shows nothing while the
+            command line still opens its windows.
+        """
 
     @property
     def datasets(self) -> tuple:
@@ -29,7 +35,30 @@ class PostgkylSession:
         r"""Print :meth:`command`.
         """
 
-    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
+    def activate(self, *, tags: list[str] | tuple[str, ...] | None = None) -> PostgkylSession:
+        r"""Keep the datasets carrying one of ``tags``.
+
+        On the command line the kept datasets become the working set and the
+        others are set aside: later commands skip them, while an option naming a
+        dataset by tag (such as ``average --weight``) still finds them. A bare
+        ``activate`` makes every loaded dataset active again::
+
+            pgkyl jacobian.gkyl --tag weight field.gkyl activate --tags default \
+                average --dims 1 --weight weight plot
+
+        Accepts ``activate(a, b)`` or ``activate([a, b])`` (flattened via
+        ``gdatastate.flatten_datasets``). No dataset is copied or mutated.
+
+        Args:
+          *datasets: The datasets to choose from, or lists/groups thereof.
+          tags: Tags to keep (repeat ``--tags`` at the CLI); every dataset when
+            omitted or empty.
+
+        Returns:
+          The datasets carrying one of ``tags``, in their given order.
+        """
+
+    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, contourf: bool = False, clevels: str | None = None, cnlevels: int | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, cmap: str | None = None, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, stamp_title: bool = False, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
         r"""Animate a sequence of frames, one frame per dataset (or dataset group).
 
         Each panel uses its own value range across all frames. Datasets overlaid
@@ -47,7 +76,9 @@ class PostgkylSession:
           num_subplot_col: Number of subplot columns.
           transpose: Transpose the display axes.
           contour: Draw contours.
+          contourf: Draw filled contours.
           clevels: Contour count or start:end:count levels.
+          cnlevels: Number of contour levels, overriding a count in ``clevels``.
           quiver: Draw vector arrows.
           streamline: Draw streamlines.
           sdensity: Streamline density.
@@ -60,6 +91,7 @@ class PostgkylSession:
           color: Line or vector color.
           style: Matplotlib style name or file.
           diverging: Use a diverging colormap.
+          cmap: Matplotlib colormap name, overriding the default.
           arg: Matplotlib format string, for example ``*--``.
           fixaspect: Use equal scaling on the display axes.
           logx: Use logarithmic x scaling.
@@ -87,6 +119,10 @@ class PostgkylSession:
           ylabel: Override the y label.
           clabel: Override the c label.
           title: Title shown on every frame.
+          stamp_title: Follow an explicit ``title`` with the frame's number and
+            time, which otherwise only replace a missing title.
+          subplot_xlabels: Per-subplot horizontal labels, comma separated.
+          subplot_ylabels: Per-subplot vertical labels, comma separated.
           edgecolors: Mesh cell edge color.
           no_showgrid: Suppress grid lines.
           hashtag: Display the Postgkyl hashtag.
@@ -131,7 +167,7 @@ class PostgkylSession:
           RuntimeError: saving to a video container without ffmpeg on ``PATH``.
         """
 
-    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, as_dataset: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``int f w dx^dims / int w dx^dims`` over the directions in ``dims``.
 
         Args:
@@ -142,15 +178,19 @@ class PostgkylSession:
             ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
             field (``gkyl_array_average`` takes no field-index argument) -- the
             plain average (dividing by volume) is computed when omitted.
-          inplace: Mutate and return ``data`` for partial averaging only.
-          tag: Optional tag for a partial-average dataset.
-          label: Optional label for a partial-average dataset.
+          as_dataset: When every direction is averaged out, return the means as a
+            one-cell dataset of point values that keeps ``data``'s time and frame,
+            so ``collect`` stacks frames into a time trace.
+          inplace: Mutate and return ``data`` when the result is a dataset.
+          tag: Optional tag for a dataset result.
+          label: Optional label for a dataset result.
 
         Returns:
           A float (one field) or NumPy array (multiple fields) containing the
-          physical mean when every direction is averaged out. Otherwise a native
-          modal dataset over the surviving dimensions. Dataset-only options
-          ``inplace``, ``tag``, and ``label`` apply only to partial averaging.
+          physical mean when every direction is averaged out, or that mean as a
+          one-cell dataset with ``as_dataset``. Otherwise a native modal dataset
+          over the surviving dimensions. Dataset-only options ``inplace``,
+          ``tag``, and ``label`` apply only when the result is a dataset.
 
         Raises:
           ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
@@ -434,6 +474,37 @@ class PostgkylSession:
             ``window=True`` and the data is not 1D.
         """
 
+    def fluctuation(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""``f - <f>_dims``: the field minus its average over the directions in
+        ``dims``, where ``<f>_dims = int f w dx^dims / int w dx^dims``.
+
+        Unlike ``average``, the result keeps every dimension of ``data``: the
+        lower-dimensional average is lifted back onto ``data``'s basis, constant
+        along ``dims``, and subtracted. Averaging the result over the same
+        ``dims`` with the same ``weight`` gives zero.
+
+        Args:
+          data: gkyl-backed (native modal) dataset in the modal value_form.
+          dims: iterable of 0-based direction indices to average over (repeat
+            ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+          weight: optional gkyl-backed dataset in the modal value_form, same
+            ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
+            field (``gkyl_array_average`` takes no field-index argument) -- the
+            plain average (dividing by volume) is subtracted when omitted.
+          inplace: Mutate and return ``data`` instead of a new dataset.
+          tag: Optional tag for the returned dataset.
+          label: Optional label for the returned dataset.
+
+        Returns:
+          A native modal dataset on ``data``'s grid, cells, and basis holding the
+          fluctuation of every field.
+
+        Raises:
+          ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
+            missing basis metadata, ``weight``'s grid/basis doesn't match
+            ``data``'s, or ``dims`` is empty or out of range.
+        """
+
     def gk_energy_balance(self, name: str, species: list[str] | tuple[str, ...], *, path: str = './', relative_error: bool = False, multib: str = '-10', field_dot_file: str | None = None, apar_dot_file: str | None = None, fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, field_file: str | None = None, apar_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
 
@@ -521,7 +592,7 @@ class PostgkylSession:
           group holding one distribution function per requested frame.
         """
 
-    def gk_load_quantity(self, quantity: Literal['ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'beta', 'c_s', 'debye_length', 'diamag_vel', 'distf', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'larmor_radius', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, kind: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+    def gk_load_quantity(self, quantity: Literal['B_tot', 'B_tot_dual', 'B_tot_mag', 'D', 'D_gB', 'E_field', 'E_field_dual', 'E_field_mag', 'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta', 'c_s_cold_i', 'c_s_hot_i', 'chi', 'chi_gB', 'collision_freq', 'dB_perp', 'dB_perp_dual', 'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf', 'energy_flux', 'energy_flux_ExB', 'energy_flux_dB', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'inv_L_T', 'inv_L_n', 'larmor_radius', 'mach_cold_i', 'mach_hot_i', 'part_flux', 'part_flux_ExB', 'part_flux_dB', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, ti_over_te: float | None = None, te_ref: float | None = None, bmag_ref: float | None = None, den_ref: list[float] | tuple[float, ...] | None = None, temp_ref: list[float] | tuple[float, ...] | None = None, nu_frac: float | None = None, conv: float | None = None, fluct: Literal['none', 'y', 'yz'] | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Load and compute a pre-named gyrokinetic quantity.
 
         Modal source files retain their DG representation through the calculation:
@@ -544,7 +615,25 @@ class PostgkylSession:
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
           gamma_i: Ion adiabatic index for sound-speed quantities.
-          kind: Named variant accepted by a quantity provider.
+          ti_over_te: Ion-to-electron temperature ratio of adiabatic electrons,
+            used by multi-species quantities when no electron species is listed
+            (default 1).
+          te_ref: Constant electron temperature (J) replacing the electron
+            temperature profile in gyro-Bohm normalizations.
+          bmag_ref: Reference magnetic field (T): enters the collision frequency's
+            Coulomb logarithm, and replaces the field profile in gyro-Bohm
+            normalizations.
+          den_ref: Reference density (m^-3) of the collision frequency's Coulomb
+            logarithm; one value, or one per species.
+          temp_ref: Reference temperature (J) of the collision frequency's Coulomb
+            logarithm; one value, or one per species.
+          nu_frac: Collision frequency multiplier used by the simulation
+            (default 1).
+          conv: Coefficient ``c`` of the convective energy flux ``c*T*Gamma``
+            removed from the energy flux to form the heat flux (default 3/2).
+          fluct: For radial fluxes, keep only the turbulent part: the correlation
+            of the fluctuations about the Jacobian-weighted ``y`` or ``(y, z)``
+            average; ``none`` (default) keeps the total flux.
           read_options: Additional provider options as repeated key/value entries.
 
         Returns:
@@ -636,6 +725,73 @@ class PostgkylSession:
 
         Raises:
           FileNotFoundError: if a required file family is missing.
+        """
+
+    def gk_transport(self, name: str, species: str, frame: str | None = None, *, path: str = './', outputs: list[Literal['gamma', 'Q', 'q', 'D', 'chi', 'D_gB', 'chi_gB', 'n', 'T', 'gxx']] | tuple[Literal['gamma', 'Q', 'q', 'D', 'chi', 'D_gB', 'chi_gB', 'n', 'T', 'gxx'], ...] | None = None, fluct: Literal['none', 'y', 'yz'] = 'none', conv: float = 1.5, grad_tol: float = 0.001, per_frame: bool = False, num_interp: int | None = None, mass: list[float] | tuple[float, ...] | None = None, charge: list[float] | tuple[float, ...] | None = None, ti_over_te: float = 1.0, te_ref: float | None = None, bmag_ref: float | None = None, tag: str = 'transport', label: str | None = None) -> PostgkylSession:
+        r"""Radial turbulent transport of a 3x gyrokinetic simulation.
+
+        Flux-surface (``y``, ``z``, Jacobian-weighted) and time averaged radial
+        profiles, one dataset per species, window and output:
+
+        * ``gamma``: particle flux ``<Gamma^x>`` (ExB, plus flutter with ``apar``).
+
+        * ``Q``: energy flux ``<Q^x> = <(m/2) M2 v^x>``.
+
+        * ``q``: heat flux ``Q - conv <T> Gamma``.
+
+        * ``D``: particle diffusivity ``-Gamma/(<g^xx> d<n>/dx)`` (m^2/s).
+
+        * ``chi``: heat diffusivity ``-q/(<n> <g^xx> d<T>/dx)`` (m^2/s).
+
+        * ``D_gB``, ``chi_gB``: those over the gyro-Bohm diffusivity
+          ``rho_s^2 c_s/L``, with the species' own gradient length.
+
+        * ``n``, ``T``, ``gxx``: the averaged density, temperature and
+          ``<|grad x|^2>``.
+
+        The fluxes are contravariant radial components (``.grad x``). For the
+        gyro-Bohm outputs, ``c_s = sqrt(T_e/m_i)`` and ``rho_s = c_s/Omega_i`` use
+        the first ion species' mass and charge and the averaged ``<B>(x)``;
+        ``T_e`` is the electron species' ``<T>(x)`` if listed, else
+        ``T_i/ti_over_te`` (adiabatic electrons).
+
+        Args:
+          name: Simulation name prefix (e.g. ``'gk_tcv_3x2v_p1'``).
+          species: Species name, or a comma-separated list (e.g. ``'elc,ion'``).
+          frame: Frames to average over: a frame, a comma-separated list, or a
+            ``'start:stop[:step]'`` range; every available frame by default.
+          path: Directory containing the simulation files.
+          outputs: Profiles to return (repeat the option); default
+            ``gamma, q, D, chi``.
+          fluct: ``none`` for the total fluxes, ``y`` or ``yz`` for the turbulent
+            part only, the correlation of the fluctuations about the ``y`` or
+            ``(y, z)`` average.
+          conv: Coefficient ``c`` of the convective energy flux ``c <T> Gamma``
+            removed from ``Q`` to form ``q`` (e.g. 0, 3/2 or 5/2).
+          grad_tol: ``D`` (``chi``) is NaN where ``|d<n>/dx|`` (``|d<T>/dx|``) is
+            at most this fraction of its maximum.
+          per_frame: Return each frame's flux-surface averaged profiles instead of
+            their time average (e.g. to collect a space-time diagram).
+          num_interp: Radial points per cell (default ``poly_order + 1``).
+          mass: Species mass, one value or one per species, when the files lack
+            it.
+          charge: Species charge, one value or one per species, when the files
+            lack it.
+          ti_over_te: Ion-to-electron temperature ratio of adiabatic electrons
+            (gyro-Bohm outputs without an electron species).
+          te_ref: Constant electron temperature (J) replacing ``T_e(x)`` in the
+            gyro-Bohm outputs.
+          bmag_ref: Constant magnetic field (T) replacing ``<B>(x)`` in the
+            gyro-Bohm outputs.
+          tag: Tag prefix of the datasets, ``<tag>_<output>[_<species>]``.
+          label: Label override for the datasets.
+
+        Returns:
+          A list of NumPy-backed 1-D datasets on the radial points.
+
+        Raises:
+          ValueError: an output name is unknown, or the data are not 3x.
+          FileNotFoundError: a needed geometry file or quantity is missing.
         """
 
     def grid(self, *, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
@@ -928,6 +1084,9 @@ class PostgkylSession:
 
         Returns:
           The caller's concrete data class with NumPy point values and a 2-D grid.
+          ``ctx["logical_grid"]`` holds the computational coordinates of that
+          grid's axes, radial ``x`` then poloidal ``z``, so ``select`` can slice
+          at a constant minor radius or poloidal angle.
           Projection geometry and sampling options cannot accompany a reusable
           projection; set them when building that projection instead.
         """
@@ -2223,7 +2382,7 @@ class PostgkylSession:
           :class:`~postgkyl.gdata.gdata.GData`.
         """
 
-    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> PostgkylSession:
+    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, contourf: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> PostgkylSession:
         r"""Plot one or more datasets onto a shared figure and return it.
 
         Accepts ``plot(a)`` or ``plot(a, b, multiblock=True)``. The first dataset sets
@@ -2327,9 +2486,13 @@ class PostgkylSession:
           arrowstyle: Streamline arrow style.
           scatter: Draw markers without connecting lines.
           quiver: Draw two-component fields as arrows.
-          contour: Draw two-dimensional values as contours.
-          clevels: Explicit contour-level specification.
-          cnlevels: Number of contour levels.
+          contour: Draw two-dimensional values as contour lines.
+          contourf: Draw two-dimensional values as filled contours.
+          clevels: Explicit contour levels, ``'a,b,c'`` or ``'start:stop:num'``,
+            used unless ``cnlevels`` is given.
+          cnlevels: Number of contour levels. With ``zmin``/``zmax`` or
+            ``diverging``, that many evenly spaced levels span the colour range
+            (11 by default); otherwise Matplotlib picks about that many.
           cont_label: Label contour lines.
           surface: Draw two-dimensional values as a three-dimensional surface.
           comparison: Distinguish overlaid two-dimensional datasets.
@@ -2363,7 +2526,8 @@ class PostgkylSession:
           no_colorbar: Suppress color bars for field plots.
           xlabel: Horizontal-axis label override.
           ylabel: Vertical-axis label override.
-          clabel: Color-bar label override.
+          clabel: Color-bar label, shown as given; only the default label
+            records a ``zscale`` other than 1.
           title: Figure-title override.
           subplot_titles: Per-subplot title specification.
           subplot_xlabels: Per-subplot horizontal-label specification.
@@ -2414,7 +2578,7 @@ class PostgkylSession:
             figure does not have enough axes for the panel count.
         """
 
-    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, style: str | None = None, rcParams: Mapping[str, str] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> PostgkylSession:
+    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> PostgkylSession:
         r"""Render 2-D surface or 3-D volumetric data with Plotly.
 
         2-D data (``num_dims == 2``, after squeezing any size-1 axis) is drawn as
@@ -2455,8 +2619,6 @@ class PostgkylSession:
           cscale: Color-value scale factor.
           cshift: Color-value shift.
           clim: Explicit ``(minimum, maximum)`` color range.
-          style: Postgkyl/Matplotlib style used to derive colors.
-          rcParams: Matplotlib configuration overrides used while deriving styles.
           background: ``"dark"`` or ``"light"`` scene theme.
           invert_cmap: Reverse the selected colormap.
           no_legend: Suppress labeled traces in the legend.
@@ -2474,7 +2636,6 @@ class PostgkylSession:
           aspect: Scene aspect mode (``auto``, ``cube``, ``data``), or numeric ratio.
           no_showgrid: Suppress scene grid lines.
           hashtag: Add a ``#pgkyl`` annotation.
-          xkcd: Derive colors from Matplotlib's XKCD style.
           color: Replace the colormap with one fixed trace color.
           opacity: Surface, volume, or marker opacity.
           scatter_opacity_range: Minimum and maximum opacity encoded in scatter colors.
@@ -2711,6 +2872,15 @@ class PostgkylSession:
         rotation), the coordinate/slice selector has no single answer and raises
         -- pick an integer index for that sibling axis first (in the same call,
         or an earlier one in the chain).
+
+        A mapped block may also carry ``ctx["logical_grid"]``: one 1-D array per
+        axis giving the computational coordinate of that axis's points (an R-Z
+        map from ``map_to_rz`` records radial ``x`` and poloidal ``z``). Coordinate
+        values and slice strings then select on it -- at a constant minor radius
+        or poloidal angle -- with no cross-section search. Once every axis of
+        such a block but one is narrowed to a single cell, the result is a
+        profile along that one axis: the block's grid becomes its logical
+        coordinates, an ordinary separable grid.
 
         Args:
           data: Dataset whose cells or point values are selected.
