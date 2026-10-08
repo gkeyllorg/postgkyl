@@ -28,8 +28,8 @@ from postgkyl.cli import PostgkylSession
 
 __all__ = [
     "Output", "Step", "GridInfo", "scan_outputs", "list_simulations",
-    "weight_file", "pick_frames", "frame_option", "apply", "run", "processed",
-    "probe", "plot_step", "python_script", "figure_png", "make_movie",
+    "weight_file", "pick_frames", "apply", "run", "processed", "probe",
+    "plot_step", "python_script", "frame_spec", "figure_png", "make_movie",
     "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames"
 ]
 
@@ -139,33 +139,55 @@ def quantity_frames(directory: str, sim: str, quantity: str,
 
 
 def pick_frames(frames: list[int], text: str) -> list[int] | None:
-  """The frames a range text selects: a Python index or slice over the
-  available ``frames`` (``':'`` all, ``'::2'`` every other, ``'-10:'`` the
-  last ten, ``'-1'`` the last one). ``None`` for blank text.
+  """The frames a range text selects among the available ``frames``, read as
+  ``load --frame`` reads it (:func:`postgkyl.io.select_frames`): ``':'``
+  all, ``'::2'`` every other frame number, ``'-10:'`` the last ten, ``'-1'``
+  the last one. ``None`` for blank text.
 
   Raises:
-    ValueError: the text is not an index or slice of ``frames``.
+    ValueError: the text is malformed or selects a frame that is not
+      available.
   """
   text = (text or "").strip()
   if not text:
     return None
-  parts = text.split(":")
   try:
-    if len(parts) == 1:
-      return [frames[int(parts[0])]]
-    if len(parts) > 3:
-      raise ValueError
-    return frames[slice(*[int(p) if p.strip() else None for p in parts])]
-  except (ValueError, IndexError):
-    raise ValueError(
-        f"frame range '{text}' is not an index or slice of the "
-        f"{len(frames)} available frame(s), e.g. ':', '::2', '-10:', '-1'."
-    ) from None
+    picked = io.select_frames(text, frames)
+  except ValueError as exc:
+    raise ValueError(f"frame range '{text}': {exc}") from None
+  missing = sorted(set(picked) - set(frames))
+  if missing:
+    raise ValueError(f"frame range '{text}' selects frame(s) {missing}, "
+                     f"which are not among the {len(frames)} available.")
+  return picked
 
 
-def frame_option(frames: list[int]) -> str:
-  """The ``frame`` option of the GK loaders selecting exactly ``frames``."""
-  return ",".join(str(frame) for frame in frames)
+def frame_spec(frames: list[int], available: list[int]) -> str:
+  """The shortest frame specification selecting exactly ``frames`` among the
+  ``available`` ones (``':'``, ``'-10:'``, ``'100:200:2'``, ...), falling
+  back to the comma-separated frames."""
+  frames, available = list(frames), sorted(available)
+  candidates = [",".join(map(str, frames))]
+  if available:
+    candidates += [":", f"-{len(frames)}:"]
+    steps = {b - a for a, b in zip(frames, frames[1:])}
+    if len(steps) == 1:
+      (step, ) = steps
+      every = f":{step}" if step != 1 else ""
+      candidates += [
+          f"{start}:{stop}{every}" for start in ("", str(frames[0]))
+          for stop in ("", str(frames[-1] + 1))
+      ]
+
+  def selects(spec):
+    try:
+      return io.select_frames(spec, available) == frames
+    except ValueError:
+      return False
+
+  return min((spec for spec in candidates if selects(spec)),
+             key=len,
+             default=candidates[0])
 
 
 # ------------------------------------------------------------------- chains
@@ -250,6 +272,8 @@ class Settings:
     mode: ``"file"`` (plot an output) or ``"quantity"``
       (``pg.gk.load_quantity``).
     frames: Frames to load; ``(None,)`` for a frame-less file.
+    available: Every frame of the quantity in ``"quantity"`` mode, so the
+      frames are written as the shortest range that selects them.
     output: The output plotted in ``"file"`` mode.
     sim: Simulation prefix of the loaded data.
     quantity: Registered quantity of ``"quantity"`` mode.
@@ -278,6 +302,7 @@ class Settings:
   directory: str
   mode: str
   frames: tuple
+  available: tuple[int, ...] = ()
   output: Output | None = None
   sim: str | None = None
   quantity: str | None = None
@@ -343,14 +368,14 @@ def build_chain(settings: Settings,
   frames = s.frames[:1] if probe_only else s.frames
   numbered = [f for f in frames if f is not None]
   if s.mode == "file":
-    loads = [Step.of("load", file_name=s.output.file_name(f)) for f in frames]
+    loads = _file_loads(s.output, frames)
   elif s.mode == "quantity":
     loads = [
         Step.of("gk_load_quantity",
                 quantity=s.quantity,
                 species=s.species,
                 name=s.sim,
-                frame=frame_option(numbered) if numbered else None,
+                frame=frame_spec(numbered, s.available) if numbered else None,
                 path=s.directory,
                 direction=s.direction,
                 **dict(s.options))
@@ -393,6 +418,21 @@ def build_chain(settings: Settings,
         Step.of("activate", tags=[_DATA_TAG])
     ]
   return tuple(loads + steps)
+
+
+def _file_loads(output: Output, frames) -> list[Step]:
+  """Load ``frames`` of ``output``: one load of the output's file pattern
+  and a frame specification when that reads exactly these files, else one
+  load per file."""
+  files = [output.file_name(f) for f in frames]
+  if len(files) > 1:
+    name = io.parse_output_name(files[0])
+    pattern = os.path.join(glob.escape(name.directory),
+                           f"{glob.escape(name.stem)}_[0-9]*.gkyl")
+    spec = frame_spec(frames, output.frames)
+    if io.select_frame_files(glob.glob(pattern), spec) == files:
+      return [Step.of("load", file_name=pattern, frame=spec)]
+  return [Step.of("load", file_name=f) for f in files]
 
 
 def _transform_steps(s: Settings) -> tuple[Step, ...]:

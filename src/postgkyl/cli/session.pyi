@@ -571,7 +571,8 @@ class PostgkylSession:
           name: Simulation name prefix.
           species: Species name.
           frame: Frame index, comma-separated indices, or a
-            ``start:stop[:step]`` range; ``:`` selects every available frame.
+            ``start:stop[:step]`` range; ``:`` selects every available frame, and
+            negative values count back from the last one (``-10:`` the last ten).
           tag: Tag for the resulting dataset.
           suffix: Use ``<name>-<species>_<suffix>_<frame>.gkyl`` as the input.
           use_c2p_vel: Convert velocity-space computational coordinates to
@@ -608,7 +609,8 @@ class PostgkylSession:
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
           frame: Frame number, comma-separated list, or ``'start:stop[:step]'``
-            range; ``':'``/``None`` selects all available frames.
+            range; ``':'``/``None`` selects all available frames, and negative
+            values count back from the last one (``'-10:'`` the last ten).
           path: Directory containing the simulation files.
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
@@ -843,7 +845,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def load(self, file_name: str, *, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+    def load(self, file_name: str, *, frame: str | float | None = None, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -857,6 +859,10 @@ class PostgkylSession:
 
         A pattern always returns a group, even if it matches only one file. A
         literal filename retains the original single-``GData`` return type.
+        ``frame`` keeps the matching files of some frames only, read from their
+        names; restart files are left out::
+
+            pg.load('elc_M0_*.gkyl', frame='-10:')   # the last ten frames
 
         ``basis_type``, ``poly_order``, and ``value_form`` are properties of the
         data itself, fixed here at load time (from the file's header metadata, or
@@ -883,6 +889,9 @@ class PostgkylSession:
 
         Args:
           file_name: Literal filename or shell-style glob pattern to load.
+          frame: With a pattern, the frames to load: a frame number, a
+            comma-separated list, or a ``'start:stop[:step]'`` range; a negative
+            number counts back from the last frame (``'-10:'`` the last ten).
           tag: Tag assigned to every loaded dataset.
           label: Optional display label assigned to every loaded dataset; defaults
             to each source filename without its directory.

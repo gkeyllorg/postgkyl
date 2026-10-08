@@ -194,6 +194,7 @@ def _(
             directory=dir_input.value.strip(),
             mode=load_mode.value,
             frames=_frames,
+            available=tuple(frames),
             output=output,
             sim=output.sim if load_mode.value == "file" and output else simprefix.value,
             quantity=quantity.value,

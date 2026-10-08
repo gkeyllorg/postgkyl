@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 import postgkyl as pg
-from postgkyl import gpython
+from postgkyl import gpython, io
 from postgkyl.cli import gui_launch as launch
 from postgkyl.cli.app import cli
 from postgkyl.gui import pipeline as gp
@@ -71,22 +71,47 @@ class TestDiscovery:
                               None) == []
 
 
-@pytest.mark.parametrize("text, expected", [
-    ("", None),
-    (":", [0, 2, 4, 6]),
-    ("::2", [0, 4]),
-    ("-2:", [4, 6]),
-    ("-1", [6]),
-    ("1", [2]),
-])
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("", None),
+        (":", [0, 2, 4, 6]),
+        ("::4", [0, 4]),
+        ("-2:", [4, 6]),
+        ("-1", [6]),
+        ("2", [2]),  # a frame number, as `load --frame` reads it
+        ("2:5", [2, 4]),
+    ])
 def test_pick_frames(text, expected):
   assert gp.pick_frames([0, 2, 4, 6], text) == expected
 
 
-@pytest.mark.parametrize("text", ["9", "a:b", "1:2:3:4"])
+@pytest.mark.parametrize("text", ["9", "1", "a:b", "1:2:3:4", "-5"])
 def test_pick_frames_rejects_bad_ranges(text):
   with pytest.raises(ValueError, match="frame range"):
     gp.pick_frames([0, 2, 4, 6], text)
+
+
+@pytest.mark.parametrize(
+    "picked, spec",
+    [
+        (list(range(100)), ":"),
+        (list(range(95, 100)), "-5:"),  # as short as "95:", and preferred
+        (list(range(90, 100)), "90:"),
+        (list(range(10)), ":10"),
+        (list(range(0, 100, 2)), "::2"),
+        (list(range(1, 100, 2)), "1::2"),
+        ([3, 7, 9], "3,7,9"),
+        ([42], "42"),
+    ])
+def test_frame_spec_is_the_shortest_that_selects_exactly(picked, spec):
+  available = list(range(100))
+  assert gp.frame_spec(picked, available) == spec
+  assert io.select_frames(spec, available) == picked
+
+
+def test_frame_spec_without_available_frames_lists_them():
+  assert gp.frame_spec([3, 4], []) == "3,4"
 
 
 def test_parse_options():
@@ -182,6 +207,23 @@ class TestBuildChain:
     with pytest.raises(ValueError, match="full configuration space"):
       gp.build_chain(_file_settings(average=(1, ), transform="map_to_rz"))
 
+  def test_frames_of_one_output_are_one_pattern_and_a_range(self, tmp_path):
+    for frame in range(5):
+      (tmp_path / f"sim-elc_M0_{frame}.gkyl").touch()
+    # Another output whose name extends this one is not caught.
+    (tmp_path / "sim-elc_M0_norm_3.gkyl").touch()
+    output = gp.scan_outputs(str(tmp_path))["elc_M0"]
+    steps = gp.build_chain(
+        _file_settings(directory=str(tmp_path),
+                       frames=(2, 3, 4),
+                       output=output,
+                       sim="sim",
+                       transform="none"))
+    assert steps == (gp.Step.of("load",
+                                file_name=str(tmp_path /
+                                              "sim-elc_M0_[0-9]*.gkyl"),
+                                frame="2:"), )
+
   def test_quantity_source(self):
     steps = gp.build_chain(
         gp.Settings(directory="d",
@@ -256,6 +298,25 @@ class TestRun:
     np.testing.assert_array_equal(data.values, direct.values)
     assert " activate --tags default fluctuation " in session.command()
     assert _pgkyl_prints(session.command()) == _printed(direct)
+
+  def test_a_frame_pattern_loads_what_one_load_per_file_does(self, tmp_path):
+    for frame in range(3):
+      (tmp_path / f"sim-elc_M0_{frame}.gkyl").symlink_to(M0_3X)
+    output = gp.scan_outputs(str(tmp_path))["elc_M0"]
+    settings = _file_settings(directory=str(tmp_path),
+                              frames=(1, 2),
+                              output=output,
+                              sim="sim",
+                              select=((2, 0.0), ))
+    steps = gp.build_chain(settings)
+    assert steps[0].kwargs["frame"] == "1:"
+    pattern, files = gp.run(steps), pg.GDataGroup([
+        pg.load(output.file_name(f)) for f in (1, 2)
+    ]).interpolate().select(z2=0.0)
+    assert [d.file_name
+            for d in pattern.datasets] == [d.file_name for d in files]
+    for got, want in zip(pattern.datasets, files):
+      np.testing.assert_array_equal(got.values, want.values)
 
   def test_full_averages_collect_into_a_time_trace(self):
     """Every direction averaged: one mean per frame, stamped with the
