@@ -469,7 +469,7 @@ def _(
 
 
 @app.cell
-def _(base64, gp, grid_msg, html, mo, plot_options, settings, traceback):
+def _(base64, gp, grid_msg, mo, plot_options, settings, traceback):
     # --- run the chain; show the figure, its Python and its command line ----
     figure_bytes, _err, _tb, _status = None, None, "", ""
     _script, _command = "", ""
@@ -497,16 +497,19 @@ def _(base64, gp, grid_msg, html, mo, plot_options, settings, traceback):
             _err = f"**{type(_exc).__name__}:** {_exc}"
             _tb = traceback.format_exc()
 
-    def _code_view(title, code):
+    def _code_view(title, code, language):
+        # A fenced block, which marimo gives a copy-to-clipboard button; long
+        # lines wrap instead of scrolling out of view.
+        if not code:
+            return mo.md("")
+        _block = mo.md(f"**{title}**\n\n```{language}\n{code}\n```").text
         return mo.Html(
-            f"<div style='margin-top:0.5rem'><b>{title}</b>"
-            "<pre style='white-space:pre-wrap;word-break:break-word;"
-            "background:var(--gray-2,#f3f3f3);padding:0.6rem 0.8rem;"
-            "border-radius:6px;font-size:0.85em;'>"
-            f"{html.escape(code)}</pre></div>") if code else mo.md("")
+            "<style>.pgkyl-code pre{white-space:pre-wrap;"
+            "word-break:break-all}</style>"
+            f"<div class='pgkyl-code'>{_block}</div>")
 
-    _code = [_code_view("Equivalent Python", _script),
-             _code_view("Equivalent command line", _command)]
+    _code = [_code_view("Equivalent Python", _script, "python"),
+             _code_view("Equivalent command line", _command, "bash")]
     if _err:
         _parts = [mo.callout(mo.md(_err), kind="warn")]
         if _tb:

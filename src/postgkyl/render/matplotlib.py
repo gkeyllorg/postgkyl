@@ -130,15 +130,15 @@ def _output_paths(save, saveas, states) -> tuple[str, ...]:
   return tuple(normalized)
 
 
-def _frame_values(states) -> tuple[list[float], str]:
-  """Each dataset's frame, to color its curve, and the colorbar label.
+def _curve_values(states) -> tuple[list[float], str]:
+  """The value coloring each dataset's curve, and the colorbar label.
 
-  The datasets' order stands in when frames are missing or repeated, since
-  they would not tell the curves apart.
+  Each dataset's time; their order stands in when times are missing or
+  repeated, since they would not tell the curves apart.
   """
-  frames = [data.ctx.get("frame") for data in states]
-  if None not in frames and len(set(frames)) == len(frames):
-    return [float(frame) for frame in frames], "frame"
+  times = [data.ctx.get("time") for data in states]
+  if None not in times and len(set(times)) == len(times):
+    return [float(time) for time in times], "time"
   return [float(index) for index in range(len(states))], "dataset"
 
 
@@ -526,8 +526,9 @@ def plot(
   normalization range (typically the min/max of the ``cval`` values across
   all curves), so several curves drawn into the same axes share one scale.
   Without ``cval`` or ``color``, several 1-D datasets drawn with ``cmap``
-  are colored by their frame (by their order when frames do not tell them
-  apart) on one colorbar labelled ``frame``, unless ``clabel`` is given.
+  are colored by their time (by their order when times do not tell them
+  apart), shifted and scaled by ``zshift``/``zscale`` like any colour value,
+  on one colorbar labelled ``time`` unless ``clabel`` is given.
   ``color`` accepts either one Matplotlib color, applied to every line, or a
   sequence containing one color per dataset (reused for all its components).
   A sequence with one color per individual line is also accepted, in
@@ -970,13 +971,15 @@ def plot(
           )
 
       # Colormap values of 1-D curves: the given ``cval``, else each
-      # dataset's frame when several curves share the figure.
+      # dataset's time, shifted and scaled like any colour value, when
+      # several curves share the figure.
       curve_values, curve_label = None, None
       curve_range = (cval_min, cval_max)
       if cmap and cval is not None:
         curve_values = [cval] * len(states)
       elif cmap and color is None and ref_num_dims == 1 and len(states) > 1:
-        curve_values, curve_label = _frame_values(states)
+        values, curve_label = _curve_values(states)
+        curve_values = [(value + zshift) * zscale for value in values]
         curve_range = (min(curve_values) if cval_min is None else cval_min,
                        max(curve_values) if cval_max is None else cval_max)
 
@@ -1096,7 +1099,7 @@ def plot(
             else:
               im = cax.plot(x, y, *plot_args, **line_kwargs)
             # Add a colorbar describing the value-to-color mapping once per
-            # axes; frames (or dataset positions) get integer ticks.
+            # axes; whole-number values (dataset positions) get integer ticks.
             low, high = curve_range
             if (curve_values is not None and comp_colorbar and low is not None
                 and high is not None and high != low
@@ -1109,7 +1112,8 @@ def plot(
                                      cax,
                                      label=(layout_clabel if curve_label is None
                                             else clabel or curve_label))
-              if curve_label is not None:
+              if curve_label is not None and all(
+                  float(value).is_integer() for value in curve_values):
                 cbar.ax.yaxis.set_major_locator(
                     ticker.MaxNLocator(integer=True))
               cax._pgkyl_cval_cbar = True

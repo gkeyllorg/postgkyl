@@ -9,8 +9,10 @@ script it renders must reproduce them.
 
 from __future__ import annotations
 
+import html
 import importlib
 from pathlib import Path
+import re
 import shlex
 
 from click.testing import CliRunner
@@ -507,9 +509,12 @@ def test_notebook_runs_headless_and_draws_a_figure(monkeypatch):
   typed = defs["plot_options"](subplot_xlabels="x (m)")
   assert typed["subplot_xlabels"] == "x (m)"
   # Below the figure: the session Python, then the command line it ran.
+  # Fenced code blocks, which marimo gives a copy button.
   view = defs["plot_view"].text
-  python, command = (view.index("Equivalent Python"),
-                     view.index("Equivalent command line"))
+  assert "language-python" in view and "language-bash" in view
+  text = html.unescape(re.sub(r"<[^>]+>", "", view))
+  python, command = (text.index("Equivalent Python"),
+                     text.index("Equivalent command line"))
   assert python < command
-  assert "s = PostgkylSession()" in view
-  assert "pgkyl " in view[command:]
+  assert "s = PostgkylSession()" in text[python:command]
+  assert "pgkyl " in text[command:]

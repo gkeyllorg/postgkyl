@@ -1038,47 +1038,61 @@ class TestCvalColoring:
     assert fig.axes[0].lines[0].get_color() == "red"
 
 
-def _frame(frame, offset=0.0):
+def _at(time, offset=0.0):
   data = _line(offset=offset)
-  data.ctx["frame"] = frame
+  data.ctx["time"] = time
   return data
 
 
-class TestFrameColoring:
-  """Several 1-D curves drawn with a colormap are colored by their frame."""
+class TestTimeColoring:
+  """Several 1-D curves drawn with a colormap are colored by their time."""
 
-  def test_curves_are_colored_by_frame_on_one_colorbar(self):
-    fig = backend.plot(_frame(3),
-                       _frame(5, 1),
-                       _frame(7, 2),
+  def test_curves_are_colored_by_time_on_one_colorbar(self):
+    fig = backend.plot(_at(3e-6),
+                       _at(5e-6, 1),
+                       _at(7e-6, 2),
                        figure=0,
                        no_show=True,
                        cmap="viridis")
     lines, (colorbar, ) = fig.axes[0].lines, fig.axes[1:]
     assert [line.get_color() for line in lines
             ] == [plt.get_cmap("viridis")(t) for t in (0.0, 0.5, 1.0)]
-    assert colorbar.get_ylabel() == "frame"
-    assert colorbar.get_ylim() == (3.0, 7.0)
-    ticks = colorbar.get_yticks()
-    np.testing.assert_array_equal(ticks, np.round(ticks))
+    assert colorbar.get_ylabel() == "time"
+    np.testing.assert_allclose(colorbar.get_ylim(), (3e-6, 7e-6))
 
-  def test_curves_without_distinct_frames_are_colored_by_order(self):
-    fig = backend.plot(_frame(4),
-                       _frame(4, 1),
+  def test_zscale_and_zshift_act_on_the_colorbar(self):
+    fig = backend.plot(_at(3e-6),
+                       _at(7e-6, 1),
                        figure=0,
                        no_show=True,
                        cmap="viridis",
-                       clabel="run")
+                       zshift=-1e-6,
+                       zscale=1e6,
+                       clabel=r"t [$\mu$s]")
+    colorbar = fig.axes[1]
+    np.testing.assert_allclose(colorbar.get_ylim(), (2.0, 6.0))
+    assert colorbar.get_ylabel() == r"t [$\mu$s]"
+
+  def test_curves_without_distinct_times_are_colored_by_order(self):
+    fig = backend.plot(_at(4.0),
+                       _at(4.0, 1),
+                       _line(offset=2),
+                       figure=0,
+                       no_show=True,
+                       cmap="viridis")
     colors = [line.get_color() for line in fig.axes[0].lines]
-    assert colors == [plt.get_cmap("viridis")(t) for t in (0.0, 1.0)]
-    assert fig.axes[1].get_ylabel() == "run"
+    assert colors == [plt.get_cmap("viridis")(t) for t in (0.0, 0.5, 1.0)]
+    colorbar = fig.axes[1]
+    assert colorbar.get_ylabel() == "dataset"
+    ticks = colorbar.get_yticks()
+    np.testing.assert_array_equal(ticks, np.round(ticks))
 
   def test_one_curve_or_an_explicit_color_keeps_its_color(self):
-    single = backend.plot(_frame(3), no_show=True, cmap="viridis")
+    single = backend.plot(_at(3.0), no_show=True, cmap="viridis")
     assert len(single.axes) == 1
     plt.close(single)
-    red = backend.plot(_frame(3),
-                       _frame(5, 1),
+    red = backend.plot(_at(3.0),
+                       _at(5.0, 1),
                        figure=0,
                        no_show=True,
                        cmap="viridis",
