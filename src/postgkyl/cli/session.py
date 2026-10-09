@@ -236,7 +236,7 @@ def render_stub() -> str:
       signature = inspect.signature(member.fget, eval_str=True)
       members.append("    @property\n" +
                      _stub_def(name, signature, _own_doc(member)))
-    elif inspect.isfunction(member):
+    else:  # A method; inspect refuses a member the stub could not declare.
       signature = inspect.signature(member, eval_str=True)
       members.append(_stub_def(name, signature, _own_doc(member)))
   for name in sorted(_MODELS):

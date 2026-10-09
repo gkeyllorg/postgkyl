@@ -6,6 +6,7 @@ public verb is covered without editing this file.
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 
 import click
@@ -14,7 +15,10 @@ import pytest
 
 import postgkyl as pg
 from postgkyl.cli.app import MODELS, cli
-from postgkyl.cli.compiler import CodecKind, _convert, command_tokens
+from postgkyl.cli.compiler import (CodecKind, _convert, build_click_command,
+                                   command_tokens, compile_callable)
+from postgkyl.cli.session import _signature
+from postgkyl.cli_spec import CommandSpec, Execution, Section, command
 
 _MODELS = {model.name: model for model in MODELS}
 
@@ -26,7 +30,8 @@ _SCALARS = {
     CodecKind.INTEGER: [(3, 3), (-2, -2), (np.int64(4), 4)],
     CodecKind.FLOAT: [(2.5, 2.5), (-1.5, -1.5), (2, 2.0),
                       (np.float32(0.5), 0.5)],
-    CodecKind.PATH: [("d/f.gkyl", Path("d/f.gkyl"))],
+    CodecKind.PATH: [("d/f.gkyl", Path("d/f.gkyl")),
+                     (Path("d/f.gkyl"), Path("d/f.gkyl"))],
 }
 
 
@@ -39,7 +44,8 @@ def _samples(codec):
   if codec.kind is CodecKind.CHOICE:
     return [(choice, choice) for choice in codec.choices]
   if codec.kind is CodecKind.ENUM:
-    return [(choice, codec.python_type(choice)) for choice in codec.choices]
+    members = [codec.python_type(choice) for choice in codec.choices]
+    return [*zip(members, members), *zip(codec.choices, members)]
   if codec.kind is CodecKind.SEQUENCE:
     items = _samples(codec.items[0])[:2]
     return [([value for value, _ in items], [parsed for _, parsed in items])]
@@ -139,6 +145,7 @@ def test_floats_keep_their_decimal_point():
     ("activate", dict(tags=1), "expected a list or tuple"),
     ("activate", dict(tags="default"), "expected a list or tuple"),
     ("plot", dict(figsize=(1.0, )), "expected 2 values"),
+    ("plot", dict(rcParams=["lines.linewidth"]), "expected a mapping"),
 ])
 def test_values_without_a_spelling_are_refused(name, values, reason):
   with pytest.raises(TypeError, match=reason):
@@ -153,3 +160,38 @@ def test_a_dataset_reference_must_be_a_tag():
       "dims": 0,
       "weight": "w"
   }) == ["--dims", "0", "--weight", "w"]
+
+
+class _Mode(Enum):
+  TEXT = "text"
+  BINARY = "binary"
+
+
+@command(CommandSpec(Section.UTILITY, Execution.LOAD))
+def _write(*, mode: _Mode = _Mode.TEXT, out: Path | None = None):
+  """Write a file.
+
+  Args:
+    mode: Output mode.
+    out: Output path.
+  """
+
+
+# No public command takes an Enum or a Path yet; the compiler supports both.
+_WRITE = compile_callable(_write)
+
+
+def test_enum_and_path_options_parse_back_to_the_values():
+  click_command = build_click_command(_WRITE)
+  for parameter in _exposed(_WRITE):
+    for value, expected in _samples(parameter.codec):
+      tokens = command_tokens(_WRITE, {parameter.name: value})
+      parsed = click_command.make_context(_WRITE.name, tokens).params
+      assert _convert(parsed[parameter.name], parameter.codec) == expected
+
+
+def test_the_session_declares_the_enum_and_path_values_it_accepts():
+  # The stub cannot import _Mode, so its default is shown as "...".
+  assert str(_signature(_WRITE)) == (
+      "(*, mode: Literal['text', 'binary'] = ..., "
+      "out: str | os.PathLike[str] | None = None) -> PostgkylSession")

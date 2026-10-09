@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import inspect
 from pathlib import Path
 import runpy
@@ -17,7 +18,7 @@ import pytest
 import postgkyl as pg
 from postgkyl.cli import PostgkylSession
 from postgkyl.cli.app import MODELS, cli
-from postgkyl.cli.session import render_stub
+from postgkyl.cli.session import _stub_docstring, render_stub
 
 ROOT = Path(__file__).parents[1]
 DATA = ROOT / "tests" / "test_data" / "generated"
@@ -55,6 +56,18 @@ def test_a_dash_leading_positional_survives_the_command_line(capsys):
   s.load(DISTF)
   s.evaluate("-1 f0 *")
   assert s.command() == f"pgkyl {DISTF} evaluate -- '-1 f0 *'"
+  s.print()
+  assert capsys.readouterr().out == _pgkyl(s.command())
+
+
+def test_a_dash_leading_file_name_is_loaded_by_option(tmp_path, monkeypatch,
+                                                      capsys):
+  monkeypatch.chdir(tmp_path)
+  Path("-distf.gkyl").symlink_to(DISTF)
+  s = PostgkylSession()
+  s.load("-distf.gkyl")
+  # A bare "-distf.gkyl" would read as an option.
+  assert s.command() == "pgkyl load --file_name -distf.gkyl"
   s.print()
   assert capsys.readouterr().out == _pgkyl(s.command())
 
@@ -108,6 +121,17 @@ def test_the_ide_stub_is_generated_from_the_current_commands():
   assert STUB.read_text() == render_stub(), (
       "session.pyi is out of date: run "
       "`python scripts/generate_session_stub.py`")
+
+
+@pytest.mark.parametrize("text", [
+    "Summary.\n\n  Indented detail.", 'Quotes """inside""".',
+    "Ends with a backslash \\", r"Keeps \d and $\alpha$."
+])
+def test_a_stub_docstring_reads_back_as_its_text(text):
+  statement = _stub_docstring(text, "        ")
+  value = ast.literal_eval(statement.strip())
+  # rstrip: the closing quotes' indentation, which PEP 257 trimming drops.
+  assert inspect.cleandoc(value).rstrip() == inspect.cleandoc(text)
 
 
 def test_the_stub_declares_every_command_with_its_docstring():
