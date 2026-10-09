@@ -187,39 +187,33 @@ class TestNodalGridDirect:
 class TestRcParamNovelties:
 
   def test_jet_sets_cmap(self):
-    with mpl.rc_context():
-      backend.plot(_field_2d(), no_show=True, jet=True)
-      assert mpl.rcParams["image.cmap"] == "jet"
+    fig = backend.plot(_field_2d(), no_show=True, jet=True)
+    assert fig.axes[0].collections[0].get_cmap().name == "jet"
 
   @pytest.mark.filterwarnings("ignore:No xkcd-style font found:UserWarning")
   def test_xkcd_flag_invokes_xkcd_mode(self):
-    with mpl.rc_context():
-      fig = backend.plot(_line(), no_show=True, xkcd=True)
-      line = fig.axes[0].lines[0]
-      assert line.get_sketch_params() is not None
+    fig = backend.plot(_line(), no_show=True, xkcd=True)
+    line = fig.axes[0].lines[0]
+    assert line.get_sketch_params() is not None
 
   @pytest.mark.filterwarnings("ignore:No xkcd-style font found:UserWarning")
   def test_xkcd_flag_does_not_leak_into_global_rcparams(self):
     # A past bug: `plt.xkcd()` called without a `with` block never reverted,
     # contaminating every plot drawn afterwards.
-    with mpl.rc_context():
-      backend.plot(_line(), no_show=True, xkcd=True)
-      assert mpl.rcParams["path.sketch"] is None
+    backend.plot(_line(), no_show=True, xkcd=True)
+    assert mpl.rcParams["path.sketch"] is None
 
-  def test_color_sets_rcparam(self):
-    with mpl.rc_context():
-      backend.plot(_line(), no_show=True, color="red")
-      assert mpl.rcParams["lines.color"] == "red"
+  def test_color_sets_line_color(self):
+    fig = backend.plot(_line(), no_show=True, color="red")
+    assert fig.axes[0].lines[0].get_color() == "red"
 
-  def test_linewidth_sets_rcparam(self):
-    with mpl.rc_context():
-      backend.plot(_line(), no_show=True, linewidth=4.0)
-      assert mpl.rcParams["lines.linewidth"] == 4.0
+  def test_linewidth_sets_line_width(self):
+    fig = backend.plot(_line(), no_show=True, linewidth=4.0)
+    assert fig.axes[0].lines[0].get_linewidth() == 4.0
 
-  def test_linestyle_sets_rcparam(self):
-    with mpl.rc_context():
-      backend.plot(_line(), no_show=True, linestyle="--")
-      assert mpl.rcParams["lines.linestyle"] == "--"
+  def test_linestyle_sets_line_style(self):
+    fig = backend.plot(_line(), no_show=True, linestyle="--")
+    assert fig.axes[0].lines[0].get_linestyle() == "--"
 
 
 # --------------------------------------------------------------------------
