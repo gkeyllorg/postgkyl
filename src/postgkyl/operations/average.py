@@ -14,32 +14,14 @@ from postgkyl.cli_spec import CliType, DatasetRef
 import numpy as np
 
 from postgkyl import dg
-from postgkyl.gdatastate.layout import require_kernel_basis
-from ._compatibility import require_collocated_layout, uniform_cartesian_grid
+from ._compatibility import average_operands, parse_axes
 
 from postgkyl.gdatastate.gdatastate import GDataState
 
 
-def _native_basis(data: "GDataState", what: str):
-  if data.backend != "gkyl":
-    raise ValueError(
-        f"average wraps gkyl_array_average and needs native modal data; "
-        f"{what} is not available after .interpolate() or without the "
-        "Gkeyll library.")
-  if data.ctx.get("value_form", "modal") != "modal":
-    raise ValueError(f"average expects the modal value_form, not "
-                     f"'{data.ctx['value_form']}' ({what}); "
-                     "call .represent(to='modal') first.")
-  basis_type = data.ctx.get("basis_type")
-  poly_order = data.ctx.get("poly_order")
-  if basis_type is None or poly_order is None:
-    raise ValueError(f"{what} has no basis_type/poly_order metadata")
-  layout = require_kernel_basis(data)
-  return layout.basis_type, layout.poly_order
-
-
 def average(data: "GDataState",
-            dims: Annotated[Iterable[int], CliType(list[int])],
+            dims: Annotated[int | Iterable[int] | str,
+                            CliType(str)],
             *,
             weight: Annotated[GDataState | None,
                               DatasetRef()] = None,
@@ -50,8 +32,9 @@ def average(data: "GDataState",
 
   Args:
     data: gkyl-backed (native modal) dataset in the modal value_form.
-    dims: iterable of 0-based direction indices to average over (repeat
-      ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+    dims: 0-based direction(s) to average over: an integer, an iterable of
+      integers, a comma-separated string (``"0,1"``), or a colon slice
+      string (``"0:2"``); ``--dims 0,1`` at the CLI.
     weight: optional gkyl-backed dataset in the modal value_form, same
       ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
       field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -69,30 +52,15 @@ def average(data: "GDataState",
   Raises:
     ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
       missing basis metadata, or ``weight``'s grid/basis doesn't match
-      ``data``'s, or dataset-only options are used for a full average.
+      ``data``'s, ``dims`` is empty, repeated, or out of range, or
+      dataset-only options are used for a full average.
   """
-  basis_type, poly_order = _native_basis(data, "data")
-  ndim = data.num_dims
-
-  weight_native = None
-  if weight is not None:
-    w_basis_type, w_poly_order = _native_basis(weight, "weight")
-    if weight.num_dims != ndim:
-      raise ValueError(
-          f"weight has {weight.num_dims} dims but the field has {ndim}")
-    if w_basis_type != basis_type:
-      raise ValueError(
-          f"weight basis_type '{w_basis_type}' != field's '{basis_type}'")
-    if w_poly_order != poly_order:
-      raise ValueError(
-          f"weight poly_order {w_poly_order} != field's {poly_order}")
-    require_collocated_layout(data, weight)
-    weight_native = weight.native
-
-  grid = uniform_cartesian_grid(data)
+  dims = parse_axes(dims, data.num_dims, "average")
+  basis_type, poly_order, grid, weight_native = average_operands(
+      data, weight, "average")
   keep_dirs, cells_avg, out_native = dg.modal.average(grid,
                                                       basis_type,
-                                                      ndim,
+                                                      data.num_dims,
                                                       poly_order,
                                                       data.native,
                                                       dims,

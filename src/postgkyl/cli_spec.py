@@ -31,6 +31,7 @@ class Execution(Enum):
   TERMINAL_EACH = auto()
   TERMINAL_ALL = auto()
   LOAD = auto()
+  ACTIVATE = auto()
 
 
 class ResultPolicy(Enum):

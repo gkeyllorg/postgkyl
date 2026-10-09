@@ -35,6 +35,10 @@ session code; `tests/test_cli_session_tokens.py` round-trips every command.
 After changing a public command, regenerate the IDE stub `cli/session.pyi`
 with `python scripts/generate_session_stub.py`; never edit it by hand.
 
+`activate` (`Execution.ACTIVATE`) chooses the working set by tag; the other
+datasets move to `DataSpace.set_aside`, which `DatasetRef` options still
+resolve. Commands never see set-aside datasets.
+
 Use native Click chaining and callback-before-dispatch. Help groups the flat
 inventory into Verbs, Diagnostics, Render, and Utility. The console entry point
 is `postgkyl.cli.app:cli`. Version reporting is owned by `_version.py`, exported

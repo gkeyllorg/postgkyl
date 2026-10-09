@@ -37,21 +37,11 @@ from postgkyl.gdatastate.layout import dg_layout, require_kernel_basis
 from postgkyl.numerics import calculus, curvilinear
 
 from ._curvilinear import curvilinear_blocks
+from ._compatibility import parse_axes
 from ._compatibility import uniform_cartesian_grid as _native_grid
 from .represent import represent
 
 from postgkyl.gdatastate.gdatastate import GDataState
-
-
-def _parse_axes(axis: int | tuple | str | None, ndim: int) -> tuple[int, ...]:
-  axes = tuple(int(a) for a in calculus.parse_axis(axis, ndim))
-  if not axes:
-    raise ValueError("integrate needs at least one axis")
-  if len(set(axes)) != len(axes):
-    raise ValueError(f"integrate axes must be distinct, got {axes}")
-  if min(axes) < 0 or max(axes) >= ndim:
-    raise ValueError(f"integrate axes {axes} out of range for a {ndim}D field")
-  return tuple(sorted(axes))
 
 
 def _native_basis(data: "GDataState") -> tuple[str, int]:
@@ -252,7 +242,7 @@ def integrate(data: "GDataState",
       requested; ``op`` is used outside a full native-DG integration; or
       dataset-only result options are used for a terminal integration.
   """
-  axes = _parse_axes(axis, data.num_dims)
+  axes = parse_axes(axis, data.num_dims, "integrate")
   full = len(axes) == data.num_dims
   layout = dg_layout(data)
   modal = layout is not None and layout.value_form == "modal"

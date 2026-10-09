@@ -16,6 +16,8 @@ owns it and simply gathered here:
     group_blocks                     <- gdatastate/ (multiblock family partition)
     info                             <- operations/ (the info verb, one-or-many)
     integrate                        <- operations/ (grid integral, via Gkeyll)
+    average, fluctuation             <- operations/ (mean over directions, and the
+                                                      field minus that mean)
     interpolate, select              <- operations/ (functional verb spellings)
     map_to_rz, resolve_geometry       <- operations/ (coordinate mapping)
     represent, apply                 <- operations/ (value_form verbs)
@@ -53,6 +55,7 @@ Architecture (strict, cycle-free DAG; see REFACTOR_GKEYLL_FFI.md)::
 
 from postgkyl.gdata import GData, load, GDataGroup, collect, evaluate, relchange, sort
 from postgkyl.operations import (
+    activate,
     apply,
     available_evaluate_operators,
     average,
@@ -61,6 +64,7 @@ from postgkyl.operations import (
     extract_input,
     fft,
     fit,
+    fluctuation,
     grid,
     growth,
     info,
@@ -94,11 +98,12 @@ hidden("collection helper is a Python API, not a pipeline command")(
 __all__ = [
     "GData", "load", "GDataGroup", "plot", "group_blocks", "info", "print",
     "integrate", "interpolate", "local_poly", "select", "average",
-    "eval_at_coord_proj", "fft", "magsq", "mask", "grid", "val2coord",
-    "extract_input", "fit", "growth", "differentiate", "map", "represent",
-    "apply", "Geometry", "RzProjection", "FluxSurfaceGrid", "map_to_rz",
-    "resolve_rz_projection", "resolve_geometry", "extract_flux_surface",
-    "resolve_flux_surface_grid", "save", "collect", "evaluate", "relchange",
-    "animate", "plotly_animate", "sort", "available_evaluate_operators",
-    "plotly", "pyvista", "gk", "__version__", "version_report"
+    "fluctuation", "eval_at_coord_proj", "fft", "magsq", "mask", "grid",
+    "val2coord", "extract_input", "fit", "growth", "differentiate", "map",
+    "represent", "apply", "Geometry", "RzProjection", "FluxSurfaceGrid",
+    "map_to_rz", "resolve_rz_projection", "resolve_geometry",
+    "extract_flux_surface", "resolve_flux_surface_grid", "save", "collect",
+    "evaluate", "relchange", "animate", "plotly_animate", "sort", "activate",
+    "available_evaluate_operators", "plotly", "pyvista", "gk", "__version__",
+    "version_report"
 ]

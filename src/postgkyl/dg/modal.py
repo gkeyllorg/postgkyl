@@ -8,6 +8,8 @@ DG bookkeeping -- e.g. what "add a scalar" means for modal coefficients.
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 
 from postgkyl import gpython
@@ -16,7 +18,6 @@ from postgkyl.gpython.array import GkylArray
 # Weak algebra and coefficient linear combinations -- direct kernel calls.
 weak_mul = gpython.kernels.weak_mul
 weak_div = gpython.kernels.weak_div
-weak_inv = gpython.kernels.weak_inv
 weak_mul_conf_phase = gpython.kernels.weak_mul_conf_phase
 lincomb = gpython.kernels.lincomb
 scale = gpython.kernels.scale
@@ -58,6 +59,32 @@ def shift_mean(basis_type: str,
   for f in range(a.ncomp // nb):
     out = gpython.kernels.shiftc(out, coeff_shift, f * nb)
   return out
+
+
+def weak_inv(basis_type: str, ndim: int, poly_order: int,
+             a: GkylArray) -> GkylArray:
+  """Weak reciprocal ``1 / a``, field by field, robust to the field's scale.
+
+  ``gkyl_dg_inv_op`` is cell-local but raises the coefficients to high
+  powers (in 3-D p1 a constant field of 1e-39 or 1e40 already returns
+  inf/nan), which SI products such as ``n T^(3/2) (dT/dx)^2`` reach. Each
+  field of each cell is therefore scaled by the power of two ``2**-e`` that
+  brings its largest coefficient to order one, inverted, and scaled back:
+  ``1/f = 2**-e * inv(2**-e f)``. Power-of-two scaling is exact in floating
+  point, so results are unchanged wherever the unscaled kernel was finite.
+  """
+  nb = gpython.basis.num_basis(basis_type, ndim, poly_order)
+  if a.ncomp % nb:
+    raise ValueError(f"ncomp {a.ncomp} is not a multiple of num_basis {nb}")
+  blocks = a.view().reshape(a.size, a.ncomp // nb, nb)
+  peak = np.abs(blocks).max(axis=-1, keepdims=True)
+  exponent = np.where(np.isfinite(peak) & (peak > 0.0), np.frexp(peak)[1], 0)
+  scaled = GkylArray.from_numpy(
+      np.ldexp(blocks, -exponent).reshape(a.size, a.ncomp))
+  inverse = gpython.kernels.weak_inv(basis_type, ndim, poly_order, scaled)
+  return GkylArray.from_numpy(
+      np.ldexp(inverse.view().reshape(blocks.shape),
+               -exponent).reshape(a.size, a.ncomp))
 
 
 def shift_all(a: GkylArray, val: float) -> GkylArray:
@@ -156,6 +183,94 @@ def average(grid: dict,
     # gkyl_array_integrate on a constant field (see test_dg_modal_average).
     out = gpython.kernels.scale(out, 2.0**(ndim_avg / 2.0))
   return keep_dirs, cells_avg, out
+
+
+@functools.lru_cache(maxsize=None)
+def _lift_matrix(basis_type: str, ndim: int, poly_order: int,
+                 keep_dirs: tuple[int, ...]) -> np.ndarray:
+  """``(num_basis_full, num_basis_reduced)`` matrix ``T[j, k] = int B_j b_k``.
+
+  ``B_j`` are the full ``ndim`` basis functions and ``b_k`` the reduced basis
+  functions of the kept directions, both Gkeyll's own (via
+  ``gpython.basis.eval_matrix``) and orthonormal on the reference cell, so
+  ``T`` is the L2 projection of the reduced basis onto the full one. The
+  tensor Gauss rule with ``poly_order + 1`` points per direction is exact for
+  these products (degree at most ``2 poly_order`` per variable for the
+  serendipity and tensor bases), so the projection is exact, not approximate.
+
+  With no kept direction the reduced field is Gkeyll's one-cell 1-D stand-in
+  whose coefficient 0 carries the mean (``b_0 = 1/sqrt(2)``); the single
+  column lifts that one constant mode.
+  """
+  pts, w = gpython.basis.gauss_quad(ndim, poly_order + 1)
+  full = gpython.basis.eval_matrix(basis_type, ndim, poly_order, pts)
+  if keep_dirs:
+    reduced = gpython.basis.eval_matrix(basis_type, len(keep_dirs), poly_order,
+                                        pts[:, list(keep_dirs)])
+  else:
+    reduced = np.full((pts.shape[0], 1), 2.0**-0.5)
+  matrix = full.T @ (w[:, None] * reduced)
+  matrix.flags.writeable = False
+  return matrix
+
+
+def lift(basis_type: str, ndim: int, poly_order: int, reduced: GkylArray,
+         avg_dirs, cells) -> GkylArray:
+  """Lift a field over the kept directions back onto the full ``ndim``
+  basis and cell layout, constant along ``avg_dirs`` -- the right inverse of
+  :func:`average` (``average(lift(g)) == g``).
+
+  ``reduced`` is the output of :func:`average` over ``avg_dirs``: modal
+  coefficients on the reduced basis (same ``basis_type``/``poly_order``,
+  ``ndim - len(avg_dirs)`` dimensions) over the kept directions' cells, or
+  for a full reduction the one-cell 1-D field whose coefficient 0 carries
+  the mean. A function of the kept variables in the reduced serendipity
+  (or tensor) space lies in the full space, so the lift is exact: the
+  returned field takes the same values as ``reduced`` at every point.
+  Multi-field arrays (``ncomp == nfields * num_basis``) are lifted field by
+  field, as :func:`average` reduces them.
+
+  Args:
+    reduced: reduced modal coefficients, sized for the kept directions'
+      cells (``cells[d]`` for ``d`` not in ``avg_dirs``; one cell when every
+      direction was averaged).
+    avg_dirs: 0-based directions the field is constant along -- the ones
+      :func:`average` reduced.
+    cells: the full per-dimension cell counts of the target layout.
+
+  Returns:
+    A ``GkylArray`` with ``nfields * num_basis(full)`` components over
+    ``prod(cells)`` cells.
+
+  Raises:
+    ValueError: ``avg_dirs`` is empty or out of range, or ``reduced``'s
+      component count is not a multiple of the reduced basis size.
+  """
+  avg_dirs = sorted(set(int(d) for d in avg_dirs))
+  if not avg_dirs or avg_dirs[0] < 0 or avg_dirs[-1] >= ndim:
+    raise ValueError(f"lift dirs {avg_dirs} out of range for a {ndim}D field")
+  keep_dirs = tuple(d for d in range(ndim) if d not in avg_dirs)
+  cells = [int(c) for c in cells]
+  matrix = _lift_matrix(basis_type, ndim, poly_order, keep_dirs)
+  nb_full, nb_red = matrix.shape
+
+  # Coefficient layout of ``reduced``: the full reduction is stored on a
+  # one-cell 1-D basis of which only the constant mode is meaningful.
+  cells_red = [cells[d] for d in keep_dirs]
+  nb_stored = nb_red if keep_dirs else gpython.basis.num_basis(
+      basis_type, 1, poly_order)
+  if reduced.ncomp % nb_stored:
+    raise ValueError(f"reduced ncomp {reduced.ncomp} is not a multiple of "
+                     f"the reduced basis's num_basis {nb_stored}")
+  nfields = reduced.ncomp // nb_stored
+  coeffs = reduced.view(cells_red or [1]).reshape(*cells_red, nfields,
+                                                  nb_stored)[..., :nb_red]
+
+  lifted = (coeffs @ matrix.T).reshape(*cells_red, nfields * nb_full)
+  for d in avg_dirs:
+    lifted = np.expand_dims(lifted, axis=d)
+  return GkylArray.from_numpy(
+      np.broadcast_to(lifted, (*cells, nfields * nb_full)))
 
 
 def differentiate(basis_type: str, ndim: int, poly_order: int, a: GkylArray,

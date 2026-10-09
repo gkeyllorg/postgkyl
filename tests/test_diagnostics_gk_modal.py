@@ -112,19 +112,18 @@ def test_all_components_retained(moments):
   assert out is not moments
 
 
-@pytest.mark.parametrize("kind", ["thermo", "ion_acoustic"])
-def test_sound_speed_multiple_ions(moments, kind):
+@pytest.mark.parametrize("fetch", [ff.fetch_c_s_hot_i, ff.fetch_c_s_cold_i])
+def test_sound_speed_multiple_ions(moments, fetch):
   n, t = moments.select(comp=0), moments.select(comp=2)
   sources = [[n, t], [n * 0.6, t * 0.4], [n * 0.2, t * 0.7]]
   # Quasineutral ions with charge states 1 and 2; species overrides also
   # exercise resolution of mass/charge independent of source metadata.
-  out = ff.fetch_c_s(sources,
-                     kind=kind,
-                     mass=[1., 4., 8.],
-                     charge=[-constants.e, constants.e, 2 * constants.e],
-                     gamma_e=1.5,
-                     gamma_i=2.5)
-  if kind == "thermo":
+  out = fetch(sources,
+              mass=[1., 4., 8.],
+              charge=[-constants.e, constants.e, 2 * constants.e],
+              gamma_e=1.5,
+              gamma_i=2.5)
+  if fetch is ff.fetch_c_s_hot_i:
     cs_sq = _samples(t) * (1.5 + 2.5 *
                            (0.6 * 0.4 + 0.2 * 0.7)) / (0.6 * 4 + 0.2 * 8)
   else:

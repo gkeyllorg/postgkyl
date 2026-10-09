@@ -1,10 +1,33 @@
 """Shared physical collocation contract for multi-dataset operations."""
 
+from collections.abc import Iterable
+
 import numpy as np
 
 from postgkyl import numerics
 from postgkyl.gdatastate.guards import require_same_quadrature
-from postgkyl.gdatastate.layout import dg_layout
+from postgkyl.gdatastate.layout import dg_layout, require_kernel_basis
+from postgkyl.numerics import calculus
+
+
+def parse_axes(axis: int | Iterable[int] | str | None, ndim: int,
+               verb: str) -> tuple[int, ...]:
+  """Distinct, in-range, sorted axes from a selector: an integer, an iterable
+  of integers, a comma-separated (``"0,1"``) or colon-sliced (``"0:2"``)
+  string, or ``None`` for every axis -- the one grammar shared by the verbs
+  that reduce over a subset of directions.
+
+  Raises:
+    ValueError: no axis is selected, an axis repeats, or one is out of range.
+  """
+  axes = tuple(int(a) for a in calculus.parse_axis(axis, ndim))
+  if not axes:
+    raise ValueError(f"{verb} needs at least one axis")
+  if len(set(axes)) != len(axes):
+    raise ValueError(f"{verb} axes must be distinct, got {axes}")
+  if min(axes) < 0 or max(axes) >= ndim:
+    raise ValueError(f"{verb} axes {axes} out of range for a {ndim}D field")
+  return tuple(sorted(axes))
 
 
 def uniform_cartesian_grid(data) -> dict:
@@ -66,3 +89,60 @@ def require_collocated_layout(left, right) -> None:
       require_same_quadrature(left, right)
   if tuple(left.num_cells) != tuple(right.num_cells):
     raise ValueError("operands have different cell layouts")
+
+
+def _native_modal_basis(data, what: str, verb: str) -> tuple[str, int]:
+  if data.backend != "gkyl":
+    raise ValueError(
+        f"{verb} wraps gkyl_array_average and needs native modal data; "
+        f"{what} is not available after .interpolate() or without the "
+        "Gkeyll library.")
+  if data.ctx.get("value_form", "modal") != "modal":
+    raise ValueError(f"{verb} expects the modal value_form, not "
+                     f"'{data.ctx['value_form']}' ({what}); "
+                     "call .represent(to='modal') first.")
+  basis_type = data.ctx.get("basis_type")
+  poly_order = data.ctx.get("poly_order")
+  if basis_type is None or poly_order is None:
+    raise ValueError(f"{what} has no basis_type/poly_order metadata")
+  layout = require_kernel_basis(data)
+  return layout.basis_type, layout.poly_order
+
+
+def average_operands(data, weight, verb: str):
+  """Validate the operands of a ``gkyl_array_average``-backed verb.
+
+  ``data`` must be native modal data with basis metadata; ``weight``, when
+  given, must be native modal data on the same grid, basis, and cell layout
+  (the kernel takes a single-field weight over the donor layout).
+
+  Returns:
+    ``(basis_type, poly_order, grid, weight_native)`` -- the kernel basis,
+    the donor grid dict for the native kernels (see
+    :func:`uniform_cartesian_grid`), and the weight's native array (``None``
+    without a weight).
+
+  Raises:
+    ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
+      missing basis metadata, or ``weight``'s grid/basis doesn't match
+      ``data``'s.
+  """
+  basis_type, poly_order = _native_modal_basis(data, "data", verb)
+  ndim = data.num_dims
+
+  weight_native = None
+  if weight is not None:
+    w_basis_type, w_poly_order = _native_modal_basis(weight, "weight", verb)
+    if weight.num_dims != ndim:
+      raise ValueError(
+          f"weight has {weight.num_dims} dims but the field has {ndim}")
+    if w_basis_type != basis_type:
+      raise ValueError(
+          f"weight basis_type '{w_basis_type}' != field's '{basis_type}'")
+    if w_poly_order != poly_order:
+      raise ValueError(
+          f"weight poly_order {w_poly_order} != field's {poly_order}")
+    require_collocated_layout(data, weight)
+    weight_native = weight.native
+
+  return basis_type, poly_order, uniform_cartesian_grid(data), weight_native

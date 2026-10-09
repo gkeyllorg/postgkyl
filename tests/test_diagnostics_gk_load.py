@@ -513,9 +513,9 @@ class TestThermalSpeedAndLengths:
 
 
 class TestSoundSpeed:
-  """The multi-species sound speeds, dispatched by '--extra kind='.
+  """The multi-species cold-ion and hot-ion sound speeds.
 
-  ``fetch_c_s`` is an ``is_multi_species`` fetch function: it receives one
+  Both are ``is_multi_species`` fetch functions: they receive one
   ``[M0, temp]`` source list per species (as
   ``GkQuantity.fetch_multi``/``load_quantity`` would hand it), not a
   flat list.
@@ -528,88 +528,77 @@ class TestSoundSpeed:
         _field(np.full((2, 1), temp), mass=mass, charge=charge)
     ]
 
-  def test_ion_acoustic_single_ion_species(self):
-    """With one Z=1 ion species the formula collapses to sqrt(Te/mi)."""
+  def _elc_ion(self):
     from scipy import constants
     e = constants.elementary_charge
     m_e, T_e = constants.electron_mass, 9.5e-18
     n_i, T_i, m_i, z_i = 2.7e19, 6.1e-18, 3.343e-27, 1.0
-    n_e = n_i * z_i
+    return (self._species(n_i * z_i, T_e, m_e,
+                          -e), self._species(n_i, T_i, m_i,
+                                             z_i * e), (n_i, T_e, T_i, m_i))
 
-    out = ff.fetch_c_s([
-        self._species(n_e, T_e, m_e, -e),
-        self._species(n_i, T_i, m_i, z_i * e)
-    ],
-                       species=["elc", "ion"],
-                       kind="ion_acoustic")
+  def test_cold_i_single_ion_species(self):
+    """With one Z=1 ion species the formula collapses to sqrt(Te/mi)."""
+    elc, ion, (_n_i, T_e, _T_i, m_i) = self._elc_ion()
+    out = ff.fetch_c_s_cold_i([elc, ion], species=["elc", "ion"])
     np.testing.assert_allclose(out.values[..., 0],
                                np.sqrt(T_e / m_i),
                                rtol=1e-10)
 
-  def test_thermo_defaults_are_gamma_e_1_gamma_i_3(self):
-    from scipy import constants
-    e = constants.elementary_charge
-    m_e, T_e = constants.electron_mass, 9.5e-18
-    n_i, T_i, m_i, z_i = 2.7e19, 6.1e-18, 3.343e-27, 1.0
-    n_e = n_i * z_i
-
-    gdatas = [
-        self._species(n_e, T_e, m_e, -e),
-        self._species(n_i, T_i, m_i, z_i * e)
-    ]
-    default = ff.fetch_c_s(gdatas, species=["elc", "ion"], kind="thermo")
-    explicit = ff.fetch_c_s(gdatas,
-                            species=["elc", "ion"],
-                            kind="thermo",
-                            gamma_e=1.0,
-                            gamma_i=3.0)
+  def test_hot_i_defaults_are_gamma_e_1_gamma_i_3(self):
+    elc, ion, (n_i, T_e, T_i, m_i) = self._elc_ion()
+    default = ff.fetch_c_s_hot_i([elc, ion], species=["elc", "ion"])
+    explicit = ff.fetch_c_s_hot_i([elc, ion],
+                                  species=["elc", "ion"],
+                                  gamma_e=1.0,
+                                  gamma_i=3.0)
     np.testing.assert_allclose(default.values, explicit.values, rtol=1e-12)
 
-    expected = np.sqrt((1.0 * n_e * T_e + 3.0 * n_i * T_i) / (n_i * m_i))
+    expected = np.sqrt((1.0 * n_i * T_e + 3.0 * n_i * T_i) / (n_i * m_i))
     np.testing.assert_allclose(default.values[..., 0], expected, rtol=1e-10)
 
   def test_species_order_does_not_matter(self):
     """Species are identified by charge sign, so the order is irrelevant."""
     elc = self._species(1.0e19, 5.0e-18, 9.1e-31, -1.6e-19)
     ion = self._species(1.0e19, 3.0e-18, 3.3e-27, 1.6e-19)
-    forward = ff.fetch_c_s([elc, ion],
-                           species=["elc", "ion"],
-                           kind="ion_acoustic")
-    shuffled = ff.fetch_c_s([ion, elc],
-                            species=["ion", "elc"],
-                            kind="ion_acoustic")
+    forward = ff.fetch_c_s_cold_i([elc, ion], species=["elc", "ion"])
+    shuffled = ff.fetch_c_s_cold_i([ion, elc], species=["ion", "elc"])
     np.testing.assert_allclose(forward.values, shuffled.values, rtol=1e-12)
 
-  def test_no_electron_species_is_an_error(self):
+  def test_ions_only_use_adiabatic_electrons(self):
+    """Without an electron species, T_e = T_i/ti_over_te and, by
+    quasineutrality, n_e = sum_j(n_j Z_j): with one Z=1 ion the cold-ion
+    speed is sqrt(T_i/(ti_over_te m_i))."""
+    _elc, ion, (_n_i, _T_e, T_i, m_i) = self._elc_ion()
+    out = ff.fetch_c_s_cold_i([ion], species=["ion"], ti_over_te=2.5)
+    np.testing.assert_allclose(out.values[..., 0],
+                               np.sqrt(T_i / 2.5 / m_i),
+                               rtol=1e-10)
+
+  def test_two_electron_species_is_an_error(self):
+    elc = self._species(1.0, 1.0, 1.0, -1.0)
     ion = self._species(1.0, 1.0, 1.0, 1.0)
-    with pytest.raises(ValueError, match="exactly one negatively charged"):
-      ff.fetch_c_s([ion], species=["ion"])
+    with pytest.raises(ValueError, match="at most one negatively charged"):
+      ff.fetch_c_s_hot_i([elc, elc, ion], species=["e1", "e2", "ion"])
 
   def test_no_ion_species_is_an_error(self):
     elc = self._species(1.0, 1.0, 1.0, -1.0)
     with pytest.raises(ValueError, match="no positively charged"):
-      ff.fetch_c_s([elc], species=["elc"])
+      ff.fetch_c_s_hot_i([elc], species=["elc"])
 
-  def test_unknown_kind_is_an_error(self):
-    elc = self._species(1.0, 1.0, 1.0, -1.0)
-    ion = self._species(1.0, 1.0, 1.0, 1.0)
-    with pytest.raises(ValueError, match="unknown kind"):
-      ff.fetch_c_s([elc, ion], species=["elc", "ion"], kind="bogus")
-
-  def test_per_species_extra_arrays_reach_nested_sources(self):
-    """'--extra mass=1,2,charge=-1,1' must give each species its own entry,
-    threaded through even though these sources carry no mass/charge in
-    their own ctx -- the whole point of ``species_idx`` reaching
+  def test_per_species_arrays_reach_nested_sources(self):
+    """``mass=[1, 2], charge=[-1, 1]`` must give each species its own
+    entry, threaded through even though these sources carry no mass/charge
+    in their own ctx -- the whole point of ``species_idx`` reaching
     ``get_src_gdata``/``_split_elc_ions``."""
     bare = lambda dens, temp: [
         _field(np.full((2, 1), dens)),
         _field(np.full((2, 1), temp))
     ]
-    out = ff.fetch_c_s([bare(2.0, 8.0), bare(2.0, 8.0)],
-                       species=["elc", "ion"],
-                       kind="thermo",
-                       mass=[1.0, 2.0],
-                       charge=[-1.0, 1.0])
+    out = ff.fetch_c_s_hot_i([bare(2.0, 8.0), bare(2.0, 8.0)],
+                             species=["elc", "ion"],
+                             mass=[1.0, 2.0],
+                             charge=[-1.0, 1.0])
     # n=2, T=8 for both species; gamma_e=1, gamma_i=3 (defaults).
     expected = np.sqrt((1.0 * 2.0 * 8.0 + 3.0 * 2.0 * 8.0) / (2.0 * 2.0))
     np.testing.assert_allclose(out.values[..., 0], expected, rtol=1e-10)
@@ -681,11 +670,11 @@ class TestDriftVelocities:
     assert np.all(np.isfinite(out.values))
 
   def test_gradB_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_gradB_vel([None, None, None, None])
 
   def test_diamag_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_diamag_vel([None, None, None, None, None])
 
 
@@ -764,7 +753,7 @@ class TestCrossGradDivB:
       ff._b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, 3)
 
   def test_ExB_vel_requires_dir(self):
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="direction="):
       ff.fetch_ExB_vel([None, None, None, None])
 
 
@@ -805,6 +794,18 @@ class TestLoadQuantity:
     with pytest.raises(FileNotFoundError):
       load_quantity("geo_int_bmag", None, GK_NAME, path=DATA)
 
+  @pytest.mark.parametrize("quantity, species, direction, expected", [
+      ("flux_particle", "ion", 1, r"$\Gamma^{y}_{i}$"),
+      ("inv_L_T", "elc", 2, r"$1/L^{z}_{T,e}$ (1/m)"),
+      ("ExB_vel", None, 0, r"$v_{E,x}$ (m/s)"),
+      ("M0", "ion", None, r"$M_{0i}$ (m$^{-3}$)"),
+  ])
+  def test_labels_name_the_direction_and_species(self, quantity, species,
+                                                 direction, expected):
+    label = gk_quant_registry.get(quantity).get_label(species=species,
+                                                      direction=direction)
+    assert label == expected
+
   def test_label_and_tag_override(self, tmp_path, monkeypatch):
     # A species-independent geo quantity needs only its own marker file.
     (tmp_path / "sim-geo_int_bmag.gkyl").touch()
@@ -835,7 +836,8 @@ class _SyntheticSource:
   POLY_ORDER = 1
   BASIS_TYPE = "serendipity"
   NUM_BASIS = 2
-  NUM_PHYS_COMPS = 4
+  # Six components, the widest source (the metrics g_11 ... g_33).
+  NUM_PHYS_COMPS = 6
   NUM_CELLS = 4
 
   def __call__(self, *args, **kwargs):
@@ -877,10 +879,21 @@ def _collect_source_files(quant, path, name, species, frame) -> set:
 
 
 def _extra_for(quant) -> dict:
-  extra = {}
-  if quant.is_vector:
-    extra["direction"] = 0
+  # No quantity assumes a direction; the others ignore it. z is the one
+  # direction the 1x synthetic data carry.
+  extra = {"direction": 2}
+  if quant.name == "collision_freq":
+    extra.update(den_ref=[1e19], temp_ref=[1e-17], bmag_ref=1.0)
   return extra
+
+
+# The synthetic data are 1x: cross-field fluxes, and the diffusivities built
+# on them, need the binormal direction y of a 3x run and must refuse.
+_NEEDS_3X = {
+    "flux_particle_ExB", "flux_energy_ExB", "flux_particle_dB",
+    "flux_energy_dB", "flux_particle", "flux_energy", "particle_D", "heat_chi",
+    "particle_D_gB", "heat_chi_gB"
+}
 
 
 @needs_gkeyll
@@ -912,6 +925,15 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
 
   monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
+  if quantity in _NEEDS_3X:
+    with pytest.raises(ValueError, match="need 3x"):
+      load_quantity(quantity,
+                    species,
+                    name,
+                    str(frame),
+                    path=path,
+                    **_extra_for(quant))
+    return
   out = load_quantity(quantity,
                       species,
                       name,
@@ -1064,8 +1086,8 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
     name = "gktest"
     path = str(tmp_path)
     for species in (_ELC_SPECIES, _ION_SPECIES):
-      for file_name in _collect_source_files(gk_quant_registry.get("c_s"), path,
-                                             name, species, 0):
+      for file_name in _collect_source_files(gk_quant_registry.get("c_s_hot_i"),
+                                             path, name, species, 0):
         open(file_name, "w").close()
       for file_name in _collect_source_files(gk_quant_registry.get("M0"), path,
                                              name, species, 0):
@@ -1073,7 +1095,7 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
     monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
     species = f"{_ELC_SPECIES},{_ION_SPECIES}"
-    out = load_quantity("c_s", species, name, "0", path=path)
+    out = load_quantity("c_s_hot_i", species, name, "0", path=path)
     assert len(out) == 1
 
     out = load_quantity("M0", species, name, "0", path=path)
@@ -1081,7 +1103,7 @@ class TestLoadQuantityMultiSpeciesMultiFrame:
 
   def test_multi_species_quantity_needs_a_species_list(self, tmp_path):
     with pytest.raises(ValueError, match="needs a species list"):
-      load_quantity("c_s", None, "gktest", "0", path=str(tmp_path))
+      load_quantity("c_s_hot_i", None, "gktest", "0", path=str(tmp_path))
 
 
 class TestUtils:

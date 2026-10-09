@@ -405,7 +405,8 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
         in (Execution.MAP_REPLACE, Execution.MAP_APPEND,
             Execution.MAP_OR_TERMINAL_EACH, Execution.TERMINAL_EACH))
     is_variadic_input = parameter.kind is inspect.Parameter.VAR_POSITIONAL and (
-        spec.execution in (Execution.COMBINE, Execution.TERMINAL_ALL))
+        spec.execution
+        in (Execution.COMBINE, Execution.TERMINAL_ALL, Execution.ACTIVATE))
     injected = marker_injected or is_receiver or is_variadic_input
     if injected and parameter.name != "self" and base in (
         Any, inspect.Parameter.empty):
@@ -712,7 +713,10 @@ def value_hint(parameter: ParameterModel) -> str:
 
 
 def _resolve_tag(ctx, parameter: str, tag: str):
-  matches = [dataset for dataset in ctx.obj.datasets if dataset.tag == tag]
+  matches = [
+      dataset for dataset in ctx.obj.datasets + ctx.obj.set_aside
+      if dataset.tag == tag
+  ]
   if not matches:
     raise click.UsageError(f"--{parameter}: no dataset tagged {tag!r}")
   if len(matches) != 1:
@@ -794,7 +798,7 @@ def execute_model(ctx, model: CommandModel, values: dict):
   """Invoke one model through its generic working-set execution adapter."""
   selected = _selected(ctx)
   execution = model.spec.execution
-  needs_input = execution is not Execution.LOAD
+  needs_input = execution not in (Execution.LOAD, Execution.ACTIVATE)
   if needs_input and not selected and not any(p.dataset_ref
                                               for p in model.parameters):
     raise click.UsageError(f"{model.name}: no datasets selected")
@@ -840,6 +844,14 @@ def execute_model(ctx, model: CommandModel, values: dict):
           for result in outputs:
             _present(result)
       return outputs
+
+    if execution is Execution.ACTIVATE:
+      everything = ctx.obj.datasets + ctx.obj.set_aside
+      result, _ = _call(model, everything, values, ctx)
+      active = {id(dataset) for dataset in _datasets_from_result(result)}
+      ctx.obj.datasets = [d for d in everything if id(d) in active]
+      ctx.obj.set_aside = [d for d in everything if id(d) not in active]
+      return result
 
     result, referenced = _call(model, selected, values, ctx)
     if execution is Execution.LOAD:

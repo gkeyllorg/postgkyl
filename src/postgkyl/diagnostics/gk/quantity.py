@@ -35,8 +35,9 @@ class GkQuantity:
     fetch_func: The fetch function for each entry in ``source`` (same
       index), taking the resolved list of source ``GDataState`` and
       returning the quantity's ``GDataState``.
-    label: LaTeX-format label for plotting (``%s`` for species name or
-      direction).
+    label: LaTeX-format label for plotting, with ``%(species)s`` and
+      ``%(dir)s`` placeholders for the species and the direction
+      (:meth:`get_label`).
     is_time_dep: Whether the quantity is time-dependent (written in frames).
     is_species_dep: Whether the quantity is species-dependent.
     is_vector: Whether the quantity is a vector (multiple components,
@@ -134,15 +135,14 @@ class GkQuantity:
   # -------------------------------------------------------------- public
   def get_label(self,
                 species: str | None = None,
-                direction: str | None = None) -> str:
-    """Get the display label, substituting ``%s`` with species or direction."""
-    if self.is_vector:
-      return self.label % str(
-          direction) if direction is not None else self.label % "i"
-    if self.is_species_dep:
-      return self.label % str(
-          species[0]) if species is not None else self.label % "s"
-    return self.label
+                direction: int | None = None) -> str:
+    """Get the display label: ``%(species)s`` becomes the species' initial
+    (``s`` when unknown) and ``%(dir)s`` the direction ``x``, ``y`` or ``z``
+    (``i`` when unknown)."""
+    return self.label % {
+        "species": species[0] if species is not None else "s",
+        "dir": "xyz"[int(direction)] if direction is not None else "i",
+    }
 
   def get_avail_source(self, path: str, name: str, species: str,
                        frame_inp: str | None) -> tuple[int, list]:

@@ -9,10 +9,13 @@ from dataclasses import dataclass, field
 class DataSpace:
   """Datasets flowing through a chained command line.
 
-  ``datasets`` is the working set every generated verb transforms.
+  ``datasets`` is the working set every generated verb transforms;
+  ``set_aside`` holds datasets ``activate`` left out, which options naming a
+  dataset by tag still find.
   """
 
   datasets: list = field(default_factory=list)
+  set_aside: list = field(default_factory=list)
 
   def __iter__(self):
     return iter(self.datasets)

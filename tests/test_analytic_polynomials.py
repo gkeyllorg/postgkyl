@@ -256,8 +256,7 @@ def test_full_average_returns_physical_mean(integrable_case, weighted):
 def test_cli_full_average_prints_genuine_mean():
   process = subprocess.run([
       "pgkyl",
-      str(GEN / "polynomial_2d_ms_p1.gkyl"), "average", "--dims", "0", "--dims",
-      "1"
+      str(GEN / "polynomial_2d_ms_p1.gkyl"), "average", "--dims", "0,1"
   ],
                            capture_output=True,
                            text=True,

@@ -614,6 +614,53 @@ def test_combine_preserves_returned_dataset_order():
   assert space.datasets == [second, first]
 
 
+def _keep_by_tag():
+
+  @command(CommandSpec(Section.UTILITY, Execution.ACTIVATE))
+  def keep(*datasets: object, tags: list[str] | None = None):
+    """Keep tagged datasets.
+
+    Args:
+      datasets: Every loaded dataset.
+      tags: Tags to keep.
+    """
+    return [dataset for dataset in datasets if not tags or dataset.tag in tags]
+
+  return keep
+
+
+def test_activate_sets_datasets_aside_and_brings_them_back():
+  keep = _keep_by_tag()
+  data, weight = _Dataset("data"), _Dataset("weight")
+  _, space = _invoke_pipeline(keep, [data, weight], ["--tags", "data"])
+  assert space.datasets == [data] and space.set_aside == [weight]
+  result = CliRunner().invoke(build_click_command(compile_callable(keep)), [],
+                              obj=space)
+  assert result.exit_code == 0, result.output
+  assert space.datasets == [data, weight] and space.set_aside == []
+
+
+def test_set_aside_datasets_are_skipped_but_found_by_tag():
+
+  @command(CommandSpec(Section.VERBS, Execution.MAP_REPLACE))
+  def weigh(data: object, *, weight: Annotated[object, DatasetRef()] = None):
+    """Mark a dataset with its weight's tag.
+
+    Args:
+      data: Current dataset.
+      weight: Tagged weight.
+    """
+    return _Dataset(f"{data.tag}*{weight.tag}")
+
+  space = DataSpace([_Dataset("data")], set_aside=[_Dataset("weight")])
+  result = CliRunner().invoke(build_click_command(compile_callable(weigh)),
+                              ["--weight", "weight"],
+                              obj=space)
+  assert result.exit_code == 0, result.output
+  assert [dataset.tag for dataset in space.datasets] == ["data*weight"]
+  assert [dataset.tag for dataset in space.set_aside] == ["weight"]
+
+
 def test_dataset_reference_resolves_uniquely_and_limits_consumption():
 
   @command(CommandSpec(Section.VERBS, Execution.COMBINE, consumes_inputs=True))
