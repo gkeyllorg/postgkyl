@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-import re
+import runpy
 import shlex
-import textwrap
 
 import click
 from click.testing import CliRunner
@@ -23,7 +22,7 @@ from postgkyl.cli.session import render_stub
 ROOT = Path(__file__).parents[1]
 DATA = ROOT / "tests" / "test_data" / "generated"
 DISTF = DATA / "distf_p2_0.gkyl"
-TUTORIAL = ROOT / "docs" / "source" / "cli-tutorial.rst"
+EXAMPLE = ROOT / "examples" / "scripts" / "13_postgkyl_session.py"
 STUB = ROOT / "src" / "postgkyl" / "cli" / "session.pyi"
 
 
@@ -65,7 +64,7 @@ def test_a_failed_call_is_neither_recorded_nor_applied():
   s.load(DISTF)
   before = s.datasets
   with pytest.raises(click.UsageError, match="no dataset tagged 'missing'"):
-    s.average([0], weight="missing")
+    s.average(0, weight="missing")
   with pytest.raises(TypeError, match="no command-line spelling"):
     s.select(z0=slice(1, 2))
   assert s.command() == f"pgkyl {DISTF}"
@@ -150,30 +149,20 @@ def test_repr_shows_the_command_line():
   assert repr(s) == f"PostgkylSession('pgkyl {DISTF}')"
 
 
-def _code_blocks(text: str, language: str) -> list[str]:
-  """The bodies of the ``.. code-block:: language`` directives in ``text``."""
-  return [
-      textwrap.dedent(body).strip() + "\n" for body in re.findall(
-          rf"\.\. code-block:: {language}\n\n((?:   .*\n|\n)+)", text)
-  ]
-
-
-_SECTION = TUTORIAL.read_text().split("Building a command line from Python")[1]
-
-
-@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
-@pytest.mark.parametrize("script", _code_blocks(_SECTION, "python"))
-def test_the_tutorial_examples_print_a_command_drawing_the_same_figure(
-    script, tmp_path, monkeypatch, capsys):
-  (command, ) = _code_blocks(_SECTION, "bash")
-  (tmp_path / "tests").mkdir()
-  (tmp_path / "tests" / "test_data").symlink_to(ROOT / "tests" / "test_data")
-  monkeypatch.chdir(tmp_path)
+def test_the_example_prints_a_command_drawing_the_same_figure(
+    tmp_path, monkeypatch, capsys):
+  monkeypatch.setenv("PGKYL_EXAMPLE_OUTPUT", str(tmp_path))
+  monkeypatch.syspath_prepend(str(EXAMPLE.parent))
   try:
-    exec(script, {})
-    assert capsys.readouterr().out == command
-    session_figure = mpimg.imread("density.png")
+    runpy.run_path(str(EXAMPLE), run_name="__main__")
+    (command, ) = [
+        line for line in capsys.readouterr().out.splitlines()
+        if line.startswith("pgkyl ")
+    ]
+    figure = tmp_path / "13_postgkyl_session.png"
+    session_figure = mpimg.imread(figure)
+    figure.unlink()
     _pgkyl(command)
-    np.testing.assert_array_equal(mpimg.imread("density.png"), session_figure)
+    np.testing.assert_array_equal(mpimg.imread(figure), session_figure)
   finally:
     plt.close("all")

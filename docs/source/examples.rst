@@ -25,6 +25,7 @@ resolve correctly.
    pyvista
    manual-arrays
    multiblock
+   postgkyl-session
 
 For help adapting the commands and comparing their results:
 

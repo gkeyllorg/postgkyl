@@ -136,8 +136,8 @@ def test_floats_keep_their_decimal_point():
     ("plot", dict(dpi=np.array([1, 2])), "ndarray has no integer spelling"),
     ("plot", dict(dpi=True), "a boolean has no scalar spelling"),
     ("plot", dict(no_show=1), "expected a bool"),
-    ("average", dict(dims=1), "expected a list or tuple"),
-    ("average", dict(dims="1"), "expected a list or tuple"),
+    ("activate", dict(tags=1), "expected a list or tuple"),
+    ("activate", dict(tags="default"), "expected a list or tuple"),
     ("plot", dict(figsize=(1.0, )), "expected 2 values"),
 ])
 def test_values_without_a_spelling_are_refused(name, values, reason):
@@ -148,8 +148,8 @@ def test_values_without_a_spelling_are_refused(name, values, reason):
 def test_a_dataset_reference_must_be_a_tag():
   data = pg.GData(tag="w")
   with pytest.raises(TypeError, match="referred to by its tag"):
-    command_tokens(_MODELS["average"], {"dims": [0], "weight": data})
+    command_tokens(_MODELS["average"], {"dims": 0, "weight": data})
   assert command_tokens(_MODELS["average"], {
-      "dims": [0],
+      "dims": 0,
       "weight": "w"
   }) == ["--dims", "0", "--weight", "w"]

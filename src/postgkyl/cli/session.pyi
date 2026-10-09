@@ -29,6 +29,29 @@ class PostgkylSession:
         r"""Print :meth:`command`.
         """
 
+    def activate(self, *, tags: list[str] | tuple[str, ...] | None = None) -> PostgkylSession:
+        r"""Keep the datasets carrying one of ``tags``.
+
+        On the command line the kept datasets become the working set and the
+        others are set aside: later commands skip them, while an option naming a
+        dataset by tag (such as ``average --weight``) still finds them. A bare
+        ``activate`` makes every loaded dataset active again::
+
+            pgkyl jacobian.gkyl --tag weight field.gkyl activate --tags default \
+                average --dims 1 --weight weight plot
+
+        Accepts ``activate(a, b)`` or ``activate([a, b])`` (flattened via
+        ``gdatastate.flatten_datasets``). No dataset is copied or mutated.
+
+        Args:
+          *datasets: The datasets to choose from, or lists/groups thereof.
+          tags: Tags to keep (repeat ``--tags`` at the CLI); every dataset when
+            omitted or empty.
+
+        Returns:
+          The datasets carrying one of ``tags``, in their given order.
+        """
+
     def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
         r"""Animate a sequence of frames, one frame per dataset (or dataset group).
 
@@ -131,13 +154,14 @@ class PostgkylSession:
           RuntimeError: saving to a video container without ffmpeg on ``PATH``.
         """
 
-    def average(self, dims: list[int] | tuple[int, ...], *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def average(self, dims: str | float, *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``int f w dx^dims / int w dx^dims`` over the directions in ``dims``.
 
         Args:
           data: gkyl-backed (native modal) dataset in the modal value_form.
-          dims: iterable of 0-based direction indices to average over (repeat
-            ``--dims`` at the CLI, e.g. ``--dims 0 --dims 1``).
+          dims: 0-based direction(s) to average over: an integer, an iterable of
+            integers, a comma-separated string (``"0,1"``), or a colon slice
+            string (``"0:2"``); ``--dims 0,1`` at the CLI.
           weight: optional gkyl-backed dataset in the modal value_form, same
             ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
             field (``gkyl_array_average`` takes no field-index argument) -- the
@@ -155,7 +179,8 @@ class PostgkylSession:
         Raises:
           ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
             missing basis metadata, or ``weight``'s grid/basis doesn't match
-            ``data``'s, or dataset-only options are used for a full average.
+            ``data``'s, ``dims`` is empty, repeated, or out of range, or
+            dataset-only options are used for a full average.
         """
 
     def collect(self, *, sumdata: bool = False, period: float | None = None, offset: float = 0.0, chunk: int | None = None, tag: str | None = None, label: str | None = None) -> PostgkylSession:
@@ -434,6 +459,38 @@ class PostgkylSession:
             ``window=True`` and the data is not 1D.
         """
 
+    def fluctuation(self, dims: str | float, *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""``f - <f>_dims``: the field minus its average over the directions in
+        ``dims``, where ``<f>_dims = int f w dx^dims / int w dx^dims``.
+
+        Unlike ``average``, the result keeps every dimension of ``data``: the
+        lower-dimensional average is lifted back onto ``data``'s basis, constant
+        along ``dims``, and subtracted. Averaging the result over the same
+        ``dims`` with the same ``weight`` gives zero.
+
+        Args:
+          data: gkyl-backed (native modal) dataset in the modal value_form.
+          dims: 0-based direction(s) to average over, in ``average``'s grammar:
+            an integer, an iterable of integers, ``"0,1"``, or ``"0:2"``;
+            ``--dims 0,1`` at the CLI.
+          weight: optional gkyl-backed dataset in the modal value_form, same
+            ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
+            field (``gkyl_array_average`` takes no field-index argument) -- the
+            plain average (dividing by volume) is subtracted when omitted.
+          inplace: Mutate and return ``data`` instead of a new dataset.
+          tag: Optional tag for the returned dataset.
+          label: Optional label for the returned dataset.
+
+        Returns:
+          A native modal dataset on ``data``'s grid, cells, and basis holding the
+          fluctuation of every field.
+
+        Raises:
+          ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
+            missing basis metadata, ``weight``'s grid/basis doesn't match
+            ``data``'s, or ``dims`` is empty, repeated, or out of range.
+        """
+
     def gk_energy_balance(self, name: str, species: list[str] | tuple[str, ...], *, path: str = './', relative_error: bool = False, multib: str = '-10', field_dot_file: str | None = None, apar_dot_file: str | None = None, fdot_file: str | None = None, source_file: str | None = None, bflux_files: Mapping[str, str] | None = None, f_file: str | None = None, field_file: str | None = None, apar_file: str | None = None, dt_file: str | None = None, logy: bool = False, absy: bool = False, xlabel: str = 'Time (s)', ylabel: str | None = None, title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
 
@@ -521,7 +578,7 @@ class PostgkylSession:
           group holding one distribution function per requested frame.
         """
 
-    def gk_load_quantity(self, quantity: Literal['ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'beta', 'c_s', 'debye_length', 'diamag_vel', 'distf', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'larmor_radius', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, kind: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+    def gk_load_quantity(self, quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag', 'E_field_contra', 'E_field_cov', 'E_field_mag', 'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta', 'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf', 'field', 'flux_energy', 'flux_energy_ExB', 'flux_energy_dB', 'flux_particle', 'flux_particle_ExB', 'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'heat_chi', 'heat_chi_gB', 'inv_L_T', 'inv_L_n', 'larmor_radius', 'mach_cold_i', 'mach_hot_i', 'particle_D', 'particle_D_gB', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, ti_over_te: float | None = None, te_ref: float | None = None, bmag_ref: float | None = None, den_ref: list[float] | tuple[float, ...] | None = None, temp_ref: list[float] | tuple[float, ...] | None = None, nu_frac: float | None = None, conv: float | None = None, fluct: Literal['none', 'y', 'yz'] | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Load and compute a pre-named gyrokinetic quantity.
 
         Modal source files retain their DG representation through the calculation:
@@ -539,12 +596,32 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Vector direction for quantities that expose components.
+          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
+            component of a vector, or the direction of a gradient length, flux, or
+            diffusivity. Required by those quantities, which assume no direction.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
           gamma_i: Ion adiabatic index for sound-speed quantities.
-          kind: Named variant accepted by a quantity provider.
+          ti_over_te: Ion-to-electron temperature ratio of adiabatic electrons,
+            used by multi-species quantities when no electron species is listed
+            (default 1).
+          te_ref: Constant electron temperature (J) replacing the electron
+            temperature profile in gyro-Bohm normalizations.
+          bmag_ref: Reference magnetic field (T): enters the collision frequency's
+            Coulomb logarithm, and replaces the field profile in gyro-Bohm
+            normalizations.
+          den_ref: Reference density (m^-3) of the collision frequency's Coulomb
+            logarithm; one value, or one per species.
+          temp_ref: Reference temperature (J) of the collision frequency's Coulomb
+            logarithm; one value, or one per species.
+          nu_frac: Collision frequency multiplier used by the simulation
+            (default 1).
+          conv: Coefficient ``c`` of the convective energy flux ``c*T*Gamma``
+            removed from the energy flux to form the heat flux (default 3/2).
+          fluct: For cross-field fluxes, keep only the turbulent part: the
+            correlation of the fluctuations about the Jacobian-weighted ``y`` or
+            ``(y, z)`` average; ``none`` (default) keeps the total flux.
           read_options: Additional provider options as repeated key/value entries.
 
         Returns:

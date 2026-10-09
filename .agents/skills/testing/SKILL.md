@@ -71,4 +71,10 @@ a subprocess with a timeout, assert successful exit, and still check its
 analytic result. A crash must fail the test without terminating the suite.
 
 Examples are real-world workflows that read data and make plots for the
-documentation; they supplement focused numerical tests.
+documentation; they supplement focused numerical tests. Show how to use a
+feature with a runnable script in `examples/scripts/`, not with code that
+exists only in a docs page: `tests/test_examples.py` runs every script, and
+the feature's page in `docs/source/` includes it. Scripts read generated test
+data from `tests/test_data/generated/` rather than new committed files, assert
+what they demonstrate, and pair each figure with its `pgkyl` command in
+`examples/figure_commands.json`.

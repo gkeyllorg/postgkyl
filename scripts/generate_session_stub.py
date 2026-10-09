@@ -1,8 +1,8 @@
 """Regenerate src/postgkyl/cli/session.pyi from the CLI command models.
 
 IDEs and type checkers cannot see PostgkylSession's runtime methods, so this
-stub declares them. Rerun after changing a public command; a test fails
-while the stub is out of date.
+stub declares them. The ``session-stub`` pre-commit hook reruns this when
+``src/postgkyl`` changes; a test fails while the stub is out of date.
 """
 
 import argparse
