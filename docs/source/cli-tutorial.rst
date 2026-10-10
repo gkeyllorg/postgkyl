@@ -21,7 +21,8 @@ default, or the directory specified by ``PGKYL_EXAMPLE_OUTPUT``.
 Use :doc:`reference/cli` to inspect every command and
 :doc:`reference/api` for the corresponding Python calls. The example bundle
 also contains the longer, executable CLI walkthrough in
-``examples/cli_tutorial.md``.
+``examples/cli_tutorial.md``. To build a command line from Python, see
+:doc:`postgkyl-session`.
 
 List-valued options
 -------------------

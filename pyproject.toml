@@ -87,6 +87,7 @@ where = ["src/"]
 
 [tool.setuptools.package-data]
 "postgkyl" = ["py.typed"]
+"postgkyl.cli" = ["*.pyi"]
 "postgkyl.render" = ["*.mplstyle", "*.js"]
 "postgkyl.gpython" = ["csrc/*.c"]
 

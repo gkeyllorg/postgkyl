@@ -57,6 +57,10 @@ jobs:
       - name: Install quality tools
         run: python -m pip install pre-commit==4.3.0 ruff==0.12.11
       - name: Validate hooks and check formatting
+        env:
+          # session-stub imports postgkyl, which this job does not install;
+          # tests/test_cli_session.py checks the stub in the test jobs.
+          SKIP: session-stub
         run: |
           pre-commit validate-config
           pre-commit run --all-files --show-diff-on-failure

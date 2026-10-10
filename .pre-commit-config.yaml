@@ -1,6 +1,18 @@
 minimum_pre_commit_version: "4.3.0"
 
 repos:
+  # Generated before the checks below so they also see the regenerated stub.
+  # It imports postgkyl, so run pre-commit from the environment with the
+  # editable install.
+  - repo: local
+    hooks:
+      - id: session-stub
+        name: regenerate PostgkylSession stub
+        entry: python scripts/generate_session_stub.py
+        language: system
+        pass_filenames: false
+        files: ^(src/postgkyl/.*\.pyi?|scripts/generate_session_stub\.py)$
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
