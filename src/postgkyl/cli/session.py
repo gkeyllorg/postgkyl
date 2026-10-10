@@ -112,7 +112,15 @@ def _doc(model: CommandModel) -> str:
 class PostgkylSession:
   """A ``pgkyl`` pipeline built from Python that records its command line."""
 
-  def __init__(self) -> None:
+  def __init__(self, *, no_show: bool = False) -> None:
+    """Start an empty session.
+
+    Args:
+      no_show: Run every command that can open a window with ``no_show``,
+        without recording it, so a GUI or a test shows nothing while the
+        command line still opens its windows.
+    """
+    self._no_show = no_show
     self._context = click.Context(cli, info_name="pgkyl")
     # The group's own callback creates the working set, as on the CLI.
     self._context.invoke(cli.callback)
@@ -169,7 +177,14 @@ class PostgkylSession:
     """
     args = self._spelling(model, command_tokens(model, values))
     _check_round_trip([*self._steps, args])
-    command, context = _parse(self._context, args)
+    executed = args
+    if self._no_show and any(parameter.name == "no_show"
+                             for parameter in model.parameters):
+      executed = self._spelling(
+          model, command_tokens(model, {
+              **values, "no_show": True
+          }))
+    command, context = _parse(self._context, executed)
     assert not context.args, context.args  # command_tokens spells one command
     result = command.invoke(context)
     # Recorded only once it has run, so a failed call leaves no trace.

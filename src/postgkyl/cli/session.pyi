@@ -8,8 +8,14 @@ class PostgkylSession:
     r"""A ``pgkyl`` pipeline built from Python that records its command line.
     """
 
-    def __init__(self) -> None:
-        ...
+    def __init__(self, *, no_show: bool = False) -> None:
+        r"""Start an empty session.
+
+        Args:
+          no_show: Run every command that can open a window with ``no_show``,
+            without recording it, so a GUI or a test shows nothing while the
+            command line still opens its windows.
+        """
 
     @property
     def datasets(self) -> tuple:
@@ -52,7 +58,7 @@ class PostgkylSession:
           The datasets carrying one of ``tags``, in their given order.
         """
 
-    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
+    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, contourf: bool = False, clevels: str | None = None, cnlevels: int | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, cmap: str | None = None, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, stamp_title: bool = False, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
         r"""Animate a sequence of frames, one frame per dataset (or dataset group).
 
         Each panel uses its own value range across all frames. Datasets overlaid
@@ -70,7 +76,9 @@ class PostgkylSession:
           num_subplot_col: Number of subplot columns.
           transpose: Transpose the display axes.
           contour: Draw contours.
+          contourf: Draw filled contours.
           clevels: Contour count or start:end:count levels.
+          cnlevels: Number of contour levels, overriding a count in ``clevels``.
           quiver: Draw vector arrows.
           streamline: Draw streamlines.
           sdensity: Streamline density.
@@ -83,6 +91,7 @@ class PostgkylSession:
           color: Line or vector color.
           style: Matplotlib style name or file.
           diverging: Use a diverging colormap.
+          cmap: Matplotlib colormap name, overriding the default.
           arg: Matplotlib format string, for example ``*--``.
           fixaspect: Use equal scaling on the display axes.
           logx: Use logarithmic x scaling.
@@ -110,6 +119,10 @@ class PostgkylSession:
           ylabel: Override the y label.
           clabel: Override the c label.
           title: Title shown on every frame.
+          stamp_title: Follow an explicit ``title`` with the frame's number and
+            time, which otherwise only replace a missing title.
+          subplot_xlabels: Per-subplot horizontal labels, comma separated.
+          subplot_ylabels: Per-subplot vertical labels, comma separated.
           edgecolors: Mesh cell edge color.
           no_showgrid: Suppress grid lines.
           hashtag: Display the Postgkyl hashtag.
@@ -154,7 +167,7 @@ class PostgkylSession:
           RuntimeError: saving to a video container without ffmpeg on ``PATH``.
         """
 
-    def average(self, dims: str | float, *, weight: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def average(self, dims: str | float, *, weight: str | None = None, as_dataset: bool = False, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""``int f w dx^dims / int w dx^dims`` over the directions in ``dims``.
 
         Args:
@@ -166,15 +179,19 @@ class PostgkylSession:
             ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
             field (``gkyl_array_average`` takes no field-index argument) -- the
             plain average (dividing by volume) is computed when omitted.
-          inplace: Mutate and return ``data`` for partial averaging only.
-          tag: Optional tag for a partial-average dataset.
-          label: Optional label for a partial-average dataset.
+          as_dataset: When every direction is averaged out, return the means as a
+            one-cell dataset of point values that keeps ``data``'s time and frame,
+            so ``collect`` stacks frames into a time trace.
+          inplace: Mutate and return ``data`` when the result is a dataset.
+          tag: Optional tag for a dataset result.
+          label: Optional label for a dataset result.
 
         Returns:
           A float (one field) or NumPy array (multiple fields) containing the
-          physical mean when every direction is averaged out. Otherwise a native
-          modal dataset over the surviving dimensions. Dataset-only options
-          ``inplace``, ``tag``, and ``label`` apply only to partial averaging.
+          physical mean when every direction is averaged out, or that mean as a
+          one-cell dataset with ``as_dataset``. Otherwise a native modal dataset
+          over the surviving dimensions. Dataset-only options ``inplace``,
+          ``tag``, and ``label`` apply only when the result is a dataset.
 
         Raises:
           ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
@@ -554,7 +571,8 @@ class PostgkylSession:
           name: Simulation name prefix.
           species: Species name.
           frame: Frame index, comma-separated indices, or a
-            ``start:stop[:step]`` range; ``:`` selects every available frame.
+            ``start:stop[:step]`` range; ``:`` selects every available frame, and
+            negative values count back from the last one (``-10:`` the last ten).
           tag: Tag for the resulting dataset.
           suffix: Use ``<name>-<species>_<suffix>_<frame>.gkyl`` as the input.
           use_c2p_vel: Convert velocity-space computational coordinates to
@@ -591,7 +609,8 @@ class PostgkylSession:
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
           frame: Frame number, comma-separated list, or ``'start:stop[:step]'``
-            range; ``':'``/``None`` selects all available frames.
+            range; ``':'``/``None`` selects all available frames, and negative
+            values count back from the last one (``'-10:'`` the last ten).
           path: Directory containing the simulation files.
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
@@ -828,7 +847,7 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-    def load(self, file_name: str, *, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+    def load(self, file_name: str, *, frame: str | float | None = None, tag: str = 'default', label: str = '', ctx: Mapping[str, str] | None = None, value_form: Literal['modal', 'nodal', 'quad'] | None = None, basis_type: str | None = None, poly_order: int | None = None, z0: str | None = None, z1: str | None = None, z2: str | None = None, z3: str | None = None, z4: str | None = None, z5: str | None = None, component: str | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -842,6 +861,10 @@ class PostgkylSession:
 
         A pattern always returns a group, even if it matches only one file. A
         literal filename retains the original single-``GData`` return type.
+        ``frame`` keeps the matching files of some frames only, read from their
+        names; restart files are left out::
+
+            pg.load('elc_M0_*.gkyl', frame='-10:')   # the last ten frames
 
         ``basis_type``, ``poly_order``, and ``value_form`` are properties of the
         data itself, fixed here at load time (from the file's header metadata, or
@@ -868,6 +891,9 @@ class PostgkylSession:
 
         Args:
           file_name: Literal filename or shell-style glob pattern to load.
+          frame: With a pattern, the frames to load: a frame number, a
+            comma-separated list, or a ``'start:stop[:step]'`` range; a negative
+            number counts back from the last frame (``'-10:'`` the last ten).
           tag: Tag assigned to every loaded dataset.
           label: Optional display label assigned to every loaded dataset; defaults
             to each source filename without its directory.
@@ -1005,6 +1031,9 @@ class PostgkylSession:
 
         Returns:
           The caller's concrete data class with NumPy point values and a 2-D grid.
+          ``ctx["logical_grid"]`` holds the computational coordinates of that
+          grid's axes, radial ``x`` then poloidal ``z``, so ``select`` can slice
+          at a constant minor radius or poloidal angle.
           Projection geometry and sampling options cannot accompany a reusable
           projection; set them when building that projection instead.
         """
@@ -2300,7 +2329,7 @@ class PostgkylSession:
           :class:`~postgkyl.gdata.gdata.GData`.
         """
 
-    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> PostgkylSession:
+    def plot(self, *, multiblock: bool = False, args: list[str] | tuple[str, ...] | None = None, figure: int | None = None, squeeze: bool = False, transpose: bool = False, grid_indices: bool = False, num_axes: int | None = None, start_axes: int = 0, overlay_axes: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, scatter: bool = False, quiver: bool = False, contour: bool = False, contourf: bool = False, clevels: str | None = None, cnlevels: int | None = None, cont_label: bool = False, surface: bool = False, comparison: bool = False, alpha: float | None = None, diverging: bool = False, lineouts: int | None = None, xmin: float | None = None, xmax: float | None = None, xscale: float = 1.0, xshift: float = 0.0, ymin: float | None = None, ymax: float | None = None, yscale: float = 1.0, yshift: float = 0.0, zmin: float | None = None, zmax: float | None = None, zscale: float = 1.0, zshift: float = 0.0, relax: bool = False, style: str | None = None, rcParams: Mapping[str, str] | None = None, no_legend: bool = False, legend_labels: list[str] | tuple[str, ...] | None = None, legend_subplot: int | None = None, legend_loc: str | float = 'best', forcelegend: bool = False, no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, subplot_titles: str | None = None, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, split_linear_log: bool = False, split_point: float = 0.0, split_log_side: str = 'right', split_width_ratios: tuple[float, float] = (1.0, 1.0), split_gap: float = 0.0, split_linear_ylim: tuple[float, float] | None = None, split_log_ylim: tuple[float, float] | None = None, no_split_right_ticks: bool = False, split_legend_side: str = 'log', split_log_base: float = 10.0, split_log_nonpositive: str = 'clip', split_seam_ticklabels: str = 'left', fixaspect: bool = False, aspect: float | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, figsize: tuple[float, float] | None = None, jet: bool = False, cmap: str | None = None, cval: float | None = None, cval_min: float | None = None, cval_max: float | None = None, save: bool = False, saveas: str | os.PathLike[str] | None = None, dpi: int = 200, no_show: bool = False, clear: bool = False) -> PostgkylSession:
         r"""Plot one or more datasets onto a shared figure and return it.
 
         Accepts ``plot(a)`` or ``plot(a, b, multiblock=True)``. The first dataset sets
@@ -2351,6 +2380,10 @@ class PostgkylSession:
         mapping ``cval`` onto the colormap; ``cval_min``/``cval_max`` set the
         normalization range (typically the min/max of the ``cval`` values across
         all curves), so several curves drawn into the same axes share one scale.
+        Without ``cval`` or ``color``, several 1-D datasets drawn with ``cmap``
+        are colored by their time (by their order when times do not tell them
+        apart), shifted and scaled by ``zshift``/``zscale`` like any colour value,
+        on one colorbar labelled ``time`` unless ``clabel`` is given.
         ``color`` accepts either one Matplotlib color, applied to every line, or a
         sequence containing one color per dataset (reused for all its components).
         A sequence with one color per individual line is also accepted, in
@@ -2404,9 +2437,13 @@ class PostgkylSession:
           arrowstyle: Streamline arrow style.
           scatter: Draw markers without connecting lines.
           quiver: Draw two-component fields as arrows.
-          contour: Draw two-dimensional values as contours.
-          clevels: Explicit contour-level specification.
-          cnlevels: Number of contour levels.
+          contour: Draw two-dimensional values as contour lines.
+          contourf: Draw two-dimensional values as filled contours.
+          clevels: Explicit contour levels, ``'a,b,c'`` or ``'start:stop:num'``,
+            used unless ``cnlevels`` is given.
+          cnlevels: Number of contour levels. With ``zmin``/``zmax`` or
+            ``diverging``, that many evenly spaced levels span the colour range
+            (11 by default); otherwise Matplotlib picks about that many.
           cont_label: Label contour lines.
           surface: Draw two-dimensional values as a three-dimensional surface.
           comparison: Distinguish overlaid two-dimensional datasets.
@@ -2440,7 +2477,8 @@ class PostgkylSession:
           no_colorbar: Suppress color bars for field plots.
           xlabel: Horizontal-axis label override.
           ylabel: Vertical-axis label override.
-          clabel: Color-bar label override.
+          clabel: Color-bar label, shown as given; only the default label
+            records a ``zscale`` other than 1.
           title: Figure-title override.
           subplot_titles: Per-subplot title specification.
           subplot_xlabels: Per-subplot horizontal-label specification.
@@ -2491,7 +2529,7 @@ class PostgkylSession:
             figure does not have enough axes for the panel count.
         """
 
-    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, style: str | None = None, rcParams: Mapping[str, str] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, xkcd: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> PostgkylSession:
+    def plotly(self, *, squeeze: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, scatter: bool = False, marker_radius: float = 4.0, markerstyle: str = 'circle', diverging: bool = False, xscale: float = 1.0, xshift: float = 0.0, yscale: float = 1.0, yshift: float = 0.0, zscale: float = 1.0, zshift: float = 0.0, cmin: float | None = None, cmax: float | None = None, cscale: float = 1.0, cshift: float = 0.0, clim: tuple[float, float] | None = None, background: str = 'dark', invert_cmap: bool = False, no_legend: bool = False, label_prefix: str = '', no_colorbar: bool = False, xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str | None = None, title: str | None = None, logx: bool = False, logy: bool = False, logz: bool = False, logc: bool = False, aspect: str | float | None = None, no_showgrid: bool = False, hashtag: bool = False, color: str | None = None, opacity: float = 1.0, scatter_opacity_range: tuple[float, float] | None = None, scatter_opacity_log: bool = False, maximum_points_per_axis: int = 0, surface_count: int = 32, clevels: str | None = None, xrange: tuple[float, float] | None = None, yrange: tuple[float, float] | None = None, zrange: tuple[float, float] | None = None, figsize: tuple[int, int] | None = None, cylindrical_to_cartesian: bool = False, cmap: str | None = None, save: bool = False, saveas: str | None = None, show: bool = False, azimuthal_angle: float = 0.0, polar_angle: float = 85.0, rotation_period: float = 40.0, fps: int = 1) -> PostgkylSession:
         r"""Render 2-D surface or 3-D volumetric data with Plotly.
 
         2-D data (``num_dims == 2``, after squeezing any size-1 axis) is drawn as
@@ -2532,8 +2570,6 @@ class PostgkylSession:
           cscale: Color-value scale factor.
           cshift: Color-value shift.
           clim: Explicit ``(minimum, maximum)`` color range.
-          style: Postgkyl/Matplotlib style used to derive colors.
-          rcParams: Matplotlib configuration overrides used while deriving styles.
           background: ``"dark"`` or ``"light"`` scene theme.
           invert_cmap: Reverse the selected colormap.
           no_legend: Suppress labeled traces in the legend.
@@ -2551,7 +2587,6 @@ class PostgkylSession:
           aspect: Scene aspect mode (``auto``, ``cube``, ``data``), or numeric ratio.
           no_showgrid: Suppress scene grid lines.
           hashtag: Add a ``#pgkyl`` annotation.
-          xkcd: Derive colors from Matplotlib's XKCD style.
           color: Replace the colormap with one fixed trace color.
           opacity: Surface, volume, or marker opacity.
           scatter_opacity_range: Minimum and maximum opacity encoded in scatter colors.
@@ -2788,6 +2823,15 @@ class PostgkylSession:
         rotation), the coordinate/slice selector has no single answer and raises
         -- pick an integer index for that sibling axis first (in the same call,
         or an earlier one in the chain).
+
+        A mapped block may also carry ``ctx["logical_grid"]``: one 1-D array per
+        axis giving the computational coordinate of that axis's points (an R-Z
+        map from ``map_to_rz`` records radial ``x`` and poloidal ``z``). Coordinate
+        values and slice strings then select on it -- at a constant minor radius
+        or poloidal angle -- with no cross-section search. Once every axis of
+        such a block but one is narrowed to a single cell, the result is a
+        profile along that one axis: the block's grid becomes its logical
+        coordinates, an ordinary separable grid.
 
         Args:
           data: Dataset whose cells or point values are selected.

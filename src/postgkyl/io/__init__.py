@@ -11,7 +11,8 @@ import os.path
 from copy import deepcopy
 
 from . import geometry, mapping
-from .naming import OutputName, parse_output_name
+from .naming import (OutputName, parse_output_name, select_frame_files,
+                     select_frames)
 from .gkyl_c_reader import GkylCReader
 from .gkyl_reader import GkylReader
 from .gkyl_h5_reader import GkylH5Reader
@@ -69,6 +70,6 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
 
 __all__ = [
     "read", "save", "geometry", "mapping", "naming", "OutputName",
-    "parse_output_name", "GkylCReader", "GkylReader", "GkylH5Reader",
-    "FlashH5Reader"
+    "parse_output_name", "select_frames", "select_frame_files", "GkylCReader",
+    "GkylReader", "GkylH5Reader", "FlashH5Reader"
 ]

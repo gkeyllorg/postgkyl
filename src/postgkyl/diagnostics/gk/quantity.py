@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Callable, TYPE_CHECKING
 
 from postgkyl.gdata import GData
+from postgkyl.io.naming import select_frames
 
 from .. import discovery
 
@@ -153,9 +154,9 @@ class GkQuantity:
       path: Directory containing the simulation files.
       name: Simulation name prefix.
       species: Species name.
-      frame_inp: A single frame, a comma-separated list, or a
-        ``'start:stop[:step]'`` range (``None``/``':'`` means every
-        available frame).
+      frame_inp: A frame specification
+        (:func:`postgkyl.io.naming.select_frames`); ``None``/``':'`` means
+        every available frame.
 
     Returns:
       ``(combo_idx, frames)``.
@@ -163,13 +164,12 @@ class GkQuantity:
     Raises:
       FileNotFoundError: if no source combination's files are found.
     """
-    frame_list: list[int] = []
-    if frame_inp is not None:
-      frame_inp = frame_inp.strip()
-      if "," in frame_inp:
-        frame_list = [int(f.strip()) for f in frame_inp.split(",")]
-      elif ":" not in frame_inp:
-        frame_list = [int(frame_inp)]
+    spec = frame_inp if frame_inp is not None else ":"
+    try:
+      # Frames given outright choose the source combination that has them.
+      frame_list = select_frames(spec, [])
+    except ValueError:  # counted back from the last frame: needs them all
+      frame_list = []
 
     combo_idx, frames_avail = self._avail_combo_frames(path, name, species,
                                                        frame_list)
@@ -182,18 +182,7 @@ class GkQuantity:
     if frames_avail == {-1}:
       return combo_idx, [None]
 
-    if len(frame_list) == 0:
-      frames_avail_sorted = sorted(frames_avail)
-      parts = frame_inp.split(":") if frame_inp else [""]
-      lower = int(parts[0]) if parts[0] else frames_avail_sorted[0]
-      upper = (int(parts[1])
-               if len(parts) > 1 and parts[1] else frames_avail_sorted[-1] + 1)
-      step = int(parts[2]) if len(parts) == 3 and parts[2] else 1
-      frame_list = [
-          f for f in frames_avail_sorted
-          if lower <= f < upper and (f - lower) % step == 0
-      ]
-
+    frame_list = select_frames(spec, frames_avail)
     return combo_idx, [frame for frame in frame_list if frame in frames_avail]
 
   def get_src_gdata(self, src: "str | GkQuantity", path: str, name: str,

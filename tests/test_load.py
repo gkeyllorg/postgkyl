@@ -83,6 +83,51 @@ def test_unmatched_glob_has_a_targeted_error(stub_load, tmp_path):
     stub_load(pattern)
 
 
+def _frame_files(directory, *names):
+  for name in names:
+    (directory / name).touch()
+
+
+def test_frame_selects_matching_files_by_frame_number(stub_load, tmp_path):
+  _frame_files(tmp_path, "s-elc_M0_0.gkyl", "s-elc_M0_1.gkyl",
+               "s-elc_M0_2.gkyl", "s-elc_M0_3.gkyl", "s-elc_M0_3_restart.gkyl")
+  pattern = str(tmp_path / "s-elc_M0_*.gkyl")
+  for frame, chosen in (("-2:", [2, 3]), ("1,3", [1,
+                                                  3]), (0, [0]), ("::2", [0,
+                                                                          2])):
+    out = stub_load(pattern, frame=frame)
+    assert [d.file_name for d in out
+            ] == [str(tmp_path / f"s-elc_M0_{f}.gkyl") for f in chosen]
+
+
+def test_frame_needs_a_pattern_and_a_matching_frame(stub_load, tmp_path):
+  _frame_files(tmp_path, "s-elc_M0_0.gkyl")
+  with pytest.raises(ValueError, match="not a pattern"):
+    stub_load(str(tmp_path / "s-elc_M0_0.gkyl"), frame="0")
+  with pytest.raises(FileNotFoundError, match="at frame '5:'"):
+    stub_load(str(tmp_path / "s-elc_M0_*.gkyl"), frame="5:")
+
+
+def test_cli_frame_counts_back_from_the_last_file(tmp_path):
+  import shutil
+  from pathlib import Path
+
+  from click.testing import CliRunner
+
+  from postgkyl.cli.app import cli
+
+  source = Path(__file__).parent / "test_data" / "generated" / "distf_p2_0.gkyl"
+  for frame in range(4):
+    shutil.copy(source, tmp_path / f"s-f_{frame}.gkyl")
+  result = CliRunner().invoke(
+      cli, [str(tmp_path / "s-f_*.gkyl"), "--frame", "-2:", "info"])
+  assert result.exit_code == 0, result.output
+  assert [
+      line.split()[0] for line in result.output.splitlines()
+      if line.startswith("s-f_")
+  ] == ["s-f_2.gkyl", "s-f_3.gkyl"]
+
+
 def test_group_load_appends_and_returns_the_same_group(stub_load):
   group = pg.GDataGroup()
 

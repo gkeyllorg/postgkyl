@@ -75,6 +75,14 @@ class TestResolveFrames:
   def test_numeric_string(self):
     assert distf.resolve_frames("7", name="n", species="ion") == [7]
 
+  def test_negative_frames_count_back_from_the_last_file(
+      self, tmp_path, monkeypatch):
+    for f in (0, 1, 2, 3):
+      (tmp_path / f"sim-ion_{f}.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    assert distf.resolve_frames("-2:", name="sim", species="ion") == [2, 3]
+    assert distf.resolve_frames("-1", name="sim", species="ion") == [3]
+
   def test_range_without_matching_files_has_a_clear_error(
       self, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -988,6 +996,17 @@ class TestGkQuantityGetAvailSource:
     combo_idx, frames = quant.get_avail_source(str(tmp_path), "sim", "ion",
                                                "1:")
     assert frames == [1, 2, 3]
+
+  def test_negative_frames_count_back_from_the_last_available(self, tmp_path):
+    quant = qmod.GkQuantity(name="q",
+                            source=[["a"]],
+                            fetch_func=[None],
+                            label="q",
+                            is_species_dep=True)
+    self._touch_frames(tmp_path, "sim-ion_a_", [0, 1, 3])
+    for frame, expected in (("-2:", [1, 3]), ("-1", [3]), (":-1", [0, 1])):
+      _, frames = quant.get_avail_source(str(tmp_path), "sim", "ion", frame)
+      assert frames == expected
 
   def test_overlapping_frame_sets_use_their_intersection(self, tmp_path):
     # The preferred complete combination can be computed on its common frame.

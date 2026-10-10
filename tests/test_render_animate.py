@@ -307,6 +307,29 @@ class TestSaveFrames:
 # --------------------------------------------------------------------------
 
 
+def _decode_first_frame(movie, output, encoder_path):
+  """Decode a movie's first frame with any available ffmpeg, starting with
+  the one that encoded it; skip when none has the decoder (e.g. a distro
+  build without H.264, as on Perlmutter)."""
+  candidates = dict.fromkeys(path for path in (encoder_path,
+                                               _ffmpeg.resolve_ffmpeg(),
+                                               _ffmpeg._bundled_ffmpeg())
+                             if path is not None)
+  errors = []
+  for path in candidates:
+    result = subprocess.run([
+        path, "-loglevel", "error", "-y", "-i",
+        str(movie), "-frames:v", "1",
+        str(output)
+    ],
+                            capture_output=True,
+                            text=True)
+    if result.returncode == 0:
+      return
+    errors.append(f"{path}: {result.stderr.strip()}")
+  pytest.skip("no ffmpeg can decode the movie: " + "; ".join(errors))
+
+
 class TestCompileMovie:
 
   def test_unsupported_extension_raises(self, tmp_path):
@@ -371,9 +394,11 @@ class TestCompileMovie:
       def clear(self):
         events.append(("clear", ))
 
-      def imshow(self, image):
+      def imshow(self, image, origin=None):
         assert isinstance(image, FakeImage)
         assert not image.closed
+        # Frames keep their orientation whatever the image.origin rcParam.
+        assert origin == "upper"
         events.append(("imshow", ))
 
     class FakeFigure:
@@ -422,6 +447,37 @@ class TestCompileMovie:
     assert len(images) == (2 if fail_encoding else 3)
     assert all(image.closed for image in images)
     assert events[-1][0] == "close"
+
+  @needs_ffmpeg
+  @external_tool
+  def test_mp4_frames_stay_upright_under_the_packaged_style(self, tmp_path):
+    """The packaged style sets image.origin = lower; a frame red on top and
+    blue below must still decode red on top."""
+    from PIL import Image
+
+    from postgkyl.render.style import style_context
+
+    image = np.zeros((64, 64, 3), np.uint8)
+    image[:32, :, 0] = 255
+    image[32:, :, 2] = 255
+    frame = tmp_path / "frame.png"
+    Image.fromarray(image).save(frame)
+    movie = tmp_path / "movie.mp4"
+    encoder = _ffmpeg.resolve_video_encoder("test")
+    with style_context("postgkyl"):
+      assert matplotlib.rcParams["image.origin"] == "lower"
+      anim_mod._compile_movie([str(frame)] * 2,
+                              str(movie),
+                              fps=2,
+                              encoder=encoder)
+
+    first = tmp_path / "first.png"
+    _decode_first_frame(movie, first, encoder[0])
+    decoded = np.asarray(Image.open(first).convert("RGB"))
+    top, bottom = decoded[decoded.shape[0] // 4], decoded[3 *
+                                                          decoded.shape[0] // 4]
+    assert top[:, 0].mean() > 200 and top[:, 2].mean() < 50
+    assert bottom[:, 2].mean() > 200 and bottom[:, 0].mean() < 50
 
   @needs_ffmpeg
   @external_tool
@@ -727,6 +783,23 @@ def test_field_modes(mode):
   assert animation._fig.axes[0].has_data()
 
 
+def test_filled_contour_levels_are_shared_across_frames():
+  """The shared value range fixes the levels: frames 1 and 10 (0..73)
+  both get 5 levels from 1 to 73."""
+  animation = _draw_animation(
+      [_field_frame(1), _field_frame(10)],
+      contourf=True,
+      cnlevels=5,
+      no_colorbar=True)
+  levels = []
+  for index in (0, 1):
+    animation._func(index, *animation._args)
+    (cs, ) = [c for c in animation._fig.axes[0].collections if c.filled]
+    levels.append(cs.levels)
+  np.testing.assert_allclose(levels[0], np.linspace(1, 73, 5))
+  np.testing.assert_array_equal(levels[0], levels[1])
+
+
 def test_grouped_tags_keep_plot_controls():
   frames = _three_frames()
   frames[0].tag = "first"
@@ -801,7 +874,8 @@ def test_field_color_controls_and_coordinate_transforms():
   ax = animation._fig.axes[0]
   mesh = ax.collections[0]
   assert isinstance(mesh.norm, matplotlib.colors.SymLogNorm)
-  assert mesh.get_clim() == (1, 100)
+  # A diverging map centres on zero: the larger typed bound is the half-width.
+  assert mesh.get_clim() == (-100, 100)
   assert mesh.get_cmap().name == "RdBu_r"
   assert ax.get_xlim() == (36, 66)
   assert ax.get_ylim() == (68, 88)
@@ -830,6 +904,36 @@ def test_frame_options_match_sequential_and_parallel_output(tmp_path):
         second) as parallel_image:
       np.testing.assert_array_equal(np.asarray(serial_image),
                                     np.asarray(parallel_image))
+
+
+def test_diverging_shared_range_centres_on_a_typed_bound():
+  """_field_frame(10) reaches 73; a typed zmax of 30 wins on every frame."""
+  animation = _draw_animation(
+      [_field_frame(1), _field_frame(10)],
+      diverging=True,
+      zmax=30.0,
+      no_colorbar=True)
+  assert animation._fig.axes[0].collections[0].get_clim() == (-30, 30)
+
+
+@pytest.mark.parametrize("title, stamp_title, expected", [
+    (None, False, "frame: 1 time: 1.0000e-01"),
+    ("n_e", False, "n_e"),
+    ("n_e", True, "n_e   frame: 1 time: 1.0000e-01"),
+    (None, True, "frame: 1 time: 1.0000e-01"),
+])
+def test_stamp_title_follows_a_typed_title(monkeypatch, title, stamp_title,
+                                           expected):
+  titles = []
+  plot = anim_mod.backend.plot
+
+  def recording_plot(*frame, **kwargs):
+    titles.append(kwargs.get("title"))
+    return plot(*frame, **kwargs)
+
+  monkeypatch.setattr(anim_mod.backend, "plot", recording_plot)
+  _draw_animation(_three_frames()[1:], title=title, stamp_title=stamp_title)
+  assert titles[-1] == expected
 
 
 def test_diverging_limits_are_fixed_across_frames():
@@ -965,3 +1069,19 @@ def test_video_errors_restore_configuration_and_decode_stderr(codec, error):
       assert matplotlib.rcParams["animation.ffmpeg_path"] == "/test/ffmpeg"
       raise error
   assert matplotlib.rcParams["animation.ffmpeg_path"] == original
+
+
+def test_cmap_reaches_every_frame(monkeypatch, tmp_path):
+  """``cmap`` is forwarded to the per-frame plot like the other options."""
+  seen = []
+  plot = anim_mod.backend.plot
+
+  def recording_plot(*frame, **kwargs):
+    seen.append(kwargs.get("cmap"))
+    return plot(*frame, **kwargs)
+
+  monkeypatch.setattr(anim_mod.backend, "plot", recording_plot)
+  anim_mod.animate(_three_frames(),
+                   cmap="RdBu_r",
+                   saveas=str(tmp_path / "movie.gif"))
+  assert len(seen) >= 3 and set(seen) == {"RdBu_r"}

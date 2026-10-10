@@ -25,6 +25,7 @@ def average(data: "GDataState",
             *,
             weight: Annotated[GDataState | None,
                               DatasetRef()] = None,
+            as_dataset: bool = False,
             inplace: bool = False,
             tag: str | None = None,
             label: str | None = None):
@@ -39,15 +40,19 @@ def average(data: "GDataState",
       ``num_dims``/``basis_type``/``poly_order`` as ``data`` and exactly one
       field (``gkyl_array_average`` takes no field-index argument) -- the
       plain average (dividing by volume) is computed when omitted.
-    inplace: Mutate and return ``data`` for partial averaging only.
-    tag: Optional tag for a partial-average dataset.
-    label: Optional label for a partial-average dataset.
+    as_dataset: When every direction is averaged out, return the means as a
+      one-cell dataset of point values that keeps ``data``'s time and frame,
+      so ``collect`` stacks frames into a time trace.
+    inplace: Mutate and return ``data`` when the result is a dataset.
+    tag: Optional tag for a dataset result.
+    label: Optional label for a dataset result.
 
   Returns:
     A float (one field) or NumPy array (multiple fields) containing the
-    physical mean when every direction is averaged out. Otherwise a native
-    modal dataset over the surviving dimensions. Dataset-only options
-    ``inplace``, ``tag``, and ``label`` apply only to partial averaging.
+    physical mean when every direction is averaged out, or that mean as a
+    one-cell dataset with ``as_dataset``. Otherwise a native modal dataset
+    over the surviving dimensions. Dataset-only options ``inplace``,
+    ``tag``, and ``label`` apply only when the result is a dataset.
 
   Raises:
     ValueError: ``data`` (or ``weight``) is NumPy-backed or non-modal, is
@@ -67,14 +72,24 @@ def average(data: "GDataState",
                                                       weight=weight_native)
 
   if not keep_dirs:
-    if inplace or tag is not None or label is not None:
-      raise ValueError(
-          "inplace, tag, and label apply only to partial averaging, which "
-          "returns a dataset")
     # The DG layer returns a constant one-cell 1D modal field, including
     # for weighted averages. Reconstruct its physical mean: phi0=1/sqrt(2).
     coefficients = out_native.view().reshape(-1, poly_order + 1)
     means = coefficients[:, 0] / np.sqrt(2.0)
+    if as_dataset:
+      # Point values, no longer DG coefficients.
+      return data._result([np.array([0.0, 1.0])],
+                          means.reshape(1, -1),
+                          inplace=inplace,
+                          tag=tag,
+                          label=label,
+                          basis_type=None,
+                          poly_order=None,
+                          value_form=None)
+    if inplace or tag is not None or label is not None:
+      raise ValueError(
+          "inplace, tag, and label apply only to a dataset result: partial "
+          "averaging or as_dataset")
     return float(means[0]) if means.size == 1 else means
 
   new_grid = [np.asarray(data.grid[d]) for d in keep_dirs]

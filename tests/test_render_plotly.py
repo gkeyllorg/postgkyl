@@ -33,6 +33,7 @@ from postgkyl.render.plotly import (
 from postgkyl.render.plotly import (
     _log_colorbar_ticks,
     _opacity_mapping,
+    _plotly_colorscale,
     _prepare_2d_coordinates,
     _prepare_3d_coordinates,
 )
@@ -369,6 +370,11 @@ class TestPlotlyMisc:
     fig = plotly(_volume_3d(), diverging=True)
     assert fig.data[0].cmin == -fig.data[0].cmax
 
+  def test_diverging_range_is_centred_on_a_typed_bound(self):
+    """x+y+z spans 0..3; a typed upper bound of 1 gives +-1."""
+    fig = plotly(_volume_3d(), diverging=True, cmax=1.0)
+    assert (fig.data[0].cmin, fig.data[0].cmax) == (-1.0, 1.0)
+
   def test_title_is_set(self):
     fig = plotly(_volume_3d(), title="my title")
     assert fig.layout.title.text == "my title"
@@ -403,30 +409,23 @@ class TestPlotlyStyleAndTheme:
     fig = plotly(_volume_3d())
     assert fig.layout.paper_bgcolor == "#000000"
 
-  def test_explicit_style_kwarg_is_applied(self):
-    # "default" resets Matplotlib's baseline rc, distinct from the packaged
-    # postgkyl style's lines.linewidth == 2 (image.cmap gets overwritten
-    # right after by the cmap-resolution step below, so assert on a rc key
-    # that step never touches).
-    plotly(_volume_3d(), style="default")
-    assert mpl.rcParams["lines.linewidth"] == 1.5
-
-  def test_rcparams_override_is_applied(self):
-    plotly(_volume_3d(), rcParams={"lines.linewidth": 4.0})
-    assert mpl.rcParams["lines.linewidth"] == 4.0
-
   def test_invert_cmap_appends_reversal_suffix(self):
-    plotly(_volume_3d(), cmap="viridis", invert_cmap=True)
-    assert mpl.rcParams["image.cmap"] == "viridis_r"
+    fig = plotly(_volume_3d(), cmap="viridis", invert_cmap=True)
+    assert _colorscale_of(fig) == _plotly_colorscale("viridis_r")
 
   def test_invert_cmap_strips_reversal_suffix(self):
-    plotly(_volume_3d(), cmap="viridis_r", invert_cmap=True)
-    assert mpl.rcParams["image.cmap"] == "viridis"
+    fig = plotly(_volume_3d(), cmap="viridis_r", invert_cmap=True)
+    assert _colorscale_of(fig) == _plotly_colorscale("viridis")
 
-  def test_xkcd_style_does_not_raise(self):
-    import matplotlib.pyplot as plt
-    plotly(_volume_3d(), xkcd=True)
-    plt.rcdefaults()
+  @pytest.mark.parametrize("background", ["dark", "light"])
+  def test_global_rcparams_are_untouched(self, background):
+    before = dict(mpl.rcParams)
+    plotly(_volume_3d(), background=background, invert_cmap=True)
+    assert dict(mpl.rcParams) == before
+
+
+def _colorscale_of(fig):
+  return [list(stop) for stop in fig.data[0].colorscale]
 
 
 class TestPlotlyLogAxes:
