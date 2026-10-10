@@ -40,7 +40,7 @@ from postgkyl.gdatastate import (
 
 from ._prep import (centred_range, default_axis_labels, materialize_plot_data,
                     remaining_axes, squeeze_collapsed_axes, subplot_grid)
-from .style import style_context
+from .style import pin_tick_label_sizes, style_context
 
 _OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
@@ -1452,6 +1452,7 @@ def plot(
         if num_axes and not overlay_axes:
           cur_start_axes += len(idx_comps)
 
+      pin_tick_label_sizes(mpl_fig)
       mpl_fig.tight_layout()
       for output_path in _output_paths(save, family_saveas, states):
         mpl_fig.savefig(output_path, dpi=dpi)

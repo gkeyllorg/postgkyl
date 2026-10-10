@@ -43,4 +43,21 @@ def style_context(path_or_name: str | None = None):
   return plt.style.context(_PACKAGED_STYLES.get(name, name))
 
 
-__all__ = ["style_context", "DEFAULT_STYLE"]
+def pin_tick_label_sizes(fig) -> None:
+  """Record on every axis of ``fig`` the size its tick labels are drawn at.
+
+  Matplotlib decides how many ticks fit an axis when the figure is drawn,
+  from the tick-label size in ``rcParams`` at that moment unless the axis
+  stores its own. A figure drawn after its ``style_context`` exits (a
+  caller's ``savefig``, ``plt.show``, a notebook) would otherwise space its
+  ticks for the unstyled font. Call inside the context once every axis,
+  colorbars included, exists.
+  """
+  for ax in fig.axes:
+    for axis in (ax.xaxis, ax.yaxis, getattr(ax, "zaxis", None)):
+      if axis is not None:
+        size = axis.get_major_ticks(1)[0].label1.get_fontsize()
+        axis.set_tick_params(which="both", labelsize=size)
+
+
+__all__ = ["style_context", "pin_tick_label_sizes", "DEFAULT_STYLE"]
