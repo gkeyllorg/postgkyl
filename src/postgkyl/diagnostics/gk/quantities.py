@@ -555,8 +555,7 @@ def _coulomb_log(ns, nr, ms, mr, Ts, Tr, qs, qr, bmag):
   msr = ms * mr / (ms + mr)
   inner2 = max(
       abs(qs * qr) / (4 * np.pi * eps0 * msr * usq),
-      hbar / (2 * e_sqrt * msr * np.sqrt(usq))
-  )
+      hbar / (2 * e_sqrt * msr * np.sqrt(usq)))
   return 0.5 * np.log(1 / inner1 / inner2 / inner2 + 1)
 
 

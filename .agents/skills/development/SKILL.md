@@ -76,6 +76,9 @@ pre-commit run --all-files --show-diff-on-failure
 `.style.yapf` (two-space indentation, 80 columns); clang-format formats C/C++
 using `.clang-format`. Ruff checks lint rules from `pyproject.toml`.
 The hooks also check TOML/YAML, merge conflicts, trailing whitespace, and final
-newlines. If hooks rewrite files, review the diff and rerun until they pass.
+newlines. The local `session-stub` hook regenerates `cli/session.pyi` by
+importing postgkyl, so run pre-commit with the editable install's `python` on
+`PATH`; CI's quality job skips it because the test jobs check the stub.
+If hooks rewrite files, review the diff and rerun until they pass.
 `--all-files` covers tracked files; pass new files with `--files` until Git tracks
 them.

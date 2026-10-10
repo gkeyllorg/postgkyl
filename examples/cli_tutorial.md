@@ -104,7 +104,26 @@ pgkyl tests/test_data/generated/distf_p2_0.gkyl tests/test_data/generated/distf_
     interpolate evaluate "f0 f1 -" info
 ```
 
-## 6. Gyrokinetics: pre-named quantities and distribution functions
+## 6. Setting datasets aside: `activate`
+
+Every command applies to every loaded dataset. That is wrong for a dataset
+that only serves as an option of another command, such as the weight of a
+weighted average: it would be averaged and plotted too, and a second
+weighted step would silently use the already-averaged weight. `activate
+--tags` keeps only the datasets with those tags in the working set; the
+others are set aside, skipped by later commands but still found by tag.
+Here the electron density, tagged `weight`, weights its own y-z average
+(a density-weighted average), and only the averaged data is left:
+
+```bash
+pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl --tag weight \
+    tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl \
+    activate --tags default average --dims 1,2 --weight weight info
+```
+
+A bare `activate` makes every loaded dataset active again.
+
+## 7. Gyrokinetics: pre-named quantities and distribution functions
 
 `gk_load_quantity` loads one of a registry of named gyrokinetic
 quantities (listed in its generated `--quantity` choices) straight from a simulation's naming convention --
@@ -128,7 +147,7 @@ pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
     info
 ```
 
-## 7. Map a field to R-Z
+## 8. Map a field to R-Z
 
 `map_to_rz` is an equation-independent mapping: it interpolates one raw DG component and
 maps it onto the physical poloidal plane. Geometry is inferred from the
@@ -150,7 +169,7 @@ data = pg.load(
 mapped = pg.map_to_rz(data, nz_interp=2)
 ```
 
-## 8. Saving to another format
+## 9. Saving to another format
 
 `save` writes the current dataset(s) out as `gkyl`/`txt`/`npy`/`vtk`.
 
@@ -158,7 +177,7 @@ mapped = pg.map_to_rz(data, nz_interp=2)
 pgkyl tests/test_data/generated/distf_p2_0.gkyl save --out_name distf --extension npy
 ```
 
-## 9. One API-derived command inventory
+## 10. One API-derived command inventory
 
 Every loaded file becomes a dataset in the current chain. The command list is
 compiled from the script API, so `--help` is the authoritative inventory and
@@ -168,7 +187,7 @@ every Python underscore remains an underscore in the CLI.
 pgkyl --help
 ```
 
-## 10. One isosurface with Plotly or PyVista
+## 11. One isosurface with Plotly or PyVista
 
 Use the generated `tests/test_data/generated/gaussian_volume.gkyl` fixture
 (run `python tests/generate_test_data.py` if needed). Its density is

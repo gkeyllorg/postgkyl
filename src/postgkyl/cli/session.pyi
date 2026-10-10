@@ -58,7 +58,7 @@ class PostgkylSession:
           The datasets carrying one of ``tags``, in their given order.
         """
 
-    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, contourf: bool = False, clevels: str | None = None, cnlevels: int | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, cmap: str | None = None, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, stamp_title: bool = False, subplot_xlabels: str | None = None, subplot_ylabels: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
+    def animate(self, *, use: str | None = None, collected: bool = False, squeeze: bool = False, subplots: bool = False, num_subplot_row: int | None = None, num_subplot_col: int | None = None, transpose: bool = False, contour: bool = False, clevels: str | None = None, quiver: bool = False, streamline: bool = False, sdensity: float = 1.0, arrowstyle: str | None = None, group: int | None = None, scatter: bool = False, markersize: float | None = None, linewidth: float | None = None, linestyle: str | None = None, color: str | None = None, style: str | None = None, diverging: bool = False, arg: str | None = None, fixaspect: bool = False, logx: bool = False, logy: bool = False, logz: bool = False, xshift: float = 0.0, xscale: float = 1.0, yshift: float = 0.0, yscale: float = 1.0, zshift: float = 0.0, zscale: float = 1.0, xmin: float | None = None, xmax: float | None = None, ymin: float | None = None, ymax: float | None = None, zmin: float | None = None, zmax: float | None = None, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, zlim: tuple[float, float] | None = None, no_legend: bool = False, no_colorbar: bool = False, forcelegend: bool = False, xlabel: str | None = None, ylabel: str | None = None, clabel: str | None = None, title: str | None = None, edgecolors: str | None = None, no_showgrid: bool = False, hashtag: bool = False, multiblock: bool = False, grouptags: bool = False, interval: int = 100, variable_range: bool = False, cutoffglobalrange: float | None = None, notitle: bool = False, no_show: bool = False, save: bool = False, saveas: str | None = None, fps: int | None = None, codec: str | None = None, dpi: int | None = None, saveframes: str | None = None, figsize: tuple[float, float] | None = None, nproc: int = 1, tmpdir: str | None = None) -> PostgkylSession:
         r"""Animate a sequence of frames, one frame per dataset (or dataset group).
 
         Each panel uses its own value range across all frames. Datasets overlaid
@@ -172,6 +172,9 @@ class PostgkylSession:
 
         Args:
           data: gkyl-backed (native modal) dataset in the modal value_form.
+          dims: 0-based direction(s) to average over: an integer, an iterable of
+            integers, a comma-separated string (``"0,1"``), or a colon slice
+            string (``"0:2"``); ``--dims 0,1`` at the CLI.
           dims: 0-based direction(s) to average over: an integer, an iterable of
             integers, a comma-separated string (``"0,1"``), or a colon slice
             string (``"0:2"``); ``--dims 0,1`` at the CLI.
@@ -596,7 +599,7 @@ class PostgkylSession:
           group holding one distribution function per requested frame.
         """
 
-    def gk_load_quantity(self, quantity: Literal['B_tot', 'B_tot_dual', 'B_tot_mag', 'D', 'D_gB', 'E_field', 'E_field_dual', 'E_field_mag', 'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta', 'c_s_cold_i', 'c_s_hot_i', 'chi', 'chi_gB', 'collision_freq', 'dB_perp', 'dB_perp_dual', 'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf', 'energy_flux', 'energy_flux_ExB', 'energy_flux_dB', 'field', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'inv_L_T', 'inv_L_n', 'larmor_radius', 'mach_cold_i', 'mach_hot_i', 'part_flux', 'part_flux_ExB', 'part_flux_dB', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, ti_over_te: float | None = None, te_ref: float | None = None, bmag_ref: float | None = None, den_ref: list[float] | tuple[float, ...] | None = None, temp_ref: list[float] | tuple[float, ...] | None = None, nu_frac: float | None = None, conv: float | None = None, fluct: Literal['none', 'y', 'yz'] | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+    def gk_load_quantity(self, quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag', 'E_field_contra', 'E_field_cov', 'E_field_mag', 'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta', 'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf', 'field', 'flux_energy', 'flux_energy_ExB', 'flux_energy_dB', 'flux_particle', 'flux_particle_ExB', 'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo', 'geo_int_jacobgeo_inv', 'geo_int_jacobtot', 'geo_int_jacobtot_inv', 'gradB_vel', 'heat_chi', 'heat_chi_gB', 'inv_L_T', 'inv_L_n', 'larmor_radius', 'mach_cold_i', 'mach_hot_i', 'particle_D', 'particle_D_gB', 'phi_norm', 'press', 'presspar', 'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'], species: str, name: str, frame: str | None = None, *, path: str = './', tag: str = 'default', label: str | None = None, direction: int | None = None, mass: float | None = None, charge: float | None = None, gamma_e: float | None = None, gamma_i: float | None = None, ti_over_te: float | None = None, te_ref: float | None = None, bmag_ref: float | None = None, den_ref: list[float] | tuple[float, ...] | None = None, temp_ref: list[float] | tuple[float, ...] | None = None, nu_frac: float | None = None, conv: float | None = None, fluct: Literal['none', 'y', 'yz'] | None = None, read_options: Mapping[str, str] | None = None) -> PostgkylSession:
         r"""Load and compute a pre-named gyrokinetic quantity.
 
         Modal source files retain their DG representation through the calculation:
@@ -615,7 +618,9 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Vector direction for quantities that expose components.
+          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
+            component of a vector, or the direction of a gradient length, flux, or
+            diffusivity. Required by those quantities, which assume no direction.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -636,9 +641,9 @@ class PostgkylSession:
             (default 1).
           conv: Coefficient ``c`` of the convective energy flux ``c*T*Gamma``
             removed from the energy flux to form the heat flux (default 3/2).
-          fluct: For radial fluxes, keep only the turbulent part: the correlation
-            of the fluctuations about the Jacobian-weighted ``y`` or ``(y, z)``
-            average; ``none`` (default) keeps the total flux.
+          fluct: For cross-field fluxes, keep only the turbulent part: the
+            correlation of the fluctuations about the Jacobian-weighted ``y`` or
+            ``(y, z)`` average; ``none`` (default) keeps the total flux.
           read_options: Additional provider options as repeated key/value entries.
 
         Returns:
