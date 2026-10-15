@@ -55,3 +55,32 @@ jobs:
           name: postgkyl-docs
           path: build/docs/html
           if-no-files-found: error
+      - name: Trigger the live Read the Docs build
+        if: >-
+          github.repository == 'gkeyllorg/postgkyl' &&
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          READTHEDOCS_TOKEN: ${{ secrets.READTHEDOCS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          token = os.environ.get("READTHEDOCS_TOKEN")
+          if not token:
+              raise SystemExit(
+                  "Configure the Postgkyl repository secret READTHEDOCS_TOKEN "
+                  "with permission to build the gkeyll Read the Docs project."
+              )
+          request = urllib.request.Request(
+              "https://app.readthedocs.org/api/v3/projects/gkeyll/versions/latest/builds/",
+              method="POST", headers={"Authorization": f"Token {token}"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              if response.status != 202:
+                  raise RuntimeError(f"Build trigger returned {response.status}")
+              build = json.load(response)["build"]
+          print(f"Read the Docs build requested: {build['urls']['build']}")
+          PY
