@@ -1,6 +1,7 @@
 """Check an installed wheel and run native contracts outside the source tree."""
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,11 @@ def test_installed_wheel():
   assert extension.with_name("libg0core.so").is_file(), extension
   info = gpython.build_info()
   assert info is not None and len(info["gkeyll_commit"]) == 40, info
+  modules = gpython.module_api_versions()
+  assert os.environ.get("POSTGKYL_GKEYLL_MODULE", "core") in modules, modules
+  assert set(modules) == set(info["gkeyll_modules"]), (modules, info)
+  for module in modules:
+    assert extension.with_name(f"libg0{module}.so").is_file(), module
   print(f"Checking installed native wheel: {extension}", flush=True)
 
 
@@ -48,6 +54,7 @@ def main():
         "tests/test_gpython_rio.py",
         "tests/test_analytic_observables.py",
         "tests/test_native_quadrature.py",
+        "tests/test_native_physics.py",
     ],
                    cwd=directory,
                    check=True)

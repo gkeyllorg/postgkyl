@@ -35,6 +35,9 @@ operations has no equation-family subpackages. Resolve
 output stems/frames through `diagnostics/discovery.py`; keep quantity vocabulary
 in the equation module's `VARIABLES` table. Use public functions from lower
 layers and return a state via `_result`, or a Figure for program diagnostics.
+Native model kernels are reached through `dg/physics.py`; diagnostics may
+import `dg` for representation conversion and kernel orchestration, while
+`gpython` remains the sole foreign-library boundary.
 
 Run the import, foreign-floor, facade, and canonical-callable contracts in
 `tests/test_postgkyl.py` after structural changes.

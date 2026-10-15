@@ -1,8 +1,8 @@
 """Load the compiled ``_gpython`` extension -- the single capability switch.
 
 The foreign floor is the CPython extension ``postgkyl.gpython._gpython``, built by
-setuptools against ``gkyl_gpython.h`` -- the gpython shim, which lives
-in the gkeyll repo (``core/zero/gpython.c``) and is compiled INTO
+setuptools against ``gkyl_gpython_core.h`` -- the gpython shim, which lives
+in the gkeyll repo (``core/zero/gpython_core.c``) and is compiled INTO
 ``libg0core.so`` by Gkeyll's own build (GKEYLL_C_SHIM.md). There are no
 runtime signature declarations and no struct mirrors here: the contract is
 enforced by the C compiler at the producer. The one runtime check left is
@@ -53,9 +53,27 @@ def lib_path() -> pathlib.Path | None:
   return pathlib.Path(_mod.__file__) if _mod is not None else None
 
 
-def build_info() -> dict[str, str] | None:
+def build_info() -> dict[str, str | list[str]] | None:
   """Build provenance bundled beside the extension, or None if absent."""
   path = pathlib.Path(__file__).with_name("_build_info.json")
   if not path.is_file():
     return None
   return json.loads(path.read_text())
+
+
+def module_api_versions() -> dict[str, int]:
+  """Call every compiled module's shim and return its checked ABI version."""
+  return require().module_api_versions()
+
+
+def require_module(module: str, function: str):
+  """Require a compiled model module and explain how to enable it."""
+  lib = require()
+  if module not in lib.module_api_versions():
+    raise RuntimeError(
+        f"Cannot call {function}: this function requires Gkeyll's {module} "
+        f"module, but Gkeyll was built without that module. To call this "
+        f"function, rebuild Postgkyl with the {module} layer (or higher) "
+        f"from a Postgkyl checkout: "
+        f"POSTGKYL_GKEYLL_MODULE={module} python -m pip install -e .")
+  return lib

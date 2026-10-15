@@ -703,12 +703,96 @@ _C2P_CONFIGS: list[tuple] = [
 ]
 
 
+def _generate_native_physics_fields(out_dir: Path) -> None:
+  """Exact affine DG data for optional native collision and moment kernels.
+
+  Collisions: n=2+x, u=1/2, T/m=1 and B=0 on [-1/4,5/4].
+  Gyrokinetics: F=2+x+v_parallel, B=3, phi=2; v_parallel in [-1/2,5/2],
+  mu in [1/4,7/4]. Stored F has no implicit Jacobian. Coefficients are
+  closed-form orthonormal Legendre integrals, with only the constant and
+  single-axis linear modes populated. No production basis routine is used.
+  """
+  metadata = {
+      "description":
+      "Affine fields for native collision and gyrokinetic moment tests.",
+      "analytic_function":
+      _generate_native_physics_fields.__doc__,
+      "generation_method":
+      "Exact orthonormal Legendre integrals: the constant coefficient is the cell average times 2^(ndim/2); each linear coefficient is its slope times the cell half-width times 2^(ndim/2)/sqrt(3). All other modes vanish. Maxwellian fields are packed in n, u, T/m order."
+  }
+  for order in (1, 2):
+    nb = order + 1
+    xedges = np.linspace(-.25, 1.25, 4)
+    x = (xedges[1:] + xedges[:-1]) / 2
+    density = np.zeros((3, nb))
+    density[:, 0] = np.sqrt(2) * (2 + x)
+    density[:, 1] = np.sqrt(2 / 3) * .25
+    temp = np.zeros_like(density)
+    temp[:, 0] = np.sqrt(2)
+    moments = np.concatenate((density, .5 * temp, temp), axis=-1)
+    for name, coefficients in (("density", density), ("temperature", temp),
+                               ("bmag", 0 * temp), ("moms", moments)):
+      write_gkyl_field(out_dir / f"collision_{name}_p{order}.gkyl", [3], [-.25],
+                       [1.25],
+                       coefficients,
+                       order,
+                       "serendipity",
+                       metadata=metadata)
+  for cdim, vdim, order, nb in ((1, 1, 1, 6), (1, 1, 2, 8), (1, 2, 1,
+                                                             12), (1, 2, 2, 20),
+                                (2, 2, 1, 24), (2, 2, 2, 48), (3, 2, 1, 48)):
+    pdim = cdim + vdim
+    ccells = [3, 2, 4][:cdim]
+    clo, chi = [-.25, 1., -2.][:cdim], [1.25, 3., 1.][:cdim]
+    cells = ccells + [4, 2][:vdim]
+    lower, upper = clo + [-.5, .25][:vdim], chi + [2.5, 1.75][:vdim]
+    grid = [
+        np.linspace(lo, hi, n + 1) for lo, hi, n in zip(lower, upper, cells)
+    ]
+    centers = np.meshgrid(*[(e[1:] + e[:-1]) / 2 for e in grid], indexing="ij")
+    coeff = np.zeros((*cells, nb))
+    norm = 2**(pdim / 2)
+    coeff[..., 0] = norm * (2 + centers[0] + centers[cdim])
+    coeff[..., 1] = norm / np.sqrt(3) * (upper[0] - lower[0]) / (2 * cells[0])
+    coeff[..., cdim + 1] = norm / np.sqrt(3) * (upper[cdim] -
+                                                lower[cdim]) / (2 * cells[cdim])
+    stem = f"native_gk_{cdim}x{vdim}v_p{order}"
+    write_gkyl_field(out_dir / f"{stem}_f.gkyl",
+                     cells,
+                     lower,
+                     upper,
+                     coeff,
+                     order,
+                     "gkhybrid" if order == 1 else "serendipity",
+                     metadata={
+                         **metadata, "cdim": cdim,
+                         "vdim": vdim
+                     })
+    cnb = (order +
+           1) if cdim == 1 else (4 if order == 1 else 8) if cdim == 2 else 8
+    for name, value in (("bmag", 3.), ("phi", 2.)):
+      coeff = np.zeros((*ccells, cnb))
+      coeff[..., 0] = value * 2**(cdim / 2)
+      write_gkyl_field(out_dir / f"{stem}_{name}.gkyl",
+                       ccells,
+                       clo,
+                       chi,
+                       coeff,
+                       order,
+                       "serendipity",
+                       metadata={
+                           **metadata, "analytic_function":
+                           f"{name}={value}, exact constant modal field"
+                       })
+
+
 def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
+  _generate_native_physics_fields(out_dir)
   _generate_calculus_samples(out_dir)
   _generate_moment_frames(out_dir)
   _generate_fourier_samples(out_dir)

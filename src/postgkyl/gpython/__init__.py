@@ -5,8 +5,8 @@ in postgkyl that touches the foreign world, and it does so through a compiled
 contract (GKEYLL_C_SHIM.md) rather than runtime declarations:
 
 - ``csrc/``    ``_gpythonmodule.c`` -- the CPython extension over
-               ``gkyl_gpython.h``; the gpython shim itself lives in the
-               gkeyll repo (``core/zero/{gkyl_gpython.h, gpython.c}``,
+               ``gkyl_gpython_core.h``; the gpython shim itself lives in the
+               gkeyll repo (``core/zero/{gkyl_gpython_core.h, gpython_core.c}``,
                compiled into ``libg0core.so`` by Gkeyll's own build)
 - ``_gpython``  the built extension module -- opaque handles in, ndarrays out
 - ``_lib``     loads ``_gpython`` + the ``GPYTHON_API_VERSION`` handshake;
@@ -33,11 +33,11 @@ If the extension is missing, importing still succeeds; ``available()``
 returns False and every entry point raises with build guidance.
 """
 
-from ._lib import available, build_info, lib_path, require
+from ._lib import available, build_info, lib_path, module_api_versions, require
 from .array import GkylArray
-from . import basis, kernels, rio
+from . import basis, kernels, rio, vlasov, gyrokinetic
 
 __all__ = [
-    "available", "build_info", "lib_path", "require", "GkylArray", "basis",
-    "kernels", "rio"
+    "available", "build_info", "lib_path", "module_api_versions", "require",
+    "GkylArray", "basis", "kernels", "rio", "vlasov", "gyrokinetic"
 ]

@@ -126,3 +126,12 @@ def require_kernel_basis(data: "GDataState") -> DGLayout:
         "this native operation does not support the "
         f"{layout.cdim}x{layout.vdim}v {layout.basis_type} basis")
   return layout
+
+
+def require_native_modal(data: "GDataState") -> DGLayout:
+  """Resolve a native modal layout before passing coefficients to a kernel."""
+  layout = require_dg_layout(data)
+  if data.backend != "gkyl" or layout.value_form != "modal":
+    raise ValueError("this operation requires native modal data; load with the "
+                     "gkyl backend and use .represent(to='modal') if needed")
+  return layout

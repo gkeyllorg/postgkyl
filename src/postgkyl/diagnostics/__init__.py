@@ -91,6 +91,11 @@ for _function, _datasets in (
     (mom.rotations.perprotate, ("array", "rotator")),
     (mom.rotations.bparrotate, ("array", "field")),
     (mom.rotations.bperprotate, ("array", "field")),
+    (vm.collisions.coulomb_log,
+     ("density_self", "density_other", "temperature_self", "temperature_other",
+      "bmag")),
+    (vm.collisions.spitzer_coll_freq, ("moms_self", "moms_other", "bmag")),
+    (gk.mom_gyrokinetic, ("distribution", "bmag", "phi")),
     (vm.kinetic.transform_frame, ("distribution", "bulk")),
     (pkpm.laguerre_compose, ("distribution", "variables")),
 ):

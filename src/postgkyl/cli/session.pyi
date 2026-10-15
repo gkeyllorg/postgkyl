@@ -632,6 +632,36 @@ class PostgkylSession:
             ``is_multi_species`` quantity requested without a species list.
         """
 
+    def gk_mom_gyrokinetic(self, distribution: str, bmag: str, *, mass: float, moment: str = 'M0', charge: float = 0.0, phi: str | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""Integrate a modal gyrokinetic distribution over velocity using Gkeyll.
+
+        bmag defines the configuration grid; basis order and the velocity-space
+        split come from the datasets. Supports p1 gkhybrid and p2 serendipity in
+        1x1v, 1x2v, 2x2v, plus p1 3x2v. Uniform physical velocity coordinates
+        are required; mapped velocity coordinates are not interpreted implicitly.
+
+        moment is M0, M1, M2, M2par, M2perp, M3par, M3perp, ThreeMoments,
+        FourMoments, or HamiltonianMoments. Perpendicular moments require 2v;
+        HamiltonianMoments requires the electrostatic potential phi and charge.
+        Combined outputs pack complete modal field blocks in the named order.
+
+        Retains the native stored-distribution normalization: for 2v, the measure
+        is (2*pi/mass) dv_parallel dmu. A configuration Jacobian present in the
+        distribution remains in the output. This function does not divide out
+        geometry or multiply by B. Returns modal configuration-space GData.
+
+        Args:
+          distribution: Scalar modal distribution on a uniform phase-space grid.
+          bmag: Scalar modal magnetic-field magnitude on the configuration grid.
+          mass: Positive species mass.
+          moment: Native moment name, for example M0 or FourMoments.
+          charge: Species charge, used by HamiltonianMoments.
+          phi: Scalar electrostatic potential for HamiltonianMoments.
+          inplace: Replace the distribution with its configuration-space moment.
+          tag: Result tag.
+          label: Result label.
+        """
+
     def gk_nodes(self, name: str, *, path: str = './', multib: str = '-10', nodes_file: str | None = None, psi_file: str | None = None, wall_file: str | None = None, contour: bool = False, clevels: str | None = None, cnlevels: int = 11, fixaspect: bool = False, xlim: tuple[float, float] | None = None, ylim: tuple[float, float] | None = None, xlabel: str = 'R (m)', ylabel: str = 'Z (m)', zlabel: str = '$\\psi$', title: str | None = None, indent_left: float = 0.0, add_width: float = 0.0, multib_unicolor: bool = False, show: bool = False, saveas: str | None = None) -> PostgkylSession:
         r"""Plot the nodes of a (possibly multiblock) grid, with optional overlays.
 
@@ -2859,6 +2889,67 @@ class PostgkylSession:
           ValueError: if ``data`` is unevaluated modal coefficients, or if more than
             one x-component is selected and their number does not equal the
             number of y-components.
+        """
+
+    def vm_collisions_coulomb_log(self, density_self: str, density_other: str, temperature_self: str, temperature_other: str, bmag: str, *, mass_self: float, mass_other: float, charge_self: float, charge_other: float, epsilon_0: float, hbar: float, num_quad: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""Compute Gkeyll's species-ordered Coulomb logarithm on collocated fields.
+
+        Inputs are scalar densities, temperatures in energy units (T/m = v_t^2),
+        and magnetic-field magnitude. Supply physical constants in consistent
+        units. This native expression is ordered: interchanging species can change
+        it; Gkeyll's Spitzer updater averages both orders internally.
+
+        Modal inputs are evaluated at quadrature points and projected back into
+        the same modal basis. Nodal, quadrature, and ordinary point inputs retain
+        their representation and backend. No input is changed unless inplace=True.
+        num_quad optionally selects Gauss points per direction for modal inputs.
+
+        Args:
+          density_self: Scalar test-species density.
+          density_other: Scalar field-species density.
+          temperature_self: Scalar test-species temperature in energy units.
+          temperature_other: Scalar field-species temperature in energy units.
+          bmag: Scalar magnetic-field magnitude.
+          mass_self: Test-species mass.
+          mass_other: Field-species mass.
+          charge_self: Test-species charge, including sign.
+          charge_other: Field-species charge, including sign.
+          epsilon_0: Vacuum permittivity in the chosen unit system.
+          hbar: Reduced Planck constant; zero selects the classical cutoff.
+          num_quad: Gauss points per axis for modal projection.
+          inplace: Replace the first dataset's values.
+          tag: Result tag.
+          label: Result label.
+        """
+
+    def vm_collisions_spitzer_coll_freq(self, moms_self: str, moms_other: str, bmag: str, *, mass_self: float, mass_other: float, charge_self: float, charge_other: float, epsilon_0: float, hbar: float, nufrac: float = 1.0, vt_sq_min_self: float = 0.0, vt_sq_min_other: float = 0.0, num_quad: int | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""Compute modal Spitzer collision frequency with Gkeyll's native updater.
+
+        moms_self and moms_other pack Maxwellian moments [n, u..., T/m], not raw
+        velocity moments. bmag is a scalar on the same configuration grid. The
+        Coulomb log uses cell averages; the density/thermal-speed factor is
+        evaluated and projected using num_quad Gauss points per direction
+        (default poly_order+2). Velocity floors are squared thermal speeds.
+        epsilon_0, hbar, masses, charges, and fields must use consistent units.
+        Returns one scalar modal field on the configuration grid.
+
+        Args:
+          moms_self: Test-species Maxwellian moments, packed as n, u..., T/m.
+          moms_other: Field-species Maxwellian moments in the same layout.
+          bmag: Scalar modal magnetic-field magnitude.
+          mass_self: Test-species mass.
+          mass_other: Field-species mass.
+          charge_self: Test-species charge, including sign.
+          charge_other: Field-species charge, including sign.
+          epsilon_0: Vacuum permittivity in the chosen unit system.
+          hbar: Reduced Planck constant; zero selects the classical cutoff.
+          nufrac: Nonnegative multiplier of the collision frequency.
+          vt_sq_min_self: Test-species squared thermal-speed floor.
+          vt_sq_min_other: Field-species squared thermal-speed floor.
+          num_quad: Gauss points per direction; defaults to poly_order+2.
+          inplace: Replace the first dataset's values.
+          tag: Result tag.
+          label: Result label.
         """
 
     def vm_kinetic_transform_frame(self, distribution: str, bulk: str, *, cdim: int, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:

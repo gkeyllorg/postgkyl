@@ -295,7 +295,13 @@ jobs:
           --timeout=180 --timeout-method=signal
 
   package:
-    name: Build and install distribution artifacts
+    name: Distribution artifacts / ${{ matrix.module }}
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [core, pkpm]
+    env:
+      POSTGKYL_GKEYLL_MODULE: ${{ matrix.module }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -314,6 +320,16 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
+      - name: Install optional native dependencies
+        if: matrix.module == 'pkpm'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev liblapacke-dev libsuperlu-dev
+          echo "LAPACK_LIBS=-lopenblas -llapacke" >> "$GITHUB_ENV"
+          echo "LAPACK_INC_DIR=/usr/include/$(gcc -print-multiarch)" >> "$GITHUB_ENV"
+          echo "LAPACK_LIB_DIR=/usr/lib/$(gcc -print-multiarch)" >> "$GITHUB_ENV"
+          echo "SUPERLU_INC_DIR=/usr/include/superlu" >> "$GITHUB_ENV"
+          echo "SUPERLU_LIB_DIR=/usr/lib/$(gcc -print-multiarch)" >> "$GITHUB_ENV"
       - name: Install artifact tools and build prerequisites
         run: >-
           python -m pip install
@@ -339,7 +355,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: distributions
+          name: distributions-${{ matrix.module }}
           path: dist/
           if-no-files-found: warn
           retention-days: 14

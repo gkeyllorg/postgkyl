@@ -1,6 +1,10 @@
+include postgkyl-build.toml
+include scripts/gkeyll_config.py
+include scripts/build_gkeyll.py
 include scripts/build_gkeyll.sh
 include scripts/update_gkeyll.sh
 include scripts/gkeyll-branch
+include scripts/gkeyll-modules
 include scripts/smoke_wheel.sh
 include scripts/check_wheel.py
 include src/postgkyl/gpython/csrc/_gpythonmodule.c
@@ -10,4 +14,4 @@ include src/postgkyl/gpython/csrc/_gpythonmodule.c
 exclude src/postgkyl/gpython/_build_info.py
 exclude src/postgkyl/gpython/_build_info.json
 exclude src/postgkyl/gpython/_gpython*.so
-exclude src/postgkyl/gpython/libg0core.so
+exclude src/postgkyl/gpython/libg0*.so

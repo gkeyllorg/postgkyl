@@ -1,8 +1,8 @@
-/* _gpythonmodule.c -- the CPython extension over gkyl_gpython.h
+/* _gpythonmodule.c -- the CPython extension over gkyl_gpython_core.h
  * (GKEYLL_C_SHIM.md).
  *
  * Knows Python objects, NumPy arrays, and the gpython contract -- and nothing
- * else about Gkeyll: gkyl_gpython.h (the gpython shim, which lives in the
+ * else about Gkeyll: gkyl_gpython_core.h (the gpython shim, which lives in the
  * gkeyll repo and is compiled into libg0core.so) exposes only opaque handles,
  * scalars, and buffers, so no layout or calling convention exists on this
  * side of the wall.
@@ -25,7 +25,68 @@
 #include <errno.h>
 #include <math.h>
 
-#include <gkyl_gpython.h>
+#include <gkyl_gpython_core.h>
+#ifdef POSTGKYL_HAVE_MOMENTS
+#include <gkyl_gpython_moments.h>
+#endif
+#ifdef POSTGKYL_HAVE_VLASOV
+#include <gkyl_gpython_vlasov.h>
+#endif
+#ifdef POSTGKYL_HAVE_GYROKINETIC
+#include <gkyl_gpython_gyrokinetic.h>
+#endif
+
+#ifdef POSTGKYL_HAVE_PKPM
+#include <gkyl_gpython_pkpm.h>
+#endif
+
+/* Each entry calls the shim in its owning Gkeyll module. */
+static const struct {
+  const char *name;
+  int expected_version;
+  int (*api_version)(void);
+} module_shims[] = {
+    {"core", GPYTHON_API_VERSION, gpython_api_version},
+#ifdef POSTGKYL_HAVE_MOMENTS
+    {"moments", GPYTHON_MOMENTS_API_VERSION, gpython_moments_api_version},
+#endif
+#ifdef POSTGKYL_HAVE_VLASOV
+    {"vlasov", GPYTHON_VLASOV_API_VERSION, gpython_vlasov_api_version},
+#endif
+#ifdef POSTGKYL_HAVE_GYROKINETIC
+    {"gyrokinetic", GPYTHON_GYROKINETIC_API_VERSION,
+     gpython_gyrokinetic_api_version},
+#endif
+#ifdef POSTGKYL_HAVE_PKPM
+    {"pkpm", GPYTHON_PKPM_API_VERSION, gpython_pkpm_api_version},
+#endif
+};
+
+static PyObject *
+py_module_api_versions(PyObject *self, PyObject *noargs)
+{
+  PyObject *versions = PyDict_New();
+  if (!versions)
+    return NULL;
+  for (size_t i = 0; i < sizeof(module_shims) / sizeof(module_shims[0]); ++i) {
+    int version = module_shims[i].api_version();
+    if (version != module_shims[i].expected_version) {
+      PyErr_Format(PyExc_ImportError, "Incompatible Gkeyll %s shim",
+                   module_shims[i].name);
+      Py_DECREF(versions);
+      return NULL;
+    }
+    PyObject *value = PyLong_FromLong(version);
+    if (!value ||
+        PyDict_SetItemString(versions, module_shims[i].name, value) < 0) {
+      Py_XDECREF(value);
+      Py_DECREF(versions);
+      return NULL;
+    }
+    Py_DECREF(value);
+  }
+  return versions;
+}
 
 static const char ARRAY_CAP[] = "gpython_array";
 static const char BASIS_CAP[] = "gpython_basis";
@@ -1060,7 +1121,142 @@ py_dynvec_write(PyObject *self, PyObject *args)
 }
 
 /* --------------------------------------------------------------- module */
+#ifdef POSTGKYL_HAVE_VLASOV
+static PyObject *
+py_coulomb_log(PyObject *self, PyObject *args)
+{
+  PyObject *samples_obj;
+  double ms, mr, qs, qr, eps0, hbar;
+  if (!PyArg_ParseTuple(args, "Odddddd", &samples_obj, &ms, &mr, &qs, &qr,
+                        &eps0, &hbar))
+    return NULL;
+  PyArrayObject *samples = (PyArrayObject *)PyArray_FROM_OTF(
+      samples_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  if (!samples)
+    return NULL;
+  int ndim = PyArray_NDIM(samples);
+  if (ndim < 1 || PyArray_DIM(samples, ndim - 1) != 5) {
+    Py_DECREF(samples);
+    PyErr_SetString(PyExc_ValueError,
+                    "Coulomb log expects rows of ns,nr,Ts,Tr,B");
+    return NULL;
+  }
+  PyArrayObject *out = (PyArrayObject *)PyArray_SimpleNew(
+      ndim - 1, PyArray_DIMS(samples), NPY_DOUBLE);
+  if (!out) {
+    Py_DECREF(samples);
+    return NULL;
+  }
+  int status = gpython_spitzer_coll_freq_calc_coulomb_log(
+      PyArray_SIZE(out), PyArray_DATA(samples), ms, mr, qs, qr, eps0, hbar,
+      PyArray_DATA(out));
+  Py_DECREF(samples);
+  if (status) {
+    Py_DECREF(out);
+    PyErr_SetString(
+        PyExc_ValueError,
+        "Coulomb log requires finite positive densities, temperatures, masses "
+        "and permittivity, nonzero charges, and nonnegative B and hbar");
+    return NULL;
+  }
+  return (PyObject *)out;
+}
+
+static PyObject *
+py_spitzer_coll_freq(PyObject *self, PyObject *args)
+{
+  PyObject *bcap, *scap, *rcap, *bmagcap, *ocap;
+  double ms, mr, qs, qr, eps0, hbar, nufrac, vtmin_s, vtmin_r;
+  int num_quad;
+  if (!PyArg_ParseTuple(args, "OOOOdddddddddiO", &bcap, &scap, &rcap, &bmagcap,
+                        &ms, &mr, &qs, &qr, &eps0, &hbar, &nufrac, &vtmin_s,
+                        &vtmin_r, &num_quad, &ocap))
+    return NULL;
+  gpython_basis *b = basis_arg(bcap);
+  gpython_array *s = array_arg(scap), *r = array_arg(rcap),
+                *bmag = array_arg(bmagcap), *out = array_arg(ocap);
+  if (!b || !s || !r || !bmag || !out)
+    return NULL;
+  if (gpython_spitzer_coll_freq(b, s, r, bmag, ms, mr, qs, qr, eps0, hbar,
+                                nufrac, vtmin_s, vtmin_r, num_quad, out)) {
+    PyErr_SetString(PyExc_ValueError,
+                    "Spitzer frequency: invalid physical parameters, "
+                    "quadrature (1..64), basis, or Maxwellian moment shapes");
+    return NULL;
+  }
+  Py_RETURN_NONE;
+}
+#endif
+
+#ifdef POSTGKYL_HAVE_GYROKINETIC
+static PyObject *
+py_mom_gyrokinetic(PyObject *self, PyObject *args)
+{
+  PyObject *cbcap, *pbcap, *loobj, *upobj, *cellsobj, *fcap, *bcap, *phicap;
+  double mass, charge;
+  const char *moment;
+  if (!PyArg_ParseTuple(args, "OOOOOddOOOs", &cbcap, &pbcap, &loobj, &upobj,
+                        &cellsobj, &mass, &charge, &fcap, &bcap, &phicap,
+                        &moment))
+    return NULL;
+  gpython_basis *cb = basis_arg(cbcap), *pb = basis_arg(pbcap);
+  gpython_array *f = array_arg(fcap), *bmag = array_arg(bcap);
+  gpython_array *phi = phicap == Py_None ? NULL : array_arg(phicap);
+  if (!cb || !pb || !f || !bmag || (phicap != Py_None && !phi))
+    return NULL;
+  PyArrayObject *lo =
+      (PyArrayObject *)PyArray_FROM_OTF(loobj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *up =
+      (PyArrayObject *)PyArray_FROM_OTF(upobj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *cells = (PyArrayObject *)PyArray_FROM_OTF(cellsobj, NPY_INT32,
+                                                           NPY_ARRAY_IN_ARRAY);
+  if (!lo || !up || !cells) {
+    Py_XDECREF(lo);
+    Py_XDECREF(up);
+    Py_XDECREF(cells);
+    return NULL;
+  }
+  int ndim = gpython_basis_ndim(pb);
+  if (PyArray_SIZE(lo) != ndim || PyArray_SIZE(up) != ndim ||
+      PyArray_SIZE(cells) != ndim) {
+    Py_DECREF(lo);
+    Py_DECREF(up);
+    Py_DECREF(cells);
+    PyErr_SetString(PyExc_ValueError,
+                    "gyrokinetic grid must match the phase-space dimension");
+    return NULL;
+  }
+  gpython_array *out = gpython_mom_gyrokinetic(
+      cb, pb, PyArray_DATA(lo), PyArray_DATA(up), PyArray_DATA(cells), mass,
+      charge, f, bmag, phi, moment);
+  Py_DECREF(lo);
+  Py_DECREF(up);
+  Py_DECREF(cells);
+  if (!out) {
+    PyErr_SetString(
+        PyExc_ValueError,
+        "gyrokinetic moment: unsupported moment/basis, invalid grid, or "
+        "incompatible field shapes (HamiltonianMoments requires phi)");
+    return NULL;
+  }
+  return wrap_array(out);
+}
+#endif
+
 static PyMethodDef gpython_methods[] = {
+#ifdef POSTGKYL_HAVE_VLASOV
+    {"coulomb_log", py_coulomb_log, METH_VARARGS,
+     "Gkeyll species-ordered Coulomb logarithm."},
+    {"spitzer_coll_freq", py_spitzer_coll_freq, METH_VARARGS,
+     "Gkeyll modal Spitzer collision frequency."},
+#endif
+#ifdef POSTGKYL_HAVE_GYROKINETIC
+    {"mom_gyrokinetic", py_mom_gyrokinetic, METH_VARARGS,
+     "Gkeyll gyrokinetic velocity moment."},
+#endif
+
+    {"module_api_versions", py_module_api_versions, METH_NOARGS,
+     "Call each selected module shim and return its ABI version."},
     {"api_version", py_api_version, METH_NOARGS, "gpython shim API version"},
     {"array_new", py_array_new, METH_VARARGS, "zeroed native array"},
     {"array_from_numpy", py_array_from_numpy, METH_VARARGS,
@@ -1136,6 +1332,10 @@ PyMODINIT_FUNC
 PyInit__gpython(void)
 {
   import_array();
+  PyObject *versions = py_module_api_versions(NULL, NULL);
+  if (!versions)
+    return NULL;
+  Py_DECREF(versions);
   PyObject *m = PyModule_Create(&gpython_module);
   if (!m)
     return NULL;
