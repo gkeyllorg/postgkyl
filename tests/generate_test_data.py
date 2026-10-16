@@ -703,6 +703,35 @@ _C2P_CONFIGS: list[tuple] = [
 ]
 
 
+def _generate_compare_sims_fixtures(out_dir: Path) -> None:
+  """Baseline/candidate directories-of-sims for the ``compare_sims`` and
+  ``compare_batch_sims`` tutorial examples: one sim (``toy_sim``), one
+  dynvector quantity that differs (``field_energy``) and one that doesn't
+  (``elc_integrated_moms``). The ``compare_batch_sims`` layout (each
+  top-level directory holding one subdirectory per simulation) is the
+  fixture's actual shape; ``compare_sims``' single-sim example points one
+  level deeper, at ``.../baseline/toy_sim``.
+  """
+  time = np.linspace(0.0, 1.0, 5)
+  for sim, scale in (("baseline", 1.0), ("candidate", 1.2)):
+    path = out_dir / "compare_sims" / sim / "toy_sim"
+    path.mkdir(parents=True, exist_ok=True)
+    write_gkyl_dynvector(
+        path / "toy_sim-field_energy.gkyl", time,
+        (np.linspace(1.0, 2.0, 5) * scale)[:, None],
+        metadata={
+            "description": "Toy field-energy history for the compare_sims "
+                           "tutorial example.",
+        })
+    write_gkyl_dynvector(
+        path / "toy_sim-elc_integrated_moms.gkyl", time,
+        np.tile(np.linspace(1.0, 2.0, 5)[:, None], (1, 3)),
+        metadata={
+            "description": "Toy integrated moments, identical in both sims, "
+                           "for the compare_sims tutorial example.",
+        })
+
+
 def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
@@ -713,6 +742,7 @@ def generate_all(out_dir: Path | str) -> None:
   _generate_moment_frames(out_dir)
   _generate_fourier_samples(out_dir)
   _generate_representation_fields(out_dir)
+  _generate_compare_sims_fixtures(out_dir)
 
   # Point samples of a plateau decay, 1.4 -> 1.2, on a narrow offset grid.
   fit_x = np.linspace(0.511174580254, 0.51122, 81)

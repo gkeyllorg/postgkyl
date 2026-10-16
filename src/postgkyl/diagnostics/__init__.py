@@ -9,12 +9,11 @@ stay in flat ``operations`` modules. Model-specific auxiliary discovery and
 interpretation live beside their diagnostic compositions.
 
 The four public packages mirror Gkeyll's model families: ``gk``, ``vm``,
-``pkpm``, and ``mom``. The equation-blind ``discovery`` module
-stays shared at this package root. There is no separate ``loaders`` package;
-each model family owns its loading and program-scale diagnostics.
+``pkpm``, and ``mom``. Equation-agnostic diagnostics lie outside of these
+four folders.
 """
 
-from . import discovery, gk, mom, pkpm, vm
+from . import compare, discovery, gk, mom, pkpm, vm
 
 from typing import Annotated, Literal
 
@@ -103,7 +102,7 @@ mom.ten_moment.mom_agyro.__annotations__["measure"] = Literal["swisdak",
 
 for _function in (pkpm.load_pkpm, discovery.find_output_stems,
                   discovery.available_frames, mom.enstrophy.enstrophy,
-                  mom.ke_dke.ke_dke):
+                  mom.ke_dke.ke_dke, compare.sims):
   _resolve(_function)
   command(_DIAG_LOAD if _function is pkpm.load_pkpm else _DIAG_REPORT)(
       _function)
@@ -160,4 +159,5 @@ __all__ = [
     "mom",
     "pkpm",
     "discovery",
+    "compare",
 ]

@@ -641,9 +641,15 @@ class TestSaving:
     backend.plot(_line(), no_show=True, saveas=outputs)
     assert all(output.exists() for output in outputs)
 
+  @pytest.mark.parametrize("extension", [".jpg", ".svg", ".webp"])
+  def test_saveas_writes_other_matplotlib_formats(self, tmp_path, extension):
+    output = tmp_path / f"figure{extension}"
+    backend.plot(_line(), no_show=True, saveas=output)
+    assert output.exists()
+
   def test_unsupported_save_extension_raises(self, tmp_path):
-    with pytest.raises(ValueError, match="Supported formats are: .png, .pdf"):
-      backend.plot(_line(), no_show=True, saveas=tmp_path / "figure.svg")
+    with pytest.raises(ValueError, match="not supported"):
+      backend.plot(_line(), no_show=True, saveas=tmp_path / "figure.xyz")
 
 
 # --------------------------------------------------------------------------
