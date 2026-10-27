@@ -32,7 +32,6 @@ from postgkyl.cli_spec import (
     CliType,
     CommandSpec,
     Execution,
-    KeyValue,
     PipelineInput,
     ResultPolicy,
     Section,
@@ -46,67 +45,31 @@ from ._prep import (default_value_label, materialize_plot_data,
                     parse_isosurface_levels, resolve_axis_labels,
                     squeeze_collapsed_axes, subplot_grid)
 from .labels import latex_to_html
-from .style import DEFAULT_STYLE, apply_style
+
+_DARK_THEME = dict(paper_color="#000000",
+                   scene_color="#000000",
+                   text_color="#e6e6e6",
+                   grid_color="#2a3242",
+                   axis_line_color="#9aa3b2")
+_LIGHT_THEME = dict(paper_color="#ffffff",
+                    scene_color="#ffffff",
+                    text_color="#111111",
+                    grid_color="#b8b8b8",
+                    axis_line_color="#222222")
 
 
-def _apply_plot_style(style: str | None,
-                      rcParams: dict | None,
-                      diverging: bool,
-                      cmap: str | None,
-                      xkcd: bool,
-                      *,
-                      background: str = "dark",
-                      invert_cmap: bool = False) -> dict:
-  """Apply Matplotlib styling (colormap source) and return Plotly theme colors."""
-  import matplotlib.pyplot as plt
+def _theme_colors(background: str | None) -> dict:
+  """Plotly theme colors for a ``"dark"`` or ``"light"`` background."""
+  name = (background or "dark").strip().lower()
+  return _LIGHT_THEME if name == "light" else _DARK_THEME
 
-  background_name = (background or "dark").strip().lower()
-  if style:
-    apply_style(style)
-  elif background_name == "light":
-    apply_style("default")
-  else:
-    apply_style(DEFAULT_STYLE)
 
-  if background_name == "light":
-    mpl.rcParams["figure.facecolor"] = "#ffffff"
-    mpl.rcParams["axes.facecolor"] = "#ffffff"
-    mpl.rcParams["savefig.facecolor"] = "#ffffff"
-    mpl.rcParams["text.color"] = "#111111"
-    mpl.rcParams["axes.labelcolor"] = "#111111"
-    mpl.rcParams["xtick.color"] = "#111111"
-    mpl.rcParams["ytick.color"] = "#111111"
-    mpl.rcParams["axes.edgecolor"] = "#222222"
-    mpl.rcParams["grid.color"] = "#b8b8b8"
-    theme_colors = dict(paper_color="#ffffff",
-                        scene_color="#ffffff",
-                        text_color="#111111",
-                        grid_color="#b8b8b8",
-                        axis_line_color="#222222")
-  else:
-    theme_colors = dict(paper_color="#000000",
-                        scene_color="#000000",
-                        text_color="#e6e6e6",
-                        grid_color="#2a3242",
-                        axis_line_color="#9aa3b2")
-
-  if rcParams:
-    for key, value in rcParams.items():
-      mpl.rcParams[key] = value
-
-  cmap_name = cmap if cmap is not None else (
-      "RdBu_r" if diverging else "inferno")
-  mpl.rcParams["image.cmap"] = cmap_name
-
+def _cmap_name(cmap: str | None, diverging: bool, invert_cmap: bool) -> str:
+  """The Matplotlib colormap name the Plotly colorscale is sampled from."""
+  name = cmap if cmap is not None else ("RdBu_r" if diverging else "inferno")
   if invert_cmap:
-    current = mpl.rcParams["image.cmap"]
-    mpl.rcParams["image.cmap"] = (current[:-2]
-                                  if current.endswith("_r") else f"{current}_r")
-
-  if xkcd:
-    plt.xkcd()
-
-  return theme_colors
+    name = name[:-2] if name.endswith("_r") else f"{name}_r"
+  return name
 
 
 def _plotly_colorscale(cmap_name: str, n: int = 256):
@@ -470,10 +433,6 @@ def plotly(data: GDataState,
            cscale: float = 1.0,
            cshift: float = 0.0,
            clim: tuple[float, float] | None = None,
-           style: str | None = None,
-           rcParams: Annotated[dict[str, object] | None,
-                               CliType(dict[str, str] | None),
-                               KeyValue()] = None,
            background: str = "dark",
            invert_cmap: bool = False,
            no_legend: bool = False,
@@ -492,7 +451,6 @@ def plotly(data: GDataState,
                              CliType(str | None)] = None,
            no_showgrid: bool = False,
            hashtag: bool = False,
-           xkcd: bool = False,
            color: str | None = None,
            opacity: float | None = 1.0,
            scatter_opacity_range: tuple[float, float] | None = None,
@@ -553,8 +511,6 @@ def plotly(data: GDataState,
     cscale: Color-value scale factor.
     cshift: Color-value shift.
     clim: Explicit ``(minimum, maximum)`` color range.
-    style: Postgkyl/Matplotlib style used to derive colors.
-    rcParams: Matplotlib configuration overrides used while deriving styles.
     background: ``"dark"`` or ``"light"`` scene theme.
     invert_cmap: Reverse the selected colormap.
     no_legend: Suppress labeled traces in the legend.
@@ -572,7 +528,6 @@ def plotly(data: GDataState,
     aspect: Scene aspect mode (``auto``, ``cube``, ``data``), or numeric ratio.
     no_showgrid: Suppress scene grid lines.
     hashtag: Add a ``#pgkyl`` annotation.
-    xkcd: Derive colors from Matplotlib's XKCD style.
     color: Replace the colormap with one fixed trace color.
     opacity: Surface, volume, or marker opacity.
     scatter_opacity_range: Minimum and maximum opacity encoded in scatter colors.
@@ -606,13 +561,7 @@ def plotly(data: GDataState,
 
   data = materialize_plot_data(data)
   clabel = default_value_label(data, clabel)
-  theme_colors = _apply_plot_style(style,
-                                   rcParams,
-                                   diverging,
-                                   cmap,
-                                   xkcd,
-                                   background=background,
-                                   invert_cmap=invert_cmap)
+  theme_colors = _theme_colors(background)
 
   grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
   num_dims = len(grid)
@@ -670,7 +619,7 @@ def plotly(data: GDataState,
     ]
     grid_shape = (num_rows, num_cols)
 
-  colorscale = _plotly_colorscale(mpl.rcParams["image.cmap"])
+  colorscale = _plotly_colorscale(_cmap_name(cmap, diverging, invert_cmap))
   scalar_colorscale = [[0.0, color], [1.0, color]
                        ] if bool(color) else colorscale
   paper_color = theme_colors["paper_color"]
