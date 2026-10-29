@@ -107,7 +107,7 @@ def pyvista(data: GDataState,
   Args:
     data: dataset to plot; must be 3-D after squeezing size-1 axes beyond
       the third. A size-1 axis of 3-D data, such as the zero thickness of
-      a map_to_torus result, is kept and renders as a surface.
+      a map_to_torus_3d result, is kept and renders as a surface.
     no_show: Do not open an interactive render window; render off-screen.
     no_spin: Do not auto-rotate the camera in interactive windows.
     max_points_per_axis: downsample to at most this many points per axis;

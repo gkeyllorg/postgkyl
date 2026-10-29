@@ -37,10 +37,52 @@ def binary(op, a, b):
   """``a <op> b`` where at least one operand is a dataset; result copies its grid."""
   pa = a if isinstance(a, GDataState) else None
   pb = b if isinstance(b, GDataState) else None
+  if any(not d.ctx.get("interpolated", False)
+         and isinstance(d.ctx.get("value_form"), str)
+         and d.ctx["value_form"].startswith("modal_surf") for d in (pa, pb)
+         if d is not None):
+    return _surface_binary(op, a, b, pa, pb)
   if (pa is not None and pa.backend == "gkyl") or (pb is not None
                                                    and pb.backend == "gkyl"):
     return _modal_binary(op, a, b, pa, pb)
   return _numpy_binary(op, a, b, pa, pb)
+
+
+def _surface_binary(op, a, b, pa, pb):
+  """Apply only operations linear in the surface DG coefficients."""
+  primary = pa if pa is not None else pb
+  layout = require_dg_layout(primary)
+  if pa is not None and pb is not None:
+    require_compatible_operands(pa, pb)
+    if op not in (operator.add, operator.sub):
+      raise NotImplementedError(
+          "surface coefficient products and quotients "
+          "require a DG kernel; call .interpolate() first")
+    result = op(pa.values, pb.values)
+  else:
+    scalar = b if pa is not None else a
+    if not isinstance(scalar, (int, float, np.integer, np.floating)):
+      raise ValueError("surface coefficients can be combined with a scalar "
+                       "or another surface field")
+    scalar = float(scalar)
+    scalar_first = pa is None
+    if op is operator.mul:
+      result = primary.values * scalar
+    elif op is operator.truediv and not scalar_first:
+      result = primary.values / scalar
+    elif op in (operator.add, operator.sub):
+      result = np.array(primary.values, copy=True)
+      if op is operator.sub and scalar_first:
+        result *= -1.0
+      shift = (scalar if scalar_first or op is operator.add else -scalar)
+      result[..., ::layout.block_size] += dg.modal.constant_mode_shift(
+          layout.ndim - 1, shift)
+    else:
+      raise NotImplementedError("surface nonlinear arithmetic requires a DG "
+                                "kernel; call .interpolate() first")
+  if primary.backend == "gkyl":
+    result = dg.rep.wrap(result)
+  return primary._result(primary.grid, result)
 
 
 # --------------------------------------------------------------- numpy domain

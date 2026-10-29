@@ -515,7 +515,8 @@ def test_every_generated_boolean_has_a_false_cli_default():
 
 def test_cli_has_no_manual_command_package_or_compatibility_layer():
   root = Path(__file__).parents[1] / "src" / "postgkyl" / "cli"
-  assert not (root / "commands").exists()
+  # Removed packages can leave ignored bytecode behind in existing checkouts.
+  assert not list((root / "commands").rglob("*.py"))
   assert not (root / "compat.py").exists()
   assert not (root / "legacy.py").exists()
 

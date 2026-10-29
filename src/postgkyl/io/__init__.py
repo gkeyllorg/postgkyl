@@ -18,6 +18,7 @@ from .gkyl_reader import GkylReader
 from .gkyl_h5_reader import GkylH5Reader
 from .flash_h5_reader import FlashH5Reader
 from .writer import save
+from .surface import surface_direction, unpack_surface
 
 # Reader registry -- tried in order; extend by adding (name, reader) entries.
 # Order is by *specificity* of ``is_compatible()``, most specific / cheapest
@@ -63,7 +64,15 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
     reader = reader_cls(file_name=file_name, ctx=ctx, **kwargs)
     if reader.is_compatible():
       reader.preload()
-      return reader.load()
+      direction = surface_direction(ctx.get("value_form"),
+                                    len(ctx.get("cells", ())))
+      if direction is not None and (any(value is not None
+                                        for value in kwargs.get("axes") or ())
+                                    or kwargs.get("comp") is not None):
+        raise ValueError("surface fields require a full read; use .select() "
+                         "after loading")
+      grid, values = reader.load()
+      return unpack_surface(grid, values, ctx)
   raise NameError(
       f"'{file_name}' cannot be read with any known reader: {list(_READERS)}")
 

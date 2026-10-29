@@ -40,10 +40,10 @@ def _boundary_path(rows, angles):
 def test_surface_values_and_points_follow_the_analytic_field():
   # Exact p1 polynomials on a twisted geometry with R = 3 + x and Z = z.
   data = pg.load(str(GENERATED / "twisted_pos_3d_p1-field_0.gkyl"))
-  torus = data.map_to_torus(x_idx=(1, -1),
-                            phi_tor=(0.3, 2.0),
-                            nphi=5,
-                            nz_interp=1)
+  torus = data.map_to_torus_3d(x_idx=(1, -1),
+                               phi_tor=(0.3, 2.0),
+                               nphi=5,
+                               nz_interp=1)
 
   # p1 samples two subcell centers per cell: x cells have width 1 on
   # [-1, 2] and z cells width 2 on [1, 5].
@@ -80,7 +80,7 @@ def test_caps_are_the_poloidal_projection_at_the_wedge_angles():
                                            phi_tor=(0.4, 2.9),
                                            nphi=6,
                                            nz_interp=2)
-  torus = data.map_to_torus(projection=projection)
+  torus = data.map_to_torus_3d(projection=projection)
   rz = pg.resolve_rz_projection(data, geometry, nz_interp=2)
   rows = np.arange(5, 41)
   # The last cap starts on the outer wall's final sample, after the
@@ -88,7 +88,8 @@ def test_caps_are_the_poloidal_projection_at_the_wedge_angles():
   last = rows.size + 4
   for angle, cap in ((0.4, torus.values[:rows.size]),
                      (2.9, torus.values[last:last + rows.size])):
-    poloidal = data.map_to_rz(projection=rz, phi_tor=angle).values[rows, :, 0]
+    poloidal = data.map_to_torus_rz(projection=rz,
+                                    phi_tor=angle).values[rows, :, 0]
     if angle == 2.9:
       poloidal = poloidal[::-1]
     np.testing.assert_allclose(cap[:, :-1, 0, 0], poloidal, rtol=1e-12)
@@ -98,22 +99,24 @@ def test_caps_are_the_poloidal_projection_at_the_wedge_angles():
 @needs_gkeyll
 def test_inferred_geometry_reuse_and_public_spellings_agree():
   data = pg.load(F3D)
-  inferred = pg.map_to_torus(data, x_idx=(3, -3), nphi=4, nz_interp=2)
+  inferred = pg.map_to_torus_3d(data, x_idx=(3, -3), nphi=4, nz_interp=2)
   projection = pg.resolve_torus_projection(data,
                                            pg.resolve_geometry(F3D),
                                            x_idx=(3, 93),
                                            nphi=4,
                                            nz_interp=2)
-  reused = data.map_to_torus(projection=projection, tag="torus", label="wedge")
+  reused = data.map_to_torus_3d(projection=projection,
+                                tag="torus",
+                                label="wedge")
   np.testing.assert_allclose(reused.values, inferred.values)
   for actual, expected in zip(reused.grid, inferred.grid):
     np.testing.assert_allclose(actual, expected)
   assert (reused.tag, reused.label) == ("torus", "wedge")
-  assert pg.map_to_torus is operations.map_to_torus is pg.GData.map_to_torus
+  assert pg.map_to_torus_3d is operations.map_to_torus_3d is pg.GData.map_to_torus_3d
 
   inplace = data.clone()
-  assert pg.map_to_torus(inplace, projection=projection,
-                         inplace=True) is inplace
+  assert pg.map_to_torus_3d(inplace, projection=projection,
+                            inplace=True) is inplace
   np.testing.assert_allclose(inplace.values, inferred.values)
 
 
@@ -160,23 +163,23 @@ def test_reusable_projection_contracts():
                                            nz_interp=2)
   for overrides in ({"nphi": 4}, {"x_idx": (1, 2)}, {"z_axis": 1.0}):
     with pytest.raises(ValueError, match="cannot be combined"):
-      data.map_to_torus(projection=projection, **overrides)
+      data.map_to_torus_3d(projection=projection, **overrides)
 
   shifted = data.clone()
   shifted.grid[0] = shifted.grid[0] + 0.01
   with pytest.raises(ValueError, match="computational grid does not match"):
-    pg.map_to_torus(shifted, projection=projection)
+    pg.map_to_torus_3d(shifted, projection=projection)
   with pytest.raises(ValueError, match="radial rows exceed"):
-    pg.map_to_torus(data,
-                    projection=replace(projection, rows=projection.rows + 1))
+    pg.map_to_torus_3d(data,
+                       projection=replace(projection, rows=projection.rows + 1))
   with pytest.raises(ValueError, match="surface points and samples differ"):
-    pg.map_to_torus(data,
-                    projection=replace(projection,
-                                       phi_tor=projection.phi_tor[:2]))
+    pg.map_to_torus_3d(data,
+                       projection=replace(projection,
+                                          phi_tor=projection.phi_tor[:2]))
   with pytest.raises(ValueError, match="requires 3-D"):
-    pg.map_to_torus(pg.load(F2D))
+    pg.map_to_torus_3d(pg.load(F2D))
   with pytest.raises(ValueError, match="un-interpolated modal DG"):
-    pg.map_to_torus(data.interpolate())
+    pg.map_to_torus_3d(data.interpolate())
 
 
 @needs_gkeyll
@@ -184,12 +187,12 @@ def test_cli_parses_negative_indices_and_matches_the_api():
   from postgkyl.cli.app import COMMANDS, cli
 
   data = pg.load(F3D)
-  expected = pg.map_to_torus(data,
-                             x_idx=(4, -4),
-                             phi_tor=(0.0, 3.0),
-                             nphi=4,
-                             nz_interp=2)
-  command = next(c for c in COMMANDS if c.name == "map_to_torus")
+  expected = pg.map_to_torus_3d(data,
+                                x_idx=(4, -4),
+                                phi_tor=(0.0, 3.0),
+                                nphi=4,
+                                nz_interp=2)
+  command = next(c for c in COMMANDS if c.name == "map_to_torus_3d")
   space = DataSpace(datasets=[data])
   result = CliRunner().invoke(command, [
       "--x_idx", "4", "-4", "--phi_tor", "0", "3", "--nphi", "4", "--nz_interp",
@@ -200,4 +203,4 @@ def test_cli_parses_negative_indices_and_matches_the_api():
   np.testing.assert_allclose(space.datasets[0].values, expected.values)
 
   help_text = CliRunner().invoke(cli, ["--help"]).output
-  assert "map_to_torus" in help_text.split("Diagnostics:", 1)[0]
+  assert "map_to_torus_3d" in help_text.split("Diagnostics:", 1)[0]

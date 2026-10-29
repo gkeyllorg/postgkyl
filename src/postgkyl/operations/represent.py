@@ -61,6 +61,10 @@ def represent(data: "GDataState",
                      f"choices: {VALUE_FORMS}")
   basis_type, ndim, poly_order = _native_basis(data)
   layout = require_dg_layout(data)
+  if layout.surface_dir is not None:
+    raise NotImplementedError("surface coefficients cannot use full-cell "
+                              "representation transforms; call "
+                              ".interpolate() first")
   split = layout.basis_kwargs
   cur = data.ctx.get("value_form", "modal")
   arr = data.native

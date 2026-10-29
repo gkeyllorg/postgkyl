@@ -83,6 +83,13 @@ def _rep_of(ctx: dict) -> str:
   return ctx.get("value_form", "modal")
 
 
+def _coefficient_form(ctx: dict) -> bool:
+  """Whether the current values are modal cell or surface coefficients."""
+  form = _rep_of(ctx)
+  return not ctx.get("interpolated") and (form == "modal"
+                                          or form.startswith("modal_surf"))
+
+
 def _compare(a, b) -> bool:
   """Value equality for nested metadata, independent of object identity."""
   if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
@@ -192,8 +199,8 @@ def _modal_kernel(token: str, tmp_grid, tmp_values, tmp_ctx):
   basis/grid validation and DG kernel selection owned by arithmetic.binary.
   """
   if not any(dg.modal.is_native(v) for v in tmp_values) and not any(
-      grid and ctx.get("basis_type") and not ctx.get("interpolated")
-      and _rep_of(ctx) == "modal" for grid, ctx in zip(tmp_grid, tmp_ctx)):
+      grid and ctx.get("basis_type") and _coefficient_form(ctx)
+      for grid, ctx in zip(tmp_grid, tmp_ctx)):
     return None
 
   if token not in _MODAL_BINARY_OPS and token not in _MODAL_UNARY_POWERS:
@@ -231,7 +238,7 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
       for grid, c, native in zip(tmp_grid, tmp_ctx, is_native)
       if native or (grid and c.get("basis_type") and not c.get("interpolated"))
   }
-  if reps == {"modal"}:
+  if len(reps) == 1 and next(iter(reps)).startswith("modal"):
     return _modal_kernel(token, tmp_grid, tmp_values, tmp_ctx)
 
   # Empty/absent grids belong to scalars, literals, or terminal reductions.

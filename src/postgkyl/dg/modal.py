@@ -35,6 +35,11 @@ def is_native(value) -> bool:
   return isinstance(value, GkylArray)
 
 
+def constant_mode_shift(ndim: int, val: float) -> float:
+  """Coefficient shift for a constant field on an orthonormal DG basis."""
+  return float(val) * 2.0**(ndim / 2.0)
+
+
 def shift_mean(basis_type: str,
                ndim: int,
                poly_order: int,
@@ -54,7 +59,7 @@ def shift_mean(basis_type: str,
                                poly_order,
                                cdim=cdim,
                                vdim=vdim)
-  coeff_shift = float(val) * 2.0**(ndim / 2.0)
+  coeff_shift = constant_mode_shift(ndim, val)
   out = a
   for f in range(a.ncomp // nb):
     out = gpython.kernels.shiftc(out, coeff_shift, f * nb)

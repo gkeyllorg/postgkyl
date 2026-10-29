@@ -155,13 +155,12 @@ def _verbs(steps):
 def test_a_step_binds_to_its_session_command():
   # Steps are checked against the generated commands, so a renamed command
   # or option fails as the chain is built, not when the GUI runs it.
-  assert gp.Step.of("map_to_phitheta", x_idx=3, nz_interp=None).kwargs == {
-      "x_idx": 3
-  }
+  step = gp.Step.of("map_to_torus_phitheta", x_idx=3, nz_interp=None)
+  assert step.kwargs == {"x_idx": 3}
   with pytest.raises(AttributeError, match="not a pgkyl command"):
     gp.Step.of("extract_flux_surface", x_idx=3)
   with pytest.raises(TypeError, match="phi"):
-    gp.Step.of("map_to_rz", phi=0.3)
+    gp.Step.of("map_to_torus_rz", phi=0.3)
 
 
 class TestBuildChain:
@@ -222,7 +221,7 @@ class TestBuildChain:
 
   def test_geometry_transforms_refuse_averages(self):
     with pytest.raises(ValueError, match="full configuration space"):
-      gp.build_chain(_file_settings(average=(1, ), transform="map_to_rz"))
+      gp.build_chain(_file_settings(average=(1, ), transform="map_to_torus_rz"))
 
   def test_frames_of_one_output_are_one_pattern_and_a_range(self, tmp_path):
     for frame in range(5):
@@ -361,10 +360,12 @@ class TestRun:
       direct = getattr(direct, step.verb)(**step.kwargs)
     np.testing.assert_array_equal(data.values, direct.values)
 
-  def test_radial_samples_are_the_flux_surfaces_map_to_phitheta_accepts(self):
-    count = gp.radial_samples(_file_settings(fluct="yz", transform="map_to_rz"))
+  def test_radial_samples_are_the_flux_surfaces_map_to_torus_phitheta_accepts(
+      self):
+    count = gp.radial_samples(
+        _file_settings(fluct="yz", transform="map_to_torus_rz"))
     assert count == 2 * 48  # Two p1 interpolation points per radial cell.
-    surface = _file_settings(transform="map_to_phitheta", nz_interp=2)
+    surface = _file_settings(transform="map_to_torus_phitheta", nz_interp=2)
     gp.run(gp.build_chain(dataclasses.replace(surface, x_idx=count - 1)))
     with pytest.raises(Exception, match="out of bounds"):
       gp.run(gp.build_chain(dataclasses.replace(surface, x_idx=count)))
@@ -375,7 +376,8 @@ class TestRun:
     assert info.curvilinear == (False, False, False)
     mapc2p = str(DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-geo_int_mapc2p.gkyl")
     info = gp.probe(
-        gp.build_chain(_file_settings(transform="map_to_rz", mapc2p=mapc2p),
+        gp.build_chain(_file_settings(transform="map_to_torus_rz",
+                                      mapc2p=mapc2p),
                        probe_only=True))
     # The R-Z axes select on minor radius and poloidal angle, not by index.
     assert info.curvilinear == (False, False)
@@ -619,7 +621,7 @@ def test_the_flux_surface_slider_spans_every_interpolated_radius(
   pytest.importorskip("marimo")
   monkeypatch.chdir(DATA)
   state = dict(_run_notebook(monkeypatch)["gui_state"],
-               transform="map_to_phitheta",
+               transform="map_to_torus_phitheta",
                x_idx=95,
                interp_pts=1,
                sel_enables=[False, False])
@@ -628,7 +630,7 @@ def test_the_flux_surface_slider_spans_every_interpolated_radius(
   # 48 p1 radial cells give 96 flux surfaces; the outermost is selectable.
   assert defs["x_idx"].stop == 95
   assert (defs["settings"].transform,
-          defs["settings"].x_idx) == ("map_to_phitheta", 95)
+          defs["settings"].x_idx) == ("map_to_torus_phitheta", 95)
   assert defs["figure_bytes"].startswith(b"\x89PNG")
 
 
@@ -641,7 +643,7 @@ def test_a_stale_or_broken_state_falls_back_to_defaults(monkeypatch, tmp_path):
       {
           "cmap": "no-such-cmap",
           "field": "no-such-field",
-          "transform": "extract_flux_surface"  # Renamed map_to_phitheta.
+          "transform": "extract_flux_surface"  # Renamed map_to_torus_phitheta.
       })
   defs = _run_notebook(monkeypatch, "--state", stale)
   assert defs["gui_state"]["cmap"] == "(default)"

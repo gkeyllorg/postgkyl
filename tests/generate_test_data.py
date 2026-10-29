@@ -81,6 +81,69 @@ def num_comps(basis: str, ndim: int, poly_order: int) -> int:
   return table[ndim - 1][idx_fn(poly_order)]
 
 
+def _generate_surface_fields(out_dir: Path) -> None:
+  """Exact affine fields stored in Gkeyll's doubled surface components."""
+  for ndim in (1, 2, 3):
+    cells = [d + 2 for d in range(ndim)]
+    lower = [-1.0 + d for d in range(ndim)]
+    upper = [2.0 + 2 * d for d in range(ndim)]
+    edges = [
+        np.linspace(lo, hi, count + 1)
+        for lo, hi, count in zip(lower, upper, cells)
+    ]
+    for direction in range(ndim):
+      tangents = [d for d in range(ndim) if d != direction]
+      block = (1, 2, 4)[ndim - 1]
+      norm = 2.0**((ndim - 1) / 2.0)
+      surface_shape = [
+          count + (d == direction) for d, count in enumerate(cells)
+      ]
+      coefficients = np.zeros((*surface_shape, 2 * block))
+      for idx in np.ndindex(*surface_shape):
+        surface = edges[direction][idx[direction]]
+        tangent_centers = [
+            0.5 * (edges[d][idx[d]] + edges[d][idx[d] + 1]) for d in tangents
+        ]
+        slopes = [3.0, -4.0]
+        value = 5.0 + 2.0 * surface + sum(
+            slopes[j] * coord for j, coord in enumerate(tangent_centers))
+        coefficients[idx + (0, )] = norm * value
+        coefficients[idx + (block, )] = norm * (7.0 - value)
+        for j, d in enumerate(tangents):
+          mode = norm * slopes[j] * np.diff(edges[d])[idx[d]] / (2 * np.sqrt(3))
+          coefficients[idx + (j + 1, )] = mode
+          coefficients[idx + (block + j + 1, )] = -mode
+
+      packed = np.zeros((*cells, 4 * block))
+      head = tuple(
+          slice(None, -1) if d == direction else slice(None)
+          for d in range(ndim))
+      tail = tuple(-1 if d == direction else slice(None) for d in range(ndim))
+      packed[..., :2 * block] = coefficients[head + (slice(None), )]
+      packed[..., 2 * block:] = packed[..., :2 * block]
+      packed[tail + (slice(2 * block, None), )] = coefficients[tail +
+                                                               (slice(None), )]
+      write_gkyl_field(
+          out_dir / f"surface_{ndim}d_dir{direction}.gkyl",
+          cells,
+          lower,
+          upper,
+          packed,
+          1,
+          "serendipity",
+          metadata={
+              "value_form":
+              f"modal_surf{direction}",
+              "analytic_function":
+              "f0=5+2*s+3*t0-4*t1; f1=7-f0 (omit absent tangents)",
+              "generation_method":
+              "Exact affine orthonormal surface-modal coefficients; the "
+              "upper face is stored in the last cell's second half.",
+              "description":
+              "Two analytic surface fields."
+          })
+
+
 def write_gkyl_field(
     path: Path,
     cells: list[int],
@@ -779,17 +842,133 @@ _C2P_CONFIGS: list[tuple] = [
 ]
 
 
+def _generate_compare_sims_fixtures(out_dir: Path) -> None:
+  """Baseline/candidate directories-of-sims for the ``compare_sims`` and
+  ``compare_batch_sims`` tutorial examples: one sim (``toy_sim``), one
+  dynvector quantity that differs (``field_energy``) and one that doesn't
+  (``elc_integrated_moms``). The ``compare_batch_sims`` layout (each
+  top-level directory holding one subdirectory per simulation) is the
+  fixture's actual shape; ``compare_sims``' single-sim example points one
+  level deeper, at ``.../baseline/toy_sim``.
+  """
+  time = np.linspace(0.0, 1.0, 5)
+  for sim, scale in (("baseline", 1.0), ("candidate", 1.2)):
+    path = out_dir / "compare_sims" / sim / "toy_sim"
+    path.mkdir(parents=True, exist_ok=True)
+    write_gkyl_dynvector(path / "toy_sim-field_energy.gkyl",
+                         time, (np.linspace(1.0, 2.0, 5) * scale)[:, None],
+                         metadata={
+                             "description":
+                             "Toy field-energy history for the compare_sims "
+                             "tutorial example.",
+                         })
+    write_gkyl_dynvector(path / "toy_sim-elc_integrated_moms.gkyl",
+                         time,
+                         np.tile(np.linspace(1.0, 2.0, 5)[:, None], (1, 3)),
+                         metadata={
+                             "description":
+                             "Toy integrated moments, identical in both sims, "
+                             "for the compare_sims tutorial example.",
+                         })
+
+
+def _generate_native_physics_fields(out_dir: Path) -> None:
+  """Exact affine DG data for optional native collision and moment kernels.
+
+  Collisions: n=2+x, u=1/2, T/m=1 and B=0 on [-1/4,5/4].
+  Gyrokinetics: F=2+x+v_parallel, B=3, phi=2; v_parallel in [-1/2,5/2],
+  mu in [1/4,7/4]. Stored F has no implicit Jacobian. Coefficients are
+  closed-form orthonormal Legendre integrals, with only the constant and
+  single-axis linear modes populated. No production basis routine is used.
+  """
+  metadata = {
+      "description":
+      "Affine fields for native collision and gyrokinetic moment tests.",
+      "analytic_function":
+      _generate_native_physics_fields.__doc__,
+      "generation_method":
+      "Exact orthonormal Legendre integrals: the constant coefficient is the cell average times 2^(ndim/2); each linear coefficient is its slope times the cell half-width times 2^(ndim/2)/sqrt(3). All other modes vanish. Maxwellian fields are packed in n, u, T/m order."
+  }
+  for order in (1, 2):
+    nb = order + 1
+    xedges = np.linspace(-.25, 1.25, 4)
+    x = (xedges[1:] + xedges[:-1]) / 2
+    density = np.zeros((3, nb))
+    density[:, 0] = np.sqrt(2) * (2 + x)
+    density[:, 1] = np.sqrt(2 / 3) * .25
+    temp = np.zeros_like(density)
+    temp[:, 0] = np.sqrt(2)
+    moments = np.concatenate((density, .5 * temp, temp), axis=-1)
+    for name, coefficients in (("density", density), ("temperature", temp),
+                               ("bmag", 0 * temp), ("moms", moments)):
+      write_gkyl_field(out_dir / f"collision_{name}_p{order}.gkyl", [3], [-.25],
+                       [1.25],
+                       coefficients,
+                       order,
+                       "serendipity",
+                       metadata=metadata)
+  for cdim, vdim, order, nb in ((1, 1, 1, 6), (1, 1, 2, 8), (1, 2, 1,
+                                                             12), (1, 2, 2, 20),
+                                (2, 2, 1, 24), (2, 2, 2, 48), (3, 2, 1, 48)):
+    pdim = cdim + vdim
+    ccells = [3, 2, 4][:cdim]
+    clo, chi = [-.25, 1., -2.][:cdim], [1.25, 3., 1.][:cdim]
+    cells = ccells + [4, 2][:vdim]
+    lower, upper = clo + [-.5, .25][:vdim], chi + [2.5, 1.75][:vdim]
+    grid = [
+        np.linspace(lo, hi, n + 1) for lo, hi, n in zip(lower, upper, cells)
+    ]
+    centers = np.meshgrid(*[(e[1:] + e[:-1]) / 2 for e in grid], indexing="ij")
+    coeff = np.zeros((*cells, nb))
+    norm = 2**(pdim / 2)
+    coeff[..., 0] = norm * (2 + centers[0] + centers[cdim])
+    coeff[..., 1] = norm / np.sqrt(3) * (upper[0] - lower[0]) / (2 * cells[0])
+    coeff[..., cdim + 1] = norm / np.sqrt(3) * (upper[cdim] -
+                                                lower[cdim]) / (2 * cells[cdim])
+    stem = f"native_gk_{cdim}x{vdim}v_p{order}"
+    write_gkyl_field(out_dir / f"{stem}_f.gkyl",
+                     cells,
+                     lower,
+                     upper,
+                     coeff,
+                     order,
+                     "gkhybrid" if order == 1 else "serendipity",
+                     metadata={
+                         **metadata, "cdim": cdim,
+                         "vdim": vdim
+                     })
+    cnb = (order +
+           1) if cdim == 1 else (4 if order == 1 else 8) if cdim == 2 else 8
+    for name, value in (("bmag", 3.), ("phi", 2.)):
+      coeff = np.zeros((*ccells, cnb))
+      coeff[..., 0] = value * 2**(cdim / 2)
+      write_gkyl_field(out_dir / f"{stem}_{name}.gkyl",
+                       ccells,
+                       clo,
+                       chi,
+                       coeff,
+                       order,
+                       "serendipity",
+                       metadata={
+                           **metadata, "analytic_function":
+                           f"{name}={value}, exact constant modal field"
+                       })
+
+
 def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
+  _generate_native_physics_fields(out_dir)
   _generate_twisted_geometry(out_dir)
   _generate_calculus_samples(out_dir)
   _generate_moment_frames(out_dir)
   _generate_fourier_samples(out_dir)
   _generate_representation_fields(out_dir)
+  _generate_surface_fields(out_dir)
+  _generate_compare_sims_fixtures(out_dir)
 
   # Point samples of a plateau decay, 1.4 -> 1.2, on a narrow offset grid.
   fit_x = np.linspace(0.511174580254, 0.51122, 81)

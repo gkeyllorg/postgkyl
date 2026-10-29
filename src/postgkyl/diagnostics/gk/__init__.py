@@ -32,6 +32,7 @@ from .quantities import (
     fetch_Tperp_from_M0_M2perp,
 )
 from .registry import gk_quant_registry
+from .moments import mom_gyrokinetic
 
 # Layer 13: program-scale diagnostics ported from src_bak's apps/gk_*.py.
 from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_balance
@@ -64,6 +65,7 @@ for _function in (energy_balance, particle_balance, nodes):
   command(_REPORT_SPEC)(_function)
 
 __all__ = [
+    "mom_gyrokinetic",
     "load_distf",
     "resolve_frames",
     "available_quantities",

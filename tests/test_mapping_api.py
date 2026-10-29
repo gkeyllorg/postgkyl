@@ -16,7 +16,7 @@ from postgkyl import gpython
 from postgkyl.cli.app import COMMANDS
 
 rz_command = next(command for command in COMMANDS
-                  if command.name == "map_to_rz")
+                  if command.name == "map_to_torus_rz")
 from postgkyl.cli.state import DataSpace
 from postgkyl.operations.geometry import resolve_geometry
 
@@ -63,23 +63,23 @@ def test_geometry_prefers_nodes_and_honors_explicit_modal_override(
 def test_geometry_overrides_and_validation_errors(tmp_path):
   data = pg.load(F2D)
   with pytest.raises(ValueError, match="either mapc2p=.*nodes_file"):
-    pg.map_to_rz(data, mapc2p=F2D_GEO, nodes_file=F2D_GEO)
-  explicit = pg.map_to_rz(data, mapc2p=F2D_GEO, nz_interp=2)
-  inferred = pg.map_to_rz(data, nz_interp=2)
+    pg.map_to_torus_rz(data, mapc2p=F2D_GEO, nodes_file=F2D_GEO)
+  explicit = pg.map_to_torus_rz(data, mapc2p=F2D_GEO, nz_interp=2)
+  inferred = pg.map_to_torus_rz(data, nz_interp=2)
   np.testing.assert_allclose(explicit.values, inferred.values)
 
   missing = data.clone()
   missing._file_name = str(tmp_path / "absent-field_0.gkyl")
   with pytest.raises(ValueError, match="Could not find a geometry file"):
-    pg.map_to_rz(missing)
+    pg.map_to_torus_rz(missing)
   with pytest.raises(ValueError, match="positive integer"):
-    pg.map_to_rz(data, nz_interp=0)
+    pg.map_to_torus_rz(data, nz_interp=0)
   with pytest.raises(ValueError, match="out of bounds"):
-    pg.map_to_rz(data, comp=1)
+    pg.map_to_torus_rz(data, comp=1)
   with pytest.raises(ValueError, match="requires 2-D or 3-D"):
-    pg.map_to_rz(pg.load(F1D), mapc2p=F2D_GEO)
+    pg.map_to_torus_rz(pg.load(F1D), mapc2p=F2D_GEO)
   with pytest.raises(ValueError, match="un-interpolated modal DG"):
-    pg.map_to_rz(data.interpolate())
+    pg.map_to_torus_rz(data.interpolate())
 
 
 @needs_gkeyll
@@ -90,7 +90,7 @@ def test_group_mapping_cli_and_help_section():
   projection = pg.resolve_rz_projection(group[0],
                                         resolve_geometry(F2D),
                                         nz_interp=2)
-  mapped = group.map_to_rz(projection=projection)
+  mapped = group.map_to_torus_rz(projection=projection)
   assert isinstance(mapped, pg.GDataGroup) and len(mapped) == 2
 
   space = DataSpace(datasets=[pg.load(F2D)])
@@ -104,21 +104,24 @@ def test_group_mapping_cli_and_help_section():
                use=None,
                tag="rz",
                label=None)
-  expected = pg.map_to_rz(pg.load(F2D), mapc2p=F2D_GEO, nz_interp=2, tag="rz")
+  expected = pg.map_to_torus_rz(pg.load(F2D),
+                                mapc2p=F2D_GEO,
+                                nz_interp=2,
+                                tag="rz")
   np.testing.assert_allclose(space.datasets[0].values, expected.values)
 
   help_text = CliRunner().invoke(cli, ["--help"]).output
   verbs = help_text.split("Diagnostics:", 1)[0]
   diagnostics = help_text.split("Diagnostics:", 1)[1].split("Render:", 1)[0]
-  assert "map_to_rz" in verbs and "map_to_rz" not in diagnostics
+  assert "map_to_torus_rz" in verbs and "map_to_torus_rz" not in diagnostics
   assert "gk_rz" not in help_text
 
 
 @needs_gkeyll
 @pytest.mark.parametrize("module_name, builder_name", [
-    ("map_to_rz", "rz_projections"),
-    ("map_to_torus", "torus_projections"),
-    ("map_to_phitheta", "phitheta_projections"),
+    ("map_to_torus_rz", "rz_projections"),
+    ("map_to_torus_3d", "torus_projections"),
+    ("map_to_torus_phitheta", "phitheta_projections"),
 ])
 def test_cached_mapping_rejects_changed_grid_with_same_prefix(
     module_name, builder_name):
@@ -140,8 +143,8 @@ def test_phitheta_cli_matches_explicit_projection():
                                               x_idx=92,
                                               nphi=4,
                                               nz_interp=2)
-  expected = data.map_to_phitheta(projection=projection)
-  command = next(c for c in COMMANDS if c.name == "map_to_phitheta")
+  expected = data.map_to_torus_phitheta(projection=projection)
+  command = next(c for c in COMMANDS if c.name == "map_to_torus_phitheta")
   space = DataSpace(datasets=[data])
   result = CliRunner().invoke(
       command, ["--x_idx", "-4", "--nphi", "4", "--nz_interp", "2"], obj=space)
@@ -149,7 +152,7 @@ def test_phitheta_cli_matches_explicit_projection():
   np.testing.assert_allclose(space.datasets[0].values, expected.values)
   result = CliRunner().invoke(cli, ["--help"])
   assert result.exit_code == 0
-  assert "map_to_phitheta" in result.output.split("Diagnostics:", 1)[0]
+  assert "map_to_torus_phitheta" in result.output.split("Diagnostics:", 1)[0]
   for retired in ("extract_flux_surface", "gk_fluxsurf"):
     assert retired not in result.output
     assert not hasattr(pg, retired)
@@ -161,7 +164,7 @@ def test_phitheta_cli_matches_explicit_projection():
 def test_fluid_output_uses_shared_geometry_in_api_and_cli(ndim):
   source = GENERATED / f"mapped_{ndim}d_b1-fluid_0.gkyl"
   data = pg.load(str(source))
-  result = data.map_to_rz(nz_interp=2, z_axis=0.5)
+  result = data.map_to_torus_rz(nz_interp=2, z_axis=0.5)
   assert result.get_grid_type() == "mapped"
   assert result.ctx["mapped_axes"] == {0: 0, 1: 0}
   assert result.values.shape == (4, 8 if ndim == 3 else 4, 1)
@@ -173,7 +176,7 @@ def test_fluid_output_uses_shared_geometry_in_api_and_cli(ndim):
   np.testing.assert_allclose(result.integrate("0,1"), 8.0)
 
   space = DataSpace(datasets=[data])
-  command = next(c for c in COMMANDS if c.name == "map_to_rz")
+  command = next(c for c in COMMANDS if c.name == "map_to_torus_rz")
   cli_result = CliRunner().invoke(command,
                                   ["--nz_interp", "2", "--z_axis", "0.5"],
                                   obj=space)
@@ -186,9 +189,9 @@ def test_fluid_output_uses_shared_geometry_in_api_and_cli(ndim):
 @needs_gkeyll
 def test_geometry_node_and_modal_files_agree_on_fluid_coordinates():
   source = str(GENERATED / "mapped_2d_b1-fluid_0.gkyl")
-  nodes = pg.load(source).map_to_rz()
-  modal = pg.load(source).map_to_rz(mapc2p="")
-  explicit = pg.load(source).map_to_rz(
+  nodes = pg.load(source).map_to_torus_rz()
+  modal = pg.load(source).map_to_torus_rz(mapc2p="")
+  explicit = pg.load(source).map_to_torus_rz(
       nodes_file=str(GENERATED / "mapped_2d_b*-geo_int_nodes.gkyl"))
   np.testing.assert_allclose(modal.values, nodes.values)
   for expected, actual, override in zip(nodes.grid, modal.grid, explicit.grid):
@@ -199,14 +202,14 @@ def test_geometry_node_and_modal_files_agree_on_fluid_coordinates():
 @needs_gkeyll
 @pytest.mark.parametrize(
     "module_name, builder_name, lookup_name, verb, keyword, sampling", [
-        ("map_to_rz", "rz_projections", "projection_for", "map_to_rz",
-         "projection", {}),
-        ("map_to_torus", "torus_projections", "projection_for", "map_to_torus",
-         "projection", {
+        ("map_to_torus_rz", "rz_projections", "projection_for",
+         "map_to_torus_rz", "projection", {}),
+        ("map_to_torus_3d", "torus_projections", "projection_for",
+         "map_to_torus_3d", "projection", {
              "x_idx": (0, -1)
          }),
-        ("map_to_phitheta", "phitheta_projections", "projection_for",
-         "map_to_phitheta", "projection", {}),
+        ("map_to_torus_phitheta", "phitheta_projections", "projection_for",
+         "map_to_torus_phitheta", "projection", {}),
     ])
 def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
     monkeypatch, module_name, builder_name, lookup_name, verb, keyword,
@@ -238,7 +241,7 @@ def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
     result = getattr(data, verb)(**{keyword: mapping})
     np.testing.assert_allclose(result.values,
                                7.0 + data.ctx["block"] + 2 * data.ctx["frame"])
-    if verb == "map_to_rz":
+    if verb == "map_to_torus_rz":
       np.testing.assert_allclose(
           result.grid[0][:, 0],
           np.linspace(2 + data.ctx["block"], 3 + data.ctx["block"], 5))
@@ -246,15 +249,15 @@ def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
 
 @needs_gkeyll
 @pytest.mark.parametrize("verb, build, keyword, sampling, options", [
-    ("map_to_rz", "resolve_rz_projection", "projection", {}, {
+    ("map_to_torus_rz", "resolve_rz_projection", "projection", {}, {
         "z_axis": 1.0
     }),
-    ("map_to_torus", "resolve_torus_projection", "projection", {
+    ("map_to_torus_3d", "resolve_torus_projection", "projection", {
         "x_idx": (0, -1)
     }, {
         "phi_tor": (0.0, 1.0)
     }),
-    ("map_to_phitheta", "resolve_phitheta_projection", "projection", {}, {
+    ("map_to_torus_phitheta", "resolve_phitheta_projection", "projection", {}, {
         "nphi": 2
     }),
 ])
@@ -272,7 +275,7 @@ def test_mapping_callables_have_one_equation_agnostic_public_owner():
   from postgkyl import operations
   from postgkyl.cli.app import MODELS
 
-  for name in ("map_to_rz", "map_to_torus", "map_to_phitheta"):
+  for name in ("map_to_torus_rz", "map_to_torus_3d", "map_to_torus_phitheta"):
     operation = getattr(operations, name)
     assert getattr(pg, name) is getattr(pg.GData, name) is operation
     assert next(model for model in MODELS

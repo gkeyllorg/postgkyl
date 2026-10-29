@@ -264,9 +264,9 @@ def _(base_settings, gp, pg, replace):
 
 @app.cell
 def _(base_settings, get_xidx, gp, mo, set_xidx, transform):
-    # --- flux surface of map_to_phitheta, among the interpolated radii ------
+    # --- flux surface of map_to_torus_phitheta, among the interpolated radii
     _count = None
-    if base_settings is not None and transform.value == "map_to_phitheta":
+    if base_settings is not None and transform.value == "map_to_torus_phitheta":
         try:
             _count = gp.radial_samples(base_settings)
         except Exception:
@@ -748,9 +748,8 @@ def _(
         frame_slider,
         fluct,
         mo.hstack([transform, interp_pts], justify="start", gap=1),
-        mapc2p_file,
-        x_idx if transform.value == "map_to_phitheta" else mo.md(""),
-        phi_tor_deg if transform.value == "map_to_rz" else mo.md(""),
+        x_idx if transform.value == "map_to_torus_phitheta" else mo.md(""),
+        phi_tor_deg if transform.value == "map_to_torus_rz" else mo.md(""),
         mo.md("**select / average**: enable a dimension to slice it at the "
               "slider's coordinate, or to average over it"),
         _select_block,

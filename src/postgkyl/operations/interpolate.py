@@ -16,6 +16,9 @@ def interpolate(data: "GDataState",
                 label: str | None = None):
   """Interpolate DG (modal/nodal) data at uniformly spaced points in each cell.
 
+  Surface-modal data are evaluated along tangential cells only; their face
+  coordinates along the perpendicular axis remain unchanged.
+
   Basis, polynomial order, and value_form are properties of ``data`` itself,
   fixed at load time (``pg.load(..., basis_type=..., poly_order=...,
   value_form=...)`` or the CLI's ``-b``/``-p``/``-v``) -- this verb only
@@ -42,6 +45,7 @@ def interpolate(data: "GDataState",
                                 basis_type=layout.basis_type,
                                 nodal=(layout.value_form == "nodal"),
                                 num_interp=num_interp,
+                                surface_dir=layout.surface_dir,
                                 **layout.basis_kwargs)
   return data._result(grid,
                       values,

@@ -20,13 +20,13 @@ direction :math:`y`,
 
 It maps the fluctuation onto the poloidal (R-Z) plane, up-sampling the
 parallel direction by 12 points per cell, and plots it with a diverging color
-map centered on zero. ``map_to_rz`` infers the geometry from the simulation
+map centered on zero. ``map_to_torus_rz`` infers the geometry from the simulation
 prefix. ``s.print_cli()`` then prints the command line that draws the same
 figure: the command below, with the script's absolute paths. The build
 compares the pixels of the two figures.
 
 Every command is a method with that command's options, so
-``help(s.map_to_rz)`` lists them. Each returns the session, so calls chain or
+``help(s.map_to_torus_rz)`` lists them. Each returns the session, so calls chain or
 stand alone; what the last command returned, here ``plot``'s figure, is
 ``s.result``. Each call parses and runs the very tokens it records, on the
 same working set as the command line, so ``s.command()`` is exactly what ran.

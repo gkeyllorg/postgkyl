@@ -19,6 +19,7 @@ import postgkyl as pg
 from postgkyl.cli import PostgkylSession
 from postgkyl.cli.app import MODELS, cli
 from postgkyl.cli.session import _stub_docstring, render_stub
+from scripts.generate_session_stub import format_stub
 
 ROOT = Path(__file__).parents[1]
 DATA = ROOT / "tests" / "test_data" / "generated"
@@ -118,9 +119,9 @@ def test_methods_are_derived_from_the_cli_models():
 
 
 def test_the_ide_stub_is_generated_from_the_current_commands():
-  assert STUB.read_text() == render_stub(), (
-      "session.pyi is out of date: run "
-      "`python scripts/generate_session_stub.py`")
+  assert STUB.read_text() == format_stub(
+      render_stub()), ("session.pyi is out of date: run "
+                       "`python scripts/generate_session_stub.py`")
 
 
 @pytest.mark.parametrize("text", [

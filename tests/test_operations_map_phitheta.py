@@ -31,7 +31,7 @@ def test_surface_follows_the_analytic_field_at_every_angle(prefix):
   # Exact p1 polynomials on a twisted geometry whose binormal domain fills
   # 1/4.19 of the torus; the full turn mixes simulated points and copies.
   data = pg.load(str(GENERATED / f"{prefix}-field_0.gkyl"))
-  surface = data.map_to_phitheta(x_idx=-2, nphi=7, nz_interp=4, comp=1)
+  surface = data.map_to_torus_phitheta(x_idx=-2, nphi=7, nz_interp=4, comp=1)
 
   phi = np.linspace(0.0, 2 * np.pi, 7, endpoint=False)
   # Sixteen parallel samples on [1, 5]; x_idx=-2 is the fifth of six
@@ -57,33 +57,35 @@ def test_each_column_is_a_row_of_the_poloidal_slice():
                                               x_idx=20,
                                               nphi=6,
                                               nz_interp=2)
-  surface = data.map_to_phitheta(projection=projection)
+  surface = data.map_to_torus_phitheta(projection=projection)
   rz = pg.resolve_rz_projection(data, geometry, nz_interp=2)
   for column, angle in zip(surface.values[..., 0], projection.phi_tor):
-    poloidal = data.map_to_rz(projection=rz, phi_tor=angle)
+    poloidal = data.map_to_torus_rz(projection=rz, phi_tor=angle)
     np.testing.assert_allclose(column, poloidal.values[20, :, 0], rtol=1e-12)
 
 
 @needs_gkeyll
 def test_inferred_geometry_reuse_and_public_spellings_agree():
   data = pg.load(F3D)
-  inferred = pg.map_to_phitheta(data, x_idx=-3, nphi=4, nz_interp=2)
+  inferred = pg.map_to_torus_phitheta(data, x_idx=-3, nphi=4, nz_interp=2)
   projection = pg.resolve_phitheta_projection(data,
                                               pg.resolve_geometry(F3D),
                                               x_idx=93,
                                               nphi=4,
                                               nz_interp=2)
-  reused = data.map_to_phitheta(projection=projection, tag="fs", label="lcfs")
+  reused = data.map_to_torus_phitheta(projection=projection,
+                                      tag="fs",
+                                      label="lcfs")
   np.testing.assert_allclose(reused.values, inferred.values)
   for actual, expected in zip(reused.grid, inferred.grid):
     np.testing.assert_allclose(actual, expected)
   assert (reused.tag, reused.label) == ("fs", "lcfs")
-  assert pg.map_to_phitheta is operations.map_to_phitheta
-  assert pg.GData.map_to_phitheta is operations.map_to_phitheta
+  assert pg.map_to_torus_phitheta is operations.map_to_torus_phitheta
+  assert pg.GData.map_to_torus_phitheta is operations.map_to_torus_phitheta
 
   inplace = data.clone()
-  assert pg.map_to_phitheta(inplace, projection=projection,
-                            inplace=True) is inplace
+  assert pg.map_to_torus_phitheta(inplace, projection=projection,
+                                  inplace=True) is inplace
   np.testing.assert_allclose(inplace.values, inferred.values)
 
 
@@ -128,13 +130,13 @@ def test_reusable_projection_contracts():
   shifted = data.clone()
   shifted.grid[0] = shifted.grid[0] + 0.1
   with pytest.raises(ValueError, match="computational grid does not match"):
-    pg.map_to_phitheta(shifted, projection=projection)
+    pg.map_to_torus_phitheta(shifted, projection=projection)
   with pytest.raises(ValueError, match="out of bounds"):
-    pg.map_to_phitheta(data, projection=replace(projection, x_idx=10_000))
+    pg.map_to_torus_phitheta(data, projection=replace(projection, x_idx=10_000))
   zero_span = replace(projection.rz, span=np.zeros_like(projection.rz.span))
   with pytest.raises(ValueError, match="span must be finite and nonzero"):
-    pg.map_to_phitheta(data, projection=replace(projection, rz=zero_span))
+    pg.map_to_torus_phitheta(data, projection=replace(projection, rz=zero_span))
   with pytest.raises(ValueError, match="requires 3-D"):
-    pg.map_to_phitheta(pg.load(F2D))
+    pg.map_to_torus_phitheta(pg.load(F2D))
   with pytest.raises(ValueError, match="un-interpolated modal DG"):
-    pg.map_to_phitheta(data.interpolate())
+    pg.map_to_torus_phitheta(data.interpolate())

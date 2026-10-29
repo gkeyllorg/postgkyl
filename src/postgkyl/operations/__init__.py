@@ -53,11 +53,12 @@ from .growth import growth
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
-from .map_to_rz import map_to_rz, resolve_rz_projection, RzProjection
-from .map_to_torus import (map_to_torus, resolve_torus_projection,
-                           TorusProjection)
-from .map_to_phitheta import (map_to_phitheta, resolve_phitheta_projection,
-                              PhiThetaProjection)
+from .map_to_torus_rz import map_to_torus_rz, resolve_rz_projection, RzProjection
+from .map_to_torus_3d import (map_to_torus_3d, resolve_torus_projection,
+                              TorusProjection)
+from .map_to_torus_phitheta import (map_to_torus_phitheta,
+                                    resolve_phitheta_projection,
+                                    PhiThetaProjection)
 from .geometry import Geometry, resolve_geometry
 
 # Command metadata is attached at the layer that owns each operation.  This
@@ -83,8 +84,8 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
                         result=ResultPolicy.VALUE)
 
 for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
-                  magsq, grid, differentiate, map, map_to_rz, map_to_torus,
-                  map_to_phitheta, fluctuation):
+                  magsq, grid, differentiate, map, map_to_torus_rz,
+                  map_to_torus_3d, map_to_torus_phitheta, fluctuation):
   command(_MAP)(_function)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
@@ -126,8 +127,8 @@ __all__ = [
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
     "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "growth", "map_to_rz",
-    "resolve_rz_projection", "map_to_torus", "resolve_torus_projection",
-    "map_to_phitheta", "resolve_phitheta_projection", "resolve_geometry",
+    "available_evaluate_operators", "map", "growth", "map_to_torus_rz",
+    "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
+    "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
     "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection"
 ]

@@ -272,10 +272,10 @@ def python_script(steps: tuple[Step, ...]) -> str:
 
 
 # --------------------------------------------------------- GUI settings
-TRANSFORMS = ("interpolate", "local_poly", "map_to_rz", "map_to_phitheta",
-              "none")
+TRANSFORMS = ("interpolate", "local_poly", "map_to_torus_rz",
+              "map_to_torus_phitheta", "none")
 # Transforms that need the geometry and the full configuration space.
-GEOMETRY_TRANSFORMS = ("map_to_rz", "map_to_phitheta")
+GEOMETRY_TRANSFORMS = ("map_to_torus_rz", "map_to_torus_phitheta")
 _FLUCT_DIMS = {"y": "1", "yz": "1,2"}
 
 
@@ -306,9 +306,9 @@ class Settings:
     transform: One of :data:`TRANSFORMS`.
     num_interp: Points per cell of ``interpolate``/``local_poly``.
     mapc2p: Mapping file of the geometry transforms (default: found).
-    phi_tor: Toroidal angle (radians) of ``map_to_rz``.
+    phi_tor: Toroidal angle (radians) of ``map_to_torus_rz``.
     nz_interp: Points per cell along z of the geometry transforms.
-    x_idx: Flux surface of ``map_to_phitheta``, an index among
+    x_idx: Flux surface of ``map_to_torus_phitheta``, an index among
       :func:`radial_samples`.
     select: ``(dimension, coordinate)`` pairs, the coordinate a cell index
       on a curvilinear dimension.
@@ -457,13 +457,13 @@ def _transform_steps(s: Settings) -> tuple[Step, ...]:
     return (Step.of("interpolate", num_interp=s.num_interp), )
   if s.transform == "local_poly":
     return (Step.of("local_poly", npoints=s.num_interp), )
-  if s.transform == "map_to_rz":
-    return (Step.of("map_to_rz",
+  if s.transform == "map_to_torus_rz":
+    return (Step.of("map_to_torus_rz",
                     mapc2p=s.mapc2p,
                     phi_tor=s.phi_tor,
                     nz_interp=s.nz_interp), )
-  if s.transform == "map_to_phitheta":
-    return (Step.of("map_to_phitheta",
+  if s.transform == "map_to_torus_phitheta":
+    return (Step.of("map_to_torus_phitheta",
                     mapc2p=s.mapc2p,
                     x_idx=s.x_idx,
                     nz_interp=s.nz_interp), )
@@ -490,8 +490,8 @@ class GridInfo:
 
   Attributes:
     lower, upper: Coordinate range per dimension: the logical coordinate
-      of a mapped dimension that records one (after ``map_to_rz``, minor
-      radius and poloidal angle), else the cell-index range of a
+      of a mapped dimension that records one (after ``map_to_torus_rz``,
+      minor radius and poloidal angle), else the cell-index range of a
       curvilinear dimension.
     cells: Values per dimension.
     curvilinear: Whether each dimension has no 1-D coordinate at all, so
@@ -537,8 +537,9 @@ def probe(steps: tuple[Step, ...]) -> GridInfo:
 
 
 def radial_samples(settings: Settings) -> int:
-  """How many flux surfaces ``map_to_phitheta``'s ``x_idx`` chooses among:
-  the radial points of the default interpolation of ``settings``' data."""
+  """How many flux surfaces ``map_to_torus_phitheta``'s ``x_idx`` chooses
+  among: the radial points of the default interpolation of ``settings``'
+  data."""
   layout = probe(
       build_chain(replace(settings,
                           fluct="none",

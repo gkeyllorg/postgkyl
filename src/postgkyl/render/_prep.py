@@ -23,10 +23,11 @@ if TYPE_CHECKING:
 
 
 def materialize_plot_data(data: "GDataState") -> "GDataState":
-  """Keep modal coefficients on their cell grid; materialize point values.
+  """Keep interior modal coefficients on their grid; materialize point values.
 
-  Each stored coefficient is a separate plotting channel. Rendering neither
-  evaluates the DG expansion nor changes the input representation.
+  Interior modal coefficients remain separate plotting channels. A 1-D surface
+  stores the face values directly, so they are plotted at those coordinates.
+  The input representation is unchanged.
   """
   if data.ctx.get("value_form", "modal") == "modal":
     return data

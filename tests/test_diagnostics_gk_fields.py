@@ -437,6 +437,36 @@ def _random(seed) -> pg.GData:
 
 class TestCrossFieldFluxes:
 
+  @pytest.mark.parametrize("energy", [False, True])
+  @pytest.mark.parametrize("apar_exists", [False, True])
+  def test_electrostatic_fallback_reports_omitted_flutter(
+      self, tmp_path, energy, apar_exists):
+    """An apar file warrants a warning; the retained ExB flux is exact."""
+    import warnings
+
+    if apar_exists:
+      (tmp_path / "sim-apar_7.gkyl").touch()
+    fetch = ff.fetch_flux_energy_es if energy else ff.fetch_flux_particle_es
+    moment = _DENS * _VT2 if energy else _DENS
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      out = fetch(_es_sources(_const(moment)),
+                  dir=0,
+                  path=tmp_path,
+                  name="sim",
+                  frame=7)
+    assert len(caught) == int(apar_exists)
+    if apar_exists:
+      assert "only the ExB contribution" in str(caught[0].message)
+    expected = np.zeros((*_CELLS, 8))
+    expected[..., 0] = moment * _VE_X / _PSI0
+    if energy:
+      expected *= 0.5 * _MASS
+    np.testing.assert_allclose(out.values,
+                               expected,
+                               rtol=1e-12,
+                               atol=1e-14 * np.abs(expected).max())
+
   @pytest.mark.parametrize("direction, vel", [(0, _VE_X), (1, _VE_Y)])
   def test_ExB_fluxes(self, direction, vel):
     np.testing.assert_allclose(
@@ -538,6 +568,38 @@ def _gij():
 class TestTransportCoefficients:
   """Uniform fluxes over linear profiles keep every denominator constant,
   so the diffusivities are exact."""
+
+  @pytest.mark.parametrize("direction, g_kk", [(0, _GXX), (1, _GYY)])
+  def test_gyro_Bohm_heat_diffusivity(self, direction, g_kk):
+    """With conv=0, chi/chi_gB = Q T/(n g^kk^(3/2) T'^2 rho_s^2 c_s).
+
+    Uniform density and reference scales leave an affine result, including
+    its nonconstant modal coefficient.
+    """
+    slopes = [0., 0., 0.]
+    slopes[direction] = -_GT
+    temp = _linear([(_T0, tuple(slopes))])
+    sources = [
+        _const(_N0), temp,
+        _const(_GAMMA),
+        _const(_Q),
+        _gij(),
+        _const(_BMAG)
+    ]
+    te_ref = 3.e-17
+    out = ff.fetch_heat_chi_gB([sources],
+                               species=["ion"],
+                               dir=direction,
+                               conv=0.,
+                               te_ref=te_ref,
+                               bmag_ref=_BMAG)
+    rho_s2_c_s = te_ref**1.5 * np.sqrt(_MASS) / (_CHARGE**2 * _BMAG**2)
+    factor = _Q / (_N0 * g_kk**1.5 * _GT**2 * rho_s2_c_s)
+    expected = _linear([(factor * _T0, tuple(factor * s for s in slopes))])
+    np.testing.assert_allclose(out.values,
+                               expected.values,
+                               rtol=1e-12,
+                               atol=1e-14 * np.abs(expected.values).max())
 
   @pytest.mark.parametrize("direction, g_kk", [(0, _GXX), (1, _GYY)])
   def test_particle_diffusivity(self, direction, g_kk):

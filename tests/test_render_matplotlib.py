@@ -681,9 +681,15 @@ class TestSaving:
     backend.plot(_line(), no_show=True, saveas=outputs)
     assert all(output.exists() for output in outputs)
 
+  @pytest.mark.parametrize("extension", [".jpg", ".svg", ".webp"])
+  def test_saveas_writes_other_matplotlib_formats(self, tmp_path, extension):
+    output = tmp_path / f"figure{extension}"
+    backend.plot(_line(), no_show=True, saveas=output)
+    assert output.exists()
+
   def test_unsupported_save_extension_raises(self, tmp_path):
-    with pytest.raises(ValueError, match="Supported formats are: .png, .pdf"):
-      backend.plot(_line(), no_show=True, saveas=tmp_path / "figure.svg")
+    with pytest.raises(ValueError, match="not supported"):
+      backend.plot(_line(), no_show=True, saveas=tmp_path / "figure.xyz")
 
 
 # --------------------------------------------------------------------------
@@ -949,9 +955,9 @@ class TestContourLevels:
 
   @pytest.mark.parametrize("filled", [False, True])
   def test_curvilinear_grids_keep_points_and_values_aligned(self, filled):
-    """A sheared, non-square curvilinear grid (as map_to_rz produces) whose
-    field is its own horizontal coordinate, f = x: linear interpolation is
-    exact, so every contour at level L lies on x = L."""
+    """A sheared, non-square curvilinear grid (as map_to_torus_rz produces)
+    whose field is its own horizontal coordinate, f = x: linear
+    interpolation is exact, so every contour at level L lies on x = L."""
     i, j = np.meshgrid(np.arange(5.0), np.arange(9.0), indexing="ij")
     x, y = i + 0.3 * j, j  # Cell-edge coordinates, shape (5, 9).
     centre = lambda a: (a[:-1, :-1] + a[1:, :-1] + a[:-1, 1:] + a[1:, 1:]) / 4

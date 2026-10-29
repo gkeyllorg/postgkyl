@@ -917,6 +917,11 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
   if quantity == "distf":
     pytest.skip("distf delegates to load_distf, covered by "
                 "TestLoadGkDistfReal against the real staged fixtures")
+  # Core-only builds support the DG operations, but the Coulomb logarithm
+  # used by collision_freq belongs to the optional Vlasov module.
+  if (quantity == "collision_freq"
+      and "vlasov" not in gpython.module_api_versions()):
+    pytest.skip("requires optional Vlasov module")
 
   quant = gk_quant_registry.get(quantity)
   name, frame = "gktest", 0

@@ -42,7 +42,6 @@ from ._prep import (centred_range, default_axis_labels, materialize_plot_data,
                     remaining_axes, squeeze_collapsed_axes, subplot_grid)
 from .style import pin_tick_label_sizes, style_context
 
-_OUTPUT_EXTENSIONS = (".png", ".pdf")
 _AxisLimits = (tuple[float, float] | list[tuple[float, float]]
                | dict[int, tuple[float, float]])
 _AxisBound = Annotated[float | dict[int, float] | None, CliType(float | None)]
@@ -92,11 +91,15 @@ def _default_output_stem(states) -> str:
 
 
 def _output_paths(save, saveas, states) -> tuple[str, ...]:
-  """Normalize and validate Matplotlib output paths.
+  """Normalize Matplotlib output paths.
 
   A sequence is accepted so the CLI can preserve combinations such as
   ``--saveas plot.pdf --saveframes frame`` without saving outside the render
-  backend. Extension-less names retain the historical PNG default.
+  backend. Extension-less names retain the historical PNG default. Any other
+  extension is passed through unvalidated: ``Figure.savefig`` picks the
+  writer from the suffix itself and raises its own ``ValueError`` listing
+  the backend's actually-supported formats (e.g. ``.jpg``/``.svg``/``.webp``
+  via Pillow, already a Matplotlib dependency) for one it doesn't recognize.
   """
   empty_path = (isinstance(saveas, (str, os.PathLike))
                 and not os.fspath(saveas))
@@ -120,12 +123,8 @@ def _output_paths(save, saveas, states) -> tuple[str, ...]:
     except TypeError as err:
       raise TypeError("every 'saveas' entry must be path-like") from err
     _, ext = os.path.splitext(path)
-    ext = ext.lower()
     if not ext:
       path = f"{path}.png"
-    elif ext not in _OUTPUT_EXTENSIONS:
-      raise ValueError("Unsupported file format for saving. Supported formats "
-                       "are: .png, .pdf")
     normalized.append(path)
   return tuple(normalized)
 
@@ -1175,7 +1174,8 @@ def plot(
               x = (nodal_grid[0] + xshift) * xscale
               y = (nodal_grid[1] + yshift) * yscale
               z = (values[..., comp].transpose() + zshift) * zscale
-              if x.ndim > 1:  # Curvilinear (e.g. map_to_rz): match z's order.
+              # Curvilinear (e.g. map_to_torus_rz): match z's order.
+              if x.ndim > 1:
                 x, y = x.transpose(), y.transpose()
               levels = _contour_levels(z,
                                        clevels=clevels,

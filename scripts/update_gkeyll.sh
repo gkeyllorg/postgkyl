@@ -39,6 +39,13 @@ if [ ! -e "${GKEYLL_DIR}/.git" ]; then
     echo "# gkeyll/ not present -- fetching ${GKEYLL_BRANCH} (sparse + blobless)"
     git clone --depth 1 --filter=blob:none --no-checkout \
         --branch "${GKEYLL_BRANCH}" "${REPO_URL}" "${GKEYLL_DIR}"
+    git -C "${GKEYLL_DIR}" sparse-checkout set --no-cone --stdin <<'EOF'
+/*
+!/vlasov/
+!/pkpm/
+!/moments/
+!/gyrokinetic/
+EOF
 else
     # Refuse local source edits before fetching or changing the checkout.
     if ! git -C "${GKEYLL_DIR}" diff --quiet || \
@@ -55,13 +62,6 @@ else
         "+refs/heads/${GKEYLL_BRANCH}:refs/remotes/origin/${GKEYLL_BRANCH}"
 fi
 
-git -C "${GKEYLL_DIR}" sparse-checkout set --no-cone --stdin <<'EOF'
-/*
-!/vlasov/
-!/pkpm/
-!/moments/
-!/gyrokinetic/
-EOF
 if git -C "${GKEYLL_DIR}" show-ref --verify --quiet "refs/heads/${GKEYLL_BRANCH}"; then
     git -C "${GKEYLL_DIR}" checkout "${GKEYLL_BRANCH}"
 else

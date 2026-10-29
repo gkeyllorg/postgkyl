@@ -20,7 +20,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`02_arithmetic_and_numpy.py`](scripts/02_arithmetic_and_numpy.py) | Weak DG algebra on raw modal data (`*`, `/`, `+`, `.integrate()`) vs. plain NumPy math after `.interpolate()`, and the guardrail between them |
 | [`03_diagnostics_five_moment.py`](scripts/03_diagnostics_five_moment.py) | The `diagnostics` layer: equation-specific physics (`postgkyl.diagnostics.mom.five_moment`) on top of a `GData`, on a generated shock-tube initial state |
 | [`04_gyrokinetics.py`](scripts/04_gyrokinetics.py) | The gyrokinetic diagnostics: `pg.gk.load_quantity` (named moments/geometry, resolved by naming convention) and `pg.gk.load_distf` (full distribution function), on the `rt_gk_tcv_iwl*` fixtures |
-| [`05_map_to_rz.py`](scripts/05_map_to_rz.py) | Gkeyll geometry discovery with `pg.map_to_rz`, plus explicit projection reuse with `map_to_rz` |
+| [`05_map_to_torus_rz.py`](scripts/05_map_to_torus_rz.py) | Gkeyll geometry discovery with `pg.map_to_torus_rz`, plus explicit projection reuse with `map_to_torus_rz` |
 | [`06_growth.py`](scripts/06_growth.py) | Recover a known energy growth rate and inspect log-space residuals |
 | [`07_collect_animate.py`](scripts/07_collect_animate.py) | Load many frames, collect a space–time diagram, and animate 1D/2D travelling waves |
 | [`08_plotly.py`](scripts/08_plotly.py) | Interactive 2D height surfaces, 3D volume isosurfaces, and one explicit `clevels` isosurface |
@@ -29,7 +29,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`11_multiblock.py`](scripts/11_multiblock.py) | Plot all blocks of one field and frame on one figure with a shared color scale |
 | [`12_gk_load_quantity.py`](scripts/12_gk_load_quantity.py) | Load and check `vt`, `phi_norm`, and `larmor_radius` on generated electron moments, potential, and magnetic geometry |
 | [`13_postgkyl_session.py`](scripts/13_postgkyl_session.py) | `PostgkylSession`: map a gyrokinetic density fluctuation to R-Z by running `pgkyl` commands from Python, then print the equivalent command line |
-| [`14_map_to_torus.py`](scripts/14_map_to_torus.py) | Render a toroidal wedge of a 3-D gyrokinetic density with `map_to_torus` and `pyvista --surface`, plus projection reuse |
+| [`14_map_to_torus.py`](scripts/14_map_to_torus.py) | Render a toroidal wedge of a 3-D gyrokinetic density with `map_to_torus_3d` and `pyvista --surface`, plus projection reuse |
 | [`mirror_comparison.py`](scripts/mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |
 
 Follow [Developer installation](../docs/source/installation.md#developer-installation),
@@ -52,7 +52,7 @@ the repo).
 See [`cli_tutorial.md`](cli_tutorial.md) -- inspecting a file, the
 `interpolate`/`select`/`plot` chain, discontinuity-preserving plots with
 `local_poly`, DynVector `info`/`fit`, the gyrokinetic loaders
-(`gk_load_quantity`, `gk_load_distf`), the `map_to_rz`
+(`gk_load_quantity`, `gk_load_distf`), the `map_to_torus_rz`
 mapping operation, `save`, and the generated command inventory.
 
 ## Running the tests

@@ -22,6 +22,8 @@ def local_poly(data: "GDataState",
   ``npoints`` reference points span the whole cell (``[-1, 1]``, endpoints
   included) and a NaN is spliced in at every cell interface, so a plot breaks
   the curve there rather than drawing a spuriously smooth line across it.
+  For surface coefficients, only tangential cells are expanded; the surface
+  coordinate stays fixed, including after selecting one face.
 
   Basis, polynomial order, and value_form are properties of ``data`` itself,
   fixed at load time, same as ``interpolate``. The result is flagged
@@ -47,6 +49,7 @@ def local_poly(data: "GDataState",
                                basis_type=layout.basis_type,
                                nodal=(layout.value_form == "nodal"),
                                npoints=npoints,
+                               surface_dir=layout.surface_dir,
                                **layout.basis_kwargs)
   return data._result(grid,
                       values,

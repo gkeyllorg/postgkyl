@@ -60,9 +60,10 @@ def resolve_rz_projection(first: "GDataState",
 
   Only the computational grid and DG metadata are read from ``first``;
   projection construction never evaluates or selects its field values.
-  ``z_axis`` is a vertical geometry offset in meters.
+  ``z_axis`` is a vertical geometry offset in meters. A geometry read from
+  file maps on its own grid, onto which ``first``'s grid is placed.
   """
-  _validate_modal_data(first, "map_to_rz", (2, 3))
+  _validate_modal_data(first, "map_to_torus_rz", (2, 3))
   nz_interp = _validate_positive_int(nz_interp, "nz_interp")
   _validate_geometry(geo, first.num_dims)
   geo = on_data_grid(geo, first.grid)
@@ -105,7 +106,7 @@ def resolve_rz_projection(first: "GDataState",
     corner_coords, corner_r, corner_z = geo.corner
     if len(corner_coords) != 3:
       raise ValueError(
-          "Corner geometry must be three-dimensional for 3-D map_to_rz.")
+          "Corner geometry must be three-dimensional for 3-D map_to_torus_rz.")
     cx, cz = corner_coords[0], corner_coords[2]
     corner_r = corner_r[:, 0, :]
     corner_z = corner_z[:, 0, :] + float(z_axis)
@@ -196,7 +197,7 @@ def _toroidal_samples(data: "GDataState", comp: int, projection: RzProjection,
                         poly_order=int(data.ctx["poly_order"]))
 
 
-def map_to_rz(
+def map_to_torus_rz(
     data: "GDataState",
     *,
     projection: Annotated[
@@ -218,7 +219,10 @@ def map_to_rz(
   DG field where the geometry places that angle along y. Angles that the
   simulated binormal domain covers are exact. Elsewhere the periodic domain
   repeats; unless it spans a whole fraction of the torus, its copies meet
-  along field lines with a jump. Geometry is shared by all equation systems.
+  along field lines with a jump. A geometry file's own grid defines the
+  mapping, even when written by another run on a different computational
+  range: the data's grid is placed on it cell for cell. Geometry is shared
+  by all equation systems.
 
   Args:
     data: Un-interpolated 2-D or 3-D modal DG field.
@@ -244,7 +248,7 @@ def map_to_rz(
     Projection geometry and sampling options cannot accompany a reusable
     projection; set them when building that projection instead.
   """
-  _validate_modal_data(data, "map_to_rz", (2, 3))
+  _validate_modal_data(data, "map_to_torus_rz", (2, 3))
   _validate_component(data, comp)
   if projection is None:
     nz_interp = _validate_positive_int(nz_interp, "nz_interp")

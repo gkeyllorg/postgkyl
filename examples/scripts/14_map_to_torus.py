@@ -21,7 +21,9 @@ data = pg.load(TEST_DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl")
 # dataset's simulation prefix. The p1 solution dips below zero at a few
 # samples next to the parallel boundary; cmin keeps the color scale on the
 # physical range.
-torus = data.map_to_torus(x_idx=(4, -4), phi_tor=(0.0, 1.5 * np.pi), nphi=160)
+torus = data.map_to_torus_3d(x_idx=(4, -4),
+                             phi_tor=(0.0, 1.5 * np.pi),
+                             nphi=160)
 torus.pyvista(surface=True,
               no_normalize=True,
               is_log=True,
@@ -44,9 +46,9 @@ projection = pg.resolve_torus_projection(data,
                                          x_idx=(4, -4),
                                          phi_tor=(0.0, 1.5 * np.pi),
                                          nphi=160)
-reused = data.map_to_torus(projection=projection)
+reused = data.map_to_torus_3d(projection=projection)
 np.testing.assert_allclose(reused.values, torus.values)
-poloidal = data.map_to_rz(phi_tor=0.0).values[4:93, :, 0]
+poloidal = data.map_to_torus_rz(phi_tor=0.0).values[4:93, :, 0]
 np.testing.assert_allclose(reused.values[:89, :-1, 0, 0], poloidal)
 
 print("14_map_to_torus: OK")

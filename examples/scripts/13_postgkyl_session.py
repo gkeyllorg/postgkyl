@@ -2,7 +2,7 @@
 
 A ``PostgkylSession`` is the ``pgkyl`` command line driven from Python. Each
 command is a method taking that command's options -- an IDE shows them, with
-the command's docstring, as you type, and ``help(s.map_to_rz)`` lists them --
+the command's docstring, as you type, and ``help(s.map_to_torus_rz)`` lists them --
 and the session records the equivalent command line. Develop a figure in a
 script or notebook, then print the one command that redraws it, e.g. in a
 batch job.
@@ -56,9 +56,9 @@ np.testing.assert_allclose(y_average.values,
 
 # 3. Map onto the R-Z plane at toroidal angle 0, up-sampling the parallel
 #    direction by 12 points per cell. The result matches the fluent API's.
-s.map_to_rz(nz_interp=12)
+s.map_to_torus_rz(nz_interp=12)
 (mapped, ) = s.datasets
-expected = pg.load(DATA).fluctuation(dims=1).map_to_rz(nz_interp=12)
+expected = pg.load(DATA).fluctuation(dims=1).map_to_torus_rz(nz_interp=12)
 np.testing.assert_array_equal(mapped.values, expected.values)
 
 # 4. Render, labeling the subplot rather than the figure: empty xlabel and

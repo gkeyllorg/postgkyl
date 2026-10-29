@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "numpy>=2.2.6"]
+requires = ["setuptools>=77", "numpy>=2.2.6", "tomli>=2; python_version < '3.11'"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -27,7 +27,7 @@ license = "MIT"
 maintainers = [
   {name = "Petr Cagas", email = "p.cagas@hzdr.de"}
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 keywords = ["plasma", "Gkeyll"]
 classifiers = [
   # 3 - Alpha
@@ -59,14 +59,18 @@ docs = [
 ]
 test = [
     "setuptools>=77",
+    "tomli>=2; python_version < '3.11'",
     "pre-commit==4.6.2",
-    "pytest>=9.0.3",
+    # pytest 9.2 makes every macOS --forked test exit with status 3 before
+    # pytest-forked can report a test result.
+    "pytest>=9.0.3,<9.2",
     "pytest-cov>=7.0.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
     "ruff>=0.12.11",
     "build>=1.3.0",
     "twine>=6.2.0",
+    "yapf==0.43.0",
     # macOS CI only: isolates each test in its own forked process (see
     # .github/workflows/test.yml's --forked flag) so a native-library abort
     # deep in a compiled dependency (matplotlib/FreeType, VTK, ...) fails
@@ -163,7 +167,8 @@ environment = { POSTGKYL_REQUIRE_GKEYLL = "1", OPENBLAS_NUM_THREADS = "1", OMP_N
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
-before-all = "dnf install -y git mesa-libGL"
+# Both packages come from AlmaLinux; avoid unrelated EPEL mirror failures.
+before-all = "dnf install -y --disablerepo='epel*' git mesa-libGL"
 
 [tool.cibuildwheel.macos]
 environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }

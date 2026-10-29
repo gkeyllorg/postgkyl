@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from postgkyl.gpython import basis
+from postgkyl.io.surface import surface_direction
 from .guards import quadrature_order
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ class DGLayout:
   block_size: int
   num_fields: int
   num_quad: int | None = None
+  surface_dir: int | None = None
 
   @property
   def basis_args(self):
@@ -36,7 +38,7 @@ class DGLayout:
 
   @property
   def basis_identity(self):
-    return (*self.basis_args, self.cdim, self.vdim)
+    return (*self.basis_args, self.cdim, self.vdim, self.surface_dir)
 
 
 def resolve_basis_split(ctx: dict, ndim: int, ncomp: int) -> tuple[int, int]:
@@ -83,7 +85,8 @@ def dg_layout(data: "GDataState") -> DGLayout | None:
   if not kind or ctx.get("interpolated", False):
     return None
   form = ctx.get("value_form", "modal")
-  if form not in ("modal", "nodal", "quad"):
+  surface_dir = surface_direction(form, data.num_dims)
+  if surface_dir is None and form not in ("modal", "nodal", "quad"):
     raise ValueError(f"unknown value_form '{form}'")
   values = data.values
   if values is None:
@@ -96,16 +99,33 @@ def dg_layout(data: "GDataState") -> DGLayout | None:
   if order is None:
     raise ValueError("dataset has no basis_type/poly_order metadata")
   ndim = data.num_dims
+  if surface_dir is not None:
+    if kind != "serendipity":
+      raise ValueError("surface geometry requires a serendipity basis")
+    if any(
+        len(data.grid[d]) != values.shape[d] + (d != surface_dir)
+        for d in range(ndim)):
+      raise ValueError("surface coordinates must locate every face and "
+                       "bound each tangential cell")
   cdim, vdim = resolve_basis_split(ctx, ndim, values.shape[-1])
-  b = basis.get_basis(kind, ndim, int(order), cdim=cdim, vdim=vdim)
   nq = quadrature_order(data) if form == "quad" else None
-  block = (
-      b.num_quad if nq is None else nq**ndim) if form == "quad" else b.num_basis
+  if surface_dir is not None and ndim == 1:
+    block = 1  # Gkeyll stores the 0-D face value without basis normalization.
+  else:
+    expansion_dim = ndim - 1 if surface_dir is not None else ndim
+    b = basis.get_basis(
+        kind, expansion_dim, int(order),
+        **({} if surface_dir is not None else {
+            "cdim": cdim,
+            "vdim": vdim
+        }))
+    block = ((b.num_quad if nq is None else nq**ndim)
+             if form == "quad" else b.num_basis)
   if block <= 0 or values.shape[-1] == 0 or values.shape[-1] % block:
     raise ValueError(f"{form} component count {values.shape[-1]} must contain "
                      f"complete field blocks of {block}")
   return DGLayout(kind, ndim, int(order), form, cdim, vdim, block,
-                  values.shape[-1] // block, nq)
+                  values.shape[-1] // block, nq, surface_dir)
 
 
 def require_dg_layout(data: "GDataState") -> DGLayout:
@@ -120,9 +140,21 @@ def require_dg_layout(data: "GDataState") -> DGLayout:
 def require_kernel_basis(data: "GDataState") -> DGLayout:
   """Reject basis splits unsupported by the legacy native-kernel signatures."""
   layout = require_dg_layout(data)
+  if layout.surface_dir is not None:
+    raise NotImplementedError("native DG kernels do not support surface "
+                              "coefficients; call .interpolate() first")
   if (layout.cdim, layout.vdim) != basis.cdim_vdim(layout.basis_type,
                                                    layout.ndim):
     raise NotImplementedError(
         "this native operation does not support the "
         f"{layout.cdim}x{layout.vdim}v {layout.basis_type} basis")
+  return layout
+
+
+def require_native_modal(data: "GDataState") -> DGLayout:
+  """Resolve a native modal layout before passing coefficients to a kernel."""
+  layout = require_dg_layout(data)
+  if data.backend != "gkyl" or layout.value_form != "modal":
+    raise ValueError("this operation requires native modal data; load with the "
+                     "gkyl backend and use .represent(to='modal') if needed")
   return layout

@@ -33,7 +33,9 @@ def _invoke(name, datasets, **kwargs):
 
 
 def test_diagnostics_follow_gkeyll_model_families():
-  assert diagnostics.__all__ == ["gk", "vm", "mom", "pkpm", "discovery"]
+  assert diagnostics.__all__ == [
+      "gk", "vm", "mom", "pkpm", "discovery", "compare"
+  ]
   assert diagnostics.mom.five_moment.__name__.endswith(".mom.five_moment")
   assert diagnostics.mom.enstrophy.__name__.endswith(".mom.enstrophy")
   assert diagnostics.vm.kinetic.__name__.endswith(".vm.kinetic")
@@ -85,6 +87,7 @@ def test_only_canonical_diagnostic_names_are_registered():
       "gk_particle_balance",
       "gk_load_distf",
       "gk_load_quantity",
+      "compare_sims",
   ):
     assert name in COMMAND_BY_NAME
   for old_name in (
@@ -108,6 +111,11 @@ def test_only_canonical_diagnostic_names_are_registered():
       "gk-load-gk-quantity",
   ):
     assert old_name not in COMMAND_BY_NAME
+
+
+def test_compare_sims_exposes_fig_per_quantity_option():
+  command = COMMAND_BY_NAME["compare_sims"]
+  assert any(option.name == "fig_per_quantity" for option in command.params)
 
 
 def test_load_distf_frame_is_text_and_cli_accepts_all_frames(

@@ -21,8 +21,8 @@ from ._mapping import (
     mappings_by_geometry,
     mapping_for,
 )
-from .map_to_rz import (RzProjection, resolve_rz_projection, _toroidal_samples,
-                        _validate_projection)
+from .map_to_torus_rz import (RzProjection, resolve_rz_projection,
+                              _toroidal_samples, _validate_projection)
 
 _DEFAULT_X_IDX = (2, -3)
 _DEFAULT_PHI_TOR = (0.5 * np.pi, 2.0 * np.pi)
@@ -71,10 +71,10 @@ def resolve_torus_projection(
   """Build a toroidal-wedge boundary for ``first``'s grid and ``geo``.
 
   Only the computational grid and DG metadata are read from ``first``.
-  Surface points sit where ``map_to_rz`` places its values: at the centers
+  Surface points sit where ``map_to_torus_rz`` places its values: at the centers
   of its R-Z cells, rotated to each toroidal angle.
   """
-  _validate_modal_data(first, "map_to_torus", (3, ))
+  _validate_modal_data(first, "map_to_torus_3d", (3, ))
   nphi = _validate_positive_int(nphi, "nphi")
   if nphi < 2:
     raise ValueError("nphi must be at least 2 to span the toroidal wedge.")
@@ -102,7 +102,7 @@ def resolve_torus_projection(
                          points=tuple(np.moveaxis(points, -1, 0)))
 
 
-def map_to_torus(
+def map_to_torus_3d(
     data: "GDataState",
     *,
     projection: Annotated[
@@ -124,7 +124,7 @@ def map_to_torus(
   The wedge lies between two flux surfaces and two poloidal planes. Its
   boundary is one closed surface in Cartesian X, Y, Z: the poloidal cap at the
   first angle, the outer flux surface, the cap at the last angle, and the
-  inner flux surface. Every face samples the field as map_to_rz does, so the
+  inner flux surface. Every face samples the field as map_to_torus_rz does, so the
   caps are its slices and faces agree where they meet. Render it with
   pyvista's surface and no_normalize options.
 
@@ -155,7 +155,7 @@ def map_to_torus(
     geometry and sampling options cannot accompany a reusable projection;
     set them when building that projection instead.
   """
-  _validate_modal_data(data, "map_to_torus", (3, ))
+  _validate_modal_data(data, "map_to_torus_3d", (3, ))
   _validate_component(data, comp)
   if projection is None:
     geometry = resolve_geometry(data.file_name,

@@ -9,9 +9,16 @@ description: Change or troubleshoot the Gkeyll native bridge, basis matrices, re
 layouts, or foreign signatures in Python or other layers. `gpython.available()`
 is the single capability switch.
 
-The shim lives in `gkeyll/core/zero/{gkyl_gpython.h,gpython.c}` and builds into
-Gkeyll's `libg0core.so`. Struct access, by-value basis conventions, and function
-pointer dispatch belong there, checked against that tree's headers.
+The shim lives in `gkeyll/core/zero/{gkyl_gpython_core.h,gpython_core.c}` and builds into
+Gkeyll's `libg0core.so`. Optional modules own their
+`zero/gpython_<module>.c` and `zero/gkyl_gpython_<module>.h` shims.
+`POSTGKYL_GKEYLL_MODULE` selects the highest module in `scripts/gkeyll-modules`;
+include all prerequisites and keep core independent. Gkeyll's higher libraries
+contain prerequisite objects, so link the extension only to the highest selected
+library. `gpython.module_api_versions()` calls and validates every selected shim,
+including PKPM when selected. Bundle the selected stack and record it in build provenance.
+Struct access, by-value basis conventions, and function pointer dispatch belong
+there, checked against that tree's headers.
 `gpython/csrc/_gpythonmodule.c` wraps only the shim's opaque handles, scalars,
 and buffers. `_lib.py` imports the extension and checks `GPYTHON_API_VERSION`.
 

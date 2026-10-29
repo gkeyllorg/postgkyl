@@ -22,12 +22,27 @@ The Python equivalents are ``data.info(all=True)`` and ``pg.info(data, all=True)
 Coefficients and point values
 -------------------------------
 
-``value_form`` distinguishes three representations:
+``value_form`` distinguishes these representations:
 
 * ``modal`` stores DG expansion coefficients. Multiplication and division
   use weak DG operations; coefficients are not samples for NumPy ufuncs.
 * ``nodal`` stores values at basis nodes.
 * ``quad`` stores values at Gauss–Legendre quadrature points.
+* ``modal_surf#`` stores surface DG coefficients, where ``#`` is the
+  zero-based direction normal to the surface. The loader reconstructs the
+  extra face at that direction's upper boundary. ``interpolate()`` evaluates
+  only the tangential basis and keeps every face at its physical coordinate.
+
+For tagged surface geometry files, load and interpolate before point-value
+analysis, for example ``pg.load(path).interpolate().plot()``. Coefficient
+selection and linear arithmetic also work before interpolation. Native weak DG
+operations on surface coefficients are unavailable. Untagged older files keep
+their original interpretation.
+
+To plot the DG polynomial along a selected face with cell jumps visible, use
+``pg.load(path).select(z1=0).local_poly().plot()`` for a ``modal_surf1`` file.
+In a 1D ``modal_surf0`` file, Gkeyll stores the face value directly, without
+DG basis normalization. ``plot()`` places each stored value at its boundary.
 
 Nodal and quadrature values support pointwise arithmetic, including native
 data. The native/NumPy backend and the value representation are separate

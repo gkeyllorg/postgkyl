@@ -160,7 +160,7 @@ def test_shim_handshake():
   """The compiled gpython shim pairs with this postgkyl (GKEYLL_C_SHIM.md).
 
   There are no struct layouts to guard anymore -- the C compiler checked the
-  whole contract when gpython.c built. What remains testable at runtime is the
+  whole contract when gpython_core.c built. What remains testable at runtime is the
   version handshake plus a behavioral probe through the shim."""
   g0 = gpython.require()
   assert g0.api_version() == g0.GPYTHON_API_VERSION
@@ -495,7 +495,7 @@ _ALLOWED = {
     # Model-specific quantity discovery and physics belong to diagnostics.
     "diagnostics": {
         "gdatastate", "operations", "numerics", "gdata", "render", "io",
-        "cli_spec"
+        "cli_spec", "dg"
     },  # added by
     # 10-diagnostics.md: equation-
     # specific compositions grouped under

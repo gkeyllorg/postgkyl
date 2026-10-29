@@ -149,7 +149,7 @@ pgkyl gk_load_distf --name tests/test_data/rt_gk_tcv_iwl_1x2v_p1 \
 
 ## 8. Map a field to R-Z
 
-`map_to_rz` is an equation-independent mapping: it interpolates one raw DG component and
+`map_to_torus_rz` is an equation-independent mapping: it interpolates one raw DG component and
 maps it onto the physical poloidal plane. Geometry is inferred from the
 field's filename, preferring nodal geometry and falling back to modal
 `mapc2p` geometry. The CLI and Python calls below use the same operation and
@@ -157,7 +157,7 @@ defaults:
 
 ```bash
 pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl \
-    map_to_rz --nz_interp 2 info
+    map_to_torus_rz --nz_interp 2 info
 ```
 
 ```python
@@ -166,7 +166,7 @@ import postgkyl as pg
 data = pg.load(
     "tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl"
 )
-mapped = pg.map_to_rz(data, nz_interp=2)
+mapped = pg.map_to_torus_rz(data, nz_interp=2)
 ```
 
 ## 9. Saving to another format
@@ -214,6 +214,106 @@ pgkyl tests/test_data/generated/gaussian_volume.gkyl interpolate \
 
 Omit `--no_show` from the PyVista command to open an interactive window.
 Use contour mode for this example; `--clevels` cannot be combined with `--volume`.
+
+## 11. Comparing two simulations: `compare_sims`
+
+`compare_sims` finds the output quantities two simulation directories share,
+ranks them by how much they differ, and plots the biggest differences --
+always including anything named in `--must_include`.
+`tests/test_data/generated/compare_sims/{baseline,candidate}/toy_sim` is a
+toy two-quantity sim pair (run `python tests/generate_test_data.py` if
+needed): `field_energy` differs between the two, `elc_integrated_moms`
+does not.
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline/toy_sim \
+    --path1 tests/test_data/generated/compare_sims/candidate/toy_sim \
+    --must_include field_energy -l 'before,after' --out_dir /tmp/compare_sims_tutorial
+```
+
+`-l`/`--labels` takes the two legend labels for `path0`/`path1` as one
+comma-separated string (there is no way to place it between the two paths
+the way `load`'s own `-l` sits right after its file, since `compare_sims` is
+a single chained command, not two). For a multi-component quantity (e.g.
+`elc_integrated_moms`'s three moments), each label gets a `_c<i>` suffix per
+component (`before_c0`, `before_c1`, ...) so every subplot stays
+distinguishable; a single-component quantity like `field_energy` keeps the
+plain label.
+
+`--z0`..`--z5` reduce a 3-D+ field the same way `select`'s selectors do; any
+axis left unpinned is pinned automatically instead, at the point where the
+two sims differ most, along whichever directions the difference itself
+changes fastest there -- so a 3-D, 4-D, 5-D, or 6-D field always plots with
+no selectors at all. `--batch` runs the same comparison across every
+simulation two directories-of-sims
+share (e.g. a CI run's accepted-vs-candidate trees) -- `path0`/`path1` are
+now each a directory holding one subdirectory per simulation, and each
+pair's figures go to their own subfolder:
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline \
+    --path1 tests/test_data/generated/compare_sims/candidate --batch \
+    --out_dir /tmp/compare_sims_batch_tutorial
+```
+
+By default every figure is collected into one combined, multi-page PDF, with
+a title page naming the compared directories so the PDF is self-contained
+(`--format` is then unused). `--out_dir` is optional; omitting it writes the
+PDF directly in the current directory as `postgkyl_compare_sims.pdf`, unless
+`--pdf_name` gives it another name:
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline/toy_sim \
+    --path1 tests/test_data/generated/compare_sims/candidate/toy_sim \
+    --pdf_name toy_sim_comparison.pdf
+```
+
+`compare_sims` keeps at most six panels (two rows by three columns) on each
+figure. Complete components continue on numbered PDF pages when needed;
+`--diff` panels count toward the six. `--fig_per_quantity` restores the
+unlimited, single-figure layout for each quantity (or multiblock patch).
+The combined PDF's title page lists the page number or range for each
+simulation.
+
+`--file_per_fig` opts into individual image files instead, ignoring
+`--pdf_name`. A quantity needing multiple figures gets `_p1`, `_p2`, ...
+file suffixes; an unsplit quantity keeps its original filename. Without
+`--out_dir`, these go under
+`./postgkyl_compare_sims/` in the current directory:
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline/toy_sim \
+    --path1 tests/test_data/generated/compare_sims/candidate/toy_sim \
+    --file_per_fig --out_dir /tmp/compare_sims_tutorial
+```
+
+Use `--fig_per_quantity` with either output mode to keep all components
+of each quantity in one figure.
+
+`--diff` additionally plots `baseline - candidate`: one more
+overlay-adjacent panel per component for a dynvector, or one more
+side-by-side panel per component -- with its own independent color scale --
+for a 2-D field. Labeled `"<label0> - <label1>"` for a single-component
+quantity, or `"<label0>_c<i> - <label1>_c<i>"` per component for a
+multi-component one:
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline/toy_sim \
+    --path1 tests/test_data/generated/compare_sims/candidate/toy_sim \
+    --must_include field_energy -l 'before,after' --diff \
+    --out_dir /tmp/compare_sims_tutorial
+```
+
+By default the CLI prints a one-line-per-sim summary (quantities plotted,
+quantities skipped, output directory), not the full per-quantity report --
+a sim with many quantities can produce a report hundreds of lines long.
+`-v`/`--verbose` prints the full report instead:
+
+```bash
+pgkyl compare_sims --path0 tests/test_data/generated/compare_sims/baseline/toy_sim \
+    --path1 tests/test_data/generated/compare_sims/candidate/toy_sim \
+    --must_include field_energy --verbose --out_dir /tmp/compare_sims_tutorial
+```
 
 ## See also
 

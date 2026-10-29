@@ -139,13 +139,19 @@ def _render_frame(index: int, frames: list[list["GDataState"]], fig: "Figure",
   return _draw_frame(frames[index], fig, plot_kwargs)
 
 
+def _init_frame_worker(rc: dict) -> None:
+  """Draw on Agg from the parent's Matplotlib rc state, which a spawned
+  worker would not otherwise inherit, so ``nproc`` changes only speed."""
+  import matplotlib
+  matplotlib.use("Agg")
+  matplotlib.rcParams.update(rc)
+
+
 def _save_frame_worker(args) -> str:
   """One frame, one process (see ``_save_frames``'s ``nproc`` path). Each
   worker builds its own figure -- Matplotlib figures are not shared across
   processes."""
   index, frame, plot_kwargs, prefix, dpi, figsize = args
-  import matplotlib
-  matplotlib.use("Agg")
   import matplotlib.pyplot as plt
 
   fig = plt.figure(figsize=figsize)
@@ -175,9 +181,12 @@ def _save_frames(frames: list[list["GDataState"]],
   if nproc > 1:
     from multiprocessing import Pool
 
+    import matplotlib as mpl
+
+    rc = {k: v for k, v in mpl.rcParams.items() if k != "backend"}
     args_list = [(i, frames[i], plot_kwargs, prefix, dpi, figsize)
                  for i in range(len(frames))]
-    with Pool(nproc) as pool:
+    with Pool(nproc, initializer=_init_frame_worker, initargs=(rc, )) as pool:
       return pool.map(_save_frame_worker, args_list)
 
   import matplotlib.pyplot as plt

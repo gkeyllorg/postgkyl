@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pypa/cibuildwheel@v4.3.1
+      - uses: pypa/cibuildwheel@v4.3.4
         env:
           # PRs exercise one interpreter on every platform; releases build all.
           CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp312-*' || 'cp3{10,11,12,13,14}-*' }}

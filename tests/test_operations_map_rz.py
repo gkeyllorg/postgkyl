@@ -31,7 +31,7 @@ needs_gkeyll = pytest.mark.skipif(
 
 @needs_gkeyll
 def test_2d_mapping_reference_grid_and_values():
-  mapped = pg.map_to_rz(pg.load(F2D), nz_interp=2)
+  mapped = pg.map_to_torus_rz(pg.load(F2D), nz_interp=2)
   assert [axis.shape for axis in mapped.grid] == [(33, 33), (33, 33)]
   assert mapped.values.shape == (32, 32, 1)
   np.testing.assert_allclose(mapped.values.flat[:5], [
@@ -45,8 +45,10 @@ def test_3d_mapping_shapes_and_angle_dependence():
   data = pg.load(F3D)
   geometry = resolve_geometry(data.file_name)
   projection = mapping.resolve_rz_projection(data, geometry, nz_interp=2)
-  at_zero = data.map_to_rz(projection=projection, phi_tor=0.0)
-  at_quarter = mapping.map_to_rz(data, projection=projection, phi_tor=np.pi / 2)
+  at_zero = data.map_to_torus_rz(projection=projection, phi_tor=0.0)
+  at_quarter = mapping.map_to_torus_rz(data,
+                                       projection=projection,
+                                       phi_tor=np.pi / 2)
   assert [axis.shape for axis in at_zero.grid] == [(97, 65), (97, 65)]
   assert at_zero.values.shape == (96, 64, 1)
   assert not np.allclose(at_zero.values, at_quarter.values)
@@ -68,7 +70,7 @@ def test_3d_mapping_reads_each_interpolation_point_at_its_own_angle():
   for ix, iz, k in ((0, 0, 3), (20, 10, 1), (60, 5, 30), (95, 31, 62)):
     angle = (projection.phi_lo[ix, iz] + (y_centers[k] - y_lo) /
              (y_hi - y_lo) * projection.span[ix, iz])
-    mapped = data.map_to_rz(projection=projection, phi_tor=angle)
+    mapped = data.map_to_torus_rz(projection=projection, phi_tor=angle)
     np.testing.assert_allclose(mapped.values[ix, iz, 0],
                                values[ix, k, iz],
                                rtol=1e-12)
@@ -93,14 +95,16 @@ def test_3d_mapping_locates_every_angle_along_the_binormal_coordinate(prefix):
   for angle in (0.0, 0.9, -2.3):
     expected = twisted_fields(xs, zf, angle, TWISTED_SPANS[prefix])
     for comp in (0, 1):
-      mapped = data.map_to_rz(projection=projection, phi_tor=angle, comp=comp)
+      mapped = data.map_to_torus_rz(projection=projection,
+                                    phi_tor=angle,
+                                    comp=comp)
       np.testing.assert_allclose(mapped.values[..., 0],
                                  expected[comp],
                                  rtol=1e-13,
                                  atol=0)
-      np.testing.assert_allclose(data.map_to_rz(projection=projection,
-                                                phi_tor=angle + 2 * np.pi,
-                                                comp=comp).values,
+      np.testing.assert_allclose(data.map_to_torus_rz(projection=projection,
+                                                      phi_tor=angle + 2 * np.pi,
+                                                      comp=comp).values,
                                  mapped.values,
                                  rtol=1e-13,
                                  atol=0)
@@ -122,7 +126,7 @@ def test_3d_mapping_pairs_a_geometry_written_on_another_grid_cell_by_cell():
   projection = mapping.resolve_rz_projection(data, geometry, nz_interp=1)
   for ix, k, iz in ((0, 3, 0), (20, 40, 10), (60, 17, 5), (95, 62, 31)):
     angle = np.arctan2(xyz[ix, k, iz, 1], xyz[ix, k, iz, 0])
-    mapped = data.map_to_rz(projection=projection, phi_tor=angle)
+    mapped = data.map_to_torus_rz(projection=projection, phi_tor=angle)
     np.testing.assert_allclose(mapped.values[ix, iz, 0],
                                values[ix, k, iz],
                                rtol=1e-5)
@@ -172,7 +176,7 @@ def test_missing_toroidal_geometry_and_incompatible_projection_fail_clearly():
   shifted = data.clone()
   shifted.grid[0] = shifted.grid[0] + 0.01
   with pytest.raises(ValueError, match="computational grid does not match"):
-    mapping.map_to_rz(shifted, projection=projection)
+    mapping.map_to_torus_rz(shifted, projection=projection)
 
 
 @needs_gkeyll
@@ -217,7 +221,7 @@ def test_reusable_rz_projection_validates_every_shape_contract():
   ]
   for projection, message in invalid_2d:
     with pytest.raises(ValueError, match=message):
-      mapping.map_to_rz(data_2d, projection=projection)
+      mapping.map_to_torus_rz(data_2d, projection=projection)
 
   data_3d = pg.load(F3D)
   geometry_3d = resolve_geometry(data_3d.file_name)
@@ -233,7 +237,7 @@ def test_reusable_rz_projection_validates_every_shape_contract():
   ]
   for projection, message in invalid_3d:
     with pytest.raises(ValueError, match=message):
-      mapping.map_to_rz(data_3d, projection=projection)
+      mapping.map_to_torus_rz(data_3d, projection=projection)
 
 
 @needs_gkeyll
@@ -246,11 +250,11 @@ def test_state_propagation_projection_reuse_and_public_surfaces():
   original = source.values.copy()
   geometry = resolve_geometry(source.file_name)
   projection = mapping.resolve_rz_projection(source, geometry, nz_interp=2)
-  first = mapping.map_to_rz(source,
-                            projection=projection,
-                            tag="rz",
-                            label="mapped")
-  second = mapping.map_to_rz(source.clone(), projection=projection)
+  first = mapping.map_to_torus_rz(source,
+                                  projection=projection,
+                                  tag="rz",
+                                  label="mapped")
+  second = mapping.map_to_torus_rz(source.clone(), projection=projection)
   assert isinstance(first, DerivedData)
   assert first is not source
   assert first.file_name == source.file_name
@@ -259,15 +263,18 @@ def test_state_propagation_projection_reuse_and_public_surfaces():
   np.testing.assert_array_equal(source.values, original)
   np.testing.assert_allclose(first.values, second.values)
 
-  fluent = source.map_to_rz(projection=projection)
-  functional = pg.map_to_rz(source, mapc2p=F2D_GEO, nz_interp=2)
+  fluent = source.map_to_torus_rz(projection=projection)
+  functional = pg.map_to_torus_rz(source, mapc2p=F2D_GEO, nz_interp=2)
   np.testing.assert_allclose(fluent.values, functional.values)
-  assert pg.map_to_rz is mapping.map_to_rz is pg.GData.map_to_rz
+  assert pg.map_to_torus_rz is mapping.map_to_torus_rz is pg.GData.map_to_torus_rz
   assert not hasattr(pg, "gk_rz")
   assert not hasattr(pg.GData, "gk_rz")
 
   inplace = source.clone()
-  result = pg.map_to_rz(inplace, mapc2p=F2D_GEO, nz_interp=2, inplace=True)
+  result = pg.map_to_torus_rz(inplace,
+                              mapc2p=F2D_GEO,
+                              nz_interp=2,
+                              inplace=True)
   assert result is inplace and result.ctx["interpolated"] is True
 
 
@@ -281,8 +288,8 @@ def test_comp_selects_an_explicit_physical_field():
   multi.push([axis.copy() for axis in source.grid],
              np.concatenate([source.values, 2.0 * source.values], axis=-1))
   multi._file_name = source.file_name
-  first = pg.map_to_rz(multi, comp=0, nz_interp=2)
-  second = pg.map_to_rz(multi, comp=1, nz_interp=2)
+  first = pg.map_to_torus_rz(multi, comp=0, nz_interp=2)
+  second = pg.map_to_torus_rz(multi, comp=1, nz_interp=2)
   np.testing.assert_allclose(second.values, 2.0 * first.values)
 
 
@@ -304,7 +311,7 @@ def test_mapping_accepts_filename_free_fields_and_explicit_geometry(num_dims):
                          phi=2 * np.pi * mesh[1] if num_dims == 3 else None,
                          corner=None)
   projection = pg.resolve_rz_projection(data, geometry, nz_interp=2)
-  mapped = data.map_to_rz(projection=projection, phi_tor=0.37)
+  mapped = data.map_to_torus_rz(projection=projection, phi_tor=0.37)
   assert not data.file_name and not mapped.file_name
   assert mapped.backend == "numpy" and mapped.is_interpolated
   assert mapped.values.shape == (4, 8 if num_dims == 3 else 4, 1)
@@ -317,7 +324,7 @@ def test_mapping_accepts_filename_free_fields_and_explicit_geometry(num_dims):
                                              geometry,
                                              nphi=5,
                                              nz_interp=2)
-    result = data.map_to_phitheta(projection=surface)
+    result = data.map_to_torus_phitheta(projection=surface)
     assert result.values.shape == (5, 8, 1)
     np.testing.assert_allclose(result.values, 7.0)
 
@@ -325,11 +332,12 @@ def test_mapping_accepts_filename_free_fields_and_explicit_geometry(num_dims):
 # ------------------------------------------------- selecting on R-Z axes
 @needs_gkeyll
 @pytest.mark.parametrize("path, geometry", [(F2D, F2D_GEO), (F3D, None)])
-def test_map_to_rz_records_the_logical_coordinates_of_its_axes(path, geometry):
+def test_map_to_torus_rz_records_the_logical_coordinates_of_its_axes(
+    path, geometry):
   """The R-Z points sit on the computational grid: radial x edges (the
   source's own x extent) and poloidal z edges, one array per axis."""
   data = pg.load(path)
-  rz = data.map_to_rz(mapc2p=geometry, nz_interp=2)
+  rz = data.map_to_torus_rz(mapc2p=geometry, nz_interp=2)
   x, z = rz.ctx["logical_grid"]
   assert (x.size, z.size) == rz.grid[0].shape
   np.testing.assert_allclose(x[[0, -1]], data.grid[0][[0, -1]])
@@ -342,7 +350,7 @@ def test_selecting_rz_axes_takes_minor_radius_and_poloidal_angle():
   """Selecting a coordinate on an R-Z axis is selecting the matching
   logical cell of the unmapped field, here at constant x then constant z."""
   data = pg.load(F2D)
-  rz = data.map_to_rz(mapc2p=F2D_GEO, nz_interp=2)
+  rz = data.map_to_torus_rz(mapc2p=F2D_GEO, nz_interp=2)
   x, z = rz.ctx["logical_grid"]
   i = 7
   profile = rz.select(z0=float(0.5 * (x[i] + x[i + 1])))

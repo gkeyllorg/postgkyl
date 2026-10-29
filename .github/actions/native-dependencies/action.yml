@@ -1,0 +1,14 @@
+name: Optional Gkeyll dependencies
+description: Install the linear algebra libraries needed above Gkeyll core on Ubuntu.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenblas-dev liblapacke-dev libsuperlu-dev
+        echo "LAPACK_LIBS=-lopenblas -llapacke" >> "$GITHUB_ENV"
+        echo "LAPACK_INC_DIR=/usr/include/$(gcc -print-multiarch)" >> "$GITHUB_ENV"
+        echo "LAPACK_LIB_DIR=/usr/lib/$(gcc -print-multiarch)" >> "$GITHUB_ENV"
+        echo "SUPERLU_INC_DIR=/usr/include/superlu" >> "$GITHUB_ENV"
+        echo "SUPERLU_LIB_DIR=/usr/lib/$(gcc -print-multiarch)" >> "$GITHUB_ENV"

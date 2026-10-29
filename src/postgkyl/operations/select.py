@@ -142,12 +142,12 @@ def select(data: "GDataState",
 
   A mapped block may also carry ``ctx["logical_grid"]``: one 1-D array per
   axis giving the computational coordinate of that axis's points (an R-Z
-  map from ``map_to_rz`` records radial ``x`` and poloidal ``z``). Coordinate
-  values and slice strings then select on it -- at a constant minor radius
-  or poloidal angle -- with no cross-section search. Once every axis of
-  such a block but one is narrowed to a single cell, the result is a
-  profile along that one axis: the block's grid becomes its logical
-  coordinates, an ordinary separable grid.
+  map from ``map_to_torus_rz`` records radial ``x`` and poloidal ``z``).
+  Coordinate values and slice strings then select on it -- at a constant
+  minor radius or poloidal angle -- with no cross-section search. Once
+  every axis of such a block but one is narrowed to a single cell, the
+  result is a profile along that one axis: the block's grid becomes its
+  logical coordinates, an ordinary separable grid.
 
   Args:
     data: Dataset whose cells or point values are selected.

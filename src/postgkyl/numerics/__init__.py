@@ -5,6 +5,7 @@ from .elementwise import grids_compatible, grid_is_prefix
 from .calculus import integrate
 from .mag_sq import mag_sq
 from .rel_change import rel_change
+from .diff_metrics import max_abs_rel_diff
 from .rotation_matrix import rotation_matrix
 from .fft import fft, init_polar, polar_isotropic
 from .fit import (
@@ -45,6 +46,7 @@ __all__ = [
     "integrate",
     "mag_sq",
     "rel_change",
+    "max_abs_rel_diff",
     "rotation_matrix",
     "fft",
     "init_polar",

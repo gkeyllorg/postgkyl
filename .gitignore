@@ -20,7 +20,7 @@ tests/test_data/generated/
 # built gpython/_gpython extension (setup.py)
 src/postgkyl/gpython/_gpython*.so
 # bundled native library copied beside the extension
-src/postgkyl/gpython/libg0core.so
+src/postgkyl/gpython/libg0*.so
 # generated Gkeyll commit/build-date metadata (setup.py)
 src/postgkyl/gpython/_build_info.py
 src/postgkyl/gpython/_build_info.json
@@ -35,3 +35,4 @@ htmlcov/
 .claude
 .codex
 .entire
+postgkyl-build.toml

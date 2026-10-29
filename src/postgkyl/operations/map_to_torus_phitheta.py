@@ -19,8 +19,8 @@ from ._mapping import (
     mappings_by_geometry,
     mapping_for,
 )
-from .map_to_rz import (RzProjection, resolve_rz_projection, _toroidal_samples,
-                        _validate_projection)
+from .map_to_torus_rz import (RzProjection, resolve_rz_projection,
+                              _toroidal_samples, _validate_projection)
 
 _DEFAULT_NPHI = 128
 
@@ -55,7 +55,7 @@ def resolve_phitheta_projection(
   Only the computational grid and DG metadata are read from ``first``.
   Toroidal samples cover one turn, ``2*pi * k / nphi``.
   """
-  _validate_modal_data(first, "map_to_phitheta", (3, ))
+  _validate_modal_data(first, "map_to_torus_phitheta", (3, ))
   nphi = _validate_positive_int(nphi, "nphi")
   rz = resolve_rz_projection(first, geo, nz_interp=nz_interp)
   return PhiThetaProjection(rz=rz,
@@ -67,7 +67,7 @@ def resolve_phitheta_projection(
                                                 endpoint=False))
 
 
-def map_to_phitheta(
+def map_to_torus_phitheta(
     data: "GDataState",
     *,
     projection: Annotated[
@@ -85,7 +85,7 @@ def map_to_phitheta(
   """Map a modal field component onto one flux surface's (phi, theta) plane.
 
   Theta is the parallel coordinate z, which makes one poloidal turn. Each
-  sample evaluates the DG field as map_to_rz does, so the column at angle
+  sample evaluates the DG field as map_to_torus_rz does, so the column at angle
   phi is row x_idx of the R-Z slice at phi. Unless the binormal domain is a
   whole fraction of the torus, its copies meet along field lines with a
   jump.
@@ -113,7 +113,7 @@ def map_to_phitheta(
     ``(phi, theta)`` grid of sample points. Projection sampling options
     cannot accompany a reusable projection; set them when building it.
   """
-  _validate_modal_data(data, "map_to_phitheta", (3, ))
+  _validate_modal_data(data, "map_to_torus_phitheta", (3, ))
   _validate_component(data, comp)
   if projection is None:
     geometry = resolve_geometry(data.file_name,

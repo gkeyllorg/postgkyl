@@ -155,3 +155,19 @@ def test_version_mismatch_degrades_like_missing():
   # Unaffected real bindings.
   assert gpython.available() is True
   assert gpython.require() is real
+
+
+@needs_gkeyll
+def test_each_selected_module_is_callable():
+  versions = gpython.module_api_versions()
+  assert list(versions) == gpython.build_info()["gkeyll_modules"]
+  assert versions["core"] == gpython.require().GPYTHON_API_VERSION
+  expected = {"moments": 1, "vlasov": 2, "gyrokinetic": 2, "pkpm": 1}
+  assert all(version == expected[module]
+             for module, version in versions.items() if module != "core")
+
+
+def test_module_calls_require_native_bridge(monkeypatch):
+  monkeypatch.setattr(_lib, "_mod", None)
+  with pytest.raises(RuntimeError, match="unavailable"):
+    gpython.module_api_versions()
