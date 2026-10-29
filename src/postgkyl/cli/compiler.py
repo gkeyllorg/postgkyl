@@ -23,6 +23,7 @@ from postgkyl.cli_spec import (
     CommandSpec,
     DatasetRef,
     Execution,
+    InfoOption,
     KeyValue,
     PipelineInput,
     ResultPolicy,
@@ -59,6 +60,7 @@ class TypeCodec:
   items: tuple["TypeCodec", ...] = ()
   multiple: bool = False
   nargs: int = 1
+  metavar: str | None = None
 
 
 @dataclass(frozen=True)
@@ -191,17 +193,19 @@ def _is_boolean_literal(value: str) -> bool:
 
 
 def _short_option_names(
-    parameters: tuple[ParameterModel, ...]) -> dict[str, str]:
-  """Assign each available initial to its first exposed parameter."""
+    parameters: tuple[ParameterModel, ...], extra_names: tuple[str, ...] = ()
+) -> dict[str, str]:
+  """Assign initials to API parameters first, then informational options."""
   assigned: dict[str, str] = {}
   claimed = set(_RESERVED_SHORT_OPTIONS)
-  for parameter in parameters:
-    if parameter.injected or parameter.argument:
-      continue
-    initial = parameter.name[0]
+  names = tuple(
+      parameter.name for parameter in parameters
+      if not parameter.injected and not parameter.argument) + extra_names
+  for name in names:
+    initial = name[0]
     if initial in claimed:
       continue
-    assigned[parameter.name] = f"-{initial}"
+    assigned[name] = f"-{initial}"
     claimed.add(initial)
   return assigned
 
@@ -276,7 +280,11 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
           "choice provider values do not match the annotated scalar type")
     if len(set(values)) != len(values):
       raise _error(fn, name, "choice provider returned duplicate choices")
-    return TypeCodec(CodecKind.CHOICE, annotation, optional, choices=values)
+    return TypeCodec(CodecKind.CHOICE,
+                     annotation,
+                     optional,
+                     choices=values,
+                     metavar=providers[0].metavar)
   if key_values and get_origin(annotation) not in (dict, Mapping):
     raise _error(fn, name, "KeyValue requires a mapping annotation")
   if annotation in _SCALARS:
@@ -379,6 +387,10 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
   canonical = fn
   signature = inspect.signature(canonical)
   hints = _type_hints(canonical)
+  for option in spec.info_options:
+    if option.name in signature.parameters:
+      raise _error(canonical, option.name,
+                   "informational option conflicts with an API parameter")
   raw: list[tuple[inspect.Parameter, object, tuple[object, ...], bool, bool,
                   bool]] = []
   for index, parameter in enumerate(signature.parameters.values()):
@@ -888,12 +900,30 @@ def execute_model(ctx, model: CommandModel, values: dict):
     raise click.UsageError(str(exc)) from exc
 
 
+def _info_callback(option: InfoOption):
+  """Render a catalog and exit during parsing, before pipeline dispatch."""
+
+  def callback(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+      return
+    rows = option.rows()
+    formatter = ctx.make_formatter()
+    formatter.write_dl(rows,
+                       col_max=max((len(name) for name, _ in rows), default=0))
+    click.echo(formatter.getvalue().rstrip())
+    ctx.exit()
+
+  return callback
+
+
 def build_click_command(model: CommandModel,
                         *,
                         command_class=_GeneratedCommand) -> click.Command:
   """Lower an immutable model to a Click command."""
   params: list[click.Parameter] = []
-  short_options = _short_option_names(model.parameters)
+  short_options = _short_option_names(
+      model.parameters,
+      tuple(option.name for option in model.spec.info_options))
   for parameter in model.parameters:
     if parameter.injected:
       continue
@@ -901,6 +931,8 @@ def build_click_command(model: CommandModel,
     assert codec is not None
     if parameter.argument:
       attrs = dict(type=_click_scalar(codec), required=parameter.required)
+      if codec.metavar is not None:
+        attrs["metavar"] = codec.metavar
       if not parameter.required:
         default = parameter.default
         if codec.kind is CodecKind.ENUM and isinstance(default, Enum):
@@ -929,9 +961,24 @@ def build_click_command(model: CommandModel,
     declarations.append(parameter.name)
     option_class = (_OptionalBooleanOption
                     if codec.kind is CodecKind.BOOLEAN else click.Option)
+    if codec.metavar is not None:
+      attrs["metavar"] = codec.metavar
     if codec.kind is CodecKind.BOOLEAN:
       attrs["metavar"] = "[BOOLEAN]"
     params.append(option_class(declarations, **attrs))
+
+  for option in model.spec.info_options:
+    declarations = [f"--{option.name}"]
+    if option.name in short_options:
+      declarations.append(short_options[option.name])
+    params.append(
+        click.Option(declarations,
+                     is_flag=True,
+                     default=False,
+                     is_eager=True,
+                     expose_value=False,
+                     help=option.help,
+                     callback=_info_callback(option)))
 
   @click.pass_context
   def callback(click_context, **kwargs):

@@ -929,7 +929,7 @@ class PostgkylSession:
         Call ``interpolate()`` on the returned datasets when point samples are needed.
 
         Args:
-          quantity: Registered quantity name (see :func:`available_quantities`).
+          quantity: Quantity to load, see -a, --avail_quant for available quantities.
           species: Species name, or a comma-separated list of them; ``None`` for
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).

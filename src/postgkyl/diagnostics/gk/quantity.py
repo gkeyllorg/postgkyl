@@ -31,6 +31,7 @@ class GkQuantity:
 
   Attributes:
     name: Name of the quantity (the registry key).
+    description: Brief plain-text explanation for the quantity catalog.
     source: List of source combinations to try, in preference order; each
       combination is a list of either file-naming-convention source strings
       (e.g. ``"M0"``) or nested ``GkQuantity`` (computed on demand).
@@ -76,6 +77,7 @@ class GkQuantity:
                            "cartesian"] | None = None
   physical_units: str | None = None
   projection_label: str | None = None
+  description: str = ""
 
   # ------------------------------------------------------------ internal
   def _src_stem(self, path: str, name: str, species: str, src: str) -> str:

@@ -23,8 +23,15 @@ def available_quantities() -> list[str]:
   return gk_quant_registry.list()
 
 
+def _quantity_catalog() -> list[tuple[str, str]]:
+  """Return sorted quantity names and their registry-owned descriptions."""
+  return [(name, gk_quant_registry.get(name).description)
+          for name in available_quantities()]
+
+
 def load_quantity(
-    quantity: Annotated[str, ChoiceProvider(available_quantities)],
+    quantity: Annotated[str,
+                        ChoiceProvider(available_quantities, metavar="TEXT")],
     species: str | None,
     name: str,
     frame: str | None = None,
@@ -55,7 +62,7 @@ def load_quantity(
   Call ``interpolate()`` on the returned datasets when point samples are needed.
 
   Args:
-    quantity: Registered quantity name (see :func:`available_quantities`).
+    quantity: Quantity to load, see -a, --avail_quant for available quantities.
     species: Species name, or a comma-separated list of them; ``None`` for
       species-independent quantities.
     name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).

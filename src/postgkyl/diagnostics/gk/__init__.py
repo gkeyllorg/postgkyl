@@ -14,7 +14,7 @@ mapping are owned by I/O and operations, respectively.
 from __future__ import annotations
 
 from .distf import load_distf, resolve_frames
-from .load_quantity import available_quantities, load_quantity
+from .load_quantity import available_quantities, load_quantity, _quantity_catalog
 from .quantities import (
     fetch_beta_from_bmag_press,
     fetch_diamag_vel_contra,
@@ -44,6 +44,7 @@ from typing import Annotated
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    InfoOption,
     KeyValue,
     ResultPolicy,
     Section,
@@ -55,7 +56,14 @@ _REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS,
                            Execution.LOAD,
                            result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_distf)
-command(_LOAD_SPEC)(load_quantity)
+command(
+    CommandSpec(
+        Section.DIAGNOSTICS,
+        Execution.LOAD,
+        info_options=(InfoOption(
+            "avail_quant", _quantity_catalog,
+            "List available quantities and their descriptions, then exit."),
+                      )))(load_quantity)
 energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                           KeyValue()]
 particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]

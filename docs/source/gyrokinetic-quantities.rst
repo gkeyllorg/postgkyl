@@ -7,8 +7,17 @@ commands below from the extracted directory. In a source checkout, first run
 ``python tests/generate_test_data.py`` to create the small synthetic inputs.
 
 ``pg.gk.load_quantity`` and its CLI command ``gk_load_quantity`` resolve the
-source files and compute a named quantity. This example loads three electron
-quantities at frame 0:
+source files and compute a named quantity. List every supported quantity and
+its brief description without loading simulation files::
+
+   pgkyl gk_load_q -a
+   pgkyl gk_load_q --avail_quant
+
+The catalog is alphabetical, with quantity names on the left and descriptions
+on the right. ``gk_load_q -h`` shows concise option help; select a quantity with
+``-q, --quantity``. The same options work with ``gk_load_quantity``.
+
+This example loads three electron quantities at frame 0:
 
 .. math::
 

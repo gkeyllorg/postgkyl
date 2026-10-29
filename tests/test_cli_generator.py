@@ -483,6 +483,7 @@ def test_every_generated_name_preserves_api_underscores():
         parameter.name
         for parameter in model.parameters if not parameter.injected
     }
+    expected.update(option.name for option in model.spec.info_options)
     assert set(options) == expected
     claimed_initials = {"h"}
     for parameter in model.parameters:
@@ -498,6 +499,17 @@ def test_every_generated_name_preserves_api_underscores():
             expected_opts.append("-" + initial)
             claimed_initials.add(initial)
         assert options[parameter.name].opts == expected_opts
+    for info in model.spec.info_options:
+      expected_opts = ["--" + info.name]
+      initial = info.name[0]
+      if initial not in claimed_initials:
+        expected_opts.append("-" + initial)
+        claimed_initials.add(initial)
+      option = options[info.name]
+      assert option.opts == expected_opts
+      assert option.is_eager and option.is_flag
+      assert not option.expose_value
+      assert option.default is False
 
 
 def test_every_generated_boolean_has_a_false_cli_default():
