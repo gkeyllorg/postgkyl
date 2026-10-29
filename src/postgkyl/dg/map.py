@@ -9,8 +9,8 @@ exactly the shape of the one it replaces.
 
 Two functions, one per step of ``MAPPING.md``'s "evaluation algorithm":
 :func:`eval_at_points` evaluates ONE coordinate's coefficients at an arbitrary
-point set (steps 1-4: cell locate, reference-coordinate conversion, grouped
-basis evaluation, reshape); :func:`map_grid` builds the tensor point set for
+point set (steps 1-4: cell locate, reference-coordinate conversion, basis
+evaluation, reshape); :func:`map_grid` builds the tensor point set for
 the target axes and calls it once per mapped dimension.
 """
 
@@ -89,12 +89,9 @@ def eval_at_points(coeffs: np.ndarray,
   cell_lin = np.ravel_multi_index(tuple(idx[:, d] for d in range(m)),
                                   tuple(int(c) for c in cells))
 
-  # Step 3: group points by containing cell -> one matrix-vector product each.
-  out = np.empty(z.shape[0], dtype=np.float64)
-  for lin in np.unique(cell_lin):
-    sel = cell_lin == lin
-    b = gpython.basis.eval_matrix(basis_type, m, poly_order, eta[sel])
-    out[sel] = b @ flat_coeffs[lin]
+  # Step 3: pair each point's basis values with its cell's coefficients.
+  basis = gpython.basis.eval_matrix(basis_type, m, poly_order, eta)
+  out = np.einsum("ij,ij->i", basis, flat_coeffs[cell_lin])
 
   # Step 4: reshape to the point-set shape.
   return out.reshape(shape)

@@ -613,7 +613,8 @@ def plot(
     no_legend: Suppress legends for line plots.
     legend_labels: Dataset labels in input order; CLI: --legend_labels
       '["new","old"]' (quote the whole JSON array), or repeat the option.
-      For multiple datasets, defaults to each dataset's label (using the
+      Defaults to supplied dataset labels, including single-dataset figures.
+      For multiple datasets, uses each dataset's label (using the
       shortest distinguishing path suffix for source filenames), falling back
       to ``dataset N`` for unnamed in-memory data.
     legend_subplot: Zero-based subplot receiving the legend.
@@ -992,7 +993,7 @@ def plot(
         if legend_labels is not None and ds_i < len(legend_labels):
           label_prefix = legend_labels[ds_i]
           explicit_legend_label = True
-        elif len(states) > 1:
+        elif len(states) > 1 or data._custom_label or data._label:
           label_prefix = dataset_labels[ds_i]
           explicit_legend_label = False
         else:

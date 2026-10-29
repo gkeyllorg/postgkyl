@@ -205,18 +205,23 @@ class TestMultiPanel:
   @pytest.mark.parametrize("components", [1, 2])
   @pytest.mark.parametrize("forcelegend", [False, True])
   @pytest.mark.parametrize("label", ["", "custom"])
-  def test_default_legend_labels(self, count, components, forcelegend, label):
+  @pytest.mark.parametrize("custom_label", [False, True])
+  def test_default_legend_labels(self, count, components, forcelegend, label,
+                                 custom_label):
     datasets = [_line(offset=i) for i in range(count)]
     for i, data in enumerate(datasets):
       data._file_name = f"/results/run{i}.gkyl"
-      data.label = label
+      if custom_label:
+        data._custom_label = label
+      else:
+        data.label = label
       data.values = np.repeat(data.values, components, axis=-1)
     fig = backend.plot(*datasets,
                        multiblock=True,
                        no_show=True,
                        forcelegend=forcelegend)
     for comp, ax in enumerate(fig.axes):
-      expected = ([f"c{comp}"] if count == 1 else
+      expected = ([f"c{comp}"] if count == 1 and not label else
                   [f"{label or f'run{i}.gkyl'}_c{comp}" for i in range(count)])
       assert [text.get_text()
               for text in ax.get_legend().get_texts()] == expected

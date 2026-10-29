@@ -98,7 +98,8 @@ class GData(GDataState):
   interpolate = operations.interpolate
   local_poly = operations.local_poly
   map_to_rz = operations.map_to_rz
-  extract_flux_surface = operations.extract_flux_surface
+  map_to_torus = operations.map_to_torus
+  map_to_phitheta = operations.map_to_phitheta
   select = operations.select
   integrate = operations.integrate
   average = operations.average

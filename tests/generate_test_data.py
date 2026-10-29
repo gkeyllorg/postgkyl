@@ -434,56 +434,132 @@ def polynomial_factors(ndim, basis, order):
   return factors
 
 
-def _generate_polynomial_fields(out_dir: Path) -> None:
-  """Write exact p1/p2 coefficients without calling a production DG kernel.
+def polynomial_coefficients(ndim, basis, order):
+  """Exact p1/p2 coefficients without calling a production DG kernel.
 
   On a cell x=c+h*xi, a+b*x+q*x^2 has orthonormal Legendre coefficients
   sqrt(2)*(a+b*c+q*(c^2+h^2/3)), sqrt(2/3)*h*(b+2*q*c),
   sqrt(8/45)*q*h^2. Multidimensional separable coefficients are products
   of these one-dimensional integrals, in Gkeyll's documented mode order.
+  Returns the cell-edge grid and field-blocked ``(*cells, 2 * modes)``
+  coefficients.
   """
+  grid = polynomial_grid(ndim)
+  factors = polynomial_factors(ndim, basis, order)
+  if ndim == 1:
+    modes = [(p, ) for p in range(order + 1)]
+  elif ndim == 2:
+    modes = [(0, 0), (1, 0), (0, 1), (1, 1)]
+    if order == 2:
+      modes += [(2, 0), (0, 2), (2, 1), (1, 2)]
+      if basis == "tensor":
+        modes += [(2, 2)]
+  else:
+    modes = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1),
+             (0, 1, 1), (1, 1, 1)]
+  cells = [len(edges) - 1 for edges in grid]
+  centers = np.meshgrid(*[(e[:-1] + e[1:]) / 2 for e in grid], indexing="ij")
+  coefficients = np.ones((*cells, 2, len(modes)))
+  for d, center in enumerate(centers):
+    h = (grid[d][1] - grid[d][0]) / 2
+    for field, (a, b, q) in enumerate(factors[:, d]):
+      local = [
+          np.sqrt(2) * (a + b * center + q * (center**2 + h**2 / 3)),
+          np.sqrt(2 / 3) * h * (b + 2 * q * center),
+          np.full_like(center,
+                       np.sqrt(8 / 45) * q * h**2)
+      ]
+      for m, powers in enumerate(modes):
+        coefficients[..., field, m] *= local[powers[d]]
+  return grid, coefficients.reshape(*cells, -1)
+
+
+def _generate_polynomial_fields(out_dir: Path) -> None:
+  """Write the separable polynomial fixtures."""
   for stem, ndim, basis, order in POLYNOMIAL_CASES:
-    grid = polynomial_grid(ndim)
-    factors = polynomial_factors(ndim, basis, order)
-    if ndim == 1:
-      modes = [(p, ) for p in range(order + 1)]
-    elif ndim == 2:
-      modes = [(0, 0), (1, 0), (0, 1), (1, 1)]
-      if order == 2:
-        modes += [(2, 0), (0, 2), (2, 1), (1, 2)]
-        if basis == "tensor":
-          modes += [(2, 2)]
-    else:
-      modes = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1),
-               (0, 1, 1), (1, 1, 1)]
-    cells = [len(edges) - 1 for edges in grid]
-    centers = np.meshgrid(*[(e[:-1] + e[1:]) / 2 for e in grid], indexing="ij")
-    coefficients = np.ones((*cells, 2, len(modes)))
-    for d, center in enumerate(centers):
-      h = (grid[d][1] - grid[d][0]) / 2
-      for field, (a, b, q) in enumerate(factors[:, d]):
-        local = [
-            np.sqrt(2) * (a + b * center + q * (center**2 + h**2 / 3)),
-            np.sqrt(2 / 3) * h * (b + 2 * q * center),
-            np.full_like(center,
-                         np.sqrt(8 / 45) * q * h**2)
-        ]
-        for m, powers in enumerate(modes):
-          coefficients[..., field, m] *= local[powers[d]]
+    grid, coefficients = polynomial_coefficients(ndim, basis, order)
+    write_gkyl_field(out_dir / f"{stem}.gkyl",
+                     list(coefficients.shape[:-1]), [e[0] for e in grid],
+                     [e[-1] for e in grid],
+                     coefficients,
+                     order,
+                     basis,
+                     metadata={
+                         "description":
+                         "Two separable polynomials on an anisotropic grid.",
+                         "analytic_function": polynomial_factors.__doc__,
+                         "generation_method": polynomial_coefficients.__doc__,
+                     })
+
+
+# Field-aligned geometries on the 3-D polynomial grid, one per y orientation.
+TWISTED_SPANS = {"twisted_pos_3d_p1": 1.5, "twisted_neg_3d_p1": -1.5}
+
+
+def twisted_phi(x, y, z, span):
+  """Toroidal angle phi = -1.2*z + 0.3*x + span*(y - 0.25)/2.
+
+  On y in [0.25, 2.25] the binormal domain covers span radians, so
+  2*pi/|span| = 4.19 copies fill the torus; R = 3 + x and Z = z.
+  """
+  return -1.2 * z + 0.3 * x + span * (y - 0.25) / 2
+
+
+def twisted_fields(x, z, phi, span):
+  """(f, g) of the twisted fixtures where toroidal angle phi crosses (x, z).
+
+  phi lies (phi - phi_lo) mod 2*pi past the lower binormal edge y = 0.25.
+  Within |span| that is a simulated point; beyond it the binormal domain
+  repeats with period span, as flux-tube copies around the torus.
+  """
+  past_edge = np.mod(phi - twisted_phi(x, 0.25, z, span),
+                     2 * np.pi * np.sign(span))
+  y = 0.25 + 2.0 * np.mod(past_edge / span, 1.0)
+  return [
+      np.prod(np.broadcast_arrays(*(np.polynomial.polynomial.polyval(c, k)
+                                    for c, k in zip((x, y, z), field))),
+              axis=0) for field in polynomial_factors(3, "serendipity", 1)
+  ]
+
+
+def _generate_twisted_geometry(out_dir: Path) -> None:
+  """Write the 3-D p1 polynomials beside R/Z/phi at interior Gauss nodes."""
+  grid, coefficients = polynomial_coefficients(3, "serendipity", 1)
+  cells = list(coefficients.shape[:-1])
+  nodes = [((e[:-1] + e[1:]) / 2)[:, None] +
+           np.diff(e)[:, None] * np.array([-1.0, 1.0]) / (2 * np.sqrt(3))
+           for e in grid]
+  x, y, z = np.meshgrid(*[axis.ravel() for axis in nodes], indexing="ij")
+  for prefix, span in TWISTED_SPANS.items():
+    write_gkyl_field(out_dir / f"{prefix}-field_0.gkyl",
+                     cells, [e[0] for e in grid], [e[-1] for e in grid],
+                     coefficients,
+                     1,
+                     "serendipity",
+                     metadata={
+                         "description":
+                         "The 3-D p1 polynomials on a twisted geometry.",
+                         "analytic_function": polynomial_factors.__doc__,
+                         "generation_method": polynomial_coefficients.__doc__,
+                     })
     write_gkyl_field(
-        out_dir / f"{stem}.gkyl",
-        cells, [e[0] for e in grid], [e[-1] for e in grid],
-        coefficients.reshape(*cells, -1),
-        order,
-        basis,
+        out_dir / f"{prefix}-geo_int_nodes.gkyl", [2 * n for n in cells],
+        [e[0] for e in grid], [e[-1] for e in grid],
+        np.stack([3.0 + x, z, twisted_phi(x, y, z, span)], axis=-1),
+        poly_order=0,
+        basis_type="serendipity",
         metadata={
+            "value_form":
+            "nodal",
+            "geometry_type":
+            1,
             "description":
-            "Two separable polynomials on an anisotropic grid.",
+            "Cylindrical R/Z/phi geometry.",
             "analytic_function":
-            polynomial_factors.__doc__,
+            twisted_phi.__doc__,
             "generation_method":
-            "Closed-form Legendre integrals, independent of Postgkyl "
-            "and Gkeyll; field-blocked exact modal coefficients.",
+            ("Point values at the two Gauss nodes per axis of "
+             "each field cell, on a 2x-refined grid."),
         })
 
 
@@ -709,6 +785,7 @@ def generate_all(out_dir: Path | str) -> None:
   out_dir.mkdir(parents=True, exist_ok=True)
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
+  _generate_twisted_geometry(out_dir)
   _generate_calculus_samples(out_dir)
   _generate_moment_frames(out_dir)
   _generate_fourier_samples(out_dir)

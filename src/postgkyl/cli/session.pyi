@@ -361,25 +361,6 @@ class PostgkylSession:
             is unrecognized, or an operator fails.
         """
 
-    def extract_flux_surface(self, *, mapc2p: str | None = None, nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
-        r"""Sample a field component on a toroidal surface.
-
-        Args:
-          data: Three-dimensional field-aligned modal DG dataset.
-          fs_grid: Reusable Python grid from resolve_flux_surface_grid; omit to
-            load geometry. Geometry and sampling options belong on its builder.
-          mapc2p: Explicit modal geometry path, or '' for the inferred modal file.
-          nodes_file: Explicit interior-node geometry path; excludes mapc2p.
-            Omit both paths to infer geometry from data.file_name.
-          x_idx: Radial index on the interpolated computational grid.
-          nphi: Number of toroidal-angle samples.
-          nz_interp: Positive parallel-direction up-sampling factor.
-          comp: Zero-based physical field component to extract.
-          inplace: Mutate and return data instead of creating a dataset.
-          tag: Optional result tag.
-          label: Optional result label.
-        """
-
     def extract_input(self) -> PostgkylSession:
         r"""Decode the input file embedded in a Gkeyll output file's ``ctx``.
 
@@ -1006,12 +987,51 @@ class PostgkylSession:
             count does not match the expected ``m * num_basis``.
         """
 
-    def map_to_rz(self, *, mapc2p: str | None = None, nodes_file: str | None = None, z_axis: float = 0.0, phi_tor: float = 0.0, nz_interp: int = 8, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+    def map_to_phitheta(self, *, mapc2p: str | None = None, nodes_file: str | None = None, x_idx: int = 0, nphi: int = 128, nz_interp: int = 12, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""Map a modal field component onto one flux surface's (phi, theta) plane.
+
+        Theta is the parallel coordinate z, which makes one poloidal turn. Each
+        sample evaluates the DG field as map_to_rz does, so the column at angle
+        phi is row x_idx of the R-Z slice at phi. Unless the binormal domain is a
+        whole fraction of the torus, its copies meet along field lines with a
+        jump.
+
+        Args:
+          data: Un-interpolated 3-D field-aligned modal DG field.
+          projection: Reusable Python projection built with
+            resolve_phitheta_projection; its computational grid must match data.
+            Omit to load geometry.
+          mapc2p: Explicit modal geometry path, or '' for the inferred modal file.
+          nodes_file: Explicit interior-node geometry path; excludes mapc2p.
+            When both paths are omitted, infer geometry from data.file_name,
+            preferring geo_int_nodes over geo_int_mapc2p. '*' selects the block.
+          x_idx: Flux-surface index on the interpolated radial grid; negative
+            indices count back from the outer edge.
+          nphi: Number of toroidal samples over one turn.
+          nz_interp: Positive parallel-direction up-sampling factor.
+          comp: Zero-based physical field component to map.
+          inplace: Mutate and return data instead of creating a dataset.
+          tag: Optional result tag.
+          label: Optional result label.
+
+        Returns:
+          The caller's concrete data class with NumPy point values on a
+          ``(phi, theta)`` grid of sample points. Projection sampling options
+          cannot accompany a reusable projection; set them when building it.
+        """
+
+    def map_to_rz(self, *, mapc2p: str | None = None, nodes_file: str | None = None, z_axis: float = 0.0, phi_tor: float = 0.0, nz_interp: int = 12, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
         r"""Map a modal field component onto a physical R-Z slice.
 
         Two-dimensional input deforms the interpolated grid. Three-dimensional
-        reconstruction requires periodic field-aligned coordinates with
-        twist-and-shift boundaries. Geometry is shared by all equation systems.
+        input is sliced at toroidal angle ``phi_tor``: every sample evaluates the
+        DG field where the geometry places that angle along y. Angles that the
+        simulated binormal domain covers are exact. Elsewhere the periodic domain
+        repeats; unless it spans a whole fraction of the torus, its copies meet
+        along field lines with a jump. A geometry file's own grid defines the
+        mapping, even when written by another run on a different computational
+        range: the data's grid is placed on it cell for cell. Geometry is shared
+        by all equation systems.
 
         Args:
           data: Un-interpolated 2-D or 3-D modal DG field.
@@ -1022,7 +1042,7 @@ class PostgkylSession:
             When both paths are omitted, infer geometry from data.file_name,
             preferring geo_int_nodes over geo_int_mapc2p. '*' selects the block.
           z_axis: Vertical offset in meters, added to geometry Z.
-          phi_tor: Toroidal angle in radians for a 3-D reconstruction.
+          phi_tor: Toroidal angle in radians for a 3-D slice.
           nz_interp: Positive parallel-direction up-sampling factor for 3-D input.
           comp: Zero-based physical field component to map.
           inplace: Mutate and return data instead of creating a dataset.
@@ -1036,6 +1056,44 @@ class PostgkylSession:
           at a constant minor radius or poloidal angle.
           Projection geometry and sampling options cannot accompany a reusable
           projection; set them when building that projection instead.
+        """
+
+    def map_to_torus(self, *, mapc2p: str | None = None, nodes_file: str | None = None, z_axis: float = 0.0, x_idx: tuple[int, int] = (2, -3), phi_tor: tuple[float, float] = (1.5707963267948966, 6.283185307179586), nphi: int = 64, nz_interp: int = 12, comp: int = 0, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
+        r"""Map a modal field component onto the boundary of a toroidal wedge.
+
+        The wedge lies between two flux surfaces and two poloidal planes. Its
+        boundary is one closed surface in Cartesian X, Y, Z: the poloidal cap at the
+        first angle, the outer flux surface, the cap at the last angle, and the
+        inner flux surface. Every face samples the field as map_to_rz does, so the
+        caps are its slices and faces agree where they meet. Render it with
+        pyvista's surface and no_normalize options.
+
+        Args:
+          data: Un-interpolated 3-D field-aligned modal DG field.
+          projection: Reusable Python projection built with
+            resolve_torus_projection; its computational grid must match data.
+            Omit to load geometry.
+          mapc2p: Explicit modal geometry path, or '' for the inferred modal file.
+          nodes_file: Explicit interior-node geometry path; excludes mapc2p.
+            When both paths are omitted, infer geometry from data.file_name,
+            preferring geo_int_nodes over geo_int_mapc2p. '*' selects the block.
+          z_axis: Vertical offset in meters, added to geometry Z.
+          x_idx: Inner and outer flux-surface indices on the interpolated radial
+            grid; negative indices count back from the outer edge.
+          phi_tor: First and last toroidal angles in radians, at most 2*pi apart.
+          nphi: Number of toroidal samples from the first to the last angle.
+          nz_interp: Positive parallel-direction up-sampling factor.
+          comp: Zero-based physical field component to map.
+          inplace: Mutate and return data instead of creating a dataset.
+          tag: Optional result tag.
+          label: Optional result label.
+
+        Returns:
+          The caller's concrete data class with NumPy point values on a mapped
+          ``(s, z, 1)`` grid: ``s`` follows the wedge boundary, ``z`` the field
+          line, and the size-1 axis is the surface's zero thickness. Projection
+          geometry and sampling options cannot accompany a reusable projection;
+          set them when building that projection instead.
         """
 
     def mask(self, mask_data: str | None = None, *, lower: float | None = None, upper: float | None = None, inplace: bool = False, tag: str | None = None, label: str | None = None) -> PostgkylSession:
@@ -2468,7 +2526,8 @@ class PostgkylSession:
           no_legend: Suppress legends for line plots.
           legend_labels: Dataset labels in input order; CLI: --legend_labels
             '["new","old"]' (quote the whole JSON array), or repeat the option.
-            For multiple datasets, defaults to each dataset's label (using the
+            Defaults to supplied dataset labels, including single-dataset figures.
+            For multiple datasets, uses each dataset's label (using the
             shortest distinguishing path suffix for source filenames), falling back
             to ``dataset N`` for unnamed in-memory data.
           legend_subplot: Zero-based subplot receiving the legend.
@@ -2661,29 +2720,31 @@ class PostgkylSession:
           grid: Print each grid axis instead of the values.
         """
 
-    def pyvista(self, *, no_show: bool = False, no_spin: bool = False, max_points_per_axis: int = -1, contour_levels: int = 10, clevels: str | None = None, is_log: bool = False, volume: bool = False, is_shaded: bool = False, hide_axes: bool = False, mesh_clip_plane: bool = False, mesh_slice_plane: bool = False, volume_clip_plane: bool = False, cmin: float | None = None, cmax: float | None = None, aspect_ratio: tuple[float, float, float] = (1, 1, 1), no_normalize: bool = False, camera_azimuth: float = 0.0, camera_elevation: float = -30.0, opacity: str | float = 'sigmoid_4', cmap: str = 'inferno', xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str = '', title: str = '', diverging: bool = False, cylindrical_to_cartesian: bool = False, theme: str = 'default', saveas: str = '', xscale: float = 1.0, yscale: float = 1.0, zscale: float = 1.0, xshift: float = 0.0, yshift: float = 0.0, zshift: float = 0.0, hide_zeros: bool = False) -> PostgkylSession:
+    def pyvista(self, *, no_show: bool = False, no_spin: bool = False, max_points_per_axis: int = -1, contour_levels: int = 10, clevels: str | None = None, is_log: bool = False, volume: bool = False, is_shaded: bool = False, hide_axes: bool = False, mesh_clip_plane: bool = False, mesh_slice_plane: bool = False, volume_clip_plane: bool = False, cmin: float | None = None, cmax: float | None = None, aspect_ratio: tuple[float, float, float] = (1, 1, 1), no_normalize: bool = False, camera_azimuth: float = 0.0, camera_elevation: float = -30.0, opacity: str | float | None = None, cmap: str = 'inferno', xlabel: str | None = None, ylabel: str | None = None, zlabel: str | None = None, clabel: str = '', title: str = '', diverging: bool = False, cylindrical_to_cartesian: bool = False, theme: str = 'default', saveas: str = '', xscale: float = 1.0, yscale: float = 1.0, zscale: float = 1.0, xshift: float = 0.0, yshift: float = 0.0, zshift: float = 0.0, hide_zeros: bool = False, surface: bool = False) -> PostgkylSession:
         r"""Render a 3-D scalar field with PyVista.
 
         Builds a structured grid from the (single-component) scalar values and
-        renders it as a volume, contour isosurfaces, or an interactive clip/slice
-        plane. By default the grid is normalized to ``aspect_ratio``; use
-        ``no_normalize`` to preserve physical coordinates and proportions.
-        Only the first value component is used.
+        renders it as a volume, contour isosurfaces, a colored surface, or an
+        interactive clip/slice plane. By default the grid is normalized to
+        ``aspect_ratio``; use ``no_normalize`` to preserve physical coordinates
+        and proportions. Only the first value component is used.
 
         Args:
-          data: dataset to plot; must be 3-D (after squeezing any size-1 axis).
+          data: dataset to plot; must be 3-D after squeezing size-1 axes beyond
+            the third. A size-1 axis of 3-D data, such as the zero thickness of
+            a map_to_torus result, is kept and renders as a surface.
           no_show: Do not open an interactive render window; render off-screen.
           no_spin: Do not auto-rotate the camera in interactive windows.
           max_points_per_axis: downsample to at most this many points per axis;
             ``-1`` disables downsampling.
-          contour_levels: Number of isosurfaces extracted unless ``volume`` is set
-            or ``clevels`` is supplied.
+          contour_levels: Number of isosurfaces extracted unless ``volume`` or
+            ``surface`` is set, or ``clevels`` is supplied.
           clevels: Explicit isosurfaces: a value, comma-separated values, or
             ``start:end:count``. Uses scalar units before ``is_log``; incompatible
-            with ``volume``.
+            with ``volume`` and ``surface``.
           is_log: color by log10 of the scalar (non-positive values masked).
           volume: Render a volume instead of isosurface contours.
-          is_shaded: enable shading on the volume render (volume mode only).
+          is_shaded: Enable lighting in volume and surface modes.
           hide_axes: hide the bounding-box axes and labels.
           mesh_clip_plane: add an interactive clip plane along ``-x``.
           mesh_slice_plane: add an interactive slice plane along ``-x``.
@@ -2698,7 +2759,8 @@ class PostgkylSession:
           camera_elevation: Initial camera elevation in degrees.
           opacity: a PyVista opacity preset string, ``"diverging"`` (opaque at
             both ends, transparent in the middle), or a number from 0 (transparent)
-            to 1 (fully opaque). Numeric strings are also accepted.
+            to 1 (fully opaque). Numeric strings are also accepted. Omitted, it is
+            ``"sigmoid_4"`` for volumes and isosurfaces and 1 for surfaces.
           cmap: colormap name; overridden to ``"RdBu_r"`` when ``diverging``.
           xlabel: Horizontal-axis label; auto-derived when omitted.
           ylabel: Vertical-axis label; auto-derived when omitted.
@@ -2719,13 +2781,16 @@ class PostgkylSession:
           yshift: Additive shift applied to the vertical axis.
           zshift: Additive shift applied to the third axis.
           hide_zeros: hide grid points whose scalar value is exactly zero.
+          surface: Color the grid's outer surface instead of extracting
+            isosurfaces.
 
         Returns:
           None: the function renders and/or saves the plot for its side effects.
 
         Raises:
           ValueError: ``data`` is not 3-D, or ``saveas`` has an unsupported
-            extension, or ``clevels`` is invalid or incompatible with the mode.
+            extension, or ``surface`` is combined with ``volume``, or ``clevels``
+            is invalid or incompatible with the mode.
           RuntimeError: PyVista could not obtain a working OpenGL context.
         """
 

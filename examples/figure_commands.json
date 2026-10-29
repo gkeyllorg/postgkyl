@@ -52,5 +52,8 @@
   },
   "13_postgkyl_session.py": {
     "13_postgkyl_session.png": "pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl fluctuation --dims 1 map_to_rz --nz_interp 12 plot --diverging --no_legend --xlabel '' --ylabel '' --clabel '$\\delta n_e$ [m$^{-3}$]' --subplot_xlabels 'R [m]' --subplot_ylabels 'Z [m]' --fixaspect --saveas '{output}/13_postgkyl_session.png'"
+  },
+  "14_map_to_torus.py": {
+    "14_map_to_torus.png": "pgkyl tests/test_data/rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl map_to_torus --x_idx 4 -4 --phi_tor 0 4.71238898038469 --nphi 160 pyvista --surface --no_normalize --is_log --cmin 5e16 --no_show --no_spin --hide_axes --theme document --camera_elevation 15 --camera_azimuth 0 --title 'Electron density on a toroidal wedge' --clabel '$n_e$ [m$^{-3}$]' --saveas '{output}/14_map_to_torus.png'"
   }
 }

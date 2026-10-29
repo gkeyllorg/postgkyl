@@ -104,6 +104,18 @@ def _signature(model: CommandModel) -> inspect.Signature:
                            return_annotation=_Source("PostgkylSession"))
 
 
+def command_signature(name: str) -> inspect.Signature:
+  """The options of session command ``name``, as a Python signature.
+
+  Raises:
+    AttributeError: ``name`` is not a ``pgkyl`` command.
+  """
+  model = _MODELS.get(name)
+  if model is None:
+    raise AttributeError(f"{name!r} is not a pgkyl command")
+  return _signature(model)
+
+
 def _doc(model: CommandModel) -> str:
   """The canonical callable's docstring, or the command help without one."""
   return inspect.getdoc(model.canonical) or model.long_help
@@ -132,7 +144,7 @@ class PostgkylSession:
     if model is None:
       raise AttributeError(
           f"{type(self).__name__!r} has no command or attribute {name!r}")
-    signature = _signature(model)
+    signature = command_signature(name)
 
     def run(*args, **kwargs):
       bound = signature.bind(*args, **kwargs)
@@ -262,4 +274,4 @@ def render_stub() -> str:
           "\n".join(members))
 
 
-__all__ = ["PostgkylSession", "render_stub"]
+__all__ = ["PostgkylSession", "command_signature", "render_stub"]

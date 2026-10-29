@@ -18,6 +18,7 @@ resolve correctly.
    gyrokinetic-distribution
    gyrokinetic-quantities
    physical-rz
+   toroidal-wedge
    exponential-growth
    arithmetic-representation
    animation

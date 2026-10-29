@@ -43,14 +43,15 @@ def test_geometry_prefers_nodes_and_honors_explicit_modal_override(
   nodes.touch()
   modal.touch()
   coords = [np.array([0.0, 1.0]), np.array([-1.0, 1.0])]
+  domain = ((0.0, 1.0), (-1.0, 1.0))
   arrays = np.ones((2, 2))
   calls = []
   monkeypatch.setattr(
       geometry_module, "_read_nodes_geometry", lambda path: (calls.append(
-          ("nodes", path)) or (coords, arrays, arrays, None)))
+          ("nodes", path)) or (coords, domain, arrays, arrays, None)))
   monkeypatch.setattr(
       geometry_module, "_read_mapc2p_geometry", lambda path: (calls.append(
-          ("mapc2p", path)) or (coords, arrays, arrays, None)))
+          ("mapc2p", path)) or (coords, domain, arrays, arrays, None)))
 
   resolve_geometry(str(source))
   assert calls[-1] == ("nodes", str(nodes))
@@ -116,7 +117,8 @@ def test_group_mapping_cli_and_help_section():
 @needs_gkeyll
 @pytest.mark.parametrize("module_name, builder_name", [
     ("map_to_rz", "rz_projections"),
-    ("extract_flux_surface", "flux_surface_grids"),
+    ("map_to_torus", "torus_projections"),
+    ("map_to_phitheta", "phitheta_projections"),
 ])
 def test_cached_mapping_rejects_changed_grid_with_same_prefix(
     module_name, builder_name):
@@ -129,25 +131,29 @@ def test_cached_mapping_rejects_changed_grid_with_same_prefix(
 
 
 @needs_gkeyll
-def test_flux_surface_cli_matches_explicit_projection():
+def test_phitheta_cli_matches_explicit_projection():
   from postgkyl.cli.app import cli
   data = pg.load(F3D)
   geometry = pg.resolve_geometry(data.file_name)
-  grid = pg.resolve_flux_surface_grid(data, geometry, nphi=4, nz_interp=2)
-  expected = data.extract_flux_surface(fs_grid=grid)
-  actual = pg.extract_flux_surface(data, nphi=4, nz_interp=2)
-  np.testing.assert_allclose(actual.values, expected.values)
-  command = next(c for c in COMMANDS if c.name == "extract_flux_surface")
+  projection = pg.resolve_phitheta_projection(data,
+                                              geometry,
+                                              x_idx=92,
+                                              nphi=4,
+                                              nz_interp=2)
+  expected = data.map_to_phitheta(projection=projection)
+  command = next(c for c in COMMANDS if c.name == "map_to_phitheta")
   space = DataSpace(datasets=[data])
-  with click.Context(command, obj=space) as ctx:
-    ctx.invoke(command, nphi=4, nz_interp=2, use=None, tag=None, label=None)
+  result = CliRunner().invoke(
+      command, ["--x_idx", "-4", "--nphi", "4", "--nz_interp", "2"], obj=space)
+  assert result.exit_code == 0, result.output
   np.testing.assert_allclose(space.datasets[0].values, expected.values)
   result = CliRunner().invoke(cli, ["--help"])
   assert result.exit_code == 0
-  assert "extract_flux_surface" in result.output.split("Diagnostics:", 1)[0]
-  assert "gk_fluxsurf" not in result.output
-  assert not hasattr(pg, "gk_fluxsurf")
-  assert not hasattr(pg.GData, "gk_fluxsurf")
+  assert "map_to_phitheta" in result.output.split("Diagnostics:", 1)[0]
+  for retired in ("extract_flux_surface", "gk_fluxsurf"):
+    assert retired not in result.output
+    assert not hasattr(pg, retired)
+    assert not hasattr(pg.GData, retired)
 
 
 @needs_gkeyll
@@ -192,14 +198,19 @@ def test_geometry_node_and_modal_files_agree_on_fluid_coordinates():
 
 @needs_gkeyll
 @pytest.mark.parametrize(
-    "module_name, builder_name, lookup_name, verb, keyword", [
+    "module_name, builder_name, lookup_name, verb, keyword, sampling", [
         ("map_to_rz", "rz_projections", "projection_for", "map_to_rz",
-         "projection"),
-        ("extract_flux_surface", "flux_surface_grids", "grid_for",
-         "extract_flux_surface", "fs_grid"),
+         "projection", {}),
+        ("map_to_torus", "torus_projections", "projection_for", "map_to_torus",
+         "projection", {
+             "x_idx": (0, -1)
+         }),
+        ("map_to_phitheta", "phitheta_projections", "projection_for",
+         "map_to_phitheta", "projection", {}),
     ])
 def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
-    monkeypatch, module_name, builder_name, lookup_name, verb, keyword):
+    monkeypatch, module_name, builder_name, lookup_name, verb, keyword,
+    sampling):
   from postgkyl.operations import _mapping
 
   module = import_module(f"postgkyl.operations.{module_name}")
@@ -218,7 +229,8 @@ def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
   mappings = getattr(module, builder_name)(
       datasets,
       nodes_file=str(GENERATED / "mapped_3d_b*-geo_int_nodes.gkyl"),
-      nz_interp=2)
+      nz_interp=2,
+      **sampling)
   assert calls == [datasets[0].file_name, datasets[2].file_name]
   assert len(mappings) == 2
   for data in datasets:
@@ -233,19 +245,24 @@ def test_mapping_reuse_loads_each_block_once_and_preserves_frames(
 
 
 @needs_gkeyll
-@pytest.mark.parametrize("verb, build, keyword, options", [
-    ("map_to_rz", "resolve_rz_projection", "projection", {
+@pytest.mark.parametrize("verb, build, keyword, sampling, options", [
+    ("map_to_rz", "resolve_rz_projection", "projection", {}, {
         "z_axis": 1.0
     }),
-    ("extract_flux_surface", "resolve_flux_surface_grid", "fs_grid", {
+    ("map_to_torus", "resolve_torus_projection", "projection", {
+        "x_idx": (0, -1)
+    }, {
+        "phi_tor": (0.0, 1.0)
+    }),
+    ("map_to_phitheta", "resolve_phitheta_projection", "projection", {}, {
         "nphi": 2
     }),
 ])
 def test_reusable_mapping_excludes_geometry_and_sampling_overrides(
-    verb, build, keyword, options):
+    verb, build, keyword, sampling, options):
   data = pg.load(str(GENERATED / "mapped_3d_b0-fluid_0.gkyl"))
   geometry = pg.resolve_geometry(data.file_name)
-  mapping = getattr(pg, build)(data, geometry)
+  mapping = getattr(pg, build)(data, geometry, **sampling)
   for overrides in (options, {"mapc2p": ""}, {"nodes_file": "unused.gkyl"}):
     with pytest.raises(ValueError, match="cannot be combined"):
       getattr(data, verb)(**{keyword: mapping}, **overrides)
@@ -255,7 +272,7 @@ def test_mapping_callables_have_one_equation_agnostic_public_owner():
   from postgkyl import operations
   from postgkyl.cli.app import MODELS
 
-  for name in ("map_to_rz", "extract_flux_surface"):
+  for name in ("map_to_rz", "map_to_torus", "map_to_phitheta"):
     operation = getattr(operations, name)
     assert getattr(pg, name) is getattr(pg.GData, name) is operation
     assert next(model for model in MODELS

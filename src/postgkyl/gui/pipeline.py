@@ -13,7 +13,7 @@ chain and figures into pixels.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import glob
 import inspect
 import io as _bytes_io
@@ -26,13 +26,15 @@ import numpy as np
 import postgkyl as pg
 from postgkyl import io
 from postgkyl.cli import PostgkylSession
+from postgkyl.cli.session import command_signature
 
 __all__ = [
     "Output", "Step", "GridInfo", "scan_outputs", "list_simulations",
     "weight_file", "pick_frames", "apply", "run", "processed", "probe",
     "plot_step", "python_script", "frame_spec", "figure_png", "make_movie",
-    "Settings", "TRANSFORMS", "parse_options", "build_chain", "quantity_frames",
-    "save_state", "load_state"
+    "Settings", "TRANSFORMS", "GEOMETRY_TRANSFORMS", "parse_options",
+    "build_chain", "radial_samples", "quantity_frames", "save_state",
+    "load_state"
 ]
 
 # Fluctuations and averages of gyrokinetic fields are weighted by the
@@ -195,10 +197,21 @@ def frame_spec(frames: list[int], available: list[int]) -> str:
 # ------------------------------------------------------------------- chains
 @dataclass(frozen=True)
 class Step:
-  """One ``PostgkylSession`` call: a ``pgkyl`` command and its options."""
+  """One ``PostgkylSession`` call: a ``pgkyl`` command and its options.
+
+  A step must name a session command and bind to its signature, so a
+  renamed command or option fails when the chain is built, not when run.
+
+  Raises:
+    AttributeError: ``verb`` is not a ``pgkyl`` command.
+    TypeError: the options do not fit the command's signature.
+  """
 
   verb: str
   options: tuple[tuple[str, object], ...] = ()
+
+  def __post_init__(self) -> None:
+    command_signature(self.verb).bind(**dict(self.options))
 
   @classmethod
   def of(cls, verb: str, **options) -> "Step":
@@ -259,9 +272,10 @@ def python_script(steps: tuple[Step, ...]) -> str:
 
 
 # --------------------------------------------------------- GUI settings
-TRANSFORMS = ("interpolate", "local_poly", "map_to_rz", "extract_flux_surface",
+TRANSFORMS = ("interpolate", "local_poly", "map_to_rz", "map_to_phitheta",
               "none")
-_GEOMETRY_TRANSFORMS = ("map_to_rz", "extract_flux_surface")
+# Transforms that need the geometry and the full configuration space.
+GEOMETRY_TRANSFORMS = ("map_to_rz", "map_to_phitheta")
 _FLUCT_DIMS = {"y": "1", "yz": "1,2"}
 
 
@@ -294,7 +308,8 @@ class Settings:
     mapc2p: Mapping file of the geometry transforms (default: found).
     phi_tor: Toroidal angle (radians) of ``map_to_rz``.
     nz_interp: Points per cell along z of the geometry transforms.
-    x_idx: Radial cell of ``extract_flux_surface``.
+    x_idx: Flux surface of ``map_to_phitheta``, an index among
+      :func:`radial_samples`.
     select: ``(dimension, coordinate)`` pairs, the coordinate a cell index
       on a curvilinear dimension.
     comp: Component to keep.
@@ -398,7 +413,7 @@ def build_chain(settings: Settings,
     steps.extend(_transform_steps(s))
   else:
     average = sorted(s.average)
-    if average and s.transform in _GEOMETRY_TRANSFORMS:
+    if average and s.transform in GEOMETRY_TRANSFORMS:
       raise ValueError(f"averaging does not apply before {s.transform}, "
                        "which needs the full configuration space.")
     dims = ",".join(map(str, average))
@@ -447,8 +462,8 @@ def _transform_steps(s: Settings) -> tuple[Step, ...]:
                     mapc2p=s.mapc2p,
                     phi_tor=s.phi_tor,
                     nz_interp=s.nz_interp), )
-  if s.transform == "extract_flux_surface":
-    return (Step.of("extract_flux_surface",
+  if s.transform == "map_to_phitheta":
+    return (Step.of("map_to_phitheta",
                     mapc2p=s.mapc2p,
                     x_idx=s.x_idx,
                     nz_interp=s.nz_interp), )
@@ -519,6 +534,18 @@ def probe(steps: tuple[Step, ...]) -> GridInfo:
       curvilinear.append(False)
   return GridInfo(tuple(lower), tuple(upper), cells, tuple(curvilinear),
                   int(fields))
+
+
+def radial_samples(settings: Settings) -> int:
+  """How many flux surfaces ``map_to_phitheta``'s ``x_idx`` chooses among:
+  the radial points of the default interpolation of ``settings``' data."""
+  layout = probe(
+      build_chain(replace(settings,
+                          fluct="none",
+                          transform="interpolate",
+                          num_interp=None),
+                  probe_only=True))
+  return layout.cells[0]
 
 
 # --------------------------------------------------------------- rendering

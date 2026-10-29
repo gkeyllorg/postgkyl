@@ -17,10 +17,16 @@ Load reusable geometry with ``pg.resolve_geometry(data.file_name)`` or construct
 ``pg.Geometry`` from coordinate arrays, build
 ``pg.resolve_rz_projection(data, geometry)``, and apply it with
 ``data.map_to_rz(projection=projection)``. The projection can be reused for
-fields on the same computational grid. Three-dimensional reconstruction
-assumes periodic field-aligned coordinates and twist-and-shift boundaries.
+fields on the same computational grid. A three-dimensional field is sliced
+at ``phi_tor`` by evaluating its DG expansion where the geometry places that
+toroidal angle along the binormal coordinate. Angles that the simulated
+binormal domain covers are exact. When that domain is not a whole fraction of
+the torus, the rest of the plane repeats it, and the copies meet with a jump
+along field lines.
 
-Related toroidal surface sampling is available through
-``data.extract_flux_surface(...)`` and the ``extract_flux_surface`` CLI verb.
+``data.map_to_phitheta(x_idx=...)`` (CLI verb ``map_to_phitheta``) samples one
+flux surface the same way over a full toroidal turn, on its (phi, theta) plane.
+To render poloidal cuts and flux surfaces together in 3-D, see
+:doc:`toroidal-wedge`.
 
 .. include:: _pairs/05_map_to_rz.inc

@@ -18,10 +18,11 @@ np.testing.assert_allclose(fit.values, log_energy.values, atol=1e-12)
 
 # Plot the reconstructed fitted energy with the public plotting function.
 # The CLI uses evaluate "f log", fit linear, and evaluate "f1 exp" (fit appends its result).
-pg.evaluate("f exp", fit).plot(title="Fitted energy growth",
-                               xlabel="Time [normalized]",
-                               ylabel="Energy [normalized]",
-                               logy=True,
-                               no_show=True,
-                               saveas=prepare_output_dir() / "06_growth.png",
-                               dpi=100)
+pg.evaluate("f1 exp", log_energy,
+            fit).plot(title="Fitted energy growth",
+                      xlabel="Time [normalized]",
+                      ylabel="Energy [normalized]",
+                      logy=True,
+                      no_show=True,
+                      saveas=prepare_output_dir() / "06_growth.png",
+                      dpi=100)

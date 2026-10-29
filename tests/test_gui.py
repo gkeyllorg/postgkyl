@@ -9,6 +9,7 @@ script it renders must reproduce them.
 
 from __future__ import annotations
 
+import dataclasses
 import html
 import importlib
 import os
@@ -149,6 +150,18 @@ def _file_settings(**overrides):
 
 def _verbs(steps):
   return [step.verb for step in steps]
+
+
+def test_a_step_binds_to_its_session_command():
+  # Steps are checked against the generated commands, so a renamed command
+  # or option fails as the chain is built, not when the GUI runs it.
+  assert gp.Step.of("map_to_phitheta", x_idx=3, nz_interp=None).kwargs == {
+      "x_idx": 3
+  }
+  with pytest.raises(AttributeError, match="not a pgkyl command"):
+    gp.Step.of("extract_flux_surface", x_idx=3)
+  with pytest.raises(TypeError, match="phi"):
+    gp.Step.of("map_to_rz", phi=0.3)
 
 
 class TestBuildChain:
@@ -337,6 +350,24 @@ class TestRun:
     mean = pg.load(str(M0_3X)).average([0, 1, 2])
     assert len(trace.grid[0]) == 2
     np.testing.assert_allclose(trace.values.ravel(), [mean, mean], rtol=1e-14)
+
+  @pytest.mark.parametrize("transform", gp.TRANSFORMS)
+  def test_every_offered_transform_runs_as_the_verb_it_names(self, transform):
+    steps = gp.build_chain(
+        _file_settings(transform=transform, num_interp=2, nz_interp=2, x_idx=5))
+    (data, ) = gp.run(steps).datasets
+    direct = pg.load(str(M0_3X))
+    for step in steps[1:]:
+      direct = getattr(direct, step.verb)(**step.kwargs)
+    np.testing.assert_array_equal(data.values, direct.values)
+
+  def test_radial_samples_are_the_flux_surfaces_map_to_phitheta_accepts(self):
+    count = gp.radial_samples(_file_settings(fluct="yz", transform="map_to_rz"))
+    assert count == 2 * 48  # Two p1 interpolation points per radial cell.
+    surface = _file_settings(transform="map_to_phitheta", nz_interp=2)
+    gp.run(gp.build_chain(dataclasses.replace(surface, x_idx=count - 1)))
+    with pytest.raises(Exception, match="out of bounds"):
+      gp.run(gp.build_chain(dataclasses.replace(surface, x_idx=count)))
 
   def test_probe_counts_fields_and_curvilinear_axes(self):
     info = gp.probe(gp.build_chain(_file_settings(), probe_only=True))
@@ -583,15 +614,38 @@ def test_a_saved_state_reopens_every_choice(monkeypatch, tmp_path):
 
 
 @needs_gkeyll
+def test_the_flux_surface_slider_spans_every_interpolated_radius(
+    monkeypatch, tmp_path):
+  pytest.importorskip("marimo")
+  monkeypatch.chdir(DATA)
+  state = dict(_run_notebook(monkeypatch)["gui_state"],
+               transform="map_to_phitheta",
+               x_idx=95,
+               interp_pts=1,
+               sel_enables=[False, False])
+  defs = _run_notebook(monkeypatch, "--state",
+                       gp.save_state(str(tmp_path / "fs.json"), state))
+  # 48 p1 radial cells give 96 flux surfaces; the outermost is selectable.
+  assert defs["x_idx"].stop == 95
+  assert (defs["settings"].transform,
+          defs["settings"].x_idx) == ("map_to_phitheta", 95)
+  assert defs["figure_bytes"].startswith(b"\x89PNG")
+
+
+@needs_gkeyll
 def test_a_stale_or_broken_state_falls_back_to_defaults(monkeypatch, tmp_path):
   pytest.importorskip("marimo")
   monkeypatch.chdir(DATA)
-  stale = gp.save_state(str(tmp_path / "stale.json"), {
-      "cmap": "no-such-cmap",
-      "field": "no-such-field"
-  })
+  stale = gp.save_state(
+      str(tmp_path / "stale.json"),
+      {
+          "cmap": "no-such-cmap",
+          "field": "no-such-field",
+          "transform": "extract_flux_surface"  # Renamed map_to_phitheta.
+      })
   defs = _run_notebook(monkeypatch, "--state", stale)
   assert defs["gui_state"]["cmap"] == "(default)"
+  assert defs["gui_state"]["transform"] == "interpolate"
   assert defs["field_dropdown"].value == "elc_M0"
   broken = tmp_path / "broken.json"
   broken.write_text("{")

@@ -12,7 +12,7 @@ from postgkyl.numerics import nodal_to_cell_centered_grid
 from .geometry import Geometry, resolve_geometry
 from .interpolate import interpolate
 
-DEFAULT_NZ_INTERP = 8
+DEFAULT_NZ_INTERP = 12
 
 
 def _validate_positive_int(value: int, name: str) -> int:
@@ -20,6 +20,16 @@ def _validate_positive_int(value: int, name: str) -> int:
                                                (int, np.integer)) or value <= 0:
     raise ValueError(f"{name} must be a positive integer.")
   return int(value)
+
+
+def _radial_index(index: int, nx: int) -> int:
+  """Parse a radial interpolation index; negatives count from the outer edge."""
+  if isinstance(index, bool) or not isinstance(index, (int, np.integer)):
+    raise ValueError("x_idx must be an integer radial index.")
+  parsed = int(index) + nx if index < 0 else int(index)
+  if not 0 <= parsed < nx:
+    raise ValueError(f"x_idx {index} is out of bounds for data with Nx={nx}.")
+  return parsed
 
 
 def _validate_modal_data(data: GDataState, operation: str,
@@ -89,6 +99,13 @@ def _interpolation_grid(
   centers = nodal_to_cell_centered_grid(
       edges, np.array([axis.size - 1 for axis in edges]))
   return edges, centers
+
+
+def _component_coefficients(data: GDataState, comp: int) -> np.ndarray:
+  """Return one physical field's modal coefficients, checked by the public API."""
+  count = num_basis(data.num_dims, int(data.ctx["poly_order"]),
+                    data.ctx["basis_type"])
+  return np.asarray(data.values)[..., comp * count:(comp + 1) * count]
 
 
 def _interpolate_component(data: GDataState, comp: int) -> np.ndarray:

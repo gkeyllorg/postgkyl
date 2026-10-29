@@ -29,6 +29,7 @@ of truth for "does the tutorial still work," not just this README.
 | [`11_multiblock.py`](scripts/11_multiblock.py) | Plot all blocks of one field and frame on one figure with a shared color scale |
 | [`12_gk_load_quantity.py`](scripts/12_gk_load_quantity.py) | Load and check `vt`, `phi_norm`, and `larmor_radius` on generated electron moments, potential, and magnetic geometry |
 | [`13_postgkyl_session.py`](scripts/13_postgkyl_session.py) | `PostgkylSession`: map a gyrokinetic density fluctuation to R-Z by running `pgkyl` commands from Python, then print the equivalent command line |
+| [`14_map_to_torus.py`](scripts/14_map_to_torus.py) | Render a toroidal wedge of a 3-D gyrokinetic density with `map_to_torus` and `pyvista --surface`, plus projection reuse |
 | [`mirror_comparison.py`](scripts/mirror_comparison.py) | A four-panel algorithm-sensitivity figure from two analytic, symmetric 1-D p1 modal-serendipity datasets, with joined linear/log axes |
 
 Follow [Developer installation](../docs/source/installation.md#developer-installation),

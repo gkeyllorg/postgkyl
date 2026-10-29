@@ -33,4 +33,10 @@ and proportions, use ``--no_normalize`` on the CLI or ``no_normalize=True`` in
 Python. This disables recentering and rescaling, ignores ``aspect_ratio``, and
 applies after any cylindrical-to-Cartesian conversion.
 
+To color the outer surface of a grid instead of extracting isosurfaces, pass
+``--surface`` (``surface=True``). Surfaces are opaque and unlit unless
+``opacity`` or ``is_shaded`` says otherwise. A size-1 axis of 3-D data is
+kept, so a slice or a :doc:`toroidal wedge <toroidal-wedge>` renders as a
+surface in space.
+
 .. include:: _pairs/09_pyvista.inc

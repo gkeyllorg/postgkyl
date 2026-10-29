@@ -75,6 +75,8 @@ print("sqrt(a^2+b^2) == sqrt(2)*a:",
 as_array = np.asarray(fa)  # plain ndarray -- the escape hatch out of GData
 print("np.asarray(interpolated) ->", as_array.shape, as_array.dtype)
 
+# Match the expression label produced by evaluate in the CLI example.
+mag.label = "f sq 2 * sqrt"
 mag.plot(title="Componentwise magnitude",
          no_show=True,
          saveas=prepare_output_dir() / "02_arithmetic.png",

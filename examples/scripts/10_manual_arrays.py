@@ -35,6 +35,8 @@ np.testing.assert_array_equal(field.values, values)
 # constructing a new point-value dataset after a manual calculation.
 manual = field.clone()
 manual.push(grid, manual_values)
+# Match the expression label produced by evaluate in the CLI example.
+manual.label = "f 1 - 0.6 /"
 manual.plot(title="Normalized density perturbation",
             xlabel="x",
             ylabel="y",

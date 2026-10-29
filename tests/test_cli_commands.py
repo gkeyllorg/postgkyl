@@ -284,6 +284,45 @@ def test_plot_uses_load_labels_after_interpolation(dims, custom_labels):
     plt.close("all")
 
 
+@pytest.mark.parametrize("custom_labels", [False, True])
+@pytest.mark.parametrize("no_legend", [False, True])
+def test_plot_load_labels_in_separate_2d_figures(custom_labels, no_legend):
+  import matplotlib.pyplot as plt
+
+  plt.close("all")
+  try:
+    field = DATA / "generated" / "2d_ms_p1.gkyl"
+    args = ([field, "-l", "hllc", field, "-l", "Roe"]
+            if custom_labels else [field, field])
+    options = ["--no_legend"] if no_legend else []
+    _ok(*args, "sel", "-c0", "pl", "--fixaspect", "--no_show", *options)
+    figures = [plt.figure(number) for number in plt.get_fignums()]
+    assert len(figures) == 2
+    expected = ["hllc_c0", "Roe_c0"] if custom_labels else ["c0", "c0"]
+    for figure, label in zip(figures, expected):
+      ax = figure.axes[0]
+      assert [text.get_text()
+              for text in ax.texts] == ([] if no_legend else [label])
+      assert ax.get_aspect() == 1.0
+  finally:
+    plt.close("all")
+
+
+@pytest.mark.parametrize("interpolate", [False, True])
+def test_ev_expression_labels_both_backends(interpolate):
+  import matplotlib.pyplot as plt
+
+  plt.close("all")
+  try:
+    field = DATA / "generated" / "2d_ms_p1.gkyl"
+    options = ["interpolate"] if interpolate else []
+    _ok(field, "-l", "input", *options, "ev", "f 2 *", "sel", "-c0", "pl",
+        "--no_show")
+    assert [text.get_text() for text in plt.gcf().axes[0].texts] == ["f 2 *_c0"]
+  finally:
+    plt.close("all")
+
+
 def test_manual_session_render_options_are_not_registered():
   assert _run("--batch_mode", FIELD, "info").exit_code != 0
   assert _run("--saveframes-prefix", "frame", FIELD, "info").exit_code != 0

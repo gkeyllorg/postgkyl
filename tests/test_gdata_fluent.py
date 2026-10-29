@@ -68,10 +68,11 @@ def _line(cls=MyData, tag: str = "default", value: float = 1.0, n: int = 5):
 # operations that act on the group as a whole. Every multi-dataset operation
 # also has a functional spelling on the top-level ``pg`` facade.
 INSTANCE_VERBS = [
-    "load", "interpolate", "local_poly", "map_to_rz", "select", "plot",
-    "plotly", "pyvista", "save", "mul", "div", "integrate", "average",
-    "fluctuation", "eval_at_coord_proj", "represent", "apply", "fft", "magsq",
-    "mask", "val2coord", "extract_input", "fit", "differentiate", "map"
+    "load", "interpolate", "local_poly", "map_to_rz", "map_to_torus",
+    "map_to_phitheta", "select", "plot", "plotly", "pyvista", "save", "mul",
+    "div", "integrate", "average", "fluctuation", "eval_at_coord_proj",
+    "represent", "apply", "fft", "magsq", "mask", "val2coord", "extract_input",
+    "fit", "differentiate", "map"
 ]
 GROUP_VERBS = ["sort", "collect", "evaluate", "animate", "plotly_animate"]
 MODULE_VERBS = GROUP_VERBS + ["relchange"]

@@ -1,60 +1,43 @@
-"""Reconstruct slices and sample surfaces in periodic field-aligned coordinates.
+"""Locate toroidal angles in field-aligned coordinates and sample surfaces.
 
-The poloidal Fourier reconstruction uses twist-and-shift parallel boundaries.
-All coordinate and boundary information is supplied explicitly.
+All coordinate information is supplied explicitly.
 """
+from collections.abc import Callable
+
 import numpy as np
-from scipy.interpolate import PchipInterpolator
 
 
-def fft_poloidal_project(values: np.ndarray, zc: np.ndarray, box: float,
-                         wind: np.ndarray, phi0_zf: np.ndarray, zf: np.ndarray,
-                         phi_tor: float) -> np.ndarray:
-  """FFT twist-and-shift reconstruction at one physical toroidal angle."""
-  nx, ny, nz = values.shape
-  fk = np.fft.rfft(values, axis=1, norm="forward")
-  mode_count = fk.shape[1]
+def binormal_fraction(phi_tor: float | np.ndarray, phi_lo: np.ndarray,
+                      span: np.ndarray) -> np.ndarray:
+  """Fraction of the binormal period at which toroidal angle ``phi_tor`` lies.
 
-  dz = zc[1] - zc[0]
-  z_extended = np.concatenate(([zc[0] - dz / 2], zc, [zc[-1] + dz / 2]))
-  fk_extended = np.zeros((nx, mode_count, nz + 2), dtype=complex)
-  fk_extended[:, :, 1:-1] = fk
-  phase_shift = (2.0 * np.pi / box) * wind
-  for mode in range(mode_count):
-    phase = np.exp(-1j * mode * phase_shift)
-    fk_extended[:, mode, -1] = 0.5 * (fk[:, mode, -1] + phase * fk[:, mode, 0])
-    fk_extended[:, mode,
-                0] = 0.5 * (fk[:, mode, 0] + np.conj(phase) * fk[:, mode, -1])
-
-  fk_zf = (PchipInterpolator(z_extended, fk_extended.real, axis=2)(zf) +
-           1j * PchipInterpolator(z_extended, fk_extended.imag, axis=2)(zf))
-
-  fraction = (phi_tor - phi0_zf) / box
-  out = np.zeros((nx, len(zf)))
-  for mode in range(mode_count):
-    weight = 1.0 if (mode == 0 or
-                     (ny % 2 == 0 and mode == mode_count - 1)) else 2.0
-    out += weight * np.real(
-        fk_zf[:, mode, :] * np.exp(-1j * 2.0 * np.pi * mode * fraction))
-  return out
+  At each point the binormal domain covers toroidal angles from ``phi_lo``
+  across ``span`` (negative when the angle decreases along y). An angle
+  inside that wedge, modulo 2*pi, is located exactly. Beyond it, the
+  periodic binormal domain repeats with period ``span``; unless 2*pi is a
+  whole number of spans, the copies meet with a discontinuity. Arguments
+  broadcast together; results lie in ``[0, 1)``.
+  """
+  offset = np.mod(phi_tor - phi_lo, 2.0 * np.pi * np.sign(span))
+  return np.mod(offset / span, 1.0)
 
 
-def sample_flux_surface(values: np.ndarray, zc: np.ndarray, zf: np.ndarray,
-                        phi_2d: np.ndarray, phi_tor: np.ndarray) -> np.ndarray:
-  """Resample a radial slice in parallel position and periodic toroidal angle."""
-  vals_zf = PchipInterpolator(zc, values, axis=-1, extrapolate=True)(zf)
-  ny = values.shape[0]
-  surface = np.empty((phi_tor.size, zf.size))
-  for iz in range(zf.size):
-    phi_y = phi_2d[:, iz]
-    val_y = vals_zf[:, iz]
-    box = np.mean(np.diff(phi_y)) * ny
-    if not np.isfinite(box) or np.isclose(box, 0.0):
-      raise ValueError(
-          "Toroidal geometry has a zero or non-finite binormal angular span.")
-    phi_ext = np.concatenate([phi_y - box, phi_y, phi_y + box])
-    val_ext = np.concatenate([val_y, val_y, val_y])
-    order = np.argsort(phi_ext)
-    folded = phi_y[0] + np.mod(phi_tor - phi_y[0], box)
-    surface[:, iz] = np.interp(folded, phi_ext[order], val_ext[order])
-  return surface
+def wedge_surface(sample: Callable[[np.ndarray, np.ndarray], np.ndarray],
+                  rows: np.ndarray, phi_tor: np.ndarray) -> np.ndarray:
+  """Sample the closed boundary of a toroidal wedge as one surface.
+
+  The wedge spans radial ``rows``, ordered inner to outer, and increasing
+  toroidal angles ``phi_tor``; its parallel axis is periodic. ``sample(rows,
+  angles)`` receives angles shaped ``(k, 1, 1)`` and returns arrays shaped
+  ``(k, len(rows), nz, ...)``.
+
+  Returns ``(2 * len(rows) + 2 * len(phi_tor) - 3, nz + 1, ...)`` samples: the
+  first cap outward, the outer flux surface forward, the last cap inward, and
+  the inner flux surface back. The last row and column repeat the first ones,
+  so the surface closes in both directions.
+  """
+  caps = sample(rows, phi_tor[[0, -1], None, None])
+  walls = sample(rows[[0, -1]], phi_tor[:, None, None])
+  ring = np.concatenate(
+      [caps[0], walls[1:, -1], caps[1, -2::-1], walls[-2::-1, 0]])
+  return np.concatenate([ring, ring[:, :1]], axis=1)
