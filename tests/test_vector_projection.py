@@ -19,6 +19,15 @@ DATA = Path(__file__).parent / "test_data" / "generated"
 DIRECTIONS = ("n0", "n1", "n2", "R", "Z", "phi")
 
 
+def _selection(selector):
+  """Map analytic reference directions to the new numeric public interface."""
+  if str(selector) in ("0", "1", "2"):
+    return dict(rep="contra", direction=selector)
+  if selector.startswith("n"):
+    return dict(rep="norm", direction=int(selector[1]))
+  return dict(rep="cyl", direction=("R", "phi", "Z").index(selector))
+
+
 def _prefix(ndim, kind="cart"):
   return f"drift_{kind}" if ndim == 3 else f"drift_2x_{kind}"
 
@@ -28,7 +37,7 @@ def _read(prefix, suffix):
 
 
 def _expected(vector, direction, ndim):
-  """Independent physical dot product and explicit tensor Gauss projection."""
+  """Independent Cartesian dot product and explicit tensor Gauss projection."""
   cells, _, _, _, basis, _, normals, positions, _, _, _ = drift_projection_reference(
       ndim)
   if direction.startswith("n"):
@@ -51,25 +60,25 @@ def _expected(vector, direction, ndim):
 @pytest.mark.parametrize("basis", ["contravariant", "covariant", "cartesian"])
 @pytest.mark.parametrize("direction", DIRECTIONS)
 def test_general_vector_projection(ndim, kind, basis, direction):
-  """All representations recover a known physical vector, coefficient by coefficient."""
+  """All representations agree with a known Cartesian vector, coefficient by coefficient."""
   prefix = _prefix(ndim, kind)
   vector = _read(prefix, "vector_" + basis)
   points = drift_projection_reference(ndim)[3]
   scalar = points[..., 0] + (.3 * points[..., 2] if ndim == 2 else 0.)
-  physical = np.stack(
+  cartesian = np.stack(
       (1 + .2 * points[..., 0], -.7 + .1 * points[..., 2], .4 + .05 * scalar),
       axis=-1)
   result = operations.project_vector(
       [vector.select(comp=i) for i in range(3)],
       basis=basis,
-      direction=direction,
+      **_selection(direction),
       tangents=_read(prefix, "geo_int_dxdz"),
       duals=_read(prefix, "geo_int_dzdx"),
       normals=_read(prefix, "geo_int_normals"),
       positions=_read(prefix, "geo_int_mapc2p"),
       position_system="cartesian" if kind == "cart" else "cylindrical")
   np.testing.assert_allclose(result.values,
-                             _expected(physical, direction, ndim),
+                             _expected(cartesian, direction, ndim),
                              rtol=2e-12,
                              atol=2e-13)
 
@@ -90,7 +99,7 @@ def test_point_representations(ndim, form, direction):
   components = [vector.select(comp=i) for i in range(3)]
   result = operations.project_vector(components,
                                      basis="cartesian",
-                                     direction=direction,
+                                     **_selection(direction),
                                      positions=positions,
                                      position_system="cartesian",
                                      normals=read("geo_int_normals"))
@@ -114,38 +123,35 @@ def test_point_representations(ndim, form, direction):
 @pytest.mark.parametrize("ndim", [2, 3])
 @pytest.mark.parametrize("kind", ["cart", "cyl"])
 @pytest.mark.parametrize("direction", DIRECTIONS)
-@pytest.mark.parametrize("quantity", [
-    "E_field_cov", "E_field_contra", "dB_perp_cov", "dB_perp_contra",
-    "B_tot_cov", "B_tot_contra"
-])
+@pytest.mark.parametrize("quantity", ["E_field", "dB_perp", "B_tot"])
 def test_field_diagnostics(ndim, kind, direction, quantity):
-  """E=-grad(phi), dB=grad(Apar) cross b, and Btot=B*b+dB in physical units."""
+  """Check E=-grad(phi), dB=grad(Apar) cross b, and Btot=B*b+dB projected onto unit vectors."""
   _, _, _, _, _, tangents, _, _, bmag, _, _ = drift_projection_reference(ndim)
   duals = np.linalg.inv(tangents)
   gradient = duals[0] + (.3 * duals[2] if ndim == 2 else 0.)
   if quantity.startswith("E_field"):
-    physical = -.4 * gradient
+    cartesian = -.4 * gradient
     units = "V/m"
   else:
-    physical = .6 * np.cross(gradient, [0., 0., 1.])
+    cartesian = .6 * np.cross(gradient, [0., 0., 1.])
     if quantity.startswith("B_tot"):
-      physical = physical + bmag[..., None] * np.array([0., 0., 1.])
+      cartesian = cartesian + bmag[..., None] * np.array([0., 0., 1.])
     units = "T"
   result, = load_quantity(quantity,
                           None,
                           _prefix(ndim, kind),
                           "0",
                           path=str(DATA),
-                          direction=direction)
+                          **_selection(direction))
   np.testing.assert_allclose(result.values,
-                             _expected(physical, direction, ndim),
+                             _expected(cartesian, direction, ndim),
                              rtol=2e-12,
                              atol=2e-13)
   assert result.ctx["projection_units"] == units
   assert f"({units})" in result.get_label()
 
 
-@pytest.mark.parametrize("quantity", ["B_tot_cov", "B_tot_contra"])
+@pytest.mark.parametrize("quantity", ["B_tot"])
 def test_equilibrium_fallback(tmp_path, quantity):
   """Missing Apar retains the existing equilibrium-only fallback under projection."""
   prefix = _prefix(2)
@@ -156,7 +162,8 @@ def test_equilibrium_fallback(tmp_path, quantity):
                           prefix,
                           None,
                           path=str(tmp_path),
-                          direction="Z")
+                          rep="cyl",
+                          direction=2)
   bmag = drift_projection_reference(2)[8]
   np.testing.assert_allclose(result.values,
                              _expected(bmag[..., None] * np.array([0., 0., 1.]),
@@ -169,17 +176,23 @@ def test_projection_contract():
   """Reject incomplete vectors and incompatible geometry instead of interpolating."""
   vector = _read("drift_cart", "vector_cartesian")
   components = [vector.select(comp=i) for i in range(3)]
-  kwargs = dict(basis="cartesian", direction="Z")
+  kwargs = dict(basis="cartesian", rep="cyl", direction=2)
   with pytest.raises(ValueError, match="three scalar"):
     operations.project_vector(components[:2], **kwargs)
   with pytest.raises(ValueError, match="basis must"):
-    operations.project_vector(components, basis="unknown", direction="Z")
+    operations.project_vector(components,
+                              basis="unknown",
+                              rep="cyl",
+                              direction=2)
   with pytest.raises(ValueError, match="direction"):
-    operations.project_vector(components, basis="cartesian", direction="0")
+    operations.project_vector(components,
+                              basis="cartesian",
+                              rep="cart",
+                              direction="R")
   for basis, geometry in (("contravariant", "tangents"), ("covariant",
                                                           "duals")):
     with pytest.raises(ValueError, match=geometry):
-      operations.project_vector(components, basis=basis, direction="Z")
+      operations.project_vector(components, basis=basis, rep="cyl", direction=2)
   with pytest.raises(ValueError, match="1 fields"):
     operations.project_vector([vector] * 3, **kwargs)
   bad = components[0].clone()
@@ -193,48 +206,57 @@ def test_projection_contract():
     operations.project_vector([components[0].interpolate(), *components[1:]],
                               **kwargs)
   with pytest.raises(ValueError, match="normals"):
-    operations.project_vector(components, basis="cartesian", direction="n0")
+    operations.project_vector(components,
+                              basis="cartesian",
+                              rep="norm",
+                              direction=0)
   positions = _read("drift_cart", "geo_int_mapc2p")
   with pytest.raises(ValueError, match="position_system"):
     operations.project_vector(components,
                               basis="cartesian",
-                              direction="R",
+                              rep="cyl",
+                              direction=0,
                               positions=positions)
   with pytest.raises(ValueError, match="R > 0"):
     operations.project_vector(components,
                               basis="cartesian",
-                              direction="phi",
+                              rep="cyl",
+                              direction=1,
                               positions=positions * 0,
                               position_system="cylindrical")
 
 
 RENAMES = {
-    "ExB_vel": "ExB_vel_contra",
-    "gradB_vel": "gradB_vel_contra",
-    "diamag_vel": "diamag_vel_contra",
-    "flux_particle_ExB": "flux_particle_ExB_contra",
-    "flux_energy_ExB": "flux_energy_ExB_contra",
-    "flux_particle_dB": "flux_particle_dB_contra",
-    "flux_energy_dB": "flux_energy_dB_contra",
-    "flux_particle": "flux_particle_contra",
-    "flux_energy": "flux_energy_contra",
-    "inv_L_n": "inv_L_n_cov",
-    "inv_L_T": "inv_L_T_cov",
+    'inv_L_n_cov': 'inv_L_n',
+    'inv_L_T_cov': 'inv_L_T',
+    'ExB_vel_contra': 'ExB_vel',
+    'gradB_vel_contra': 'gradB_vel',
+    'diamag_vel_contra': 'diamag_vel',
+    'dB_perp_contra': 'dB_perp',
+    'dB_perp_cov': 'dB_perp',
+    'B_tot_cov': 'B_tot',
+    'B_tot_contra': 'B_tot',
+    'E_field_cov': 'E_field',
+    'E_field_contra': 'E_field',
+    'flux_particle_ExB_contra': 'flux_particle_ExB',
+    'flux_energy_ExB_contra': 'flux_energy_ExB',
+    'flux_particle_dB_contra': 'flux_particle_dB',
+    'flux_energy_dB_contra': 'flux_energy_dB',
+    'flux_particle_contra': 'flux_particle',
+    'flux_energy_contra': 'flux_energy'
 }
 
 
 @pytest.mark.parametrize("old,new", RENAMES.items())
 def test_clean_renames(old, new):
-  """Only the explicit basis name is registered; old CLI names fail clearly."""
+  """Register one basis-independent name and reject the old suffixed names."""
   assert not gk_quant_registry.has(old)
   quantity = gk_quant_registry.get(new)
   assert quantity is not None
-  assert quantity.component_basis == ("covariant" if new.endswith("_cov") else
-                                      "contravariant")
-  result = CliRunner().invoke(cli, [
-      "gk_load_q", "-q", old, "-n", "drift_cart", "-s", "ion", "-p",
-      str(DATA), "-f", "0", "-d", "0"
-  ])
+  basis = "covariant" if new in ("E_field", "B_tot", "inv_L_n",
+                                 "inv_L_T") else "contravariant"
+  assert quantity.component_basis == basis
+  result = CliRunner().invoke(cli, ["gk_load_q", "-q", old])
   assert result.exit_code != 0
   assert "Invalid value for '--quantity'" in result.output
   assert old in result.output
@@ -244,17 +266,17 @@ def test_registry_projection_scope_and_geo_name():
   """Capability metadata enables fields/drifts, leaving packed geometry unchanged."""
   enabled = {
       q
-      for q in gk_quant_registry.list()
-      if gk_quant_registry.get(q).projection_label
+      for q in gk_quant_registry.list() if gk_quant_registry.get(q).is_vector
   }
   assert enabled == {
-      "ExB_vel_contra", "gradB_vel_contra", "diamag_vel_contra", "E_field_cov",
-      "E_field_contra", "dB_perp_cov", "dB_perp_contra", "B_tot_cov",
-      "B_tot_contra"
+      "ExB_vel", "gradB_vel", "diamag_vel", "E_field", "dB_perp", "B_tot",
+      "geo_int_b_i", "inv_L_n", "inv_L_T", "flux_particle_ExB",
+      "flux_particle_dB", "flux_particle", "flux_energy_ExB", "flux_energy_dB",
+      "flux_energy"
   }
   geometry = gk_quant_registry.get("geo_int_b_i")
   assert geometry.component_basis == "covariant"
-  assert geometry.projection_label is None
+  assert geometry.packed_vector
   result, = load_quantity("geo_int_b_i",
                           None,
                           "drift_cart",
@@ -268,13 +290,10 @@ def test_registry_projection_scope_and_geo_name():
       assert quantity.component_basis is None
 
 
-@pytest.mark.parametrize("quantity", [
-    "E_field_cov", "E_field_contra", "dB_perp_cov", "dB_perp_contra",
-    "B_tot_cov", "B_tot_contra"
-])
+@pytest.mark.parametrize("quantity", ["E_field", "dB_perp", "B_tot"])
 def test_field_cli(quantity):
   result = CliRunner().invoke(cli, [
       "gk_load_q", "-q", quantity, "-n", "drift_2x_cart", "-p",
-      str(DATA), "-s", "ion", "-f", "0", "-r", "dir=phi", "info"
+      str(DATA), "-s", "ion", "-f", "0", "-o", "dir=1", "-r", "cyl", "info"
   ])
   assert result.exit_code == 0, result.output

@@ -1,7 +1,12 @@
 """Gyrokinetic derived-quantity physics -- the ``fetch_*`` functions behind the
 quantity registry.
 
-All formulas preserve their inputs' representation. Modal sources stay native:
+Registered vector quantity names omit ``_cov`` and ``_contra``; select their
+output representation through ``load_quantity(..., rep=...)``. Low-level
+``fetch_*`` names retain basis suffixes because these functions compute a
+fixed representation. The loader applies any requested conversion afterward.
+
+All formulas preserve their inputs' DG representation. Modal sources stay native:
 products and inverses use Gkeyll weak kernels, square roots use its quadrature
 projection, and derivatives act on each cell's polynomial. Interpolation is
 an explicit downstream operation, after the quantity has been computed.
@@ -73,7 +78,7 @@ def _get_ctx_val(gdata: "GData", key: str, **kwargs):
 
 
 def _component(d: "GData", comp: int | None) -> "GData":
-  """Select a physical field while retaining its complete DG expansion."""
+  """Select a field while retaining its complete DG expansion."""
   return d.clone() if comp is None else operations.select(d, comp=comp)
 
 
@@ -149,7 +154,7 @@ def _vector_magnitude(cov, contra) -> "GData":
 
 # --------------------------------------------------- generic fetch factories
 def _make_fetch_comp(icomp: int | None):
-  """A fetch function that extracts the ``icomp``-th physical component."""
+  """A fetch function that extracts field ``icomp`` with all its DG coefficients."""
 
   def fetch(gdatas: list["GData"], **kwargs):
     return _component(gdatas[0], icomp)
@@ -617,13 +622,17 @@ def _make_fetch_inv_grad_length(name: str):
   """Inverse gradient length of a scalar field ``X`` along the direction
   ``x^k`` selected with ``dir``, ``1/L_X = -(dX/dx^k)/X``: ``dir=0`` is the
   radial one, ``dir=2`` the parallel one. The derivative is along the
-  computational coordinate, not normalized by ``|grad x^k|``. ``gdatas``:
+  computational coordinate, not normalized by ``|grad x^k|``. Missing
+  coordinate derivatives in reduced simulations are zero. ``gdatas``:
   ``[X]`` (e.g. ``M0`` or ``temp``)."""
   quantity = f"fetch_inv_L_{name}_cov"
 
   def fetch(gdatas: list["GData"], **kwargs):
     field = gdatas[0]
-    grad = _derivative(field, _direction(kwargs, quantity), quantity)
+    comp = _direction(kwargs, quantity)
+    axis = _config_axis(field.num_dims)[comp]
+    grad = field * 0.0 if axis is None else operations.differentiate(
+        field, direction=axis)
     return grad * (1.0 / field) * -1.0
 
   fetch.__name__ = quantity
@@ -764,7 +773,7 @@ def fetch_dB_perp_mag(gdatas: list["GData"], **kwargs):
 
 def fetch_B_equilibrium_cov(gdatas: list["GData"], **kwargs):
   """A covariant component of the equilibrium field, ``B_i = B b_i``: what
-  ``B_tot_cov`` falls back to without ``apar`` output. ``dir`` selects ``i``.
+  ``B_tot`` falls back to without ``apar`` output. ``dir`` selects ``i``.
 
   ``gdatas``: ``(bmag, b_i)``.
   """
@@ -786,8 +795,7 @@ def fetch_B_tot_cov(gdatas: list["GData"], **kwargs):
 def fetch_B_equilibrium_contra(gdatas: list["GData"], **kwargs):
   """A contravariant component of the equilibrium field. ``b`` lies along
   ``e_3``, so ``b^i = delta^i_3/sqrt(g_33)`` and
-  ``B^i = (B/sqrt(g_33)) delta^i_3``: the first two components vanish. This
-  is what ``B_tot_contra`` falls back to without ``apar`` output.
+  ``B^i = (B/sqrt(g_33)) delta^i_3``: the first two components vanish.
 
   ``gdatas``: ``(bmag, g_ij)``.
   """
@@ -855,11 +863,12 @@ def fetch_E_field_mag(gdatas: list["GData"], **kwargs):
 
 # ------------------------------------------------------- cross-field fluxes
 # Contravariant components (. grad x^k) of the ExB and magnetic flutter fluxes
-# of 3x data, along the cross-field direction k selected with ``dir``: 0 (x,
-# radial) or 1 (y, binormal). Along z the flux is dominated by the parallel
-# streaming M1 b^z, which these drift fluxes omit, so z is refused.
+# of 2x or 3x data, along computational direction k selected with dir=0,1,2.
+# All components contain ExB and flutter contributions only; equilibrium
+# parallel streaming is excluded even in the third component.
 # ``fluct='y'`` or ``'yz'`` keeps the turbulent part: the correlation of the
-# fluctuations about the Jacobian-weighted y or (y, z) average.
+# fluctuations about the Jacobian-weighted y or (y, z) average in 3x.
+# In 2x, both choices average over z (stored array dimension 1).
 _FLUCT_DIMS = {"y": [1], "yz": [1, 2]}
 
 
@@ -885,20 +894,22 @@ def _maybe_fluct(field: "GData", jacobgeo: "GData", quantity: str,
   if key not in _FLUCT_DIMS:
     raise ValueError(f"{quantity}: unknown fluct={key!r}; use one of: none, "
                      f"{', '.join(_FLUCT_DIMS)}.")
-  return operations.fluctuation(field, _FLUCT_DIMS[key], weight=jacobgeo)
+  dims = [1] if field.num_dims == 2 else _FLUCT_DIMS[key]
+  return operations.fluctuation(field, dims, weight=jacobgeo)
 
 
 def _cross_field_flux(moment: "GData", velocity, jacobgeo: "GData",
                       factor: float, quantity: str, **kwargs) -> "GData":
   """``factor * moment * v^k``, either factor optionally replaced by its
-  fluctuation. ``velocity(k)`` builds ``v^k`` once the data are known to be
-  3x and ``k`` a cross-field direction: turbulent fluxes need the binormal
-  direction."""
-  if moment.num_dims != 3:
-    raise ValueError(f"{quantity}: cross-field fluxes need 3x (x,y,z) data, "
-                     f"got {moment.num_dims} dimensions.")
-  vel = _maybe_fluct(velocity(_flux_direction(kwargs, quantity)), jacobgeo,
-                     quantity, **kwargs)
+  fluctuation. In 2x, derivatives along the absent binormal coordinate are
+  zero; fluctuations use the z average. All three vector components retain
+  the same ExB/flutter physics, excluding equilibrium parallel streaming."""
+  if moment.num_dims not in (2, 3):
+    raise ValueError(
+        f"{quantity}: cross-field fluxes need 2x (x,z) or 3x (x,y,z) data, "
+        f"got {moment.num_dims} dimensions.")
+  vel = _maybe_fluct(velocity(_direction(kwargs, quantity)), jacobgeo, quantity,
+                     **kwargs)
   return _maybe_fluct(moment, jacobgeo, quantity, **kwargs) * vel * factor
 
 
@@ -993,7 +1004,7 @@ def fetch_flux_particle_contra_es(gdatas: list["GData"], **kwargs):
 
   ``gdatas``: ``(M0, phi, jacobgeo, jacobtot_inv, b_i)``.
   """
-  _warn_if_apar_dropped("flux_particle_contra", **kwargs)
+  _warn_if_apar_dropped("flux_particle", **kwargs)
   return fetch_flux_particle_ExB_contra(gdatas, **kwargs)
 
 
@@ -1016,7 +1027,7 @@ def fetch_flux_energy_contra_es(gdatas: list["GData"], **kwargs):
 
   ``gdatas``: ``(M2, phi, jacobgeo, jacobtot_inv, b_i)``.
   """
-  _warn_if_apar_dropped("flux_energy_contra", **kwargs)
+  _warn_if_apar_dropped("flux_energy", **kwargs)
   return fetch_flux_energy_ExB_contra(gdatas, **kwargs)
 
 
@@ -1031,37 +1042,36 @@ def fetch_flux_energy_contra_es(gdatas: list["GData"], **kwargs):
 # conv defaulting to 3/2.
 
 
-def _heat_flux(temp: "GData", flux_particle_contra: "GData",
-               flux_energy_contra: "GData", **kwargs) -> "GData":
+def _heat_flux(temp: "GData", flux_particle: "GData", flux_energy: "GData",
+               **kwargs) -> "GData":
   """Heat flux ``q = Q - conv*T*Gamma`` (``conv`` defaults to 3/2)."""
   conv = kwargs.get("conv")
   conv = 1.5 if conv is None else float(conv)
-  return flux_energy_contra + temp * flux_particle_contra * -conv
+  return flux_energy + temp * flux_particle * -conv
 
 
 def fetch_particle_D(gdatas: list["GData"], **kwargs):
   """Local particle diffusivity along ``x^k`` (``dir``),
   ``D^k = -Gamma^k/(g^kk dn/dx^k)`` (m^2/s).
 
-  ``gdatas``: ``(M0, flux_particle_contra, gij)``.
+  ``gdatas``: ``(M0, flux_particle, gij)``.
   """
-  m0, flux_particle_contra, gij = gdatas
+  m0, flux_particle, gij = gdatas
   comp = _flux_direction(kwargs, "fetch_particle_D")
   denom = _metric_diagonal(gij, comp) * _derivative(m0, comp,
                                                     "fetch_particle_D")
-  return flux_particle_contra * (1.0 / denom) * -1.0
+  return flux_particle * (1.0 / denom) * -1.0
 
 
 def fetch_heat_chi(gdatas: list["GData"], **kwargs):
   """Local heat diffusivity along ``x^k`` (``dir``),
   ``chi^k = -q^k/(n g^kk dT/dx^k)`` (m^2/s).
 
-  ``gdatas``: ``(M0, temp, flux_particle_contra, flux_energy_contra, gij)``.
+  ``gdatas``: ``(M0, temp, flux_particle, flux_energy, gij)``.
   """
-  m0, temp, flux_particle_contra, flux_energy_contra, gij = gdatas
+  m0, temp, flux_particle, flux_energy, gij = gdatas
   comp = _flux_direction(kwargs, "fetch_heat_chi")
-  heat_flux = _heat_flux(temp, flux_particle_contra, flux_energy_contra,
-                         **kwargs)
+  heat_flux = _heat_flux(temp, flux_particle, flux_energy, **kwargs)
   denom = m0 * _metric_diagonal(gij, comp) * _derivative(
       temp, comp, "fetch_heat_chi")
   return heat_flux * (1.0 / denom) * -1.0
@@ -1119,11 +1129,11 @@ def fetch_particle_D_gB(gdatas: list[list["GData"]], **kwargs):
   ``L_n = -n/(sqrt(g^kk) dn/dx^k)``. ``--species ion,elc`` uses kinetic
   electrons; ``--species ion`` adiabatic ones (see
   :func:`_gyro_bohm_factors`). ``gdatas`` has one
-  ``[M0, temp, flux_particle_contra, gij, bmag]`` list per species.
+  ``[M0, temp, flux_particle, gij, bmag]`` list per species.
   """
-  m0, _temp, flux_particle_contra, gij, _bmag = gdatas[0]
+  m0, _temp, flux_particle, gij, _bmag = gdatas[0]
   comp = _flux_direction(kwargs, "fetch_particle_D_gB")
-  return _gyro_bohm_normalized(flux_particle_contra * m0,
+  return _gyro_bohm_normalized(flux_particle * m0,
                                _derivative(m0, comp, "fetch_particle_D_gB"),
                                _metric_diagonal(gij, comp), None, gdatas,
                                **kwargs)
@@ -1138,12 +1148,11 @@ def fetch_heat_chi_gB(gdatas: list[list["GData"]], **kwargs):
 
   ``L_T = -T/(sqrt(g^kk) dT/dx^k)``, species listed as for
   :func:`fetch_particle_D_gB`. ``gdatas`` has one
-  ``[M0, temp, flux_particle_contra, flux_energy_contra, gij, bmag]`` list per species.
+  ``[M0, temp, flux_particle, flux_energy, gij, bmag]`` list per species.
   """
-  m0, temp, flux_particle_contra, flux_energy_contra, gij, _bmag = gdatas[0]
+  m0, temp, flux_particle, flux_energy, gij, _bmag = gdatas[0]
   comp = _flux_direction(kwargs, "fetch_heat_chi_gB")
-  heat_flux = _heat_flux(temp, flux_particle_contra, flux_energy_contra,
-                         **kwargs)
+  heat_flux = _heat_flux(temp, flux_particle, flux_energy, **kwargs)
   return _gyro_bohm_normalized(heat_flux * temp,
                                _derivative(temp, comp, "fetch_heat_chi_gB"),
                                _metric_diagonal(gij, comp), m0, gdatas,

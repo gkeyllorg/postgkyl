@@ -924,9 +924,9 @@ def drift_projection_reference(ndim=3):
   bmag = 2 + .1 * scalar
   cross = np.cross([0., 0., 1.], duals[0] + parallel_slope * duals[2])
   speeds = {
-      "ExB_vel_contra": .4 / bmag,
-      "gradB_vel_contra": .4 / bmag**2,
-      "diamag_vel_contra": .7 / (2 * bmag)
+      "ExB_vel": .4 / bmag,
+      "gradB_vel": .4 / bmag**2,
+      "diamag_vel": .7 / (2 * bmag)
   }
   return cells, lower, upper, points, basis, tangents, normals, positions, bmag, cross, speeds
 
@@ -936,7 +936,7 @@ def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
   (cells, lower, upper, points, basis, tangents, normals, positions, bmag, _,
    _) = drift_projection_reference(ndim)
 
-  def write(stem, samples, geometry_type):
+  def write(stem, samples, geometry_type, analytic_function=None):
     """Project tensor Gauss samples with explicit p1 Legendre basis values."""
     samples = np.broadcast_to(samples, (*cells, 2**ndim, np.shape(samples)[-1]))
     coeff = np.einsum("...qc,qm->...cm", samples, basis).reshape(*cells, -1)
@@ -961,7 +961,8 @@ def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
                          "description":
                          "Affine geometry and analytic drift fields",
                          "analytic_function":
-                         drift_projection_reference.__doc__,
+                         analytic_function
+                         or drift_projection_reference.__doc__,
                          "generation_method":
                          "Explicit tensor two-point Gauss Legendre projection"
                      })
@@ -988,6 +989,7 @@ def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
         "geo_int_g_ij": (tangents.T @ tangents)[metric_indices],
         "geo_int_gij": (duals @ duals.T)[metric_indices],
         "geo_int_jacobgeo_inv": np.array([1 / np.linalg.det(tangents)]),
+        "geo_int_jacobgeo": np.array([np.linalg.det(tangents)]),
         "apar_0": (.2 + .6 * scalar)[..., None],
         "geo_int_dxdz": tangents.T.ravel(),
         "geo_int_normals": normals.ravel(),
@@ -1003,6 +1005,28 @@ def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
     }
     for suffix, values in fields.items():
       write(f"{prefix}-{suffix}", values, geometry_type)
+    # Full vector diagnostics: n=2+.2*f, upar=.3, Tpar=Tperp=4, mass=charge=1.
+    # Maxwellian moments are M1=n*u, M2=n*(u^2+3T), M3=n*(u^3+5uT).
+    # Each field is projected with the same independent tensor Gauss rule.
+    density = 2 + .2 * scalar
+    fields.update({
+        "ion_M0_0":
+        density[..., None],
+        "ion_M1_0": (.3 * density)[..., None],
+        "ion_M2_0": ((.3**2 + 12) * density)[..., None],
+        "ion_M2perp_0": (8 * density)[..., None],
+        "ion_M3_0": ((.3**3 + 6) * density)[..., None],
+        "ion_BiMaxwellianMoments_0":
+        np.stack((density, density * 0 + .3, density * 0 + 4, density * 0 + 4),
+                 axis=-1),
+    })
+    for suffix, values in fields.items():
+      write(f"{prefix.replace('drift_', 'repr_', 1)}-{suffix}",
+            values,
+            geometry_type,
+            analytic_function=drift_projection_reference.__doc__ +
+            " For repr_* fields, n=2+.2*f, upar=.3, Tpar=Tperp=4, p=n*T; "
+            "M1=n*u, M2=n*(u^2+3T), M3=n*(u^3+5*u*T).")
 
 
 def generate_all(out_dir: Path | str) -> None:

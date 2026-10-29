@@ -80,7 +80,7 @@ def _const(*values, **ctx) -> pg.GData:
 
 
 def _avg(data, comp=0, ndim=3):
-  """Cell averages of physical component ``comp``."""
+  """Cell averages of field ``comp``, including its complete DG expansion."""
   return data.values[..., comp * 2**ndim] * 2.0**(-ndim / 2.0)
 
 
@@ -249,15 +249,15 @@ class TestInverseGradientLength:
 
   def test_reduced_runs_carry_only_their_directions(self):
     """A 1x run holds z alone, so 1/L along z uses its only dimension; x is
-    refused. A 2x run holds x and z, so y is refused."""
+    zero. A 2x run holds x and z, so the y derivative is zero."""
     field_1x = _linear([(1.0, (0.5, ))], cells=(3, ), lengths=(1.0, ))
     out = ff.fetch_inv_L_n_cov([field_1x], dir=2) * field_1x
     np.testing.assert_allclose(_avg(out, ndim=1), -0.5, **ROUND_OFF)
-    with pytest.raises(ValueError, match="1x simulation has no x direction"):
-      ff.fetch_inv_L_n_cov([field_1x], dir=0)
+    np.testing.assert_array_equal(
+        ff.fetch_inv_L_n_cov([field_1x], dir=0).values, 0)
     field_2x = _linear([(1.0, (0.5, 0.2))], cells=(3, 5), lengths=(0.6, 1.9))
-    with pytest.raises(ValueError, match="2x simulation has no y direction"):
-      ff.fetch_inv_L_n_cov([field_2x], dir=1)
+    np.testing.assert_array_equal(
+        ff.fetch_inv_L_n_cov([field_2x], dir=1).values, 0)
 
 
 # --------------------------------------------------- magnetic perturbations
@@ -405,12 +405,14 @@ class TestElectricField:
 # ------------------------------------------------------- cross-field fluxes
 # phi = g x + a y + e z and b_i = (0, b_y, b_z) give the uniform
 #   v_E^x = (b_y dphi/dz - b_z dphi/dy)/(J B) = (b_y e - b_z a) jacobtot_inv,
-#   v_E^y = (b_z dphi/dx - b_x dphi/dz)/(J B) = b_z g jacobtot_inv.
+#   v_E^y = (b_z dphi/dx - b_x dphi/dz)/(J B) = b_z g jacobtot_inv,
+#   v_E^z = (b_x dphi/dy - b_y dphi/dx)/(J B) = -b_y g jacobtot_inv.
 _GX, _A, _EZ = 2.3, 3.7, -1.9
 _BY, _BZ = 0.4, 0.9
 _JTOT_INV, _JGEO, _BMAG = 0.37, 1.6, 2.3
 _VE_X = (_BY * _EZ - _BZ * _A) * _JTOT_INV
 _VE_Y = _BZ * _GX * _JTOT_INV
+_VE_Z = -_BY * _GX * _JTOT_INV
 _DENS, _UPAR, _VT2 = 2.0e19, 1.0e4, 3.0e9
 
 
@@ -468,7 +470,8 @@ class TestCrossFieldFluxes:
                                rtol=1e-12,
                                atol=1e-14 * np.abs(expected).max())
 
-  @pytest.mark.parametrize("direction, vel", [(0, _VE_X), (1, _VE_Y)])
+  @pytest.mark.parametrize("direction, vel", [(0, _VE_X), (1, _VE_Y),
+                                              (2, _VE_Z)])
   def test_ExB_fluxes(self, direction, vel):
     np.testing.assert_allclose(
         _avg(
@@ -497,13 +500,15 @@ class TestCrossFieldFluxes:
         0.5 * _MASS * expected, **ROUND_OFF)
 
   def test_direction_is_required_and_cross_field(self):
-    """No direction is assumed, and z is refused: it would miss the
-    parallel streaming flux."""
+    """Require direction; the third ExB component excludes parallel streaming."""
     srcs = _es_sources(_const(_DENS))
     with pytest.raises(ValueError, match="direction="):
       ff.fetch_flux_particle_ExB_contra(srcs)
-    with pytest.raises(ValueError, match="parallel streaming"):
-      ff.fetch_flux_particle_ExB_contra(srcs, dir=2)
+    # Nonzero b_y gives v_E^z = -b_y*dphi/dx/(J B).
+    values = ff.fetch_flux_particle_ExB_contra(srcs, dir=2).values
+    expected = np.zeros_like(values)
+    expected[..., 0] = _DENS * _VE_Z / _PSI0
+    np.testing.assert_allclose(values, expected, **ROUND_OFF)
 
   def test_total_flux_is_ExB_plus_flutter(self):
     m0, m1 = _random(1), _random(2)
@@ -549,9 +554,9 @@ class TestCrossFieldFluxes:
                                atol=1e-12 * np.abs(lhs).max())
     assert not np.allclose(total.values, turb.values)
 
-  def test_fluxes_need_3x_and_a_known_fluct(self):
+  def test_fluxes_need_2x_or_3x_and_a_known_fluct(self):
     flat = _linear([(_DENS, (0.0, ))], cells=(3, ), lengths=(1.0, ))
-    with pytest.raises(ValueError, match="need 3x"):
+    with pytest.raises(ValueError, match="need 2x .* or 3x"):
       ff.fetch_flux_particle_ExB_contra([flat] * 5, dir=0)
     with pytest.raises(ValueError, match="fluct"):
       ff.fetch_flux_particle_ExB_contra(_es_sources(_const(_DENS)),

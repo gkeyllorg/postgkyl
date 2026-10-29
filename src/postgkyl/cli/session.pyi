@@ -880,27 +880,23 @@ class PostgkylSession:
 
   def gk_load_quantity(
       self,
-      quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag',
-                        'E_field_contra', 'E_field_cov', 'E_field_mag',
-                        'ExB_vel_contra', 'M0', 'M1', 'M2', 'M2par', 'M2perp',
-                        'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar',
-                        'beta', 'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
-                        'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag',
-                        'debye_length', 'diamag_vel_contra', 'distf', 'field',
-                        'flux_energy_ExB_contra', 'flux_energy_contra',
-                        'flux_energy_dB_contra', 'flux_particle_ExB_contra',
-                        'flux_particle_contra', 'flux_particle_dB_contra',
-                        'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij',
-                        'geo_int_gij', 'geo_int_jacobgeo',
+      quantity: Literal['B_tot', 'B_tot_mag', 'E_field', 'E_field_mag',
+                        'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3',
+                        'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta',
+                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp',
+                        'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf',
+                        'field', 'flux_energy', 'flux_energy_ExB',
+                        'flux_energy_dB', 'flux_particle', 'flux_particle_ExB',
+                        'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag',
+                        'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo',
                         'geo_int_jacobgeo_inv', 'geo_int_jacobtot',
-                        'geo_int_jacobtot_inv', 'gradB_vel_contra', 'heat_chi',
-                        'heat_chi_gB', 'inv_L_T_cov', 'inv_L_n_cov',
-                        'larmor_radius', 'mach_cold_i', 'mach_hot_i',
-                        'particle_D', 'particle_D_gB', 'phi_norm', 'press',
-                        'presspar', 'pressperp', 'qpar', 'qpar_fluid',
-                        'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid',
-                        'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda',
-                        'temp', 'upar', 'vt'],
+                        'geo_int_jacobtot_inv', 'gradB_vel', 'heat_chi',
+                        'heat_chi_gB', 'inv_L_T', 'inv_L_n', 'larmor_radius',
+                        'mach_cold_i', 'mach_hot_i', 'particle_D',
+                        'particle_D_gB', 'phi_norm', 'press', 'presspar',
+                        'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm',
+                        'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm',
+                        'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'],
       species: str,
       name: str,
       frame: str | None = None,
@@ -909,6 +905,7 @@ class PostgkylSession:
       tag: str = 'default',
       label: str | None = None,
       direction: str | None = None,
+      rep: Literal['covar', 'contra', 'cyl', 'cart', 'norm'] | None = None,
       mass: float | None = None,
       charge: float | None = None,
       gamma_e: float | None = None,
@@ -921,8 +918,12 @@ class PostgkylSession:
       nu_frac: float | None = None,
       conv: float | None = None,
       fluct: Literal['none', 'y', 'yz'] | None = None,
-      read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+      options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Load and compute a pre-named gyrokinetic quantity.
+
+        Derived vector names have no representation suffix: use ``B_tot``, for
+        example, and select components with ``rep`` and ``direction``. The catalog
+        lists each quantity once and states its default representation.
 
         Modal source files retain their DG representation through the calculation:
         products, inverses, square roots, and derivatives use native DG operations.
@@ -939,17 +940,14 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Coordinate direction (0 for x, 1 for y, 2 for z), as a string
-            or Python integer. Selects a vector component or the direction of a
-            gradient length, flux, or diffusivity. These quantities require a direction.
-            Drift, electric-field and magnetic-field component quantities also accept
-            n0/n1/n2 (coordinate unit normals) and R/Z/phi (cylindrical unit vectors)
-            for 2x and 3x data. Physical projections have units m/s, V/m or T,
-            respectively. Numerical selectors retain the named covariant or
-            contravariant components, with coordinate-dependent units. In 2x the
-            full geometry indices remain 0=radial, 1=binormal, 2=parallel; the
-            binormal velocity need not vanish. Mapping to R-Z changes display
-            positions, not the chosen vector projection.
+          direction: Numeric component index 0,1,2 (Python also accepts integers).
+            For covar/contra these are computational components; for cyl the order
+            is R,phi,Z; for cart it is X,Y,Z; norm selects increasing-coordinate
+            unit normals. In 2x the full indices remain 0=radial, 1=binormal,
+            2=parallel.
+          rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
+            uses the quantity's native representation, shown by --avail_quant.
+            Only for vector quantities.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -972,8 +970,9 @@ class PostgkylSession:
             removed from the energy flux to form the heat flux (default 3/2).
           fluct: For cross-field fluxes, keep only the turbulent part: the
             correlation of the fluctuations about the Jacobian-weighted ``y`` or
-            ``(y, z)`` average; ``none`` (default) keeps the total flux.
-          read_options: Additional provider options as repeated key/value entries.
+            ``(y, z)`` average in 3x. In 2x, both ``y`` and ``yz`` average along
+            stored dimension 1 (z). ``none`` (default) keeps the total flux.
+          options: Additional provider options as repeated key/value entries.
 
         Returns:
           A list of computed ``GDataState`` datasets.
@@ -1304,7 +1303,7 @@ class PostgkylSession:
            z4: str | None = None,
            z5: str | None = None,
            component: str | None = None,
-           read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+           options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -1358,7 +1357,7 @@ class PostgkylSession:
           z4: Partial-load selector for coordinate direction 4.
           z5: Partial-load selector for coordinate direction 5.
           component: Partial-load component selector.
-          read_options: Reader-specific options as repeated key/value entries.
+          options: Reader-specific options as repeated key/value entries.
         """
 
   def local_poly(self,

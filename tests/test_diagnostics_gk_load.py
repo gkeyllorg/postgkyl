@@ -796,10 +796,9 @@ class TestLoadQuantity:
       load_quantity("geo_int_bmag", None, GK_NAME, path=DATA)
 
   @pytest.mark.parametrize("quantity, species, direction, expected", [
-      ("flux_particle_contra", "ion", 1, r"$\Gamma^{y}_{i}$"),
-      ("inv_L_T_cov", "elc", 2, r"$1/L_{T,e,z}$ (1/coordinate unit)"),
-      ("ExB_vel_contra", None, 0,
-       r"$v_{E}^{x}$ (contravariant component units)"),
+      ("flux_particle", "ion", 1, r"$\Gamma^{y}_{i}$"),
+      ("inv_L_T", "elc", 2, r"$1/L_{T,e,z}$ (1/coordinate unit)"),
+      ("ExB_vel", None, 0, r"$v_{E}^{x}$ (contravariant component units)"),
       ("M0", "ion", None, r"$M_{0i}$ (m$^{-3}$)"),
   ])
   def test_labels_name_the_direction_and_species(self, quantity, species,
@@ -890,12 +889,11 @@ def _extra_for(quant) -> dict:
 
 
 # The synthetic data are 1x: cross-field fluxes, and the diffusivities built
-# on them, need the binormal direction y of a 3x run and must refuse.
-_NEEDS_3X = {
-    "flux_particle_ExB_contra", "flux_energy_ExB_contra",
-    "flux_particle_dB_contra", "flux_energy_dB_contra", "flux_particle_contra",
-    "flux_energy_contra", "particle_D", "heat_chi", "particle_D_gB",
-    "heat_chi_gB"
+# on them, require a 2x or 3x configuration grid and must refuse.
+_NEEDS_2X_OR_3X = {
+    "flux_particle_ExB", "flux_energy_ExB", "flux_particle_dB",
+    "flux_energy_dB", "flux_particle", "flux_energy", "particle_D", "heat_chi",
+    "particle_D_gB", "heat_chi_gB"
 }
 
 
@@ -933,8 +931,8 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
 
   monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-  if quantity in _NEEDS_3X:
-    with pytest.raises(ValueError, match="need 3x"):
+  if quantity in _NEEDS_2X_OR_3X:
+    with pytest.raises(ValueError, match="need 2x .* or 3x"):
       load_quantity(quantity,
                     species,
                     name,

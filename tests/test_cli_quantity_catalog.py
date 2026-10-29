@@ -35,8 +35,8 @@ def test_catalog_requires_no_inputs_and_never_loads(name, flag, monkeypatch):
     assert description.strip(), quantity
     assert "\n" not in description
   # Descriptions make the basis explicit; geometry retains its established name.
-  assert "Contravariant" in result.output
-  assert "Covariant" in result.output
+  assert "(default: contravariant)" in result.output
+  assert "(default: covariant)" in result.output
   assert "geo_int_b_i" in result.output
 
 
@@ -62,7 +62,9 @@ def test_catalog_alignment_wrapping_and_complete_descriptions(width):
   for name, parts in rows.items():
     # Click may wrap at hyphens as well as whitespace.
     assert "".join("".join(parts).split()) == "".join(
-        gk_quant_registry.get(name).description.split())
+        (gk_quant_registry.get(name).description +
+         (f" (default: {gk_quant_registry.get(name).component_basis})"
+          if gk_quant_registry.get(name).component_basis else "")).split())
 
 
 @pytest.mark.parametrize("name", ["gk_load_q", "gk_load_quantity"])
@@ -73,7 +75,7 @@ def test_quantity_help_is_concise(name):
   assert "-q, --quantity TEXT" in normalized
   assert "Quantity to load, see -a, --avail_quant for available quantities." in normalized
   assert "-a, --avail_quant" in normalized
-  assert "ExB_vel_contra" not in result.output
+  assert "ExB_vel" not in result.output
   assert "geo_int_b_i" not in result.output
 
 
@@ -85,10 +87,9 @@ def test_choice_validation_and_completion_are_preserved():
   assert isinstance(option.type, click.Choice)
   assert list(option.type.choices) == gk_quant_registry.list()
   with click.Context(generated) as ctx:
-    assert option.type.convert("gradB_vel_contra", option,
-                               ctx) == "gradB_vel_contra"
-    assert [item.value for item in option.shell_complete(ctx, "gradB")
-            ] == ["gradB_vel_contra"]
+    assert option.type.convert("gradB_vel", option, ctx) == "gradB_vel"
+    assert [item.value
+            for item in option.shell_complete(ctx, "gradB")] == ["gradB_vel"]
   result = CliRunner().invoke(cli, ["gk_load_q", "-q", "not_a_quantity"])
   assert result.exit_code == 2
   assert "Invalid value for '--quantity'" in result.output

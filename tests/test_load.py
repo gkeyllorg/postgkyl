@@ -40,11 +40,11 @@ def test_pathlike_literal_remains_supported(stub_load, tmp_path):
   assert out.file_name == str(tmp_path / "frame_0.gkyl")
 
 
-def test_partial_read_options_are_lowered_once_at_load(stub_load):
+def test_partial_options_are_lowered_once_at_load(stub_load):
   out = stub_load("frame_0.gkyl",
                   z1="2:4",
                   component="1",
-                  read_options={"custom": "yes"})
+                  options={"custom": "yes"})
   assert out.load_kwargs["axes"] == (None, "2:4", None, None, None, None)
   assert out.load_kwargs["comp"] == "1"
   assert out.load_kwargs["custom"] == "yes"

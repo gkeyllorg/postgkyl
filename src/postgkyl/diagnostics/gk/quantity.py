@@ -19,7 +19,7 @@ from postgkyl.gdata import GData
 
 from .. import discovery
 from .vector_projection import fetch_vector
-from postgkyl.operations.vector_projection import PHYSICAL_DIRECTIONS
+from postgkyl.operations.vector_projection import BASIS_REPRESENTATION, UNIT_VECTOR_REPRESENTATIONS
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -30,7 +30,7 @@ class GkQuantity:
   """A gyrokinetic quantity: one or more source combinations + fetch logic.
 
   Attributes:
-    name: Name of the quantity (the registry key).
+    name: Registry key, without a representation suffix for derived vectors.
     description: Brief plain-text explanation for the quantity catalog.
     source: List of source combinations to try, in preference order; each
       combination is a list of either file-naming-convention source strings
@@ -45,11 +45,12 @@ class GkQuantity:
     is_species_dep: Whether the quantity is species-dependent.
     is_vector: Whether the quantity is a vector (multiple components,
       selected via the ``dir`` extra).
-    component_basis: Covariant/contravariant representation of vector components,
-      or None for quantities that are not coordinate vector components.
-    physical_units: Units of physical projections, independent of coordinates.
-    projection_label: Physical-projection label; None disables projection support.
-      Includes %(dir)s and %(units)s placeholders.
+    component_basis: Native vector basis or stored tensor basis, displayed as
+      the default in the quantity catalog. Vector output can be converted
+      through ``rep`` without changing ``name``. None when not applicable.
+    unit_vector_units: Units of Cartesian, cylindrical, and unit-normal projections.
+    vector_symbol: LaTeX symbol used for converted vector component labels.
+    packed_vector: Fetch returns all three native components in one dataset.
     is_tensor: Whether the quantity is a tensor.
     is_integrated: Whether the quantity is a grid integral.
     is_geo: Whether the quantity is a (frame-independent) geometry
@@ -75,8 +76,9 @@ class GkQuantity:
   is_multi_species: bool = False
   component_basis: Literal["contravariant", "covariant",
                            "cartesian"] | None = None
-  physical_units: str | None = None
-  projection_label: str | None = None
+  unit_vector_units: str | None = None
+  vector_symbol: str | None = None
+  packed_vector: bool = False
   description: str = ""
 
   # ------------------------------------------------------------ internal
@@ -149,22 +151,35 @@ class GkQuantity:
   def get_label(self,
                 species: str | None = None,
                 direction: str | int | None = None,
-                units: str | None = None) -> str:
-    """Get the display label: ``%(species)s`` becomes the species' initial
-    (``s`` when unknown) and ``%(dir)s`` the direction ``x``, ``y`` or ``z``
-    (``i`` when unknown)."""
-    physical = str(direction) in PHYSICAL_DIRECTIONS
-    template = self.projection_label if physical and self.projection_label else self.label
-    if units is None:
-      units = self.physical_units if physical else f"{self.component_basis} component units"
-    return template % {
-        "units":
-        units,
-        "species":
-        species[0] if species is not None else "s",
-        "dir": ("xyz"[int(direction)] if str(direction) in ("0", "1", "2") else
-                str(direction) if direction is not None else "i"),
+                units: str | None = None,
+                rep: str | None = None) -> str:
+    """Label the requested component, retaining native labels for default output."""
+    fields = {
+        "species": species[0] if species is not None else "s",
+        "dir":
+        "xyz"[int(direction)] if str(direction) in ("0", "1", "2") else "i"
     }
+    native = BASIS_REPRESENTATION.get(self.component_basis)
+    resolved = rep or native
+    unit_projection = resolved in UNIT_VECTOR_REPRESENTATIONS
+    if units is None:
+      output_basis = {
+          "covar": "covariant",
+          "contra": "contravariant"
+      }.get(resolved, self.component_basis)
+      units = self.unit_vector_units if unit_projection else f"{output_basis} component units"
+    fields["units"] = units
+    if self.is_vector and resolved != native:
+      comp = int(direction)
+      index = ({
+          "cyl": ("R", r"\phi", "Z"),
+          "cart": ("X", "Y", "Z"),
+          "norm": ("n0", "n1", "n2")
+      }.get(resolved, ("x", "y", "z")))[comp]
+      symbol = self.vector_symbol % fields
+      marker = "^" if resolved == "contra" else "_"
+      return f"${{{symbol}}}{marker}{{{index}}}$ ({units})"
+    return self.label % fields
 
   def get_avail_source(self, path: str, name: str, species: str,
                        frame_inp: str | None) -> tuple[int, list]:
@@ -244,7 +259,7 @@ class GkQuantity:
         for src in combo
     ]
     extra = dict(extra, path=path, name=name, species=species, frame=frame)
-    if self.projection_label is not None:
+    if self.is_vector:
       return fetch_vector(fetch_func, gdatas, self, **extra)
     return fetch_func(gdatas, **extra)
 
