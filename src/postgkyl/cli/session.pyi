@@ -906,7 +906,7 @@ class PostgkylSession:
       path: str = './',
       tag: str = 'default',
       label: str | None = None,
-      direction: int | None = None,
+      direction: str | None = None,
       mass: float | None = None,
       charge: float | None = None,
       gamma_e: float | None = None,
@@ -937,9 +937,13 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
-            component of a vector, or the direction of a gradient length, flux, or
-            diffusivity. Required by those quantities, which assume no direction.
+          direction: Coordinate direction (0 for x, 1 for y, 2 for z), as a string
+            or Python integer. Selects a vector component or the direction of a
+            gradient length, flux, or diffusivity. These quantities require a direction.
+            ExB_vel, gradB_vel and diamag_vel also accept n0/n1/n2 (coordinate
+            unit normals) and R/Z/phi (cylindrical unit vectors), in m/s for 3x
+            data. Numerical drift selectors retain coordinate units/s. Mapping
+            to R-Z changes display positions, not the chosen vector projection.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.

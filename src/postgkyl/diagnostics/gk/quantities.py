@@ -30,6 +30,7 @@ from scipy import constants
 
 from postgkyl import operations
 from postgkyl.dg import physics
+from .drift_projection import drift_direction, project_drift
 
 if TYPE_CHECKING:
   from postgkyl.gdata import GData
@@ -692,37 +693,56 @@ def _b_cross_grad_div_b_component(scalar: "GData", jacobtot_inv: "GData",
 
 
 def fetch_ExB_vel(gdatas: list["GData"], **kwargs):
-  """``v_{E,k} = epsilon_{ijk}/(J B) * b_i * d(phi)/dx^j`` (``dir`` selects k).
+  """ExB coordinate rate (0/1/2) or physical projection (n0/n1/n2/R/Z/phi).
 
-  ``gdatas``: ``(jacobtot_inv, bmag, b_i, phi)``.
+  Sources: (jacobtot_inv, bmag, b_i, phi). Physical projections also need
+  ``drift_geometry`` containing saved tangents and normals or positions.
   """
   jacobtot_inv, _bmag, b_i, phi = gdatas
-  comp = _direction(kwargs, "fetch_ExB_vel")
-  return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp)
+  selector = drift_direction(kwargs.get("dir"))
+
+  def component(comp):
+    """Compute the original contravariant ExB component."""
+    return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp)
+
+  return project_drift(component, selector, jacobtot_inv,
+                       **kwargs.get("drift_geometry", {}))
 
 
 def fetch_gradB_vel(gdatas: list["GData"], **kwargs):
-  """``v_gradB,k = Tperp/(q B) * epsilon_{ijk} * b_i * d(B)/dx^j / (J B)``.
+  """Grad-B coordinate rate or physical projection; see fetch_ExB_vel.
 
-  ``gdatas``: ``(jacobtot_inv, bmag, b_i, Tperp)``.
+  Sources: (jacobtot_inv, bmag, b_i, Tperp), with Tperp in joules.
   """
   jacobtot_inv, bmag, b_i, Tperp = gdatas
-  comp = _direction(kwargs, "fetch_gradB_vel")
-  out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, comp)
+  selector = drift_direction(kwargs.get("dir"))
   charge = _get_ctx_val(Tperp, "charge", **kwargs)
-  return Tperp * out * (1.0 / bmag) / charge
+
+  def component(comp):
+    """Keep the original weak-product order for the grad-B coordinate rate."""
+    out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, comp)
+    return Tperp * out * (1.0 / bmag) / charge
+
+  return project_drift(component, selector, jacobtot_inv,
+                       **kwargs.get("drift_geometry", {}))
 
 
 def fetch_diamag_vel(gdatas: list["GData"], **kwargs):
-  """``v_diamag,k = 1/(q n) epsilon_{ijk} b_i * d(pperp)/dx^j / (J B)``.
+  """Diamagnetic coordinate rate or physical projection; see fetch_ExB_vel.
 
-  ``gdatas``: ``(jacobtot_inv, bmag, b_i, m0, pressperp)``.
+  Sources: (jacobtot_inv, bmag, b_i, m0, pressperp).
   """
   jacobtot_inv, bmag, b_i, m0, pressperp = gdatas
-  comp = _direction(kwargs, "fetch_diamag_vel")
-  out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i, comp)
+  selector = drift_direction(kwargs.get("dir"))
   charge = _get_ctx_val(pressperp, "charge", **kwargs)
-  return out * (1.0 / m0) / charge
+
+  def component(comp):
+    """Keep the original weak-product order for the diamagnetic coordinate rate."""
+    out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i, comp)
+    return out * (1.0 / m0) / charge
+
+  return project_drift(component, selector, jacobtot_inv,
+                       **kwargs.get("drift_geometry", {}))
 
 
 # --------------------------------------------- magnetic field perturbations

@@ -135,13 +135,15 @@ class GkQuantity:
   # -------------------------------------------------------------- public
   def get_label(self,
                 species: str | None = None,
-                direction: int | None = None) -> str:
+                direction: str | int | None = None) -> str:
     """Get the display label: ``%(species)s`` becomes the species' initial
     (``s`` when unknown) and ``%(dir)s`` the direction ``x``, ``y`` or ``z``
     (``i`` when unknown)."""
     return self.label % {
-        "species": species[0] if species is not None else "s",
-        "dir": "xyz"[int(direction)] if direction is not None else "i",
+        "species":
+        species[0] if species is not None else "s",
+        "dir": ("xyz"[int(direction)] if str(direction) in ("0", "1", "2") else
+                str(direction) if direction is not None else "i"),
     }
 
   def get_avail_source(self, path: str, name: str, species: str,

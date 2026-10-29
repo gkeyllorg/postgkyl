@@ -879,10 +879,121 @@ def _generate_native_physics_fields(out_dir: Path) -> None:
                        })
 
 
+def drift_projection_reference(ndim=3):
+  """Affine 2x/3x map and analytic drift samples at tensor two-point Gauss nodes.
+
+  X=(2,-1,0.4)+A*x, A=[[2,.6,0],[0,1.5,0],[.2,-.1,3]].
+  b=(0,0,1), B=2+.1*f, phi=1+.4*f, p=3+.7*f,
+  n=2, Tperp=4, charge=1. In 3x, f=x0. In 2x, f=x0+.3*x2,
+  with x1=.3 fixed and all three geometry vectors retained. The 2x
+  scalars vary in both stored directions; their binormal derivative is zero.
+  Polynomial fields are exact p1; reciprocal fields are Gauss projections.
+  """
+  from itertools import product
+  dims = [0, 2] if ndim == 2 else [0, 1, 2]
+  cells = tuple(np.array([2, 3, 4])[dims])
+  lower = np.array([0., -.2, .1])[dims]
+  upper = np.array([.7, 1.1, 2.2])[dims]
+  widths = (upper - lower) / cells
+  centers = np.stack(np.meshgrid(*[
+      lower[d] + widths[d] * (np.arange(n) + .5) for d, n in enumerate(cells)
+  ],
+                                 indexing="ij"),
+                     axis=-1)
+  signs = np.array(list(product((-1., 1.), repeat=ndim)))
+  grid_points = centers[..., None, :] + widths * signs / np.sqrt(3) / 2
+  points = np.full((*cells, 2**ndim, 3), .3)
+  points[..., dims] = grid_points
+  if ndim == 2:
+    sx, sz = signs.T
+    basis = np.stack([np.ones(4), sx, sz, sx * sz], axis=-1) / 2
+  else:
+    sx, sy, sz = signs.T
+    basis = np.stack(
+        [np.ones(8), sx, sy, sz, sx * sy, sx * sz, sy * sz, sx * sy * sz],
+        axis=-1) / np.sqrt(8)
+  tangents = np.array([[2., .6, 0.], [0., 1.5, 0.], [.2, -.1, 3.]])
+  duals = np.linalg.inv(tangents)
+  normals = duals / np.linalg.norm(duals, axis=1)[:, None]
+  positions = np.array([2., -1., .4]) + points @ tangents.T
+  parallel_slope = .3 if ndim == 2 else 0.
+  scalar = points[..., 0] + parallel_slope * points[..., 2]
+  bmag = 2 + .1 * scalar
+  cross = np.cross([0., 0., 1.], duals[0] + parallel_slope * duals[2])
+  speeds = {
+      "ExB_vel": .4 / bmag,
+      "gradB_vel": .4 / bmag**2,
+      "diamag_vel": .7 / (2 * bmag)
+  }
+  return cells, lower, upper, points, basis, tangents, normals, positions, bmag, cross, speeds
+
+
+def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
+  """Write independently projected affine-map drift inputs for both position layouts."""
+  (cells, lower, upper, points, basis, tangents, normals, positions, bmag, _,
+   _) = drift_projection_reference(ndim)
+
+  def write(stem, samples, geometry_type):
+    """Project tensor Gauss samples with explicit p1 Legendre basis values."""
+    samples = np.broadcast_to(samples, (*cells, 2**ndim, np.shape(samples)[-1]))
+    coeff = np.einsum("...qc,qm->...cm", samples, basis).reshape(*cells, -1)
+    write_gkyl_field(out_dir / f"{stem}.gkyl",
+                     cells,
+                     lower,
+                     upper,
+                     coeff,
+                     1,
+                     "serendipity",
+                     metadata={
+                         "geometry_type":
+                         geometry_type,
+                         "charge":
+                         1.,
+                         "mass":
+                         1.,
+                         "time":
+                         0.,
+                         "frame":
+                         0,
+                         "description":
+                         "Affine geometry and analytic drift fields",
+                         "analytic_function":
+                         drift_projection_reference.__doc__,
+                         "generation_method":
+                         "Explicit tensor two-point Gauss Legendre projection"
+                     })
+
+  for kind, geometry_type in (("cart", 3), ("cyl", 1)):
+    prefix = f"drift_{kind}" if ndim == 3 else f"drift_2x_{kind}"
+    scalar = points[..., 0] + (.3 * points[..., 2] if ndim == 2 else 0.)
+    position = positions.copy()
+    if kind == "cyl":
+      position[..., 0] = np.hypot(positions[..., 0], positions[..., 1])
+      position[..., 1] = positions[..., 2]
+      position[..., 2] = np.arctan2(positions[..., 1], positions[..., 0])
+    fields = {
+        "geo_int_dxdz": tangents.T.ravel(),
+        "geo_int_normals": normals.ravel(),
+        "geo_int_mapc2p": position,
+        "geo_int_b_i": tangents[2, :],
+        "geo_int_bmag": bmag[..., None],
+        "geo_int_jacobtot_inv": (1 / (np.linalg.det(tangents) * bmag))[...,
+                                                                       None],
+        "field_0": (1 + .4 * scalar)[..., None],
+        "ion_M0_0": np.array([2.]),
+        "ion_M2perp_0": (3 + .7 * scalar)[..., None],
+        "ion_BiMaxwellianMoments_0": np.array([2., 0., 4., 4.]),
+    }
+    for suffix, values in fields.items():
+      write(f"{prefix}-{suffix}", values, geometry_type)
+
+
 def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
+  _generate_drift_projection_fields(out_dir)
+  _generate_drift_projection_fields(out_dir, ndim=2)
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
   _generate_native_physics_fields(out_dir)
