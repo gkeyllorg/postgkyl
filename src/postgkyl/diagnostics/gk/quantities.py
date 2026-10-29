@@ -30,7 +30,6 @@ from scipy import constants
 
 from postgkyl import operations
 from postgkyl.dg import physics
-from .drift_projection import drift_direction, project_drift
 
 if TYPE_CHECKING:
   from postgkyl.gdata import GData
@@ -620,7 +619,7 @@ def _make_fetch_inv_grad_length(name: str):
   radial one, ``dir=2`` the parallel one. The derivative is along the
   computational coordinate, not normalized by ``|grad x^k|``. ``gdatas``:
   ``[X]`` (e.g. ``M0`` or ``temp``)."""
-  quantity = f"fetch_inv_L_{name}"
+  quantity = f"fetch_inv_L_{name}_cov"
 
   def fetch(gdatas: list["GData"], **kwargs):
     field = gdatas[0]
@@ -631,8 +630,8 @@ def _make_fetch_inv_grad_length(name: str):
   return fetch
 
 
-fetch_inv_L_n = _make_fetch_inv_grad_length("n")
-fetch_inv_L_T = _make_fetch_inv_grad_length("T")
+fetch_inv_L_n_cov = _make_fetch_inv_grad_length("n")
+fetch_inv_L_T_cov = _make_fetch_inv_grad_length("T")
 
 
 # ------------------------------------------------------------ drift speeds
@@ -692,57 +691,29 @@ def _b_cross_grad_div_b_component(scalar: "GData", jacobtot_inv: "GData",
   return (pos_term + neg_term) * jacobtot_inv
 
 
-def fetch_ExB_vel(gdatas: list["GData"], **kwargs):
-  """ExB coordinate rate (0/1/2) or physical projection (n0/n1/n2/R/Z/phi).
-
-  Sources: (jacobtot_inv, bmag, b_i, phi). Physical projections also need
-  ``drift_geometry`` containing saved tangents and normals or positions.
-  """
+def fetch_ExB_vel_contra(gdatas: list["GData"], **kwargs):
+  """Contravariant ExB drift component from (jacobtot_inv, bmag, b_i, phi)."""
   jacobtot_inv, _bmag, b_i, phi = gdatas
-  selector = drift_direction(kwargs.get("dir"))
-
-  def component(comp):
-    """Compute the original contravariant ExB component."""
-    return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp)
-
-  return project_drift(component, selector, jacobtot_inv,
-                       **kwargs.get("drift_geometry", {}))
+  comp = _direction(kwargs, "fetch_ExB_vel_contra")
+  return _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp)
 
 
-def fetch_gradB_vel(gdatas: list["GData"], **kwargs):
-  """Grad-B coordinate rate or physical projection; see fetch_ExB_vel.
-
-  Sources: (jacobtot_inv, bmag, b_i, Tperp), with Tperp in joules.
-  """
+def fetch_gradB_vel_contra(gdatas: list["GData"], **kwargs):
+  """Contravariant grad-B drift from (jacobtot_inv, bmag, b_i, Tperp)."""
   jacobtot_inv, bmag, b_i, Tperp = gdatas
-  selector = drift_direction(kwargs.get("dir"))
+  comp = _direction(kwargs, "fetch_gradB_vel_contra")
   charge = _get_ctx_val(Tperp, "charge", **kwargs)
-
-  def component(comp):
-    """Keep the original weak-product order for the grad-B coordinate rate."""
-    out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, comp)
-    return Tperp * out * (1.0 / bmag) / charge
-
-  return project_drift(component, selector, jacobtot_inv,
-                       **kwargs.get("drift_geometry", {}))
+  out = _b_cross_grad_div_b_component(bmag, jacobtot_inv, b_i, comp)
+  return Tperp * out * (1.0 / bmag) / charge
 
 
-def fetch_diamag_vel(gdatas: list["GData"], **kwargs):
-  """Diamagnetic coordinate rate or physical projection; see fetch_ExB_vel.
-
-  Sources: (jacobtot_inv, bmag, b_i, m0, pressperp).
-  """
+def fetch_diamag_vel_contra(gdatas: list["GData"], **kwargs):
+  """Contravariant diamagnetic drift from (jacobtot_inv, bmag, b_i, M0, pperp)."""
   jacobtot_inv, bmag, b_i, m0, pressperp = gdatas
-  selector = drift_direction(kwargs.get("dir"))
+  comp = _direction(kwargs, "fetch_diamag_vel_contra")
   charge = _get_ctx_val(pressperp, "charge", **kwargs)
-
-  def component(comp):
-    """Keep the original weak-product order for the diamagnetic coordinate rate."""
-    out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i, comp)
-    return out * (1.0 / m0) / charge
-
-  return project_drift(component, selector, jacobtot_inv,
-                       **kwargs.get("drift_geometry", {}))
+  out = _b_cross_grad_div_b_component(pressperp, jacobtot_inv, b_i, comp)
+  return out * (1.0 / m0) / charge
 
 
 # --------------------------------------------- magnetic field perturbations
@@ -938,7 +909,7 @@ def _dB_over_B(apar: "GData", bmag: "GData", jacobgeo_inv: "GData",
                               dir=comp) * (1.0 / bmag)
 
 
-def fetch_flux_particle_ExB(gdatas: list["GData"], **kwargs):
+def fetch_flux_particle_ExB_contra(gdatas: list["GData"], **kwargs):
   """ExB particle flux along ``x^k`` (``dir``), ``Gamma_E^k = n v_E^k``.
 
   ``gdatas``: ``(M0, phi, jacobgeo, jacobtot_inv, b_i)``.
@@ -947,10 +918,10 @@ def fetch_flux_particle_ExB(gdatas: list["GData"], **kwargs):
   return _cross_field_flux(
       m0,
       lambda comp: _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp),
-      jacobgeo, 1.0, "fetch_flux_particle_ExB", **kwargs)
+      jacobgeo, 1.0, "fetch_flux_particle_ExB_contra", **kwargs)
 
 
-def fetch_flux_energy_ExB(gdatas: list["GData"], **kwargs):
+def fetch_flux_energy_ExB_contra(gdatas: list["GData"], **kwargs):
   """ExB energy flux along ``x^k`` (``dir``), ``Q_E^k = (m/2) M2 v_E^k``
   with ``M2 = M2par + M2perp`` (exact in long-wavelength gyrokinetics, where
   ``v_E`` does not depend on velocity).
@@ -962,10 +933,10 @@ def fetch_flux_energy_ExB(gdatas: list["GData"], **kwargs):
   return _cross_field_flux(
       m2,
       lambda comp: _b_cross_grad_div_b_component(phi, jacobtot_inv, b_i, comp),
-      jacobgeo, 0.5 * mass, "fetch_flux_energy_ExB", **kwargs)
+      jacobgeo, 0.5 * mass, "fetch_flux_energy_ExB_contra", **kwargs)
 
 
-def fetch_flux_particle_dB(gdatas: list["GData"], **kwargs):
+def fetch_flux_particle_dB_contra(gdatas: list["GData"], **kwargs):
   """Magnetic flutter particle flux along ``x^k`` (``dir``),
   ``Gamma_dB^k = M1 dB^k/B``.
 
@@ -974,10 +945,10 @@ def fetch_flux_particle_dB(gdatas: list["GData"], **kwargs):
   m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i = gdatas
   return _cross_field_flux(
       m1, lambda comp: _dB_over_B(apar, bmag, jacobgeo_inv, b_i, comp),
-      jacobgeo, 1.0, "fetch_flux_particle_dB", **kwargs)
+      jacobgeo, 1.0, "fetch_flux_particle_dB_contra", **kwargs)
 
 
-def fetch_flux_energy_dB(gdatas: list["GData"], **kwargs):
+def fetch_flux_energy_dB_contra(gdatas: list["GData"], **kwargs):
   """Magnetic flutter energy flux along ``x^k`` (``dir``),
   ``Q_dB^k = (m/2) M3 dB^k/B`` with ``M3 = M3par + M3perp``.
 
@@ -987,7 +958,7 @@ def fetch_flux_energy_dB(gdatas: list["GData"], **kwargs):
   mass = _get_ctx_val(m3, "mass", **kwargs)
   return _cross_field_flux(
       m3, lambda comp: _dB_over_B(apar, bmag, jacobgeo_inv, b_i, comp),
-      jacobgeo, 0.5 * mass, "fetch_flux_energy_dB", **kwargs)
+      jacobgeo, 0.5 * mass, "fetch_flux_energy_dB_contra", **kwargs)
 
 
 def _warn_if_apar_dropped(quantity: str, **kwargs) -> None:
@@ -1003,50 +974,50 @@ def _warn_if_apar_dropped(quantity: str, **kwargs) -> None:
         stacklevel=2)
 
 
-def fetch_flux_particle_em(gdatas: list["GData"], **kwargs):
+def fetch_flux_particle_contra_em(gdatas: list["GData"], **kwargs):
   """Total cross-field particle flux, ``Gamma^k = Gamma_E^k + Gamma_dB^k``.
 
   ``gdatas``: ``(M0, M1, apar, phi, bmag, jacobgeo, jacobgeo_inv,
   jacobtot_inv, b_i)``.
   """
   m0, m1, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
-  return (fetch_flux_particle_ExB([m0, phi, jacobgeo, jacobtot_inv, b_i], **
-                                  kwargs) +
-          fetch_flux_particle_dB([m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i],
-                                 **kwargs))
+  return (fetch_flux_particle_ExB_contra([m0, phi, jacobgeo, jacobtot_inv, b_i],
+                                         **kwargs) +
+          fetch_flux_particle_dB_contra(
+              [m1, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs))
 
 
-def fetch_flux_particle_es(gdatas: list["GData"], **kwargs):
+def fetch_flux_particle_contra_es(gdatas: list["GData"], **kwargs):
   """Total cross-field particle flux of an electrostatic run,
   ``Gamma^k = Gamma_E^k``.
 
   ``gdatas``: ``(M0, phi, jacobgeo, jacobtot_inv, b_i)``.
   """
-  _warn_if_apar_dropped("flux_particle", **kwargs)
-  return fetch_flux_particle_ExB(gdatas, **kwargs)
+  _warn_if_apar_dropped("flux_particle_contra", **kwargs)
+  return fetch_flux_particle_ExB_contra(gdatas, **kwargs)
 
 
-def fetch_flux_energy_em(gdatas: list["GData"], **kwargs):
+def fetch_flux_energy_contra_em(gdatas: list["GData"], **kwargs):
   """Total cross-field energy flux, ``Q^k = Q_E^k + Q_dB^k``.
 
   ``gdatas``: ``(M2, M3, apar, phi, bmag, jacobgeo, jacobgeo_inv,
   jacobtot_inv, b_i)``.
   """
   m2, m3, apar, phi, bmag, jacobgeo, jacobgeo_inv, jacobtot_inv, b_i = gdatas
-  return (
-      fetch_flux_energy_ExB([m2, phi, jacobgeo, jacobtot_inv, b_i], **kwargs) +
-      fetch_flux_energy_dB([m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **
-                           kwargs))
+  return (fetch_flux_energy_ExB_contra([m2, phi, jacobgeo, jacobtot_inv, b_i],
+                                       **kwargs) +
+          fetch_flux_energy_dB_contra(
+              [m3, apar, bmag, jacobgeo, jacobgeo_inv, b_i], **kwargs))
 
 
-def fetch_flux_energy_es(gdatas: list["GData"], **kwargs):
+def fetch_flux_energy_contra_es(gdatas: list["GData"], **kwargs):
   """Total cross-field energy flux of an electrostatic run,
   ``Q^k = Q_E^k``.
 
   ``gdatas``: ``(M2, phi, jacobgeo, jacobtot_inv, b_i)``.
   """
-  _warn_if_apar_dropped("flux_energy", **kwargs)
-  return fetch_flux_energy_ExB(gdatas, **kwargs)
+  _warn_if_apar_dropped("flux_energy_contra", **kwargs)
+  return fetch_flux_energy_ExB_contra(gdatas, **kwargs)
 
 
 # --------------------------------------------------- transport coefficients
@@ -1060,36 +1031,37 @@ def fetch_flux_energy_es(gdatas: list["GData"], **kwargs):
 # conv defaulting to 3/2.
 
 
-def _heat_flux(temp: "GData", flux_particle: "GData", flux_energy: "GData",
-               **kwargs) -> "GData":
+def _heat_flux(temp: "GData", flux_particle_contra: "GData",
+               flux_energy_contra: "GData", **kwargs) -> "GData":
   """Heat flux ``q = Q - conv*T*Gamma`` (``conv`` defaults to 3/2)."""
   conv = kwargs.get("conv")
   conv = 1.5 if conv is None else float(conv)
-  return flux_energy + temp * flux_particle * -conv
+  return flux_energy_contra + temp * flux_particle_contra * -conv
 
 
 def fetch_particle_D(gdatas: list["GData"], **kwargs):
   """Local particle diffusivity along ``x^k`` (``dir``),
   ``D^k = -Gamma^k/(g^kk dn/dx^k)`` (m^2/s).
 
-  ``gdatas``: ``(M0, flux_particle, gij)``.
+  ``gdatas``: ``(M0, flux_particle_contra, gij)``.
   """
-  m0, flux_particle, gij = gdatas
+  m0, flux_particle_contra, gij = gdatas
   comp = _flux_direction(kwargs, "fetch_particle_D")
   denom = _metric_diagonal(gij, comp) * _derivative(m0, comp,
                                                     "fetch_particle_D")
-  return flux_particle * (1.0 / denom) * -1.0
+  return flux_particle_contra * (1.0 / denom) * -1.0
 
 
 def fetch_heat_chi(gdatas: list["GData"], **kwargs):
   """Local heat diffusivity along ``x^k`` (``dir``),
   ``chi^k = -q^k/(n g^kk dT/dx^k)`` (m^2/s).
 
-  ``gdatas``: ``(M0, temp, flux_particle, flux_energy, gij)``.
+  ``gdatas``: ``(M0, temp, flux_particle_contra, flux_energy_contra, gij)``.
   """
-  m0, temp, flux_particle, flux_energy, gij = gdatas
+  m0, temp, flux_particle_contra, flux_energy_contra, gij = gdatas
   comp = _flux_direction(kwargs, "fetch_heat_chi")
-  heat_flux = _heat_flux(temp, flux_particle, flux_energy, **kwargs)
+  heat_flux = _heat_flux(temp, flux_particle_contra, flux_energy_contra,
+                         **kwargs)
   denom = m0 * _metric_diagonal(gij, comp) * _derivative(
       temp, comp, "fetch_heat_chi")
   return heat_flux * (1.0 / denom) * -1.0
@@ -1147,11 +1119,11 @@ def fetch_particle_D_gB(gdatas: list[list["GData"]], **kwargs):
   ``L_n = -n/(sqrt(g^kk) dn/dx^k)``. ``--species ion,elc`` uses kinetic
   electrons; ``--species ion`` adiabatic ones (see
   :func:`_gyro_bohm_factors`). ``gdatas`` has one
-  ``[M0, temp, flux_particle, gij, bmag]`` list per species.
+  ``[M0, temp, flux_particle_contra, gij, bmag]`` list per species.
   """
-  m0, _temp, flux_particle, gij, _bmag = gdatas[0]
+  m0, _temp, flux_particle_contra, gij, _bmag = gdatas[0]
   comp = _flux_direction(kwargs, "fetch_particle_D_gB")
-  return _gyro_bohm_normalized(flux_particle * m0,
+  return _gyro_bohm_normalized(flux_particle_contra * m0,
                                _derivative(m0, comp, "fetch_particle_D_gB"),
                                _metric_diagonal(gij, comp), None, gdatas,
                                **kwargs)
@@ -1166,11 +1138,12 @@ def fetch_heat_chi_gB(gdatas: list[list["GData"]], **kwargs):
 
   ``L_T = -T/(sqrt(g^kk) dT/dx^k)``, species listed as for
   :func:`fetch_particle_D_gB`. ``gdatas`` has one
-  ``[M0, temp, flux_particle, flux_energy, gij, bmag]`` list per species.
+  ``[M0, temp, flux_particle_contra, flux_energy_contra, gij, bmag]`` list per species.
   """
-  m0, temp, flux_particle, flux_energy, gij, _bmag = gdatas[0]
+  m0, temp, flux_particle_contra, flux_energy_contra, gij, _bmag = gdatas[0]
   comp = _flux_direction(kwargs, "fetch_heat_chi_gB")
-  heat_flux = _heat_flux(temp, flux_particle, flux_energy, **kwargs)
+  heat_flux = _heat_flux(temp, flux_particle_contra, flux_energy_contra,
+                         **kwargs)
   return _gyro_bohm_normalized(heat_flux * temp,
                                _derivative(temp, comp, "fetch_heat_chi_gB"),
                                _metric_diagonal(gij, comp), m0, gdatas,

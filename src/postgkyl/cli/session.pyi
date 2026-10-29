@@ -882,23 +882,25 @@ class PostgkylSession:
       self,
       quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag',
                         'E_field_contra', 'E_field_cov', 'E_field_mag',
-                        'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3',
-                        'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta',
-                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
+                        'ExB_vel_contra', 'M0', 'M1', 'M2', 'M2par', 'M2perp',
+                        'M3', 'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar',
+                        'beta', 'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
                         'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag',
-                        'debye_length', 'diamag_vel', 'distf', 'field',
-                        'flux_energy', 'flux_energy_ExB', 'flux_energy_dB',
-                        'flux_particle', 'flux_particle_ExB',
-                        'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag',
-                        'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo',
+                        'debye_length', 'diamag_vel_contra', 'distf', 'field',
+                        'flux_energy_ExB_contra', 'flux_energy_contra',
+                        'flux_energy_dB_contra', 'flux_particle_ExB_contra',
+                        'flux_particle_contra', 'flux_particle_dB_contra',
+                        'geo_int_b_i', 'geo_int_bmag', 'geo_int_g_ij',
+                        'geo_int_gij', 'geo_int_jacobgeo',
                         'geo_int_jacobgeo_inv', 'geo_int_jacobtot',
-                        'geo_int_jacobtot_inv', 'gradB_vel', 'heat_chi',
-                        'heat_chi_gB', 'inv_L_T', 'inv_L_n', 'larmor_radius',
-                        'mach_cold_i', 'mach_hot_i', 'particle_D',
-                        'particle_D_gB', 'phi_norm', 'press', 'presspar',
-                        'pressperp', 'qpar', 'qpar_fluid', 'qpar_fluid_norm',
-                        'qpar_norm', 'qperp', 'qperp_fluid', 'qperp_fluid_norm',
-                        'qperp_norm', 'rho_over_lambda', 'temp', 'upar', 'vt'],
+                        'geo_int_jacobtot_inv', 'gradB_vel_contra', 'heat_chi',
+                        'heat_chi_gB', 'inv_L_T_cov', 'inv_L_n_cov',
+                        'larmor_radius', 'mach_cold_i', 'mach_hot_i',
+                        'particle_D', 'particle_D_gB', 'phi_norm', 'press',
+                        'presspar', 'pressperp', 'qpar', 'qpar_fluid',
+                        'qpar_fluid_norm', 'qpar_norm', 'qperp', 'qperp_fluid',
+                        'qperp_fluid_norm', 'qperp_norm', 'rho_over_lambda',
+                        'temp', 'upar', 'vt'],
       species: str,
       name: str,
       frame: str | None = None,
@@ -940,10 +942,14 @@ class PostgkylSession:
           direction: Coordinate direction (0 for x, 1 for y, 2 for z), as a string
             or Python integer. Selects a vector component or the direction of a
             gradient length, flux, or diffusivity. These quantities require a direction.
-            ExB_vel, gradB_vel and diamag_vel also accept n0/n1/n2 (coordinate
-            unit normals) and R/Z/phi (cylindrical unit vectors), in m/s for 3x
-            data. Numerical drift selectors retain coordinate units/s. Mapping
-            to R-Z changes display positions, not the chosen vector projection.
+            Drift, electric-field and magnetic-field component quantities also accept
+            n0/n1/n2 (coordinate unit normals) and R/Z/phi (cylindrical unit vectors)
+            for 2x and 3x data. Physical projections have units m/s, V/m or T,
+            respectively. Numerical selectors retain the named covariant or
+            contravariant components, with coordinate-dependent units. In 2x the
+            full geometry indices remain 0=radial, 1=binormal, 2=parallel; the
+            binormal velocity need not vanish. Mapping to R-Z changes display
+            positions, not the chosen vector projection.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.

@@ -56,7 +56,8 @@ _geo_int_b_i = GkQuantity(name="geo_int_b_i",
                           fetch_func=[ff.fetch_s0cAll],
                           label=r"$b_%(dir)s$",
                           is_vector=True,
-                          is_geo=True)
+                          is_geo=True,
+                          component_basis='covariant')
 gk_quant_registry.register(_geo_int_b_i)
 
 # ----------------------------------------- tensor geometric quantities (geo)
@@ -349,53 +350,68 @@ gk_quant_registry.register(_collision_freq)
 
 # ---------------------------------------------------------- gradient lengths
 # Along the direction dir (0: x, 1: y, 2: z) of the simulation.
-_inv_L_n = GkQuantity(name="inv_L_n",
-                      source=[[_M0]],
-                      fetch_func=[ff.fetch_inv_L_n],
-                      label=r"$1/L^{%(dir)s}_{n,%(species)s}$ (1/m)",
-                      is_time_dep=True,
-                      is_species_dep=True)
-gk_quant_registry.register(_inv_L_n)
-
-_inv_L_T = GkQuantity(name="inv_L_T",
-                      source=[[_temp]],
-                      fetch_func=[ff.fetch_inv_L_T],
-                      label=r"$1/L^{%(dir)s}_{T,%(species)s}$ (1/m)",
-                      is_time_dep=True,
-                      is_species_dep=True)
-gk_quant_registry.register(_inv_L_T)
-
-# ----------------------------------------------------------- drift speeds
-_ExB_vel = GkQuantity(
-    name="ExB_vel",
-    source=[[_geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i, _field]],
-    fetch_func=[ff.fetch_ExB_vel],
-    label=r"$v_{E,%(dir)s}$ (m/s)",
-    is_time_dep=True,
-    is_vector=True)
-gk_quant_registry.register(_ExB_vel)
-
-_gradB_vel = GkQuantity(
-    name="gradB_vel",
-    source=[[_geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i, _Tperp]],
-    fetch_func=[ff.fetch_gradB_vel],
-    label=r"$v_{\nabla B,%(dir)s}$ (m/s)",
+_inv_L_n_cov = GkQuantity(
+    name="inv_L_n_cov",
+    source=[[_M0]],
+    fetch_func=[ff.fetch_inv_L_n_cov],
+    label='$1/L_{n,%(species)s,%(dir)s}$ (1/coordinate unit)',
     is_time_dep=True,
     is_species_dep=True,
+    component_basis='covariant',
     is_vector=True)
-gk_quant_registry.register(_gradB_vel)
+gk_quant_registry.register(_inv_L_n_cov)
 
-_diamag_vel = GkQuantity(name="diamag_vel",
-                         source=[[
-                             _geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i,
-                             _M0, _pressperp
-                         ]],
-                         fetch_func=[ff.fetch_diamag_vel],
-                         label=r"$v_{dia,%(dir)s}$ (m/s)",
-                         is_time_dep=True,
-                         is_species_dep=True,
-                         is_vector=True)
-gk_quant_registry.register(_diamag_vel)
+_inv_L_T_cov = GkQuantity(
+    name="inv_L_T_cov",
+    source=[[_temp]],
+    fetch_func=[ff.fetch_inv_L_T_cov],
+    label='$1/L_{T,%(species)s,%(dir)s}$ (1/coordinate unit)',
+    is_time_dep=True,
+    is_species_dep=True,
+    component_basis='covariant',
+    is_vector=True)
+gk_quant_registry.register(_inv_L_T_cov)
+
+# ----------------------------------------------------------- drift speeds
+_ExB_vel_contra = GkQuantity(
+    name="ExB_vel_contra",
+    source=[[_geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i, _field]],
+    fetch_func=[ff.fetch_ExB_vel_contra],
+    label='$v_{E}^{%(dir)s}$ (%(units)s)',
+    is_time_dep=True,
+    is_vector=True,
+    component_basis='contravariant',
+    physical_units='m/s',
+    projection_label='$v_{E,%(dir)s}$ (%(units)s)')
+gk_quant_registry.register(_ExB_vel_contra)
+
+_gradB_vel_contra = GkQuantity(
+    name="gradB_vel_contra",
+    source=[[_geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i, _Tperp]],
+    fetch_func=[ff.fetch_gradB_vel_contra],
+    label='$v_{\\nabla B}^{%(dir)s}$ (%(units)s)',
+    is_time_dep=True,
+    is_species_dep=True,
+    is_vector=True,
+    component_basis='contravariant',
+    physical_units='m/s',
+    projection_label='$v_{\\nabla B,%(dir)s}$ (%(units)s)')
+gk_quant_registry.register(_gradB_vel_contra)
+
+_diamag_vel_contra = GkQuantity(
+    name="diamag_vel_contra",
+    source=[[
+        _geo_int_jacobtot_inv, _geo_int_bmag, _geo_int_b_i, _M0, _pressperp
+    ]],
+    fetch_func=[ff.fetch_diamag_vel_contra],
+    label='$v_{dia}^{%(dir)s}$ (%(units)s)',
+    is_time_dep=True,
+    is_species_dep=True,
+    is_vector=True,
+    component_basis='contravariant',
+    physical_units='m/s',
+    projection_label='$v_{dia,%(dir)s}$ (%(units)s)')
+gk_quant_registry.register(_diamag_vel_contra)
 
 # ------------------------------------------- magnetic field perturbations
 _apar = GkQuantity(name="apar",
@@ -409,18 +425,24 @@ _dB_perp_contra = GkQuantity(
     name="dB_perp_contra",
     source=[[_apar, _geo_int_jacobgeo_inv, _geo_int_b_i]],
     fetch_func=[ff.fetch_dB_perp_contra],
-    label=r"$\delta B_\perp^{%(dir)s}$ (T)",
+    label='$\\delta B_\\perp^{%(dir)s}$ (%(units)s)',
     is_time_dep=True,
-    is_vector=True)
+    is_vector=True,
+    component_basis='contravariant',
+    physical_units='T',
+    projection_label='$\\delta B_{\\perp %(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_dB_perp_contra)
 
 _dB_perp_cov = GkQuantity(
     name="dB_perp_cov",
     source=[[_apar, _geo_int_jacobgeo_inv, _geo_int_b_i, _geo_int_g_ij]],
     fetch_func=[ff.fetch_dB_perp_cov],
-    label=r"$\delta B_{\perp %(dir)s}$ (T)",
+    label='$\\delta B_{\\perp %(dir)s}$ (%(units)s)',
     is_time_dep=True,
-    is_vector=True)
+    is_vector=True,
+    component_basis='covariant',
+    physical_units='T',
+    projection_label='$\\delta B_{\\perp %(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_dB_perp_cov)
 
 _dB_perp_mag = GkQuantity(
@@ -439,18 +461,24 @@ _B_tot_cov = GkQuantity(
     name="B_tot_cov",
     source=[_B_tot_sources, [_geo_int_bmag, _geo_int_b_i]],
     fetch_func=[ff.fetch_B_tot_cov, ff.fetch_B_equilibrium_cov],
-    label=r"$B_{%(dir)s}$ (T)",
+    label='$B_{%(dir)s}$ (%(units)s)',
     is_time_dep=True,
-    is_vector=True)
+    is_vector=True,
+    component_basis='covariant',
+    physical_units='T',
+    projection_label='$B_{%(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_B_tot_cov)
 
 _B_tot_contra = GkQuantity(
     name="B_tot_contra",
     source=[_B_tot_sources, [_geo_int_bmag, _geo_int_g_ij]],
     fetch_func=[ff.fetch_B_tot_contra, ff.fetch_B_equilibrium_contra],
-    label=r"$B^{%(dir)s}$ (T)",
+    label='$B^{%(dir)s}$ (%(units)s)',
     is_time_dep=True,
-    is_vector=True)
+    is_vector=True,
+    component_basis='contravariant',
+    physical_units='T',
+    projection_label='$B_{%(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_B_tot_contra)
 
 _B_tot_mag = GkQuantity(name="B_tot_mag",
@@ -464,17 +492,23 @@ gk_quant_registry.register(_B_tot_mag)
 _E_field_cov = GkQuantity(name="E_field_cov",
                           source=[[_field]],
                           fetch_func=[ff.fetch_E_field_cov],
-                          label=r"$E_{%(dir)s}$",
+                          label='$E_{%(dir)s}$ (%(units)s)',
                           is_time_dep=True,
-                          is_vector=True)
+                          is_vector=True,
+                          component_basis='covariant',
+                          physical_units='V/m',
+                          projection_label='$E_{%(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_E_field_cov)
 
 _E_field_contra = GkQuantity(name="E_field_contra",
                              source=[[_field, _geo_int_gij]],
                              fetch_func=[ff.fetch_E_field_contra],
-                             label=r"$E^{%(dir)s}$",
+                             label='$E^{%(dir)s}$ (%(units)s)',
                              is_time_dep=True,
-                             is_vector=True)
+                             is_vector=True,
+                             component_basis='contravariant',
+                             physical_units='V/m',
+                             projection_label='$E_{%(dir)s}$ (%(units)s)')
 gk_quant_registry.register(_E_field_contra)
 
 _E_field_mag = GkQuantity(name="E_field_mag",
@@ -496,81 +530,101 @@ _total_flux_geo = [
     _geo_int_jacobtot_inv, _geo_int_b_i
 ]
 
-_flux_particle_ExB = GkQuantity(name="flux_particle_ExB",
-                                source=[[_M0] + _es_flux_geo],
-                                fetch_func=[ff.fetch_flux_particle_ExB],
-                                label=r"$\Gamma^{%(dir)s}_{E,%(species)s}$",
-                                is_time_dep=True,
-                                is_species_dep=True)
-gk_quant_registry.register(_flux_particle_ExB)
+_flux_particle_ExB_contra = GkQuantity(
+    name="flux_particle_ExB_contra",
+    source=[[_M0] + _es_flux_geo],
+    fetch_func=[ff.fetch_flux_particle_ExB_contra],
+    label=r"$\Gamma^{%(dir)s}_{E,%(species)s}$",
+    is_time_dep=True,
+    is_species_dep=True,
+    component_basis='contravariant',
+    is_vector=True)
+gk_quant_registry.register(_flux_particle_ExB_contra)
 
-_flux_energy_ExB = GkQuantity(name="flux_energy_ExB",
-                              source=[[_M2] + _es_flux_geo],
-                              fetch_func=[ff.fetch_flux_energy_ExB],
-                              label=r"$Q^{%(dir)s}_{E,%(species)s}$",
-                              is_time_dep=True,
-                              is_species_dep=True)
-gk_quant_registry.register(_flux_energy_ExB)
+_flux_energy_ExB_contra = GkQuantity(
+    name="flux_energy_ExB_contra",
+    source=[[_M2] + _es_flux_geo],
+    fetch_func=[ff.fetch_flux_energy_ExB_contra],
+    label=r"$Q^{%(dir)s}_{E,%(species)s}$",
+    is_time_dep=True,
+    is_species_dep=True,
+    component_basis='contravariant',
+    is_vector=True)
+gk_quant_registry.register(_flux_energy_ExB_contra)
 
-_flux_particle_dB = GkQuantity(
-    name="flux_particle_dB",
+_flux_particle_dB_contra = GkQuantity(
+    name="flux_particle_dB_contra",
     source=[[_M1] + _em_flux_geo],
-    fetch_func=[ff.fetch_flux_particle_dB],
+    fetch_func=[ff.fetch_flux_particle_dB_contra],
     label=r"$\Gamma^{%(dir)s}_{\delta B,%(species)s}$",
     is_time_dep=True,
-    is_species_dep=True)
-gk_quant_registry.register(_flux_particle_dB)
+    is_species_dep=True,
+    component_basis='contravariant',
+    is_vector=True)
+gk_quant_registry.register(_flux_particle_dB_contra)
 
-_flux_energy_dB = GkQuantity(name="flux_energy_dB",
-                             source=[[_M3] + _em_flux_geo],
-                             fetch_func=[ff.fetch_flux_energy_dB],
-                             label=r"$Q^{%(dir)s}_{\delta B,%(species)s}$",
-                             is_time_dep=True,
-                             is_species_dep=True)
-gk_quant_registry.register(_flux_energy_dB)
+_flux_energy_dB_contra = GkQuantity(
+    name="flux_energy_dB_contra",
+    source=[[_M3] + _em_flux_geo],
+    fetch_func=[ff.fetch_flux_energy_dB_contra],
+    label=r"$Q^{%(dir)s}_{\delta B,%(species)s}$",
+    is_time_dep=True,
+    is_species_dep=True,
+    component_basis='contravariant',
+    is_vector=True)
+gk_quant_registry.register(_flux_energy_dB_contra)
 
 # ExB plus flutter, or ExB only without apar output.
-_flux_particle = GkQuantity(
-    name="flux_particle",
-    source=[[_M0, _M1] + _total_flux_geo, [_M0] + _es_flux_geo],
-    fetch_func=[ff.fetch_flux_particle_em, ff.fetch_flux_particle_es],
-    label=r"$\Gamma^{%(dir)s}_{%(species)s}$",
-    is_time_dep=True,
-    is_species_dep=True)
-gk_quant_registry.register(_flux_particle)
+_flux_particle_contra = GkQuantity(name="flux_particle_contra",
+                                   source=[[_M0, _M1] + _total_flux_geo,
+                                           [_M0] + _es_flux_geo],
+                                   fetch_func=[
+                                       ff.fetch_flux_particle_contra_em,
+                                       ff.fetch_flux_particle_contra_es
+                                   ],
+                                   label=r"$\Gamma^{%(dir)s}_{%(species)s}$",
+                                   is_time_dep=True,
+                                   is_species_dep=True,
+                                   component_basis='contravariant',
+                                   is_vector=True)
+gk_quant_registry.register(_flux_particle_contra)
 
-_flux_energy = GkQuantity(
-    name="flux_energy",
+_flux_energy_contra = GkQuantity(
+    name="flux_energy_contra",
     source=[[_M2, _M3] + _total_flux_geo, [_M2] + _es_flux_geo],
-    fetch_func=[ff.fetch_flux_energy_em, ff.fetch_flux_energy_es],
+    fetch_func=[ff.fetch_flux_energy_contra_em, ff.fetch_flux_energy_contra_es],
     label=r"$Q^{%(dir)s}_{%(species)s}$",
     is_time_dep=True,
-    is_species_dep=True)
-gk_quant_registry.register(_flux_energy)
+    is_species_dep=True,
+    component_basis='contravariant',
+    is_vector=True)
+gk_quant_registry.register(_flux_energy_contra)
 
 # ---------------------------------------------------- transport coefficients
 # Local diffusivities along dir=0 (x) or 1 (y); conv sets the convective part
 # of Q (3/2).
 _particle_D = GkQuantity(name="particle_D",
-                         source=[[_M0, _flux_particle, _geo_int_gij]],
+                         source=[[_M0, _flux_particle_contra, _geo_int_gij]],
                          fetch_func=[ff.fetch_particle_D],
                          label=r"$D^{%(dir)s}_{%(species)s}$ (m$^2$/s)",
                          is_time_dep=True,
                          is_species_dep=True)
 gk_quant_registry.register(_particle_D)
 
-_heat_chi = GkQuantity(
-    name="heat_chi",
-    source=[[_M0, _temp, _flux_particle, _flux_energy, _geo_int_gij]],
-    fetch_func=[ff.fetch_heat_chi],
-    label=r"$\chi^{%(dir)s}_{%(species)s}$ (m$^2$/s)",
-    is_time_dep=True,
-    is_species_dep=True)
+_heat_chi = GkQuantity(name="heat_chi",
+                       source=[[
+                           _M0, _temp, _flux_particle_contra,
+                           _flux_energy_contra, _geo_int_gij
+                       ]],
+                       fetch_func=[ff.fetch_heat_chi],
+                       label=r"$\chi^{%(dir)s}_{%(species)s}$ (m$^2$/s)",
+                       is_time_dep=True,
+                       is_species_dep=True)
 gk_quant_registry.register(_heat_chi)
 
 _particle_D_gB = GkQuantity(
     name="particle_D_gB",
-    source=[[_M0, _temp, _flux_particle, _geo_int_gij, _geo_int_bmag]],
+    source=[[_M0, _temp, _flux_particle_contra, _geo_int_gij, _geo_int_bmag]],
     fetch_func=[ff.fetch_particle_D_gB],
     label=r"$D^{%(dir)s}_{%(species)s}/D_{gB}$",
     is_time_dep=True,
@@ -580,8 +634,8 @@ gk_quant_registry.register(_particle_D_gB)
 
 _heat_chi_gB = GkQuantity(name="heat_chi_gB",
                           source=[[
-                              _M0, _temp, _flux_particle, _flux_energy,
-                              _geo_int_gij, _geo_int_bmag
+                              _M0, _temp, _flux_particle_contra,
+                              _flux_energy_contra, _geo_int_gij, _geo_int_bmag
                           ]],
                           fetch_func=[ff.fetch_heat_chi_gB],
                           label=r"$\chi^{%(dir)s}_{%(species)s}/\chi_{gB}$",

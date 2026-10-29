@@ -46,18 +46,107 @@ The website build executes both interfaces and compares all three plots.
 .. include:: _pairs/12_gk_load_quantity.inc
 
 
-Drift direction selectors
--------------------------
+Vector names and component conventions
+---------------------------------------
 
-``ExB_vel``, ``gradB_vel`` and ``diamag_vel`` accept:
+Names ending in ``_contra`` return contravariant components :math:`V^i`
+for numerical direction selectors; names ending in ``_cov`` return covariant
+components :math:`V_i`. These components use the coordinate basis, which need
+not be orthogonal or normalized. The following are clean renames: update
+scripts and commands to the new names; the old names are not aliases.
 
-* ``direction="0"``, ``"1"``, ``"2"``: contravariant coordinate rates,
-  retaining previous numerical behavior. Python also accepts integers.
-* ``direction="n0"``, ``"n1"``, ``"n2"``: velocity along a unit normal
-  toward increasing computational coordinate, in m/s. ``n0`` measures
+.. list-table:: Renamed quantities
+   :header-rows: 1
+   :widths: 35 40 25
+
+   * - Previous name
+     - New name
+     - Representation
+   * - ``ExB_vel``
+     - ``ExB_vel_contra``
+     - Contravariant
+   * - ``gradB_vel``
+     - ``gradB_vel_contra``
+     - Contravariant
+   * - ``diamag_vel``
+     - ``diamag_vel_contra``
+     - Contravariant
+   * - ``flux_particle_ExB``
+     - ``flux_particle_ExB_contra``
+     - Contravariant
+   * - ``flux_energy_ExB``
+     - ``flux_energy_ExB_contra``
+     - Contravariant
+   * - ``flux_particle_dB``
+     - ``flux_particle_dB_contra``
+     - Contravariant
+   * - ``flux_energy_dB``
+     - ``flux_energy_dB_contra``
+     - Contravariant
+   * - ``flux_particle``
+     - ``flux_particle_contra``
+     - Contravariant
+   * - ``flux_energy``
+     - ``flux_energy_contra``
+     - Contravariant
+   * - ``inv_L_n``
+     - ``inv_L_n_cov``
+     - Covariant
+   * - ``inv_L_T``
+     - ``inv_L_T_cov``
+     - Covariant
+
+The naming audit follows the formulas, rather than the presence of a
+``dir`` argument alone:
+
+* Drifts compute :math:`v^i=\mathbf v\cdot\nabla x^i`. Particle and energy
+  fluxes multiply contravariant drift or magnetic-flutter components by
+  scalar moments, so their components are contravariant too.
+* Inverse gradient lengths compute :math:`-\partial_i X/X`, a covariant
+  logarithmic gradient. Their units are inverse coordinate units, not
+  universally inverse metres.
+* ``E_field_cov`` computes :math:`-\partial_i\phi`, and ``E_field_contra``
+  raises the index with :math:`g^{ij}`. ``dB_perp_contra`` computes the
+  contravariant curl of :math:`A_\parallel\mathbf b`; ``dB_perp_cov`` lowers
+  the index with :math:`g_{ij}`. ``B_tot_cov`` and ``B_tot_contra`` add the
+  equilibrium field in the corresponding representation. These names
+  already specify the basis and remain unchanged.
+* ``geo_int_b_i`` retains its name: the subscript already denotes covariant
+  components. It still returns all three packed components; ``dir`` does
+  not select a component. Geometry tensors, including ``geo_int_g_ij``
+  and ``geo_int_gij``, and actual Gkeyll output filenames are unchanged.
+* ``particle_D``, ``heat_chi``, ``particle_D_gB`` and ``heat_chi_gB`` are
+  directional transport coefficients, not vector components. Their names
+  remain unchanged, as do scalar parallel velocities and magnitudes.
+
+Fluxes and transport coefficients retain their existing 3x, cross-field
+``dir=0,1`` restriction and fluctuation conventions. Inverse gradient lengths
+retain the numerical selectors for coordinates present in the data. These
+quantities do not yet accept physical projection selectors.
+
+Physical direction selectors
+-----------------------------
+
+``ExB_vel_contra``, ``gradB_vel_contra``, ``diamag_vel_contra``,
+``E_field_cov``, ``E_field_contra``, ``dB_perp_cov``, ``dB_perp_contra``,
+``B_tot_cov`` and ``B_tot_contra`` accept:
+
+* ``direction="0"``, ``"1"``, ``"2"``: coordinate components in the basis
+  named by the suffix, retaining previous numerical behavior. Python also
+  accepts integers.
+* ``direction="n0"``, ``"n1"``, ``"n2"``: physical component along the unit
+  normal toward increasing computational coordinate. ``n0`` measures
   transport across flux surfaces in a flux-coordinate simulation.
-* ``direction="R"``, ``"Z"``, ``"phi"``: cylindrical components in m/s.
-  Use ``R`` and ``Z`` to plot physical drift arrows on an R-Z plane.
+* ``direction="R"``, ``"Z"``, ``"phi"``: physical cylindrical components.
+  Use ``R`` and ``Z`` to plot vector arrows on an R-Z plane.
+
+Physical projections have units m/s for drifts, V/m for the electrostatic
+field, and T for magnetic fields. The suffix describes the representation
+used for numerical selectors; a physical selector returns the requested
+projection irrespective of that suffix. For example, ``E_field_cov`` and
+``E_field_contra`` with ``direction="R"`` describe the same physical component.
+With spatially varying DG geometry, separate weak basis transformations can
+introduce projection/truncation differences between the two calculations.
 
 Physical projections support 2x and 3x data. In 2x, the grid contains
 the radial and parallel coordinates, while geometry retains all three
@@ -65,34 +154,60 @@ vectors. Selectors keep the full geometry indexing: ``0``/``n0`` refer
 to the radial coordinate, ``1``/``n1`` to the binormal coordinate, and
 ``2``/``n2`` to the parallel coordinate. Thus ``n1`` is not the normal
 of the second stored grid dimension. The omitted binormal derivative
-is zero, but the binormal drift can be nonzero and is included when
-reconstructing the physical velocity.
+is zero, but the binormal vector component can be nonzero and is included
+when reconstructing the physical vector.
 
-The loader reads Cartesian
-coordinate tangents from ``geo_int_dxdz`` and coordinate unit normals from
-``geo_int_normals``. Cylindrical projections use ``geo_int_mapc2p`` positions:
+The loader reads Cartesian coordinate tangents from ``geo_int_dxdz`` for
+contravariant components, reciprocal vectors from ``geo_int_dzdx`` for
+covariant components, and coordinate unit normals from ``geo_int_normals``.
+Cylindrical R/phi projections use ``geo_int_mapc2p`` positions:
 Cartesian MAPC2P positions supply X/R and Y/R directly; TOKAMAK positions
-supply the stored toroidal angle. No new geometry output is required.
-Missing required geometry and cylindrical R/phi projections at R=0 produce
-errors. Each packed vector contains its X, Y, Z components consecutively.
+supply the stored toroidal angle. No new geometry output is required, and
+Z projections do not require position data. Missing required geometry and
+cylindrical R/phi projections at R=0 produce errors. Each packed basis vector
+contains its Cartesian X, Y, Z components consecutively.
 
-The reconstructed velocity is ``v = sum_i v^i e_i``. Normal components are
-``v dot n_i = v^i/sqrt(g^{ii})`` (no sum); coordinate normals need not be
-orthogonal. Unit vectors are evaluated at quadrature points and projected;
-products use the retained DG basis. Transport-flux diagnostics remain
-contravariant.
+The reconstructed vector is
+:math:`\mathbf V=\sum_i V^i\mathbf e_i=\sum_i V_i\nabla x^i`.
+Normal components are
+:math:`\mathbf V\cdot\hat{\mathbf n}_i=V^i/\sqrt{g^{ii}}` (no sum);
+coordinate normals need not be orthogonal. For modal data, cylindrical unit
+vectors are evaluated at quadrature points and projected back; contractions
+use DG weak products. No silent interpolation occurs.
 
-Numerical selectors do not universally have units of m/s. For TOKAMAK
-geometry ``0`` has units Wb/(rad s), and ``1`` and ``2`` have units rad/s.
+Numerical selectors have coordinate-dependent units. For TOKAMAK drift
+components, ``0`` has units Wb/(rad s), and ``1`` and ``2`` have units rad/s.
 Arbitrary MAPC2P coordinate units cannot be inferred and are labeled
-``coordinate units/s``. Use a physical selector for an unambiguous m/s result.
+``coordinate units/s``. Numeric electric/magnetic components are labeled
+with their covariant/contravariant component-unit convention. Use a physical
+selector for unambiguous m/s, V/m, or T units.
 
 For example::
 
-   pgkyl gk_load_q -n sim -s ion -f 0 -q gradB_vel -d n0 map_to_rz plot
+   pgkyl gk_load_q -n sim -s ion -f 0 -q gradB_vel_contra -d n0 map_to_rz plot
+   pgkyl gk_load_q -n sim -s ion -f 0 -q E_field_cov -d R map_to_rz plot
 
-The legacy read-option spelling ``-r dir=n0`` also works. Other diagnostics
-continue to accept their original numerical direction selectors.
+The read-option spelling ``-r dir=n0`` also works. ``B_tot_*`` retains its
+existing equilibrium-only fallback when no ``apar`` output is available.
+
+Reusable Python projector
+-------------------------
+
+``pg.operations.project_vector`` projects any three scalar component datasets,
+with explicit ``basis="contravariant"``, ``"covariant"`` or ``"cartesian"``.
+Supply ``tangents`` for contravariant reconstruction or ``duals`` for covariant
+reconstruction, plus ``normals`` for n0/n1/n2. For R/phi supply ``positions``
+and ``position_system="cartesian"`` for (X,Y,Z) or ``"cylindrical"`` for
+(R,Z,phi). All geometry uses the packing described above.
+
+The operation accepts native modal, nodal or quadrature data, or interpolated
+point data. All inputs must have compatible grids, backends and representations;
+convert them explicitly before mixing layouts. It returns a scalar dataset in
+the same representation and does not infer physical units or discover files.
+It is a Python operation, not a separate CLI command. GK diagnostics own file
+loading and labels and call this shared operation after assembling the vector.
+
+The runnable example covers the loader and the general Python operation:
 
 .. literalinclude:: ../../examples/scripts/20_drift_projections.py
    :language: python

@@ -163,16 +163,18 @@ def test_recursive_loader_returns_modal_temperature(tmp_path):
   np.testing.assert_allclose(out.values, _project(2 * (m2 - m1**2 / n) / n))
 
 
-@pytest.mark.parametrize(
-    "fetch", [ff.fetch_ExB_vel, ff.fetch_gradB_vel, ff.fetch_diamag_vel])
+@pytest.mark.parametrize("fetch", [
+    ff.fetch_ExB_vel_contra, ff.fetch_gradB_vel_contra,
+    ff.fetch_diamag_vel_contra
+])
 @pytest.mark.parametrize("direction", [0, 1, 2])
 def test_drifts_use_cell_local_derivatives(moments, fetch, direction):
   jac, bmag, scalar = [moments.select(comp=c) for c in [0, 3, 2]]
   b_i = moments.select(comp="0:3")
   sources = [jac, bmag, b_i, scalar]
-  if fetch is ff.fetch_diamag_vel:
+  if fetch is ff.fetch_diamag_vel_contra:
     sources.append(scalar)
-  differentiated = bmag if fetch is ff.fetch_gradB_vel else scalar
+  differentiated = bmag if fetch is ff.fetch_gradB_vel_contra else scalar
   # Unit-width cells: df/dx = 2*b for f=a+b*xi, independently of jumps.
   deriv = np.sqrt(6.) * differentiated.values[:, 1, None]
   if direction == 0:
@@ -182,9 +184,9 @@ def test_drifts_use_cell_local_derivatives(moments, fetch, direction):
   else:
     cross = np.zeros((2, 2))
   expected = cross * _samples(jac)[:, 0, :]
-  if fetch is ff.fetch_gradB_vel:
+  if fetch is ff.fetch_gradB_vel_contra:
     expected *= _samples(scalar)[:, 0, :] / _samples(bmag)[:, 0, :] / 3
-  elif fetch is ff.fetch_diamag_vel:
+  elif fetch is ff.fetch_diamag_vel_contra:
     expected /= _samples(scalar)[:, 0, :] * 3
   out = fetch(sources, dir=direction)
   assert out.backend == "gkyl"
@@ -218,6 +220,6 @@ def test_cross_product_in_reduced_and_full_configuration_space(ndim, direction):
   expected = np.zeros_like(phi.values)
   expected[..., 0] = 2 * np.cross([3., 4., 5.], gradient)[direction] * np.sqrt(
       2**ndim)
-  out = ff.fetch_ExB_vel([jac, None, bi, phi], dir=direction)
+  out = ff.fetch_ExB_vel_contra([jac, None, bi, phi], dir=direction)
   assert out.backend == "gkyl"
   np.testing.assert_allclose(out.values, expected, atol=1e-13)

@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, Literal, TYPE_CHECKING
 
 from postgkyl.gdata import GData
 
 from .. import discovery
+from .vector_projection import fetch_vector
+from postgkyl.operations.vector_projection import PHYSICAL_DIRECTIONS
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -42,6 +44,11 @@ class GkQuantity:
     is_species_dep: Whether the quantity is species-dependent.
     is_vector: Whether the quantity is a vector (multiple components,
       selected via the ``dir`` extra).
+    component_basis: Covariant/contravariant representation of vector components,
+      or None for quantities that are not coordinate vector components.
+    physical_units: Units of physical projections, independent of coordinates.
+    projection_label: Physical-projection label; None disables projection support.
+      Includes %(dir)s and %(units)s placeholders.
     is_tensor: Whether the quantity is a tensor.
     is_integrated: Whether the quantity is a grid integral.
     is_geo: Whether the quantity is a (frame-independent) geometry
@@ -65,6 +72,10 @@ class GkQuantity:
   is_integrated: bool = False
   is_geo: bool = False
   is_multi_species: bool = False
+  component_basis: Literal["contravariant", "covariant",
+                           "cartesian"] | None = None
+  physical_units: str | None = None
+  projection_label: str | None = None
 
   # ------------------------------------------------------------ internal
   def _src_stem(self, path: str, name: str, species: str, src: str) -> str:
@@ -135,11 +146,18 @@ class GkQuantity:
   # -------------------------------------------------------------- public
   def get_label(self,
                 species: str | None = None,
-                direction: str | int | None = None) -> str:
+                direction: str | int | None = None,
+                units: str | None = None) -> str:
     """Get the display label: ``%(species)s`` becomes the species' initial
     (``s`` when unknown) and ``%(dir)s`` the direction ``x``, ``y`` or ``z``
     (``i`` when unknown)."""
-    return self.label % {
+    physical = str(direction) in PHYSICAL_DIRECTIONS
+    template = self.projection_label if physical and self.projection_label else self.label
+    if units is None:
+      units = self.physical_units if physical else f"{self.component_basis} component units"
+    return template % {
+        "units":
+        units,
         "species":
         species[0] if species is not None else "s",
         "dir": ("xyz"[int(direction)] if str(direction) in ("0", "1", "2") else
@@ -224,6 +242,8 @@ class GkQuantity:
         for src in combo
     ]
     extra = dict(extra, path=path, name=name, species=species, frame=frame)
+    if self.projection_label is not None:
+      return fetch_vector(fetch_func, gdatas, self, **extra)
     return fetch_func(gdatas, **extra)
 
   def get_avail_source_multi(self, path: str, name: str,

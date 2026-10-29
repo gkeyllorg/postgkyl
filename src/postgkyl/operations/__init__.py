@@ -25,6 +25,7 @@ this namespace re-exports their exact canonical callables from
 :mod:`postgkyl.render` without wrapping them.
 """
 
+from .vector_projection import project_vector
 from . import arithmetic
 from .interpolate import interpolate
 from .local_poly import local_poly
@@ -110,6 +111,9 @@ for _function in (integrate, average):
 command(_TERM_EACH)(extract_input)
 command(_MAP)(represent)
 
+hidden("requires explicit vector components and geometry datasets")(
+    project_vector)
+
 hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
@@ -127,5 +131,5 @@ __all__ = [
     "available_evaluate_operators", "map", "growth", "map_to_rz",
     "resolve_rz_projection", "extract_flux_surface",
     "resolve_flux_surface_grid", "resolve_geometry", "Geometry", "RzProjection",
-    "FluxSurfaceGrid"
+    "FluxSurfaceGrid", "project_vector"
 ]

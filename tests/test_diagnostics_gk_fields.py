@@ -233,7 +233,8 @@ class TestCollisionFrequency:
 class TestInverseGradientLength:
   _SLOPES = (-2.2, 0.7, 1.3)
 
-  @pytest.mark.parametrize("fetch", [ff.fetch_inv_L_n, ff.fetch_inv_L_T])
+  @pytest.mark.parametrize("fetch",
+                           [ff.fetch_inv_L_n_cov, ff.fetch_inv_L_T_cov])
   @pytest.mark.parametrize("direction", [0, 1, 2])
   def test_minus_the_gradient_over_the_field(self, fetch, direction):
     """``1/L * X = -dX/dx^k`` exactly, the derivative of a linear field
@@ -244,19 +245,19 @@ class TestInverseGradientLength:
 
   def test_direction_must_be_requested(self):
     with pytest.raises(ValueError, match="direction="):
-      ff.fetch_inv_L_T([_linear([(50.0, self._SLOPES)])])
+      ff.fetch_inv_L_T_cov([_linear([(50.0, self._SLOPES)])])
 
   def test_reduced_runs_carry_only_their_directions(self):
     """A 1x run holds z alone, so 1/L along z uses its only dimension; x is
     refused. A 2x run holds x and z, so y is refused."""
     field_1x = _linear([(1.0, (0.5, ))], cells=(3, ), lengths=(1.0, ))
-    out = ff.fetch_inv_L_n([field_1x], dir=2) * field_1x
+    out = ff.fetch_inv_L_n_cov([field_1x], dir=2) * field_1x
     np.testing.assert_allclose(_avg(out, ndim=1), -0.5, **ROUND_OFF)
     with pytest.raises(ValueError, match="1x simulation has no x direction"):
-      ff.fetch_inv_L_n([field_1x], dir=0)
+      ff.fetch_inv_L_n_cov([field_1x], dir=0)
     field_2x = _linear([(1.0, (0.5, 0.2))], cells=(3, 5), lengths=(0.6, 1.9))
     with pytest.raises(ValueError, match="2x simulation has no y direction"):
-      ff.fetch_inv_L_n([field_2x], dir=1)
+      ff.fetch_inv_L_n_cov([field_2x], dir=1)
 
 
 # --------------------------------------------------- magnetic perturbations
@@ -446,7 +447,7 @@ class TestCrossFieldFluxes:
 
     if apar_exists:
       (tmp_path / "sim-apar_7.gkyl").touch()
-    fetch = ff.fetch_flux_energy_es if energy else ff.fetch_flux_particle_es
+    fetch = ff.fetch_flux_energy_contra_es if energy else ff.fetch_flux_particle_contra_es
     moment = _DENS * _VT2 if energy else _DENS
     with warnings.catch_warnings(record=True) as caught:
       warnings.simplefilter("always")
@@ -471,13 +472,13 @@ class TestCrossFieldFluxes:
   def test_ExB_fluxes(self, direction, vel):
     np.testing.assert_allclose(
         _avg(
-            ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)),
-                                       dir=direction)), _DENS * vel,
+            ff.fetch_flux_particle_ExB_contra(_es_sources(_const(_DENS)),
+                                              dir=direction)), _DENS * vel,
         **ROUND_OFF)
     np.testing.assert_allclose(
         _avg(
-            ff.fetch_flux_energy_ExB(_es_sources(_const(_DENS * _VT2)),
-                                     dir=direction)),
+            ff.fetch_flux_energy_ExB_contra(_es_sources(_const(_DENS * _VT2)),
+                                            dir=direction)),
         0.5 * _MASS * _DENS * _VT2 * vel, **ROUND_OFF)
 
   @pytest.mark.parametrize("direction", [0, 1])
@@ -489,10 +490,10 @@ class TestCrossFieldFluxes:
     expected = _DENS * _UPAR * dB / _BMAG
     srcs = _em_sources(_const(_DENS * _UPAR), slopes)
     np.testing.assert_allclose(
-        _avg(ff.fetch_flux_particle_dB(srcs, dir=direction)), expected,
+        _avg(ff.fetch_flux_particle_dB_contra(srcs, dir=direction)), expected,
         **ROUND_OFF)
     np.testing.assert_allclose(
-        _avg(ff.fetch_flux_energy_dB(srcs, dir=direction)),
+        _avg(ff.fetch_flux_energy_dB_contra(srcs, dir=direction)),
         0.5 * _MASS * expected, **ROUND_OFF)
 
   def test_direction_is_required_and_cross_field(self):
@@ -500,9 +501,9 @@ class TestCrossFieldFluxes:
     parallel streaming flux."""
     srcs = _es_sources(_const(_DENS))
     with pytest.raises(ValueError, match="direction="):
-      ff.fetch_flux_particle_ExB(srcs)
+      ff.fetch_flux_particle_ExB_contra(srcs)
     with pytest.raises(ValueError, match="parallel streaming"):
-      ff.fetch_flux_particle_ExB(srcs, dir=2)
+      ff.fetch_flux_particle_ExB_contra(srcs, dir=2)
 
   def test_total_flux_is_ExB_plus_flutter(self):
     m0, m1 = _random(1), _random(2)
@@ -510,18 +511,18 @@ class TestCrossFieldFluxes:
     em = _em_sources(m1, (0.3, -0.2, 0.1))
     phi, jgeo, jtot_inv, b_i = es[1:]
     apar, bmag, _jgeo, jgeo_inv, _b = em[1:]
-    total = ff.fetch_flux_particle_em(
+    total = ff.fetch_flux_particle_contra_em(
         [m0, m1, apar, phi, bmag, jgeo, jgeo_inv, jtot_inv, b_i], dir=0)
-    expected = (ff.fetch_flux_particle_ExB([m0, phi, jgeo, jtot_inv, b_i],
-                                           dir=0).values +
-                ff.fetch_flux_particle_dB([m1, apar, bmag, jgeo, jgeo_inv, b_i],
-                                          dir=0).values)
+    expected = (ff.fetch_flux_particle_ExB_contra(
+        [m0, phi, jgeo, jtot_inv, b_i], dir=0).values +
+                ff.fetch_flux_particle_dB_contra(
+                    [m1, apar, bmag, jgeo, jgeo_inv, b_i], dir=0).values)
     np.testing.assert_allclose(total.values, expected, rtol=1e-12, atol=1e-14)
 
   def test_uniform_fields_have_no_turbulent_flux(self):
-    gamma = ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)),
-                                       dir=0,
-                                       fluct="yz")
+    gamma = ff.fetch_flux_particle_ExB_contra(_es_sources(_const(_DENS)),
+                                              dir=0,
+                                              fluct="yz")
     np.testing.assert_allclose(gamma.values,
                                0.0,
                                atol=1e-12 * _DENS * abs(_VE_X))
@@ -533,8 +534,8 @@ class TestCrossFieldFluxes:
     m0, phi = _random(3), _random(4)
     srcs = _es_sources(m0, phi=phi)
     jgeo = srcs[2]
-    total = ff.fetch_flux_particle_ExB(srcs, dir=0)
-    turb = ff.fetch_flux_particle_ExB(srcs, dir=0, fluct=fluct)
+    total = ff.fetch_flux_particle_ExB_contra(srcs, dir=0)
+    turb = ff.fetch_flux_particle_ExB_contra(srcs, dir=0, fluct=fluct)
     v_x = ff._b_cross_grad_div_b_component(phi, srcs[3], srcs[4], 0)
     mean_n = m0 - m0.fluctuation(dims, weight=jgeo)
     mean_v = v_x - v_x.fluctuation(dims, weight=jgeo)
@@ -551,9 +552,11 @@ class TestCrossFieldFluxes:
   def test_fluxes_need_3x_and_a_known_fluct(self):
     flat = _linear([(_DENS, (0.0, ))], cells=(3, ), lengths=(1.0, ))
     with pytest.raises(ValueError, match="need 3x"):
-      ff.fetch_flux_particle_ExB([flat] * 5, dir=0)
+      ff.fetch_flux_particle_ExB_contra([flat] * 5, dir=0)
     with pytest.raises(ValueError, match="fluct"):
-      ff.fetch_flux_particle_ExB(_es_sources(_const(_DENS)), dir=0, fluct="x")
+      ff.fetch_flux_particle_ExB_contra(_es_sources(_const(_DENS)),
+                                        dir=0,
+                                        fluct="x")
 
 
 # --------------------------------------------------- transport coefficients

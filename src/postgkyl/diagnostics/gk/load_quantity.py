@@ -12,7 +12,7 @@ from typing import Annotated, Literal, TYPE_CHECKING
 
 from postgkyl.cli_spec import ChoiceProvider, KeyValue
 from .registry import gk_quant_registry
-from .drift_projection import DRIFT_QUANTITIES, drift_direction, load_drift_geometry
+from .vector_projection import vector_direction, load_vector_geometry
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -68,10 +68,14 @@ def load_quantity(
     direction: Coordinate direction (0 for x, 1 for y, 2 for z), as a string
       or Python integer. Selects a vector component or the direction of a
       gradient length, flux, or diffusivity. These quantities require a direction.
-      ExB_vel, gradB_vel and diamag_vel also accept n0/n1/n2 (coordinate
-      unit normals) and R/Z/phi (cylindrical unit vectors), in m/s for 3x
-      data. Numerical drift selectors retain coordinate units/s. Mapping
-      to R-Z changes display positions, not the chosen vector projection.
+      Drift, electric-field and magnetic-field component quantities also accept
+      n0/n1/n2 (coordinate unit normals) and R/Z/phi (cylindrical unit vectors)
+      for 2x and 3x data. Physical projections have units m/s, V/m or T,
+      respectively. Numerical selectors retain the named covariant or
+      contravariant components, with coordinate-dependent units. In 2x the
+      full geometry indices remain 0=radial, 1=binormal, 2=parallel; the
+      binormal velocity need not vanish. Mapping to R-Z changes display
+      positions, not the chosen vector projection.
     mass: Species mass used by quantities that require it.
     charge: Species charge used by quantities that require it.
     gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -121,12 +125,13 @@ def load_quantity(
     raise ValueError(f"Unknown quantity '{quantity}'. Available quantities: "
                      f"{', '.join(valid)}.")
 
-  if quantity in DRIFT_QUANTITIES:
-    selector = drift_direction(extra.get("dir"))
-    extra["dir"] = selector
-    extra["drift_geometry"] = load_drift_geometry(path, name, selector)
-
   gkquant = gk_quant_registry.get(quantity)
+  if gkquant.projection_label is not None:
+    selector = vector_direction(extra.get("dir"))
+    extra["dir"] = selector
+    extra["vector_geometry"] = load_vector_geometry(path, name, selector,
+                                                    gkquant.component_basis)
+
   path = path.rstrip("/") + "/"
   species_list = [s.strip() for s in species.split(",")] if species else [None]
 
@@ -170,10 +175,9 @@ def load_quantity(
     for fr in frames:
       out = gkquant.fetch(path, name, sp, fr, src_combo_idx, **species_extra)
 
-      default_label = gkquant.get_label(species=sp, direction=extra.get("dir"))
-      if quantity in DRIFT_QUANTITIES:
-        default_label = default_label.replace("(m/s)",
-                                              f"({out.ctx['drift_units']})")
+      default_label = gkquant.get_label(species=sp,
+                                        direction=extra.get("dir"),
+                                        units=out.ctx.get("projection_units"))
       if label is not None:
         out_label = label + (f" {sp}" if len(species_list) > 1 else "")
       else:

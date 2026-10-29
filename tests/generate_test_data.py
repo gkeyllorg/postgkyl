@@ -887,6 +887,9 @@ def drift_projection_reference(ndim=3):
   n=2, Tperp=4, charge=1. In 3x, f=x0. In 2x, f=x0+.3*x2,
   with x1=.3 fixed and all three geometry vectors retained. The 2x
   scalars vary in both stored directions; their binormal derivative is zero.
+  Apar=.2+.6*f gives dB=.6*grad(f) cross b. A separate vector
+  V=(1+.2*x0, -.7+.1*x2, .4+.05*f) is stored as Cartesian, contravariant
+  (inv(A)*V), and covariant (A.T*V) components.
   Polynomial fields are exact p1; reciprocal fields are Gauss projections.
   """
   from itertools import product
@@ -921,9 +924,9 @@ def drift_projection_reference(ndim=3):
   bmag = 2 + .1 * scalar
   cross = np.cross([0., 0., 1.], duals[0] + parallel_slope * duals[2])
   speeds = {
-      "ExB_vel": .4 / bmag,
-      "gradB_vel": .4 / bmag**2,
-      "diamag_vel": .7 / (2 * bmag)
+      "ExB_vel_contra": .4 / bmag,
+      "gradB_vel_contra": .4 / bmag**2,
+      "diamag_vel_contra": .7 / (2 * bmag)
   }
   return cells, lower, upper, points, basis, tangents, normals, positions, bmag, cross, speeds
 
@@ -971,7 +974,21 @@ def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
       position[..., 0] = np.hypot(positions[..., 0], positions[..., 1])
       position[..., 1] = positions[..., 2]
       position[..., 2] = np.arctan2(positions[..., 1], positions[..., 0])
+    duals = np.linalg.inv(tangents)
+    metric_indices = np.triu_indices(3)
+    # A separate affine vector tests all reconstruction bases independently.
+    vector = np.stack(
+        [1 + .2 * points[..., 0], -.7 + .1 * points[..., 2], .4 + .05 * scalar],
+        axis=-1)
     fields = {
+        "vector_cartesian": vector,
+        "vector_contravariant": vector @ duals.T,
+        "vector_covariant": vector @ tangents,
+        "geo_int_dzdx": duals.ravel(),
+        "geo_int_g_ij": (tangents.T @ tangents)[metric_indices],
+        "geo_int_gij": (duals @ duals.T)[metric_indices],
+        "geo_int_jacobgeo_inv": np.array([1 / np.linalg.det(tangents)]),
+        "apar_0": (.2 + .6 * scalar)[..., None],
         "geo_int_dxdz": tangents.T.ravel(),
         "geo_int_normals": normals.ravel(),
         "geo_int_mapc2p": position,
