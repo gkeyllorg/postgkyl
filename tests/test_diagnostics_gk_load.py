@@ -87,6 +87,18 @@ class TestResolveFrames:
     with pytest.raises(ValueError, match="positive integer"):
       distf.resolve_frames("::0", name="sim", species="ion")
 
+  def test_range_rejects_too_many_fields(self, tmp_path, monkeypatch):
+    (tmp_path / "sim-ion_0.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="expected start:stop"):
+      distf.resolve_frames("0:1:2:3", name="sim", species="ion")
+
+  def test_range_with_no_selected_frames_raises(self, tmp_path, monkeypatch):
+    (tmp_path / "sim-ion_0.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="matches no files"):
+      distf.resolve_frames("2:3", name="sim", species="ion")
+
 
 class TestLoadGkDistfFrames:
   """The public loader resolves frame syntax around the per-frame core."""
@@ -171,6 +183,39 @@ class TestLoadGkDistfReal:
                        frame=250,
                        jacobtot_inv_file=os.path.join(DATA,
                                                       "does_not_exist.gkyl"))
+
+  def test_registry_distf_loads_real_frame(self):
+    out = load_quantity("distf",
+                        "elc",
+                        GK_NAME,
+                        "250",
+                        path=DATA,
+                        read_options={"c2p_vel": "0"})
+    assert len(out) == 1
+    data = out[0]
+    assert isinstance(data, GData)
+    assert data.is_interpolated
+    assert data.values.shape == (32, 16, 8, 1)
+    assert np.all(np.isfinite(data.values))
+
+  def test_explicit_file_family_overrides(self):
+    prefix = os.path.join(DATA, GK_NAME)
+    expected = distf.load_distf(prefix, "elc", 250, num_interp=1)
+    actual = distf.load_distf(
+        "unused",
+        "elc",
+        250,
+        block_idx=2,
+        suffix="fdot",
+        num_interp=1,
+        jf_file=f"{prefix}-elc_250.gkyl",
+        mapc2p_vel_file="unused-map.gkyl",
+        jacobvel_file=f"{prefix}-elc_jacobvel.gkyl",
+        mc2nu_file="unused-mc2nu.gkyl",
+        mapc2p_file="unused-mapc2p.gkyl",
+        jacobtot_inv_file=f"{prefix}-geo_int_jacobtot_inv.gkyl")
+    np.testing.assert_allclose(actual.values, expected.values, rtol=0, atol=0)
+    assert actual.values.shape == (32, 16, 8, 1)
 
 
 class _FakeDistfData(GData):
@@ -713,7 +758,7 @@ class TestLoadDistf:
     assert calls["use_mc2nu"] is True
     assert calls["use_mapc2p"] is False
     assert calls["block_idx"] == 2
-    assert calls["num_interp"] == 0
+    assert calls["num_interp"] == 1
 
   def test_defaults(self, monkeypatch):
     calls = {}
@@ -897,7 +942,8 @@ _NEEDS_3X = {
 
 
 @needs_gkeyll
-@pytest.mark.parametrize("quantity", gk_quant_registry.list())
+@pytest.mark.parametrize(
+    "quantity", [name for name in gk_quant_registry.list() if name != "distf"])
 def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
                                                       monkeypatch):
   """Smoke test across the whole registry (weak assertion, matching
@@ -906,9 +952,6 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
   constant recipe, regardless of what real quantity it names), so this
   checks "no exception, one dataset comes back", not specific numbers --
   those are covered analytically in ``TestFetchPhysics`` above."""
-  if quantity == "distf":
-    pytest.skip("distf delegates to load_distf, covered by "
-                "TestLoadGkDistfReal against the real staged fixtures")
   # Core-only builds support the DG operations, but the Coulomb logarithm
   # used by collision_freq belongs to the optional Vlasov module.
   if (quantity == "collision_freq"
@@ -1151,6 +1194,15 @@ class TestUtils:
       (tmp_path / f"sim_b{i}-ion_field_0.gkyl").touch()
     pattern = str(tmp_path / "sim_b*-ion_field_0.gkyl")
     assert utils.get_block_indices("-1", pattern) == [0, 1, 2]
+
+  def test_get_block_indices_open_slice_uses_existing_indices(self, tmp_path):
+    for block in (0, 2, 5):
+      (tmp_path / f"sim_b{block}-geo_corn_nodes.gkyl").touch()
+    pattern = str(tmp_path / "sim_b*-geo_corn_nodes.gkyl")
+    assert utils.get_block_indices(":", pattern) == [0, 2, 5]
+    assert utils.get_block_indices("1:", pattern) == [2, 5]
+    assert utils.get_block_indices("::-1", pattern) == [5, 2, 0]
+    assert utils.get_block_indices("-1", pattern) == [0, 2, 5]
 
   def test_get_block_indices_comma_list(self):
     assert utils.get_block_indices("0,2,4", "unused") == [0, 2, 4]

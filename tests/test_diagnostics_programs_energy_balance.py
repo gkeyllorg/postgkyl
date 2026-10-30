@@ -2,15 +2,14 @@
 
 Ported/extended from ``src_bak/postgkyl/apps/gk_energy_balance.py`` (no
 ``tests_bak`` corpus exists for this app -- it was never covered upstream).
-The repo does not ship a multi-file gyrokinetic energy-balance fixture set
-(``<name>-field_energy_dot.gkyl``, ``..._fdot_integrated_moms.gkyl``, ...),
-so the full figure path is exercised against synthetic per-file datasets
+The full figure path is exercised against synthetic per-file datasets
 stubbed through ``utils.GData`` (the same technique
 ``tests/test_diagnostics_gk_load.py`` uses for the quantity registry),
 rather than skipped outright -- this gives real coverage of the block/
 species accumulation loop and both (absolute- and relative-error) plotting
 branches. The pure residual formula and accumulation helper are unit-tested
-directly with no I/O at all.
+directly with no I/O at all. Generated dynvector files also exercise the real
+reader and figure path together.
 
 Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_energy_balance.py -v
 """
@@ -336,20 +335,44 @@ class TestGkEnergyBalanceSynthetic:
 
 
 class TestGkEnergyBalanceRealFixtures:
-  """Real end-to-end run against ``tests/test_data`` -- skipped loudly since
-  the repo does not ship a gyrokinetic energy-balance file family (only
-  single-frame distribution/geometry fixtures for a different diagnostic are
-  staged there)."""
+  """Real end-to-end run against generated dynvector files."""
 
   def test_real_fixture_energy_balance(self):
-    required = ("field_energy_dot.gkyl", "_fdot_integrated_moms.gkyl")
-    if not any(
-        any(f.endswith(suffix) for f in os.listdir(DATA))
-        for suffix in required):
-      pytest.skip(
-          "tests/test_data ships no gyrokinetic energy-balance file family "
-          "(needs e.g. '<name>-field_energy_dot.gkyl', "
-          "'<name>-<species>_fdot_integrated_moms.gkyl'); see "
-          "TestGkEnergyBalanceSynthetic for full-path coverage against "
-          "stubbed data instead.")
-    pytest.fail("fixture files appeared -- wire up a real-data assertion here")
+    path = os.path.join(DATA, "generated", "gk_programs")
+    time = np.linspace(0.0, 1.0, 5)
+    fdot = 2.0 + time
+    source = np.full(5, 0.3)
+    bflux = np.full(5, 0.1)
+    field_dot = np.full(5, 0.4)
+    for relative in (False, True):
+      fig, traces = eb.energy_balance(
+          "sim", ["ion"],
+          path=path,
+          relative_error=relative,
+          field_dot_file="sim-field_energy_dot.gkyl")
+      try:
+        np.testing.assert_array_equal(traces.time, time)
+        np.testing.assert_allclose(traces.fdot,
+                                   fdot[1:] if relative else fdot,
+                                   rtol=0,
+                                   atol=1e-14)
+        np.testing.assert_allclose(traces.field_dot,
+                                   field_dot[1:] if relative else field_dot,
+                                   rtol=0,
+                                   atol=1e-14)
+        if relative:
+          expected = (source[1:] - bflux[1:] -
+                      (fdot[1:] - field_dot[1:])) * 0.25 / 18.0
+          np.testing.assert_allclose(traces.mom_err_norm,
+                                     expected,
+                                     rtol=0,
+                                     atol=1e-14)
+          assert traces.mom_err is None
+        else:
+          np.testing.assert_allclose(traces.mom_err,
+                                     np.r_[0.0, source[1:]] - bflux -
+                                     (fdot - field_dot),
+                                     rtol=0,
+                                     atol=1e-14)
+      finally:
+        plt.close(fig)
