@@ -167,8 +167,8 @@ def nodes(
     ylabel: str = "Z (m)",
     zlabel: str = r"$\psi$",
     title: str | None = None,
-    left_indent: float = 0.0,
-    add_width: float = 0.0,
+    shift_axis: tuple[float, float] = (0.0, 0.0),
+    stretch_axis: tuple[float, float] = (1.0, 1.0),
     multib_unicolor: bool = False,
     no_show: bool = False,
     saveas: str | None = None,
@@ -204,8 +204,10 @@ def nodes(
     ylabel: Vertical-axis label.
     zlabel: Poloidal-flux colorbar label.
     title: Figure title.
-    left_indent: Horizontal axes-position adjustment in figure units.
-    add_width: Axes-width adjustment in figure units.
+    shift_axis: Horizontal and vertical shifts of the displayed axes, as fractions
+      of the figure width and height.
+    stretch_axis: Factors for displayed axes width and height. Values other than
+      ``(1, 1)`` intentionally change the displayed R/Z scaling.
     multib_unicolor: Use one color for every block instead of cycling.
     no_show: Return without opening a plot window.
     saveas: If given, save the figure to this path.
@@ -214,6 +216,11 @@ def nodes(
     The populated Figure.
   """
   path = path.rstrip("/") + "/"
+  if len(stretch_axis) != 2 or not np.all(
+      np.isfinite(stretch_axis)) or min(stretch_axis) <= 0:
+    raise ValueError("stretch_axis must contain two positive finite factors.")
+  if len(shift_axis) != 2 or not np.all(np.isfinite(shift_axis)):
+    raise ValueError("shift_axis must contain two finite offsets.")
   if toroidal_sampling not in ("nearest", "all"):
     raise ValueError(f"Unknown toroidal_sampling: '{toroidal_sampling}'.")
   file_prefix = f"{path}{name}-" if multib == "-10" else f"{path}{name}_b*-"
@@ -265,12 +272,13 @@ def nodes(
   length_z = vert_z_ex[1] - vert_z_ex[0]
   aspect_ratio = length_r / length_z
 
-  ax_pos = [0.14 + left_indent, 0.10, 0.72 + add_width, 0.84]
+  ax_pos = [0.14, 0.10, 0.72, 0.84]
   cax_pos = [ax_pos[0] + ax_pos[2] + 0.02, ax_pos[1], 0.025, ax_pos[3]]
   fig_width = min(9.0, max(5.0, 8.0 * aspect_ratio + 2.0))
   fig_height = min(8.0, max(3.5, 0.75 * fig_width / aspect_ratio + 1.0))
   fig = plt.figure(figsize=(fig_width, fig_height))
   ax = fig.add_axes(ax_pos)
+  cbar_ax = None
 
   color_list = plt.rcParams["axes.prop_cycle"].by_key()["color"]
   block_colors = cycle([color_list[0]] if multib_unicolor else color_list)
@@ -353,6 +361,21 @@ def nodes(
     ax.set_ylim(ylim[0], ylim[1])
   ax.set_aspect("equal", adjustable="box")
   utils.set_tick_font_size(ax, _TICK_FONT_SIZE)
+
+  if shift_axis != (0.0, 0.0) or stretch_axis != (1.0, 1.0):
+    fig.canvas.draw()
+    box = ax.get_position()
+    right_limit = 0.90 if cbar_ax is not None else 0.95
+    width = min(box.width * stretch_axis[0], right_limit - 0.06)
+    height = min(box.height * stretch_axis[1], 0.92)
+    left = min(max(box.x0 + shift_axis[0], 0.06), right_limit - width)
+    bottom = min(max(box.y0 - (height - box.height) / 2 + shift_axis[1], 0.02),
+                 0.98 - height)
+    if stretch_axis != (1.0, 1.0):
+      ax.set_aspect("auto")
+    ax.set_position([left, bottom, width, height])
+    if cbar_ax is not None:
+      cbar_ax.set_position([left + width + 0.02, bottom, 0.025, height])
 
   if saveas:
     fig.savefig(saveas)

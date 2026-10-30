@@ -287,6 +287,36 @@ class TestGkNodesSynthetic:
     finally:
       plt.close(fig)
 
+  def test_stretch_and_shift_resize_and_move_displayed_axes(
+      self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
+    figures = [
+        nodes.nodes("sim", path=path, no_show=True),
+        nodes.nodes("sim", path=path, stretch_axis=(1.1, 0.8), no_show=True),
+        nodes.nodes("sim", path=path, shift_axis=(0.03, 0.02), no_show=True),
+        nodes.nodes("sim", path=path, shift_axis=(-0.02, -0.03), no_show=True),
+    ]
+    try:
+      for fig in figures:
+        fig.canvas.draw()
+      base, stretched, shifted, back = [
+          fig.axes[0].get_position() for fig in figures
+      ]
+      assert stretched.width == pytest.approx(1.1 * base.width)
+      assert stretched.height == pytest.approx(0.8 * base.height)
+      assert figures[1].axes[0].get_aspect() == "auto"
+      assert shifted.x0 == pytest.approx(base.x0 + 0.03)
+      assert shifted.y0 == pytest.approx(base.y0 + 0.02)
+      assert shifted.width == pytest.approx(base.width)
+      assert figures[2].axes[0].get_aspect() == 1.0
+      assert back.x0 == pytest.approx(base.x0 - 0.02)
+      assert back.y0 == pytest.approx(base.y0 - 0.03)
+    finally:
+      for fig in figures:
+        plt.close(fig)
+
   def test_cli_surf_nodes_is_a_bare_flag(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
@@ -299,15 +329,16 @@ class TestGkNodesSynthetic:
         cli, ["gk_nodes", "-n", "sim", "-p", path, "-s", "--no_show"])
     assert result.exit_code == 0, result.output
 
-  def test_cli_interior_and_left_indent_short_options(self, stub, tmp_path):
+  def test_cli_interior_and_two_axis_layout_options(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
              _square_nodes())
     stub.add(f"{path}sim-geo_int_nodes.gkyl", [np.arange(3.0)] * 2,
              np.ones((4, 4, 3)))
-    result = CliRunner().invoke(
-        cli,
-        ["gk_nodes", "-n", "sim", "-p", path, "-i", "-l", "0.02", "--no_show"])
+    result = CliRunner().invoke(cli, [
+        "gk_nodes", "-n", "sim", "-p", path, "-i", "--shift_axis", "0.02",
+        "-0.01", "--stretch_axis", "1.5", "0.8", "--no_show"
+    ])
     assert result.exit_code == 0, result.output
 
   def test_multiblock_sums_extrema_across_blocks(self, stub, tmp_path):
