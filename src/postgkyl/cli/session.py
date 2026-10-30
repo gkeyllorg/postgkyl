@@ -104,6 +104,18 @@ def _signature(model: CommandModel) -> inspect.Signature:
                            return_annotation=_Source("PostgkylSession"))
 
 
+def command_signature(name: str) -> inspect.Signature:
+  """The options of session command ``name``, as a Python signature.
+
+  Raises:
+    AttributeError: ``name`` is not a ``pgkyl`` command.
+  """
+  model = _MODELS.get(name)
+  if model is None:
+    raise AttributeError(f"{name!r} is not a pgkyl command")
+  return _signature(model)
+
+
 def _doc(model: CommandModel) -> str:
   """The canonical callable's docstring, or the command help without one."""
   return inspect.getdoc(model.canonical) or model.long_help
@@ -112,7 +124,15 @@ def _doc(model: CommandModel) -> str:
 class PostgkylSession:
   """A ``pgkyl`` pipeline built from Python that records its command line."""
 
-  def __init__(self) -> None:
+  def __init__(self, *, no_show: bool = False) -> None:
+    """Start an empty session.
+
+    Args:
+      no_show: Run every command that can open a window with ``no_show``,
+        without recording it, so a GUI or a test shows nothing while the
+        command line still opens its windows.
+    """
+    self._no_show = no_show
     self._context = click.Context(cli, info_name="pgkyl")
     # The group's own callback creates the working set, as on the CLI.
     self._context.invoke(cli.callback)
@@ -124,7 +144,7 @@ class PostgkylSession:
     if model is None:
       raise AttributeError(
           f"{type(self).__name__!r} has no command or attribute {name!r}")
-    signature = _signature(model)
+    signature = command_signature(name)
 
     def run(*args, **kwargs):
       bound = signature.bind(*args, **kwargs)
@@ -169,7 +189,14 @@ class PostgkylSession:
     """
     args = self._spelling(model, command_tokens(model, values))
     _check_round_trip([*self._steps, args])
-    command, context = _parse(self._context, args)
+    executed = args
+    if self._no_show and any(parameter.name == "no_show"
+                             for parameter in model.parameters):
+      executed = self._spelling(
+          model, command_tokens(model, {
+              **values, "no_show": True
+          }))
+    command, context = _parse(self._context, executed)
     assert not context.args, context.args  # command_tokens spells one command
     result = command.invoke(context)
     # Recorded only once it has run, so a failed call leaves no trace.
@@ -247,4 +274,4 @@ def render_stub() -> str:
           "\n".join(members))
 
 
-__all__ = ["PostgkylSession", "render_stub"]
+__all__ = ["PostgkylSession", "command_signature", "render_stub"]

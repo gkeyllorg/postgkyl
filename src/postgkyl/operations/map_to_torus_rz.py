@@ -42,6 +42,10 @@ class RzProjection:
   r: np.ndarray
   z: np.ndarray
   computational_grid: tuple[np.ndarray, ...]
+  # Computational coordinates of the r/z points along each of their axes:
+  # radial x, then the poloidal z (``r[i, j] = R(rz_axes[0][i],
+  # rz_axes[1][j])``).
+  rz_axes: tuple[np.ndarray, np.ndarray] = ()
   zf: np.ndarray | None = None
   phi_lo: np.ndarray | None = None
   span: np.ndarray | None = None
@@ -69,11 +73,12 @@ def resolve_rz_projection(first: "GDataState",
   if first.num_dims == 2:
     r = resample_grid(geo.major_r, geo.coords, edges)
     z = resample_grid(vert_z, geo.coords, edges)
-    return RzProjection(num_dims=2,
-                        r=r,
-                        z=z,
-                        computational_grid=tuple(
-                            np.array(axis, copy=True) for axis in edges))
+    return RzProjection(
+        num_dims=2,
+        r=r,
+        z=z,
+        computational_grid=tuple(np.array(axis, copy=True) for axis in edges),
+        rz_axes=(np.array(edges[0], copy=True), np.array(edges[1], copy=True)))
 
   if geo.phi is None:
     raise ValueError(
@@ -126,7 +131,8 @@ def resolve_rz_projection(first: "GDataState",
                       phi_lo=phi_lo,
                       span=span,
                       computational_grid=tuple(
-                          np.array(axis, copy=True) for axis in edges))
+                          np.array(axis, copy=True) for axis in edges),
+                      rz_axes=(np.array(xn, copy=True), zf_edges))
 
 
 def _validate_projection(data: "GDataState", projection: RzProjection) -> None:
@@ -236,6 +242,9 @@ def map_to_torus_rz(
 
   Returns:
     The caller's concrete data class with NumPy point values and a 2-D grid.
+    ``ctx["logical_grid"]`` holds the computational coordinates of that
+    grid's axes, radial ``x`` then poloidal ``z``, so ``select`` can slice
+    at a constant minor radius or poloidal angle.
     Projection geometry and sampling options cannot accompany a reusable
     projection; set them when building that projection instead.
   """
@@ -261,17 +270,19 @@ def map_to_torus_rz(
   else:
     out = _toroidal_samples(data, comp, projection, slice(None), float(phi_tor))
 
-  return data._result([projection.r, projection.z],
-                      out[..., np.newaxis],
-                      inplace=inplace,
-                      tag=tag,
-                      label=label,
-                      interpolated=True,
-                      grid_type="mapped",
-                      mapped_axes={
-                          0: 0,
-                          1: 0
-                      })
+  return data._result(
+      [projection.r, projection.z],
+      out[..., np.newaxis],
+      inplace=inplace,
+      tag=tag,
+      label=label,
+      interpolated=True,
+      grid_type="mapped",
+      mapped_axes={
+          0: 0,
+          1: 0
+      },
+      logical_grid=[np.array(axis, copy=True) for axis in projection.rz_axes])
 
 
 def rz_projections(

@@ -7,12 +7,14 @@ from typing import Annotated, Literal
 
 from postgkyl import operations
 from postgkyl.cli_spec import (
+    CliType,
     CommandSpec,
     Execution,
     KeyValue,
     Section,
     command,
 )
+from postgkyl.io.naming import FrameSpec, select_frame_files
 from postgkyl.gdata.gdata import GData
 from postgkyl.gdata.gdatagroup import GDataGroup
 
@@ -21,6 +23,7 @@ from postgkyl.gdata.gdatagroup import GDataGroup
 def load(
     file_name: str,
     *,
+    frame: Annotated[FrameSpec | None, CliType(str | None)] = None,
     tag: str = "default",
     label: str = "",
     ctx: Annotated[dict[str, str] | None, KeyValue()] = None,
@@ -50,6 +53,10 @@ def load(
 
   A pattern always returns a group, even if it matches only one file. A
   literal filename retains the original single-``GData`` return type.
+  ``frame`` keeps the matching files of some frames only, read from their
+  names; restart files are left out::
+
+      pg.load('elc_M0_*.gkyl', frame='-10:')   # the last ten frames
 
   ``basis_type``, ``poly_order``, and ``value_form`` are properties of the
   data itself, fixed here at load time (from the file's header metadata, or
@@ -76,6 +83,9 @@ def load(
 
   Args:
     file_name: Literal filename or shell-style glob pattern to load.
+    frame: With a pattern, the frames to load: a frame number, a
+      comma-separated list, or a ``'start:stop[:step]'`` range; a negative
+      number counts back from the last frame (``'-10:'`` the last ten).
     tag: Tag assigned to every loaded dataset.
     label: Optional display label assigned to every loaded dataset; defaults
       to each source filename without its directory.
@@ -99,10 +109,16 @@ def load(
     read_kwargs["axes"] = axes
   if component is not None:
     read_kwargs["comp"] = component
+  if frame is not None and not has_magic(file_name):
+    raise ValueError(f"frame {frame!r} selects among the files a pattern "
+                     f"matches, but {file_name!r} is not a pattern")
   if has_magic(file_name):
     matches = glob(file_name)
+    if frame is not None:
+      matches = select_frame_files(matches, frame)
     if not matches:
-      raise FileNotFoundError(f"No files match pattern: '{file_name}'")
+      at = "" if frame is None else f" at frame {frame!r}"
+      raise FileNotFoundError(f"No files match pattern: '{file_name}'{at}")
     datasets = [
         GData(match,
               tag=tag,
