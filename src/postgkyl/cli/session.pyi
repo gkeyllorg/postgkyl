@@ -1019,22 +1019,24 @@ class PostgkylSession:
                path: str = './',
                multib: str = '-10',
                nodes_file: str | None = None,
+               int_nodes: bool = False,
+               surf_nodes: bool = False,
+               toroidal_sampling: str = 'nearest',
                psi_file: str | None = None,
                wall_file: str | None = None,
                contour: bool = False,
                clevels: str | None = None,
                cnlevels: int = 11,
-               fixaspect: bool = False,
                xlim: tuple[float, float] | None = None,
                ylim: tuple[float, float] | None = None,
                xlabel: str = 'R (m)',
                ylabel: str = 'Z (m)',
                zlabel: str = '$\\psi$',
                title: str | None = None,
-               indent_left: float = 0.0,
+               left_indent: float = 0.0,
                add_width: float = 0.0,
                multib_unicolor: bool = False,
-               show: bool = False,
+               no_show: bool = False,
                saveas: str | None = None) -> PostgkylSession:
     r"""Plot the nodes of a (possibly multiblock) grid, with optional overlays.
 
@@ -1044,8 +1046,14 @@ class PostgkylSession:
           multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
             every block; otherwise a comma list or ``'start:stop[:step]'`` slice
             of block indices.
-          nodes_file: Override for the ``<name>-nodes.gkyl`` grid-nodes file
+          nodes_file: Override for the ``<name>-geo_corn_nodes.gkyl`` file
             (``*`` stands for the block index); an absolute path is used as-is.
+          int_nodes: Mark interior quadrature nodes without connecting them.
+            For 3-D data, use the first toroidal quadrature plane.
+          surf_nodes: Draw curved cell edges through surface nodes and mark them.
+            Uses surf0 and surf1 in 2-D, or surf0 and surf2 in a 3-D R/Z slice.
+          toroidal_sampling: For 3-D curved edges, ``'nearest'`` uses the first
+            toroidal Gauss plane and ``'all'`` draws every plane.
           psi_file: Optional poloidal-flux file to overlay (interpolated p2 tensor
             basis); an absolute path is used as-is.
           wall_file: Optional CSV ``(R, Z)`` vacuum-vessel wall outline to overlay.
@@ -1055,19 +1063,16 @@ class PostgkylSession:
             levels when ``None``.
           cnlevels: Number of automatic contour levels (ignored if ``clevels`` is
             given).
-          fixaspect: Enforce equal R/Z scaling (unused placeholder kept for
-            interface symmetry with the old CLI's ``--fix_aspect``; the figure is
-            already built to the data's aspect ratio).
           xlim: Optional horizontal-axis limits.
           ylim: Optional vertical-axis limits.
           xlabel: Horizontal-axis label.
           ylabel: Vertical-axis label.
           zlabel: Poloidal-flux colorbar label.
           title: Figure title.
-          indent_left: Horizontal axes-position adjustment in figure units.
+          left_indent: Horizontal axes-position adjustment in figure units.
           add_width: Axes-width adjustment in figure units.
           multib_unicolor: Use one color for every block instead of cycling.
-          show: Call ``plt.show()`` before returning.
+          no_show: Return without opening a plot window.
           saveas: If given, save the figure to this path.
 
         Returns:

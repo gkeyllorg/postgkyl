@@ -1152,6 +1152,15 @@ class TestUtils:
     pattern = str(tmp_path / "sim_b*-ion_field_0.gkyl")
     assert utils.get_block_indices("-1", pattern) == [0, 1, 2]
 
+  def test_get_block_indices_open_slice_uses_existing_indices(self, tmp_path):
+    for block in (0, 2, 5):
+      (tmp_path / f"sim_b{block}-geo_corn_nodes.gkyl").touch()
+    pattern = str(tmp_path / "sim_b*-geo_corn_nodes.gkyl")
+    assert utils.get_block_indices(":", pattern) == [0, 2, 5]
+    assert utils.get_block_indices("1:", pattern) == [2, 5]
+    assert utils.get_block_indices("::-1", pattern) == [5, 2, 0]
+    assert utils.get_block_indices("-1", pattern) == [0, 2, 5]
+
   def test_get_block_indices_comma_list(self):
     assert utils.get_block_indices("0,2,4", "unused") == [0, 2, 4]
 

@@ -9,6 +9,7 @@ vessel wall outline.
 from __future__ import annotations
 
 from itertools import cycle
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -84,28 +85,92 @@ def _parse_levels(clevels: str | None, cnlevels: int) -> np.ndarray | int:
   return np.array([float(v) for v in clevels.split(",") if v])
 
 
+def _surface_rz(values: np.ndarray,
+                mapc2p: bool) -> tuple[np.ndarray, np.ndarray]:
+  """Convert an unsliced surface-node array to R and Z."""
+  if mapc2p:
+    return np.hypot(values[..., 0], values[..., 1]), values[..., 2]
+  return values[..., 0], values[..., 1]
+
+
+def _read_node_coordinates(file_name: str, expected: tuple[int, ...]):
+  """Read a point-node file with the shape implied by the corner grid."""
+  if not os.path.isfile(file_name):
+    raise ValueError(f"Missing geometry nodes file: '{file_name}'.")
+  _, values, gdata = utils.read_gfile(file_name)
+  if values.shape[:-1] != expected:
+    raise ValueError(f"Geometry nodes file '{file_name}' has shape "
+                     f"{values.shape[:-1]}; expected {expected}.")
+  if not np.all(np.isfinite(values)) or not np.any(values):
+    raise ValueError(
+        f"Geometry nodes file '{file_name}' is nonfinite or all zero.")
+  return _surface_rz(values, is_geo_mapc2p(gdata.ctx))
+
+
+def _read_surface(prefix: str, direction: int, corner_shape: tuple[int, ...]):
+  expected = tuple(n if d == direction else 2 * (n - 1)
+                   for d, n in enumerate(corner_shape))
+  return _read_node_coordinates(f"{prefix}-geo_surf{direction}_nodes.gkyl",
+                                expected)
+
+
+def _draw_curves(ax, corners, surfaces, color, toroidal_sampling):
+  """Connect each edge's corners and its two Gauss surface samples."""
+  cr, cz = corners
+  ndim = cr.ndim
+  if ndim == 2:
+    planes = [(cr, cz, surfaces[0], surfaces[1])]
+  else:
+    sample_indices = (range(surfaces[0][0].shape[1])
+                      if toroidal_sampling == "all" else (0, ))
+    planes = []
+    for sample in sample_indices:
+      cell, quad = divmod(sample, 2)
+      weight = (0.5 + (-1 if quad == 0 else 1) / (2 * np.sqrt(3)))
+      r = (1 - weight) * cr[:, cell, :] + weight * cr[:, cell + 1, :]
+      z = (1 - weight) * cz[:, cell, :] + weight * cz[:, cell + 1, :]
+      s0 = tuple(v[:, sample, :] for v in surfaces[0])
+      s2 = tuple(v[:, sample, :] for v in surfaces[2])
+      planes.append((r, z, s0, s2))
+  segments = []
+  for r, z, s0, s1 in planes:
+    for i in range(r.shape[0]):
+      for j in range(r.shape[1] - 1):
+        segments.append([(r[i, j], z[i, j]), (s0[0][i, 2 * j], s0[1][i, 2 * j]),
+                         (s0[0][i, 2 * j + 1], s0[1][i, 2 * j + 1]),
+                         (r[i, j + 1], z[i, j + 1])])
+    for j in range(r.shape[1]):
+      for i in range(r.shape[0] - 1):
+        segments.append([(r[i, j], z[i, j]), (s1[0][2 * i, j], s1[1][2 * i, j]),
+                         (s1[0][2 * i + 1, j], s1[1][2 * i + 1, j]),
+                         (r[i + 1, j], z[i + 1, j])])
+  ax.add_collection(LineCollection(segments, color=color))
+
+
 def nodes(
     name: str,
     *,
     path: str = "./",
     multib: str = "-10",
     nodes_file: str | None = None,
+    int_nodes: bool = False,
+    surf_nodes: bool = False,
+    toroidal_sampling: str = "nearest",
     psi_file: str | None = None,
     wall_file: str | None = None,
     contour: bool = False,
     clevels: str | None = None,
     cnlevels: int = 11,
-    fixaspect: bool = False,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     xlabel: str = "R (m)",
     ylabel: str = "Z (m)",
     zlabel: str = r"$\psi$",
     title: str | None = None,
-    indent_left: float = 0.0,
+    left_indent: float = 0.0,
     add_width: float = 0.0,
     multib_unicolor: bool = False,
-    show: bool = False,
+    no_show: bool = False,
     saveas: str | None = None,
 ) -> plt.Figure:
   """Plot the nodes of a (possibly multiblock) grid, with optional overlays.
@@ -116,8 +181,14 @@ def nodes(
     multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice
       of block indices.
-    nodes_file: Override for the ``<name>-nodes.gkyl`` grid-nodes file
+    nodes_file: Override for the ``<name>-geo_corn_nodes.gkyl`` file
       (``*`` stands for the block index); an absolute path is used as-is.
+    int_nodes: Mark interior quadrature nodes without connecting them.
+      For 3-D data, use the first toroidal quadrature plane.
+    surf_nodes: Draw curved cell edges through surface nodes and mark them.
+      Uses surf0 and surf1 in 2-D, or surf0 and surf2 in a 3-D R/Z slice.
+    toroidal_sampling: For 3-D curved edges, ``'nearest'`` uses the first
+      toroidal Gauss plane and ``'all'`` draws every plane.
     psi_file: Optional poloidal-flux file to overlay (interpolated p2 tensor
       basis); an absolute path is used as-is.
     wall_file: Optional CSV ``(R, Z)`` vacuum-vessel wall outline to overlay.
@@ -127,32 +198,31 @@ def nodes(
       levels when ``None``.
     cnlevels: Number of automatic contour levels (ignored if ``clevels`` is
       given).
-    fixaspect: Enforce equal R/Z scaling (unused placeholder kept for
-      interface symmetry with the old CLI's ``--fix_aspect``; the figure is
-      already built to the data's aspect ratio).
     xlim: Optional horizontal-axis limits.
     ylim: Optional vertical-axis limits.
     xlabel: Horizontal-axis label.
     ylabel: Vertical-axis label.
     zlabel: Poloidal-flux colorbar label.
     title: Figure title.
-    indent_left: Horizontal axes-position adjustment in figure units.
+    left_indent: Horizontal axes-position adjustment in figure units.
     add_width: Axes-width adjustment in figure units.
     multib_unicolor: Use one color for every block instead of cycling.
-    show: Call ``plt.show()`` before returning.
+    no_show: Return without opening a plot window.
     saveas: If given, save the figure to this path.
 
   Returns:
     The populated Figure.
   """
   path = path.rstrip("/") + "/"
+  if toroidal_sampling not in ("nearest", "all"):
+    raise ValueError(f"Unknown toroidal_sampling: '{toroidal_sampling}'.")
   file_prefix = f"{path}{name}-" if multib == "-10" else f"{path}{name}_b*-"
 
   if nodes_file:
     resolved_nodes_file = nodes_file if nodes_file[
         0] == "/" else path + nodes_file
   else:
-    resolved_nodes_file = file_prefix + "nodes.gkyl"
+    resolved_nodes_file = file_prefix + "geo_corn_nodes.gkyl"
 
   blocks = utils.get_block_indices(multib, resolved_nodes_file)
 
@@ -164,7 +234,24 @@ def nodes(
         resolved_nodes_file.replace("*", str(block_idx)))
     mapc2p = is_geo_mapc2p(gdat.ctx)
     major_r, vert_z = nodes_to_RZ(nodes, mapc2p)
-    block_nodes[block_idx] = (major_r, vert_z, gdat)
+    spatial_dim = nodes.ndim - 1
+    prefix = file_prefix.replace("*", str(block_idx)).rstrip("-")
+    interior = None
+    if int_nodes:
+      expected = tuple(2 * (n - 1) for n in nodes.shape[:-1])
+      interior = _read_node_coordinates(f"{prefix}-geo_int_nodes.gkyl",
+                                        expected)
+      if spatial_dim == 3:
+        interior = tuple(v[:, 0, :] for v in interior)
+    surfaces = {}
+    if surf_nodes:
+      if spatial_dim == 1:
+        raise ValueError("Surface nodes require 2D or 3D geometry.")
+      directions = (0, 1) if spatial_dim == 2 else (0, 2)
+      for direction in directions:
+        surfaces[direction] = _read_surface(prefix, direction, nodes.shape[:-1])
+    block_nodes[block_idx] = (major_r, vert_z, _surface_rz(nodes, mapc2p),
+                              surfaces, interior)
     major_r_ex = [
         min(major_r_ex[0], np.amin(major_r)),
         max(major_r_ex[1], np.amax(major_r))
@@ -178,30 +265,47 @@ def nodes(
   length_z = vert_z_ex[1] - vert_z_ex[0]
   aspect_ratio = length_r / length_z
 
-  ax_pos = [
-      0.82 - (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + indent_left,
-      0.08, (8.36 * aspect_ratio) / (8.36 * aspect_ratio + 2.5) + add_width,
-      0.88
-  ]
-  cax_pos = [ax_pos[0] + ax_pos[2] + 0.01, ax_pos[1], 0.02, ax_pos[3]]
-  fig = plt.figure(figsize=(8.36 * aspect_ratio + 2.5, 8.36 + 1.14))
+  ax_pos = [0.14 + left_indent, 0.10, 0.72 + add_width, 0.84]
+  cax_pos = [ax_pos[0] + ax_pos[2] + 0.02, ax_pos[1], 0.025, ax_pos[3]]
+  fig_width = min(9.0, max(5.0, 8.0 * aspect_ratio + 2.0))
+  fig_height = min(8.0, max(3.5, 0.75 * fig_width / aspect_ratio + 1.0))
+  fig = plt.figure(figsize=(fig_width, fig_height))
   ax = fig.add_axes(ax_pos)
 
   color_list = plt.rcParams["axes.prop_cycle"].by_key()["color"]
   block_colors = cycle([color_list[0]] if multib_unicolor else color_list)
 
   for block_idx in blocks:
-    major_r, vert_z, gdat = block_nodes[block_idx]
+    major_r, vert_z, full_corners, surfaces, interior = block_nodes[block_idx]
     ax.plot(major_r, vert_z, marker=".", color="k", linestyle="none")
 
     cell_color = next(block_colors)
-    if major_r.ndim <= 1:
+    if surf_nodes:
+      _draw_curves(ax, full_corners, surfaces, cell_color, toroidal_sampling)
+      for direction in ((0, 1) if full_corners[0].ndim == 2 else (0, 2)):
+        surf_r, surf_z = surfaces[direction]
+        if full_corners[0].ndim == 3 and toroidal_sampling == "nearest":
+          surf_r, surf_z = surf_r[:, 0, :], surf_z[:, 0, :]
+        ax.plot(surf_r.ravel(),
+                surf_z.ravel(),
+                marker=".",
+                color=cell_color,
+                linestyle="none")
+    elif major_r.ndim <= 1:
       ax.plot(major_r, vert_z, color=cell_color, linestyle="-")
     else:
       segs_constx = np.stack((major_r, vert_z), axis=2)
       segs_consty = segs_constx.transpose(1, 0, 2)
       ax.add_collection(LineCollection(segs_constx, color=cell_color))
       ax.add_collection(LineCollection(segs_consty, color=cell_color))
+
+    if interior is not None:
+      ax.plot(interior[0].ravel(),
+              interior[1].ravel(),
+              marker="x",
+              markersize=3,
+              color=cell_color,
+              linestyle="none")
 
   colorbar = True
   if psi_file:
@@ -247,11 +351,12 @@ def nodes(
     ax.set_xlim(xlim[0], xlim[1])
   if ylim:
     ax.set_ylim(ylim[0], ylim[1])
+  ax.set_aspect("equal", adjustable="box")
   utils.set_tick_font_size(ax, _TICK_FONT_SIZE)
 
   if saveas:
     fig.savefig(saveas)
-  if show:
+  if not no_show:
     plt.show()
 
   return fig

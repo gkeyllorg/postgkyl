@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 
 import numpy as np
 from postgkyl.gdata import GData
@@ -157,8 +158,8 @@ def get_block_indices(multib: str, file_path_name: str) -> list[int]:
       use every block found by globbing ``file_path_name``; otherwise a
       comma-separated list or a ``'start:stop[:step]'`` slice string of the
       desired block indices.
-    file_path_name: Path/filename glob used to discover blocks when
-      ``multib == "-1"``, with the block index replaced by ``"*"`` (e.g.
+    file_path_name: Path/filename glob used to discover blocks for ``-1`` or
+      an open-ended slice, with the block index replaced by ``"*"`` (e.g.
       ``"<sim_name>_b*-<species>_field_0.gkyl"``).
 
   Returns:
@@ -176,14 +177,32 @@ def get_block_indices(multib: str, file_path_name: str) -> list[int]:
     except ValueError:
       return False
 
+  def _discovered_blocks() -> list[int]:
+    if "*" not in file_path_name:
+      return []
+    prefix, suffix = file_path_name.split("*", 1)
+    pattern = re.compile(re.escape(prefix) + r"(\d+)" + re.escape(suffix))
+    return sorted({
+        int(match.group(1))
+        for path in glob.glob(file_path_name)
+        if (match := pattern.fullmatch(path)) is not None
+    })
+
   if multib == "-10":
     return [0]
   if multib == "-1":
-    return list(range(len(glob.glob(file_path_name))))
+    return _discovered_blocks()
   if "," in multib:
     return [int(b) for b in multib.split(",")]
   if ":" in multib:
     s = parse_slice_string(multib)
+    if s.stop is None:
+      discovered = _discovered_blocks()
+      if not discovered:
+        return []
+      selected = range(*s.indices(discovered[-1] + 1))
+      available = set(discovered)
+      return [block for block in selected if block in available]
     return list(range(*s.indices(MAX_NUM_BLOCKS)))
   if _is_int(multib):
     return [int(multib)]

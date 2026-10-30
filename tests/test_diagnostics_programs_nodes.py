@@ -25,7 +25,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from click.testing import CliRunner
 
+from postgkyl.cli.app import cli
 from postgkyl.diagnostics.gk import utils as gk_utils
 from postgkyl.io import geometry
 
@@ -175,24 +177,146 @@ def _square_nodes(nx=3, ny=3):
 
 class TestGkNodesSynthetic:
 
+  def test_surface_nodes_draw_curved_edges_2d(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    corner = np.zeros((3, 3, 2))
+    corner[..., 0] = np.arange(3)[:, None] + 1.0
+    corner[..., 1] = np.arange(3)[None, :]
+    surf0 = np.zeros((3, 4, 2))
+    surf0[..., 0] = np.arange(3)[:, None] + 1.25
+    surf0[..., 1] = np.array([0.25, 0.75, 1.25, 1.75])
+    surf1 = np.zeros((4, 3, 2))
+    surf1[..., 0] = np.array([1.25, 1.75, 2.25, 2.75])[:, None]
+    surf1[..., 1] = np.arange(3)[None, :] + 0.125
+    grid = [np.arange(4.0), np.arange(4.0)]
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", grid, corner,
+             {"geometry_type": 1})
+    stub.add(f"{path}sim-geo_surf0_nodes.gkyl", grid, surf0,
+             {"geometry_type": 1})
+    stub.add(f"{path}sim-geo_surf1_nodes.gkyl", grid, surf1,
+             {"geometry_type": 1})
+    interior = np.zeros((4, 4, 2))
+    interior[..., 0] = np.arange(4)[:, None] + 1.1
+    interior[..., 1] = np.arange(4)[None, :] + 0.2
+    stub.add(f"{path}sim-geo_int_nodes.gkyl", grid, interior,
+             {"geometry_type": 1})
+
+    fig = nodes.nodes("sim", path=path, int_nodes=True, no_show=True)
+    try:
+      marker = fig.axes[0].lines[-1]
+      assert marker.get_marker() == "x"
+      assert marker.get_linestyle() == "None"
+      np.testing.assert_allclose(marker.get_xdata(), interior[..., 0].ravel())
+    finally:
+      plt.close(fig)
+
+    fig = nodes.nodes("sim", path=path, surf_nodes=True, int_nodes=True)
+    try:
+      segments = fig.axes[0].collections[0].get_segments()
+      np.testing.assert_allclose(segments[0],
+                                 [[1, 0], [1.25, 0.25], [1.25, 0.75], [1, 1]])
+      assert len(segments) == 12
+      np.testing.assert_allclose(fig.axes[0].lines[-3].get_xdata(),
+                                 surf0[..., 0].ravel())
+      assert fig.axes[0].lines[-1].get_marker() == "x"
+    finally:
+      plt.close(fig)
+
+  def test_3d_sampling_and_missing_surface(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    corner = np.zeros((2, 2, 2, 2))
+    corner[..., 0] = 1 + np.arange(2)[:, None, None] + \
+        2 * np.arange(2)[None, :, None]
+    corner[..., 1] = np.arange(2)[None, None, :]
+    grid = [np.arange(3.0)] * 3
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", grid, corner,
+             {"geometry_type": 1})
+    with pytest.raises(ValueError, match="geo_int_nodes.gkyl"):
+      nodes.nodes("sim", path=path, int_nodes=True)
+    interior = np.ones((2, 2, 2, 2))
+    interior[:, 0, :, 0] = 2.0
+    interior[:, 1, :, 0] = 10.0
+    stub.add(f"{path}sim-geo_int_nodes.gkyl", grid, interior,
+             {"geometry_type": 1})
+    fig = nodes.nodes("sim", path=path, int_nodes=True, no_show=True)
+    try:
+      np.testing.assert_allclose(fig.axes[0].lines[-1].get_xdata(), 2.0)
+      assert fig.axes[0].lines[-1].get_linestyle() == "None"
+    finally:
+      plt.close(fig)
+    with pytest.raises(ValueError, match="geo_surf0_nodes.gkyl"):
+      nodes.nodes("sim", path=path, surf_nodes=True)
+
+    zero = np.zeros((2, 2, 2, 2))
+    stub.add(f"{path}sim-geo_surf0_nodes.gkyl", grid, zero,
+             {"geometry_type": 1})
+    with pytest.raises(ValueError, match="all zero"):
+      nodes.nodes("sim", path=path, surf_nodes=True)
+
+    for direction, shape in ((0, (2, 2, 2)), (2, (2, 2, 2))):
+      surface = np.ones(shape + (2, ))
+      surface[..., 0] = 1 + direction
+      stub.add(f"{path}sim-geo_surf{direction}_nodes.gkyl", grid, surface,
+               {"geometry_type": 1})
+    for sampling, expected in (("nearest", 4), ("all", 8)):
+      fig = nodes.nodes("sim",
+                        path=path,
+                        surf_nodes=True,
+                        toroidal_sampling=sampling)
+      try:
+        segments = fig.axes[0].collections[0].get_segments()
+        assert len(segments) == expected
+        assert len(fig.axes[0].lines) == 4  # corners, surf0, surf2
+        np.testing.assert_allclose(segments[0][0],
+                                   [1 + 2 * (0.5 - 1 / (2 * np.sqrt(3))), 0])
+      finally:
+        plt.close(fig)
+    with pytest.raises(ValueError, match="Unknown toroidal_sampling"):
+      nodes.nodes("sim", path=path, toroidal_sampling="invalid")
+
   def test_single_block_no_overlays(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl",
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl",
              [np.arange(3.0), np.arange(3.0)], _square_nodes())
     fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
       assert len(fig.axes) == 1
+      assert fig.axes[0].get_aspect() == 1.0
+      assert max(fig.get_size_inches()) <= 9.0
     finally:
       plt.close(fig)
+
+  def test_cli_surf_nodes_is_a_bare_flag(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
+    surface = np.ones((3, 4, 3))
+    stub.add(f"{path}sim-geo_surf0_nodes.gkyl", [np.arange(3.0)] * 2, surface)
+    stub.add(f"{path}sim-geo_surf1_nodes.gkyl", [np.arange(3.0)] * 2,
+             surface.transpose(1, 0, 2))
+    result = CliRunner().invoke(
+        cli, ["gk_nodes", "-n", "sim", "-p", path, "-s", "--no_show"])
+    assert result.exit_code == 0, result.output
+
+  def test_cli_interior_and_left_indent_short_options(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
+    stub.add(f"{path}sim-geo_int_nodes.gkyl", [np.arange(3.0)] * 2,
+             np.ones((4, 4, 3)))
+    result = CliRunner().invoke(
+        cli,
+        ["gk_nodes", "-n", "sim", "-p", path, "-i", "-l", "0.02", "--no_show"])
+    assert result.exit_code == 0, result.output
 
   def test_multiblock_sums_extrema_across_blocks(self, stub, tmp_path):
     path = str(tmp_path) + "/"
     block0 = _square_nodes()
     block1 = _square_nodes() + 5.0  # shifted far away in R and Z
-    stub.add(f"{path}sim_b0-nodes.gkyl", [np.arange(3.0)] * 2, block0)
-    stub.add(f"{path}sim_b1-nodes.gkyl", [np.arange(3.0)] * 2, block1)
-    fig = nodes.nodes("sim", path=path, multib="0,1")
+    stub.add(f"{path}sim_b0-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2, block0)
+    stub.add(f"{path}sim_b1-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2, block1)
+    fig = nodes.nodes("sim", path=path, multib=":")
     try:
       assert fig is not None
     finally:
@@ -203,7 +327,7 @@ class TestGkNodesSynthetic:
     rz_nodes = np.zeros((3, 3, 2))
     rz_nodes[..., 0] = np.linspace(1.0, 2.0, 3)[:, None]
     rz_nodes[..., 1] = np.linspace(-1.0, 1.0, 3)[None, :]
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2,
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
              rz_nodes,
              ctx={"geometry_type": 1})
     fig = nodes.nodes("sim", path=path)
@@ -214,7 +338,8 @@ class TestGkNodesSynthetic:
 
   def test_wall_file_overlay(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     wall_path = tmp_path / "wall.csv"
     wall_path.write_text("0.0,0.0\n1.0,1.0\n2.0,0.0\n")
     fig = nodes.nodes("sim", path=path, wall_file="wall.csv")
@@ -235,7 +360,8 @@ class TestGkNodesSynthetic:
 
   def test_xlim_ylim_and_saveas(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     out_path = str(tmp_path / "out.png")
     fig = nodes.nodes("sim",
                       path=path,
@@ -254,19 +380,25 @@ class TestGkNodesSynthetic:
     nodes_1d = np.zeros((4, 3))
     nodes_1d[:, 0] = np.linspace(1.0, 2.0, 4)
     nodes_1d[:, 2] = np.linspace(0.0, 1.0, 4)
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(4.0)], nodes_1d)
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(4.0)], nodes_1d)
     fig = nodes.nodes("sim", path=path)
     try:
       assert fig is not None
     finally:
       plt.close(fig)
 
-  def test_show_calls_plt_show(self, stub, tmp_path, monkeypatch):
+  def test_show_by_default_and_no_show(self, stub, tmp_path, monkeypatch):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     calls = []
     monkeypatch.setattr(plt, "show", lambda: calls.append(True))
-    fig = nodes.nodes("sim", path=path, show=True)
+    fig = nodes.nodes("sim", path=path)
+    try:
+      assert calls == [True]
+    finally:
+      plt.close(fig)
+    fig = nodes.nodes("sim", path=path, no_show=True)
     try:
       assert calls == [True]
     finally:
@@ -287,7 +419,8 @@ class TestGkNodesPsiOverlay:
 
   def test_pcolormesh_with_colorbar(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     self._add_psi(stub, path)
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl")
     try:
@@ -297,7 +430,8 @@ class TestGkNodesPsiOverlay:
 
   def test_contour(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     self._add_psi(stub, path)
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", contour=True)
     try:
@@ -307,7 +441,8 @@ class TestGkNodesPsiOverlay:
 
   def test_single_level_clevels_suppresses_colorbar(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     self._add_psi(stub, path)
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", clevels="0.5")
     try:
@@ -317,7 +452,8 @@ class TestGkNodesPsiOverlay:
 
   def test_absolute_psi_file_override(self, stub, tmp_path):
     path = str(tmp_path) + "/"
-    stub.add(f"{path}sim-nodes.gkyl", [np.arange(3.0)] * 2, _square_nodes())
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
     abs_psi = f"{path}custom_psi.gkyl"
     psi_grid = [np.linspace(0.0, 3.0, 4), np.linspace(-1.0, 1.0, 3)]
     stub.add(abs_psi, psi_grid, np.ones((3, 2)))
