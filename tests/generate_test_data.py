@@ -796,6 +796,62 @@ def _generate_compare_sims_fixtures(out_dir: Path) -> None:
                          })
 
 
+def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
+  """Small, independently specified inputs for the GK figure programs."""
+  path = out_dir / "gk_programs"
+  path.mkdir(parents=True, exist_ok=True)
+  time = np.linspace(0.0, 1.0, 5)
+  fdot = np.zeros((5, 3))
+  fdot[:, 0] = 1.0 + time
+  fdot[:, 2] = 2.0 + time
+  source = np.zeros_like(fdot)
+  source[:, (0, 2)] = (0.1, 0.3)
+  bflux = np.zeros_like(fdot)
+  bflux[:, (0, 2)] = (0.05, 0.1)
+  moments = np.zeros_like(fdot)
+  moments[:, (0, 2)] = (10.0, 20.0)
+  histories = {
+      "ion_fdot_integrated_moms": (time, fdot),
+      "ion_source_integrated_moms": (time, source),
+      "ion_bflux_xlower_integrated_HamiltonianMoments": (time, bflux),
+      "ion_integrated_moms": (time, moments),
+      "field_energy_dot": (time, np.full((5, 1), 0.4)),
+      "field_energy": (time, np.full((5, 1), 2.0)),
+      "dt": (time[1:], np.full((4, 1), 0.25)),
+  }
+  for quantity, (timestamps, values) in histories.items():
+    write_gkyl_dynvector(path / f"sim-{quantity}.gkyl",
+                         timestamps,
+                         values,
+                         metadata={
+                             "description":
+                             "Analytic GK balance test history.",
+                             "analytic_function":
+                             "M0 fdot=1+t, M2 fdot=2+t; source=(0.1,0.3); "
+                             "bflux=(0.05,0.1); moments=(10,20); "
+                             "field_dot=0.4, field=2, dt=0.25.",
+                             "generation_method":
+                             "Direct time samples of the stated formulas."
+                         })
+
+  x, z = np.meshgrid(np.linspace(1.0, 2.0, 3),
+                     np.linspace(0.0, 1.0, 3),
+                     indexing="ij")
+  corners = np.stack((x, np.zeros_like(x), z), axis=-1)
+  write_gkyl_field(path / "sim-geo_corn_nodes.gkyl", [3, 3], [0.0, 0.0],
+                   [1.0, 1.0],
+                   corners,
+                   poly_order=0,
+                   basis_type="serendipity",
+                   metadata={
+                       "geometry_type": 3,
+                       "description":
+                       "Cartesian corner nodes for GK overlay tests.",
+                       "analytic_function": "X=1+i/2, Y=0, Z=j/2.",
+                       "generation_method": "Direct point coordinates."
+                   })
+
+
 def _generate_native_physics_fields(out_dir: Path) -> None:
   """Exact affine DG data for optional native collision and moment kernels.
 
@@ -892,6 +948,7 @@ def generate_all(out_dir: Path | str) -> None:
   _generate_representation_fields(out_dir)
   _generate_surface_fields(out_dir)
   _generate_compare_sims_fixtures(out_dir)
+  _generate_balance_and_nodes_fixtures(out_dir)
 
   # Point samples of a plateau decay, 1.4 -> 1.2, on a narrow offset grid.
   fit_x = np.linspace(0.511174580254, 0.51122, 81)

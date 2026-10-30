@@ -1,10 +1,8 @@
 """Tests for ``postgkyl.diagnostics.gk.particle_balance``.
 
 See ``test_diagnostics_programs_energy_balance.py`` for the shared testing
-strategy (no ``tests_bak`` corpus exists for this app; the repo ships no
-multi-file gyrokinetic particle-balance fixture set, so the full figure path
-is exercised against synthetic per-file datasets stubbed through
-``utils.GData``).
+strategy. Stubbed datasets exercise branches, and generated dynvector files
+exercise the real reader and figure path together.
 
 Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_particle_balance.py -v
 """
@@ -249,13 +247,37 @@ class TestGkParticleBalanceSynthetic:
 class TestGkParticleBalanceRealFixtures:
 
   def test_real_fixture_particle_balance(self):
-    required = ("_fdot_integrated_moms.gkyl", )
-    if not any(
-        any(f.endswith(suffix) for f in os.listdir(DATA))
-        for suffix in required):
-      pytest.skip(
-          "tests/test_data ships no gyrokinetic particle-balance file family "
-          "(needs e.g. '<name>-<species>_fdot_integrated_moms.gkyl'); see "
-          "TestGkParticleBalanceSynthetic for full-path coverage against "
-          "stubbed data instead.")
-    pytest.fail("fixture files appeared -- wire up a real-data assertion here")
+    path = os.path.join(DATA, "generated", "gk_programs")
+    time = np.linspace(0.0, 1.0, 5)
+    fdot = 1.0 + time
+    source = np.full(5, 0.1)
+    bflux = np.full(5, 0.05)
+    for relative in (False, True):
+      fig, traces = pb.particle_balance("sim",
+                                        "ion",
+                                        path=path,
+                                        relative_error=relative)
+      try:
+        np.testing.assert_array_equal(traces.time, time)
+        np.testing.assert_allclose(traces.fdot,
+                                   fdot[1:] if relative else fdot,
+                                   rtol=0,
+                                   atol=1e-14)
+        np.testing.assert_allclose(traces.bflux_tot,
+                                   bflux[1:] if relative else bflux,
+                                   rtol=0,
+                                   atol=1e-14)
+        if relative:
+          expected = (source[1:] - bflux[1:] - fdot[1:]) * 0.25 / 10.0
+          np.testing.assert_allclose(traces.mom_err_norm,
+                                     expected,
+                                     rtol=0,
+                                     atol=1e-14)
+          assert traces.mom_err is None
+        else:
+          np.testing.assert_allclose(traces.mom_err,
+                                     np.r_[0.0, source[1:]] - bflux - fdot,
+                                     rtol=0,
+                                     atol=1e-14)
+      finally:
+        plt.close(fig)

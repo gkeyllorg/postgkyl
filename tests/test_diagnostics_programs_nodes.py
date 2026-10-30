@@ -5,11 +5,8 @@ exists for this app). The pure geometry helpers (``is_geo_mapc2p``,
 ``nodes_to_RZ``, ``multib_tag``, ``_parse_levels``) are unit-tested
 unconditionally; the node-plotting figure path is exercised against
 synthetic node arrays stubbed through ``utils.GData`` (single- and
-multi-block). The poloidal-flux (``psi_file``) and wall overlays additionally
-call ``GData.interpolate()`` on a *real* modal DG field (``nodes`` hardcodes
-``poly_order=2``/basis ``"mt"`` for the psi read) -- the repo ships no
-interpolatable p2-tensor poloidal-flux fixture, so that branch is skipped
-loudly rather than faked.
+multi-block). A generated geometry file and the scalar p2-tensor fixture
+also exercise the poloidal-flux overlay through real file loading.
 
 Run: PYTHONPATH=src pytest tests/test_diagnostics_programs_nodes.py -v
 """
@@ -27,6 +24,7 @@ import numpy as np
 import pytest
 from click.testing import CliRunner
 
+from postgkyl import gpython
 from postgkyl.cli.app import cli
 from postgkyl.diagnostics.gk import utils as gk_utils
 from postgkyl.io import geometry
@@ -496,26 +494,28 @@ class TestGkNodesPsiOverlay:
 
 
 class TestGkNodesPsiOverlayRealFixtures:
-  """The psi overlay calls ``GData.interpolate()`` on a real modal DG field
-  (``nodes`` hardcodes ``poly_order=2``, basis ``"mt"``/tensor, and never
-  selects a single component before handing the interpolated array straight
-  to ``pcolormesh``/``contour``) -- skipped loudly since the repo's one
-  matching-basis fixture, ``tests/test_data/generated/2d_mt_p2.gkyl``, is a
-  9-component demo field (no shipped poloidal-flux fixture is single-
-  component), which ``pcolormesh``/``contour`` cannot render directly."""
+  """Nine p2 tensor coefficients interpolate to one scalar field."""
 
-  def test_psi_overlay_needs_single_component_p2_tensor_fixture(self):
-    import postgkyl as pg
+  @pytest.mark.skipif(not gpython.available(), reason="needs compiled Gkeyll")
+  @pytest.mark.parametrize("contour", [False, True])
+  def test_psi_overlay_real_files(self, contour):
+    from matplotlib.collections import QuadMesh
 
-    candidate = os.path.join(GENERATED, "2d_mt_p2.gkyl")
-    if not os.path.exists(candidate):
-      pytest.skip(f"no p2 tensor-basis 2-D fixture at '{candidate}'.")
-    num_comps = pg.load(candidate).num_comps
-    if num_comps == 1:
-      pytest.fail("fixture is now single-component -- wire up a real "
-                  "psi-overlay assertion here")
-    pytest.skip(
-        f"'{candidate}' has {num_comps} components; nodes(psi_file=...) "
-        "never selects a single component before pcolormesh/contour, so "
-        "this fixture cannot exercise that path meaningfully. See "
-        "TestGkNodesSynthetic for the node-plotting coverage instead.")
+    path = os.path.join(GENERATED, "gk_programs")
+    fig = nodes.nodes("sim",
+                      path=path,
+                      psi_file=os.path.join(GENERATED, "2d_mt_p2.gkyl"),
+                      contour=contour,
+                      stretch_axis=(1.1, 0.8),
+                      no_show=True)
+    try:
+      assert len(fig.axes) == 2
+      assert fig.axes[1].get_position().width > 0
+      if contour:
+        assert len(fig.axes[0].collections) > 2
+      else:
+        meshes = [c for c in fig.axes[0].collections if isinstance(c, QuadMesh)]
+        assert len(meshes) == 1
+        assert meshes[0].get_array().shape == (24, 24)
+    finally:
+      plt.close(fig)
