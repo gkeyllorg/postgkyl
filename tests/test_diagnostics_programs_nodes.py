@@ -415,6 +415,25 @@ class TestGkNodesSynthetic:
       assert fig is not None
     finally:
       plt.close(fig)
+    with pytest.raises(ValueError, match="Surface nodes require 2D or 3D"):
+      nodes.nodes("sim", path=path, surf_nodes=True)
+
+  @pytest.mark.parametrize("option,value,match", [
+      ("stretch_axis", (1.0, 0.0), "stretch_axis"),
+      ("shift_axis", (float("nan"), 0.0), "shift_axis"),
+  ])
+  def test_invalid_axis_layout_raises(self, option, value, match):
+    with pytest.raises(ValueError, match=match):
+      nodes.nodes("sim", **{option: value})
+
+  def test_interior_shape_must_match_corner_grid(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
+             _square_nodes())
+    stub.add(f"{path}sim-geo_int_nodes.gkyl", [np.arange(3.0)] * 2,
+             np.ones((3, 4, 3)))
+    with pytest.raises(ValueError, match="expected \\(4, 4\\)"):
+      nodes.nodes("sim", path=path, int_nodes=True)
 
   def test_show_by_default_and_no_show(self, stub, tmp_path, monkeypatch):
     path = str(tmp_path) + "/"

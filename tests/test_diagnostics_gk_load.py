@@ -87,6 +87,18 @@ class TestResolveFrames:
     with pytest.raises(ValueError, match="positive integer"):
       distf.resolve_frames("::0", name="sim", species="ion")
 
+  def test_range_rejects_too_many_fields(self, tmp_path, monkeypatch):
+    (tmp_path / "sim-ion_0.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="expected start:stop"):
+      distf.resolve_frames("0:1:2:3", name="sim", species="ion")
+
+  def test_range_with_no_selected_frames_raises(self, tmp_path, monkeypatch):
+    (tmp_path / "sim-ion_0.gkyl").touch()
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="matches no files"):
+      distf.resolve_frames("2:3", name="sim", species="ion")
+
 
 class TestLoadGkDistfFrames:
   """The public loader resolves frame syntax around the per-frame core."""
@@ -185,6 +197,25 @@ class TestLoadGkDistfReal:
     assert data.is_interpolated
     assert data.values.shape == (32, 16, 8, 1)
     assert np.all(np.isfinite(data.values))
+
+  def test_explicit_file_family_overrides(self):
+    prefix = os.path.join(DATA, GK_NAME)
+    expected = distf.load_distf(prefix, "elc", 250, num_interp=1)
+    actual = distf.load_distf(
+        "unused",
+        "elc",
+        250,
+        block_idx=2,
+        suffix="fdot",
+        num_interp=1,
+        jf_file=f"{prefix}-elc_250.gkyl",
+        mapc2p_vel_file="unused-map.gkyl",
+        jacobvel_file=f"{prefix}-elc_jacobvel.gkyl",
+        mc2nu_file="unused-mc2nu.gkyl",
+        mapc2p_file="unused-mapc2p.gkyl",
+        jacobtot_inv_file=f"{prefix}-geo_int_jacobtot_inv.gkyl")
+    np.testing.assert_allclose(actual.values, expected.values, rtol=0, atol=0)
+    assert actual.values.shape == (32, 16, 8, 1)
 
 
 class _FakeDistfData(GData):
