@@ -172,6 +172,20 @@ class TestLoadGkDistfReal:
                        jacobtot_inv_file=os.path.join(DATA,
                                                       "does_not_exist.gkyl"))
 
+  def test_registry_distf_loads_real_frame(self):
+    out = load_quantity("distf",
+                        "elc",
+                        GK_NAME,
+                        "250",
+                        path=DATA,
+                        read_options={"c2p_vel": "0"})
+    assert len(out) == 1
+    data = out[0]
+    assert isinstance(data, GData)
+    assert data.is_interpolated
+    assert data.values.shape == (32, 16, 8, 1)
+    assert np.all(np.isfinite(data.values))
+
 
 class _FakeDistfData(GData):
   """A ``GData`` whose ``.interpolate()`` is a stubbed no-op (real
@@ -713,7 +727,7 @@ class TestLoadDistf:
     assert calls["use_mc2nu"] is True
     assert calls["use_mapc2p"] is False
     assert calls["block_idx"] == 2
-    assert calls["num_interp"] == 0
+    assert calls["num_interp"] == 1
 
   def test_defaults(self, monkeypatch):
     calls = {}
@@ -897,7 +911,8 @@ _NEEDS_3X = {
 
 
 @needs_gkeyll
-@pytest.mark.parametrize("quantity", gk_quant_registry.list())
+@pytest.mark.parametrize(
+    "quantity", [name for name in gk_quant_registry.list() if name != "distf"])
 def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
                                                       monkeypatch):
   """Smoke test across the whole registry (weak assertion, matching
@@ -906,9 +921,6 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
   constant recipe, regardless of what real quantity it names), so this
   checks "no exception, one dataset comes back", not specific numbers --
   those are covered analytically in ``TestFetchPhysics`` above."""
-  if quantity == "distf":
-    pytest.skip("distf delegates to load_distf, covered by "
-                "TestLoadGkDistfReal against the real staged fixtures")
   # Core-only builds support the DG operations, but the Coulomb logarithm
   # used by collision_freq belongs to the optional Vlasov module.
   if (quantity == "collision_freq"
