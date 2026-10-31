@@ -53,3 +53,18 @@ The Gkeyll host fetches Postgkyl ``main`` on each build. Its scheduled GitHub
 Actions check detects breakage from upstream changes even when the host
 repository has no new commits. Postgkyl pull requests build their proposed
 code and documentation together before merge.
+
+Publish the documentation
+-------------------------
+
+After each push to Postgkyl ``main``, including merged pull requests, the
+Documentation workflow requests a build of the ``gkeyll`` Read the Docs
+project's ``latest`` version after its tests and preview build pass. This
+build uses the separate ``gkeyllorg/gkyl-doc`` repository, whose preparation
+script fetches Postgkyl ``main``. Pull requests only build previews.
+
+To request another build, run Postgkyl's Documentation workflow manually on
+``main``. The trigger logs a link to the hosted build; successful acceptance
+does not mean that the hosted build has finished. Read the Docs publishes
+the updated site when that build succeeds. Each hosted build fetches the
+current ``main``, which may include newer merges than the triggering commit.

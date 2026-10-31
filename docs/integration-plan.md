@@ -20,7 +20,8 @@ build. Local and pull-request previews use the proposed working checkout.
 - `tests/test_docs_build.py` checks strict Sphinx builds, command coverage,
   per-command API pages, navigation, portable downloads, and preservation of unrelated directories.
 - `.github/workflows/docs.yml` runs the documentation checks on Python 3.12
-  for pull requests and main pushes, and uploads an HTML preview.
+  for pull requests and main pushes, and uploads an HTML preview. Successful
+  main pushes and manual runs on main then request a Read the Docs build.
 
 In gkyl-doc, `scripts/prepare_postgkyl.py` fetches main, installs that checkout,
 and stages the generated section. `make html`, Read the Docs, and the host's
