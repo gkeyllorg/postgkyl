@@ -9,18 +9,28 @@ The Python and CLI outputs below are both generated and compared when this websi
 Computational coordinates are useful for analysis, but a poloidal view places
 the field in its physical geometry. Keep the companion
 ``rt_gk_tcv_nt_iwl_3x2v_p1-geo_int_mapc2p.gkyl`` beside the electron density
-file so ``pg.map_to_rz`` can resolve it by the simulation prefix. The mapping
+file so ``pg.map_to_torus_rz`` can resolve it by the simulation prefix. The mapping
 operation uses the same geometry filenames for every Gkeyll equation system.
-The matching CLI verb is ``map_to_rz``.
+The matching CLI verb is ``map_to_torus_rz``.
 
 Load reusable geometry with ``pg.resolve_geometry(data.file_name)`` or construct
 ``pg.Geometry`` from coordinate arrays, build
 ``pg.resolve_rz_projection(data, geometry)``, and apply it with
-``data.map_to_rz(projection=projection)``. The projection can be reused for
-fields on the same computational grid. Three-dimensional reconstruction
-assumes periodic field-aligned coordinates and twist-and-shift boundaries.
+``data.map_to_torus_rz(projection=projection)``. The projection can be reused for
+fields on the same computational grid. A three-dimensional field is sliced
+at ``phi_tor`` by evaluating its DG expansion where the geometry places that
+toroidal angle along the binormal coordinate. Angles that the simulated
+binormal domain covers are exact. When that domain is not a whole fraction of
+the torus, the rest of the plane repeats it, and the copies meet with a jump
+along field lines.
 
-Related toroidal surface sampling is available through
-``data.extract_flux_surface(...)`` and the ``extract_flux_surface`` CLI verb.
+``data.map_to_torus_phitheta(x_idx=...)`` (CLI verb ``map_to_torus_phitheta``) samples one
+flux surface the same way over a full toroidal turn, on its (phi, theta) plane.
+For scripts using the former flux-surface API, replace
+``extract_flux_surface`` with ``map_to_torus_phitheta`` and
+``resolve_flux_surface_grid`` with ``resolve_phitheta_projection``. Pass a
+reusable result as ``projection=`` instead of ``fs_grid=``.
+To render poloidal cuts and flux surfaces together in 3-D, see
+:doc:`toroidal-wedge`.
 
-.. include:: _pairs/05_map_to_rz.inc
+.. include:: _pairs/05_map_to_torus_rz.inc

@@ -97,8 +97,9 @@ class GData(GDataState):
   # static language servers such as VS Code/Pylance.
   interpolate = operations.interpolate
   local_poly = operations.local_poly
-  map_to_rz = operations.map_to_rz
-  extract_flux_surface = operations.extract_flux_surface
+  map_to_torus_rz = operations.map_to_torus_rz
+  map_to_torus_3d = operations.map_to_torus_3d
+  map_to_torus_phitheta = operations.map_to_torus_phitheta
   select = operations.select
   integrate = operations.integrate
   average = operations.average

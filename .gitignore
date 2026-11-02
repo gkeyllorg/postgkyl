@@ -34,5 +34,8 @@ coverage.xml
 htmlcov/
 .claude
 .codex
-.entire
+.entire/*
+!.entire/settings.json
+# Entire per-user/local configuration
+.entire/settings.local.json
 postgkyl-build.toml

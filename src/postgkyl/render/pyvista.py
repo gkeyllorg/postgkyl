@@ -1,4 +1,4 @@
-"""Canonical PyVista renderer for 3-D scalar-field volumes and isosurfaces.
+"""Canonical PyVista renderer for 3-D scalar fields and surfaces.
 
 ``pg.pyvista``, ``GData.pyvista``, ``operations.pyvista``, and the generated
 CLI are aliases or lowerings of the one public function in this module.
@@ -44,6 +44,14 @@ def _require_gl_context(action):
         f"context; the render backend raised: {exc!r}") from exc
 
 
+def _to_aspect(coord: np.ndarray, aspect: float) -> np.ndarray:
+  """Map coordinates onto ``[-aspect, aspect]``; a flat axis maps to 0."""
+  span = np.ptp(coord)
+  unit = (coord - np.min(coord)) / span if span > 0 else np.full_like(
+      coord, 0.5)
+  return (2 * unit - 1) * aspect
+
+
 @command(
     CommandSpec(Section.RENDER,
                 Execution.TERMINAL_EACH,
@@ -68,7 +76,8 @@ def pyvista(data: GDataState,
             no_normalize: bool = False,
             camera_azimuth: float = 0.0,
             camera_elevation: float = -30.0,
-            opacity: Annotated[str | float, CliType(str)] = "sigmoid_4",
+            opacity: Annotated[str | float | None,
+                               CliType(str | None)] = None,
             cmap: str = "inferno",
             xlabel: str | None = None,
             ylabel: str | None = None,
@@ -85,29 +94,32 @@ def pyvista(data: GDataState,
             xshift: float = 0.0,
             yshift: float = 0.0,
             zshift: float = 0.0,
-            hide_zeros: bool = False):
+            hide_zeros: bool = False,
+            surface: bool = False):
   """Render a 3-D scalar field with PyVista.
 
   Builds a structured grid from the (single-component) scalar values and
-  renders it as a volume, contour isosurfaces, or an interactive clip/slice
-  plane. By default the grid is normalized to ``aspect_ratio``; use
-  ``no_normalize`` to preserve physical coordinates and proportions.
-  Only the first value component is used.
+  renders it as a volume, contour isosurfaces, a colored surface, or an
+  interactive clip/slice plane. By default the grid is normalized to
+  ``aspect_ratio``; use ``no_normalize`` to preserve physical coordinates
+  and proportions. Only the first value component is used.
 
   Args:
-    data: dataset to plot; must be 3-D (after squeezing any size-1 axis).
+    data: dataset to plot; must be 3-D after squeezing size-1 axes beyond
+      the third. A size-1 axis of 3-D data, such as the zero thickness of
+      a map_to_torus_3d result, is kept and renders as a surface.
     no_show: Do not open an interactive render window; render off-screen.
     no_spin: Do not auto-rotate the camera in interactive windows.
     max_points_per_axis: downsample to at most this many points per axis;
       ``-1`` disables downsampling.
-    contour_levels: Number of isosurfaces extracted unless ``volume`` is set
-      or ``clevels`` is supplied.
+    contour_levels: Number of isosurfaces extracted unless ``volume`` or
+      ``surface`` is set, or ``clevels`` is supplied.
     clevels: Explicit isosurfaces: a value, comma-separated values, or
       ``start:end:count``. Uses scalar units before ``is_log``; incompatible
-      with ``volume``.
+      with ``volume`` and ``surface``.
     is_log: color by log10 of the scalar (non-positive values masked).
     volume: Render a volume instead of isosurface contours.
-    is_shaded: enable shading on the volume render (volume mode only).
+    is_shaded: Enable lighting in volume and surface modes.
     hide_axes: hide the bounding-box axes and labels.
     mesh_clip_plane: add an interactive clip plane along ``-x``.
     mesh_slice_plane: add an interactive slice plane along ``-x``.
@@ -122,7 +134,8 @@ def pyvista(data: GDataState,
     camera_elevation: Initial camera elevation in degrees.
     opacity: a PyVista opacity preset string, ``"diverging"`` (opaque at
       both ends, transparent in the middle), or a number from 0 (transparent)
-      to 1 (fully opaque). Numeric strings are also accepted.
+      to 1 (fully opaque). Numeric strings are also accepted. Omitted, it is
+      ``"sigmoid_4"`` for volumes and isosurfaces and 1 for surfaces.
     cmap: colormap name; overridden to ``"RdBu_r"`` when ``diverging``.
     xlabel: Horizontal-axis label; auto-derived when omitted.
     ylabel: Vertical-axis label; auto-derived when omitted.
@@ -143,17 +156,24 @@ def pyvista(data: GDataState,
     yshift: Additive shift applied to the vertical axis.
     zshift: Additive shift applied to the third axis.
     hide_zeros: hide grid points whose scalar value is exactly zero.
+    surface: Color the grid's outer surface instead of extracting
+      isosurfaces.
 
   Returns:
     None: the function renders and/or saves the plot for its side effects.
 
   Raises:
     ValueError: ``data`` is not 3-D, or ``saveas`` has an unsupported
-      extension, or ``clevels`` is invalid or incompatible with the mode.
+      extension, or ``surface`` is combined with ``volume``, or ``clevels``
+      is invalid or incompatible with the mode.
     RuntimeError: PyVista could not obtain a working OpenGL context.
   """
   import pyvista as pv
 
+  if volume and surface:
+    raise ValueError("surface is incompatible with volume mode")
+  if opacity is None:
+    opacity = 1.0 if surface else "sigmoid_4"
   if isinstance(opacity, str):
     try:
       opacity = float(opacity)
@@ -162,8 +182,8 @@ def pyvista(data: GDataState,
 
   levels = contour_levels
   if clevels is not None:
-    if volume:
-      raise ValueError("clevels is incompatible with volume mode")
+    if volume or surface:
+      raise ValueError("clevels is incompatible with volume and surface modes")
     levels = parse_isosurface_levels(clevels)
     if is_log:
       if np.any(levels <= 0):
@@ -181,7 +201,8 @@ def pyvista(data: GDataState,
         "Unsupported file format for saving. Supported formats are: "
         ".html, .png, .jpg, .jpeg, .pdf, .svg, .gltf, .vtksz")
 
-  grid, values, axes = squeeze_collapsed_axes(list(data.grid), data.values)
+  grid, values, axes = ((list(data.grid), data.values, (0, 1, 2)) if len(
+      data.grid) == 3 else squeeze_collapsed_axes(list(data.grid), data.values))
   num_dims = len(grid)
   if num_dims != 3:
     raise ValueError(f"pyvista renders 3D scalar fields only, got {num_dims}D")
@@ -210,11 +231,8 @@ def pyvista(data: GDataState,
   zmax, zmin = np.max(z), np.min(z)
   datamax, datamin = np.max(scalar), np.min(scalar)
   if not no_normalize:
-    x_range, y_range, z_range = xmax - xmin, ymax - ymin, zmax - zmin
-    # Normalize to [-aspect, aspect] per axis.
-    x = (x - xmin) / x_range * aspect_ratio[0] * 2 - aspect_ratio[0]
-    y = (y - ymin) / y_range * aspect_ratio[1] * 2 - aspect_ratio[1]
-    z = (z - zmin) / z_range * aspect_ratio[2] * 2 - aspect_ratio[2]
+    x, y, z = (_to_aspect(coord, aspect)
+               for coord, aspect in zip((x, y, z), aspect_ratio))
 
   x, y, z, scalar = downsample(x,
                                y,
@@ -265,7 +283,7 @@ def pyvista(data: GDataState,
 
     scalar_bar_args = {"title": latex_to_unicode(clabel), "fmt": colorbarformat}
 
-    if not volume:
+    if not (volume or surface):
       contours = grid3d.contour(isosurfaces=levels, scalars="f_plot")
       if mesh_clip_plane:
         pl.add_mesh_clip_plane(contours,
@@ -308,6 +326,14 @@ def pyvista(data: GDataState,
                           normal="-x",
                           scalar_bar_args=scalar_bar_args,
                           factor=1.0)
+      elif surface:
+        pl.add_mesh(grid3d,
+                    scalars="f_plot",
+                    cmap=cmap,
+                    clim=clim,
+                    opacity=opacity,
+                    lighting=is_shaded,
+                    scalar_bar_args=scalar_bar_args)
       else:
         vol = pl.add_volume(grid3d,
                             scalars="f_plot",

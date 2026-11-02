@@ -5,7 +5,7 @@ and assembles point coordinates for equation-agnostic mapping operations.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 
 from postgkyl.gdatastate.gdatastate import GDataState
@@ -24,6 +24,10 @@ class Geometry:
 
   ``corner`` closes the poloidal domain's ``theta = +/-pi`` ends for a 3-D
   R-Z projection. It is optional boundary geometry on its own point grid.
+  ``domain`` holds the ``(lower, upper)`` computational range of each axis
+  of the grid a geometry file was written on. That grid defines the mapping:
+  data, possibly from another run, is placed on it by normalized position.
+  Without a domain, ``coords`` are already the data's coordinates.
   """
 
   coords: list[np.ndarray]
@@ -31,6 +35,7 @@ class Geometry:
   vert_z: np.ndarray
   phi: np.ndarray | None
   corner: tuple[list[np.ndarray], np.ndarray, np.ndarray] | None
+  domain: tuple[tuple[float, float], ...] | None = None
 
 
 def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
@@ -58,6 +63,11 @@ def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
     raise ValueError(
         f"Geometry toroidal-angle shape {geometry.phi.shape} does not match {shape}."
     )
+  if geometry.domain is not None and (len(geometry.domain) != num_dims or any(
+      not lower < upper for lower, upper in geometry.domain)):
+    raise ValueError(
+        f"Geometry domain must give an increasing (lower, upper) range for "
+        f"each of the {num_dims} dimensions.")
   if geometry.corner is not None:
     corner_coords, corner_r, corner_z = geometry.corner
     if len(corner_coords) != num_dims:
@@ -73,6 +83,35 @@ def _validate_geometry(geometry: Geometry, num_dims: int) -> None:
           "Corner geometry coordinate and R/Z array shapes are incompatible.")
 
 
+def on_data_grid(geometry: Geometry, grid: list[np.ndarray]) -> Geometry:
+  """``geometry`` in the computational coordinates of the data ``grid``.
+
+  Each axis of the geometry's domain is mapped linearly onto the data's
+  range, so the geometry grid pairs with the data cell for cell.
+  """
+  if geometry.domain is None:
+    return geometry
+
+  def place(axes):
+    return [
+        grid[d][0] + (np.asarray(axis) - lower) / (upper - lower) *
+        (grid[d][-1] - grid[d][0])
+        for d, (axis, (lower, upper)) in enumerate(zip(axes, geometry.domain))
+    ]
+
+  corner = geometry.corner
+  if corner is not None:
+    corner = (place(corner[0]), corner[1], corner[2])
+  return replace(geometry,
+                 coords=place(geometry.coords),
+                 corner=corner,
+                 domain=None)
+
+
+def _domain(grid) -> tuple[tuple[float, float], ...]:
+  return tuple((float(axis[0]), float(axis[-1])) for axis in grid)
+
+
 def _pointwise_file(
     path: str) -> tuple[list[np.ndarray], np.ndarray, GDataState]:
   """Load a geometry point file without evaluating its stored coordinates."""
@@ -83,13 +122,14 @@ def _pointwise_file(
 def _read_nodes_geometry(path: str):
   grid, values, data = _pointwise_file(path)
   coords = geometry_coordinates(grid, values, path)
-  return coords, *geometry_components(values, data.ctx, path)
+  return coords, _domain(grid), *geometry_components(values, data.ctx, path)
 
 
 def _read_mapc2p_geometry(path: str):
   field = interpolate(GDataState(path))
   coords = nodal_to_cell_centered_grid(field.grid, field.values.shape[:-1])
-  return coords, *geometry_components(field.values, field.ctx, path)
+  return coords, _domain(
+      field.grid), *geometry_components(field.values, field.ctx, path)
 
 
 def _read_corner_rz(path: str):
@@ -114,11 +154,11 @@ def resolve_geometry(file_name: str | None,
   files = resolve_geometry_files(file_name,
                                  mapc2p=mapc2p,
                                  nodes_file=nodes_file)
-  coords, major_r, vert_z, phi = (_read_nodes_geometry(files.interior)
-                                  if files.kind == "nodes" else
-                                  _read_mapc2p_geometry(files.interior))
+  coords, domain, major_r, vert_z, phi = (_read_nodes_geometry(files.interior)
+                                          if files.kind == "nodes" else
+                                          _read_mapc2p_geometry(files.interior))
   corner = _read_corner_rz(files.corner) if files.corner is not None else None
-  geometry = Geometry(coords, major_r, vert_z, phi, corner)
+  geometry = Geometry(coords, major_r, vert_z, phi, corner, domain)
   _validate_geometry(geometry, len(coords))
   return geometry
 

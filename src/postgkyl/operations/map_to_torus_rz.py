@@ -8,11 +8,15 @@ from dataclasses import dataclass
 from functools import partial
 import numpy as np
 
+from postgkyl.dg import eval_at_points
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.numerics.resample import resample_grid
-from .geometry import Geometry, resolve_geometry, _validate_geometry
+from postgkyl.numerics.rz import binormal_fraction
+from .geometry import (Geometry, on_data_grid, resolve_geometry,
+                       _validate_geometry)
 from ._mapping import (
     DEFAULT_NZ_INTERP,
+    _component_coefficients,
     _interpolate_component,
     _interpolation_grid,
     validate_mapping_grid,
@@ -22,22 +26,25 @@ from ._mapping import (
     mappings_by_geometry,
     mapping_for,
 )
-from postgkyl.numerics.rz import fft_poloidal_project
 
 
 @dataclass(frozen=True)
 class RzProjection:
-  """Precomputed R-Z mapping reusable by fields on one computational grid."""
+  """Precomputed R-Z mapping reusable by fields on one computational grid.
+
+  ``r`` and ``z`` hold the plane's cell corners. A 3-D projection samples
+  each radial interpolation center at parallel positions ``zf`` and records
+  where the binormal domain lies there: its toroidal angle ``phi_lo`` at the
+  lower y edge and its angular ``span`` across y.
+  """
 
   num_dims: int
   r: np.ndarray
   z: np.ndarray
   computational_grid: tuple[np.ndarray, ...]
-  zc: np.ndarray | None = None
   zf: np.ndarray | None = None
-  box: float | None = None
-  wind: np.ndarray | None = None
-  phi0_zf: np.ndarray | None = None
+  phi_lo: np.ndarray | None = None
+  span: np.ndarray | None = None
 
 
 def resolve_rz_projection(first: "GDataState",
@@ -49,11 +56,13 @@ def resolve_rz_projection(first: "GDataState",
 
   Only the computational grid and DG metadata are read from ``first``;
   projection construction never evaluates or selects its field values.
-  ``z_axis`` is a vertical geometry offset in meters.
+  ``z_axis`` is a vertical geometry offset in meters. A geometry read from
+  file maps on its own grid, onto which ``first``'s grid is placed.
   """
-  _validate_modal_data(first, "map_to_rz", (2, 3))
+  _validate_modal_data(first, "map_to_torus_rz", (2, 3))
   nz_interp = _validate_positive_int(nz_interp, "nz_interp")
   _validate_geometry(geo, first.num_dims)
+  geo = on_data_grid(geo, first.grid)
   edges, centers = _interpolation_grid(first)
   vert_z = geo.vert_z + float(z_axis)
 
@@ -68,30 +77,21 @@ def resolve_rz_projection(first: "GDataState",
 
   if geo.phi is None:
     raise ValueError(
-        "The geometry has no toroidal-angle component; 3-D map_to_rz requires one."
-    )
+        "The geometry has no toroidal-angle component; 3-D toroidal mapping "
+        "requires one.")
 
-  xc, yc, zc = centers
-  nx, ny, nz = xc.size, yc.size, zc.size
-  if ny < 2 or nz < 2:
-    raise ValueError(
-        "3-D map_to_rz requires at least two interpolated y and z points.")
-
+  xn, yn, zn = edges
+  zf_edges = np.linspace(zn[0], zn[-1], nz_interp * (zn.size - 1) + 1)
+  zf = 0.5 * (zf_edges[:-1] + zf_edges[1:])
+  # The angle is linear in y, so its values on both binormal edges locate
+  # every angle along y. Edges past the outer geometry nodes extrapolate.
   phi = np.unwrap(np.unwrap(np.unwrap(geo.phi, axis=2), axis=1), axis=0)
-  phi_field = resample_grid(phi, geo.coords, centers)
-  box_estimate = np.mean(np.diff(phi_field[nx // 2, :, nz // 2])) * ny
-  if not np.isfinite(box_estimate) or np.isclose(box_estimate, 0.0):
+  ends = resample_grid(phi, geo.coords, [centers[0], yn[[0, -1]], zf])
+  phi_lo = ends[:, 0, :]
+  span = ends[:, 1, :] - phi_lo
+  if not np.all(np.isfinite(span)) or np.any(np.isclose(span, 0.0)):
     raise ValueError(
         "Toroidal geometry has a zero or non-finite binormal angular span.")
-  n0 = max(1, int(round(abs(2.0 * np.pi / box_estimate))))
-  box = np.sign(box_estimate) * 2.0 * np.pi / n0
-  wind = phi_field[:, 0, -1] - phi_field[:, 0, 0]
-
-  xn, _, zn = edges
-  zf_edges = np.linspace(zn[0], zn[-1], nz_interp * nz + 1)
-  zf = 0.5 * (zf_edges[:-1] + zf_edges[1:])
-  phi0_zf = np.array(
-      [np.interp(zf, zc, phi_field[ix, 0, :]) for ix in range(nx)])
 
   gx, _, gz = geo.coords
   r2d = geo.major_r[:, 0, :]
@@ -101,7 +101,7 @@ def resolve_rz_projection(first: "GDataState",
     corner_coords, corner_r, corner_z = geo.corner
     if len(corner_coords) != 3:
       raise ValueError(
-          "Corner geometry must be three-dimensional for 3-D map_to_rz.")
+          "Corner geometry must be three-dimensional for 3-D map_to_torus_rz.")
     cx, cz = corner_coords[0], corner_coords[2]
     corner_r = corner_r[:, 0, :]
     corner_z = corner_z[:, 0, :] + float(z_axis)
@@ -122,11 +122,9 @@ def resolve_rz_projection(first: "GDataState",
   return RzProjection(num_dims=3,
                       r=r,
                       z=z,
-                      zc=zc,
                       zf=zf,
-                      box=box,
-                      wind=wind,
-                      phi0_zf=phi0_zf,
+                      phi_lo=phi_lo,
+                      span=span,
                       computational_grid=tuple(
                           np.array(axis, copy=True) for axis in edges))
 
@@ -154,24 +152,46 @@ def _validate_projection(data: "GDataState", projection: RzProjection) -> None:
           f"got {projection.r.shape}.")
     return
 
-  required = (projection.zc, projection.zf, projection.box, projection.wind,
-              projection.phi0_zf)
+  required = (projection.zf, projection.phi_lo, projection.span)
   if any(value is None for value in required):
     raise ValueError(
         "Incompatible R-Z projection: 3-D projection metadata is incomplete.")
-  if not np.isfinite(projection.box) or np.isclose(projection.box, 0.0):
+  if not np.all(np.isfinite(projection.span)) or np.any(
+      np.isclose(projection.span, 0.0)):
     raise ValueError(
         "Incompatible R-Z projection: toroidal angular span must be finite and nonzero."
     )
-  nx, _, nz = (axis.size - 1 for axis in edges)
-  if (projection.zc.shape != (nz, ) or projection.wind.shape != (nx, )
-      or projection.phi0_zf.shape != (nx, projection.zf.size)
-      or projection.r.shape != (nx + 1, projection.zf.size + 1)):
+  samples = (edges[0].size - 1, projection.zf.size)
+  if (projection.phi_lo.shape != samples or projection.span.shape != samples
+      or projection.r.shape != (samples[0] + 1, samples[1] + 1)):
     raise ValueError(
         "Incompatible R-Z projection: projection and data grid shapes differ.")
 
 
-def map_to_rz(
+def _toroidal_samples(data: "GDataState", comp: int, projection: RzProjection,
+                      rows, phi_tor: float | np.ndarray) -> np.ndarray:
+  """Evaluate a field component on projection ``rows`` at angles ``phi_tor``.
+
+  Each sample evaluates the DG expansion at its radial center, its parallel
+  position, and the binormal position of ``phi_tor`` there. ``phi_tor``
+  broadcasts against ``(rows, zf)``.
+  """
+  xn = projection.computational_grid[0]
+  x = 0.5 * (xn[:-1] + xn[1:])[rows, np.newaxis]
+  y_lo, y_hi = data.grid[1][0], data.grid[1][-1]
+  y = y_lo + (y_hi - y_lo) * binormal_fraction(phi_tor, projection.phi_lo[rows],
+                                               projection.span[rows])
+  points = np.stack(np.broadcast_arrays(x, y, projection.zf), axis=-1)
+  return eval_at_points(_component_coefficients(data, comp),
+                        [axis[0] for axis in data.grid],
+                        [axis[-1] for axis in data.grid],
+                        [axis.size - 1 for axis in data.grid],
+                        points,
+                        basis_type=data.ctx["basis_type"],
+                        poly_order=int(data.ctx["poly_order"]))
+
+
+def map_to_torus_rz(
     data: "GDataState",
     *,
     projection: Annotated[
@@ -189,8 +209,14 @@ def map_to_rz(
   """Map a modal field component onto a physical R-Z slice.
 
   Two-dimensional input deforms the interpolated grid. Three-dimensional
-  reconstruction requires periodic field-aligned coordinates with
-  twist-and-shift boundaries. Geometry is shared by all equation systems.
+  input is sliced at toroidal angle ``phi_tor``: every sample evaluates the
+  DG field where the geometry places that angle along y. Angles that the
+  simulated binormal domain covers are exact. Elsewhere the periodic domain
+  repeats; unless it spans a whole fraction of the torus, its copies meet
+  along field lines with a jump. A geometry file's own grid defines the
+  mapping, even when written by another run on a different computational
+  range: the data's grid is placed on it cell for cell. Geometry is shared
+  by all equation systems.
 
   Args:
     data: Un-interpolated 2-D or 3-D modal DG field.
@@ -201,7 +227,7 @@ def map_to_rz(
       When both paths are omitted, infer geometry from data.file_name,
       preferring geo_int_nodes over geo_int_mapc2p. '*' selects the block.
     z_axis: Vertical offset in meters, added to geometry Z.
-    phi_tor: Toroidal angle in radians for a 3-D reconstruction.
+    phi_tor: Toroidal angle in radians for a 3-D slice.
     nz_interp: Positive parallel-direction up-sampling factor for 3-D input.
     comp: Zero-based physical field component to map.
     inplace: Mutate and return data instead of creating a dataset.
@@ -213,7 +239,7 @@ def map_to_rz(
     Projection geometry and sampling options cannot accompany a reusable
     projection; set them when building that projection instead.
   """
-  _validate_modal_data(data, "map_to_rz", (2, 3))
+  _validate_modal_data(data, "map_to_torus_rz", (2, 3))
   _validate_component(data, comp)
   if projection is None:
     nz_interp = _validate_positive_int(nz_interp, "nz_interp")
@@ -230,17 +256,13 @@ def map_to_rz(
         "projection cannot be combined with geometry or sampling options; "
         "set them in resolve_rz_projection instead.")
   _validate_projection(data, projection)
-  values = _interpolate_component(data, comp)
-
   if projection.num_dims == 2:
-    out = values[..., np.newaxis]
+    out = _interpolate_component(data, comp)
   else:
-    out = fft_poloidal_project(values, projection.zc, projection.box,
-                               projection.wind, projection.phi0_zf,
-                               projection.zf, float(phi_tor))[..., np.newaxis]
+    out = _toroidal_samples(data, comp, projection, slice(None), float(phi_tor))
 
   return data._result([projection.r, projection.z],
-                      out,
+                      out[..., np.newaxis],
                       inplace=inplace,
                       tag=tag,
                       label=label,

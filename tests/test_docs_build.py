@@ -114,7 +114,7 @@ def test_downloaded_examples_run_outside_repository(documentation, tmp_path):
                  env=env,
                  check=True)
   assert (tmp_path / "figures/06_growth.png").stat().st_size > 0
-  assert (tmp_path / "figures/05_map_to_rz.png").stat().st_size > 0
+  assert (tmp_path / "figures/05_map_to_torus_rz.png").stat().st_size > 0
   for quantity in ("vt", "phi_norm", "larmor_radius"):
     assert (tmp_path /
             f"figures/12_gk_load_quantity_{quantity}.png").stat().st_size > 0

@@ -125,9 +125,11 @@ def test_read_nodes_geometry_recovers_gauss_coordinates(monkeypatch):
   data = SimpleNamespace(ctx={"geometry_type": file_geometry._MAPC2P_IDX})
   monkeypatch.setattr(core_geometry, "_pointwise_file", lambda _path:
                       (grid, values, data))
-  coords, major_r, vert_z, phi = core_geometry._read_nodes_geometry(
+  coords, domain, major_r, vert_z, phi = core_geometry._read_nodes_geometry(
       "nodes.gkyl")
   assert [axis.shape for axis in coords] == [(2, ), (2, )]
+  # The file's own grid range, on which the geometry maps the data.
+  assert domain == ((0.0, 1.0), (-1.0, 1.0))
   assert major_r.shape == vert_z.shape == phi.shape == (2, 2)
 
 
@@ -164,7 +166,8 @@ def test_resolve_geometry_honors_explicit_nodes_and_loads_corner(
                       lambda path: path in {str(nodes), str(corner)})
   monkeypatch.setattr(
       core_geometry, "_read_nodes_geometry", lambda path:
-      (calls.append(path) or (coords, values, values, None)))
+      (calls.append(path) or (coords, ((0.0, 1.0),
+                                       (-1.0, 1.0)), values, values, None)))
   monkeypatch.setattr(
       core_geometry, "_read_corner_rz", lambda path:
       (calls.append(path) or (coords, values, values)))

@@ -44,6 +44,21 @@ needs_gl = pytest.mark.skipif(
     reason="no working (off-screen) OpenGL context on this host")
 
 
+def _shell():
+  """A quarter cylinder of radius 2 as a mapped, size-1-thick 3-D grid."""
+  theta, height = np.meshgrid(np.linspace(0.0, np.pi / 2, 4),
+                              np.linspace(-1.0, 1.0, 3),
+                              indexing="ij")
+  grid = [
+      axis[..., np.newaxis]
+      for axis in (2 * np.cos(theta), 2 * np.sin(theta), height)
+  ]
+  values = theta + height
+  d = GDataState()
+  d.push(grid, values[..., np.newaxis, np.newaxis])
+  return d, grid, values
+
+
 def _volume(n=6) -> GDataState:
   grid = [np.linspace(0.0, 1.0, n + 1) for _ in range(3)]
   x, y, z = np.meshgrid(*[0.5 * (g[:-1] + g[1:]) for g in grid], indexing="ij")
@@ -113,6 +128,15 @@ class TestPyvista:
 
   def test_volume_clip_plane_does_not_raise(self):
     pyvista(_volume(), no_show=True, volume=True, volume_clip_plane=True)
+
+  def test_surface_mode_saves_a_png_screenshot(self, tmp_path):
+    out = tmp_path / "surface.png"
+    pyvista(_shell()[0],
+            surface=True,
+            no_normalize=True,
+            no_show=True,
+            saveas=str(out))
+    assert out.exists() and out.stat().st_size > 0
 
   def test_saves_a_vector_graphic(self, tmp_path):
     out = tmp_path / "out.svg"
@@ -301,6 +325,69 @@ def test_unnormalized_isosurface_preserves_physical_plane(monkeypatch):
   np.testing.assert_allclose(mesh.points.sum(axis=1), 1, rtol=0, atol=1e-7)
 
 
+class TestPyvistaSurface:
+
+  def test_mapped_shell_keeps_physical_points_and_values(self, monkeypatch):
+    plotter = MagicMock()
+    monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+    data, grid, values = _shell()
+    pyvista(data,
+            surface=True,
+            no_normalize=True,
+            no_show=True,
+            no_spin=True,
+            hide_axes=True)
+    mesh = plotter.add_mesh.call_args.args[0]
+    assert tuple(mesh.dimensions) == (4, 3, 1)
+    np.testing.assert_allclose(mesh.points,
+                               np.column_stack(
+                                   [axis.ravel(order="F") for axis in grid]),
+                               rtol=0,
+                               atol=1e-14)
+    np.testing.assert_allclose(mesh["f_raw"],
+                               values.ravel(order="F"),
+                               rtol=0,
+                               atol=1e-14)
+    # Surfaces default to opaque, unlit colors.
+    assert plotter.add_mesh.call_args.kwargs["opacity"] == 1.0
+    assert plotter.add_mesh.call_args.kwargs["lighting"] is False
+
+  def test_explicit_opacity_and_shading_reach_the_surface(self, monkeypatch):
+    plotter = MagicMock()
+    monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+    pyvista(_shell()[0],
+            surface=True,
+            opacity="0.5",
+            is_shaded=True,
+            no_show=True,
+            no_spin=True,
+            hide_axes=True)
+    assert plotter.add_mesh.call_args.kwargs["opacity"] == 0.5
+    assert plotter.add_mesh.call_args.kwargs["lighting"] is True
+
+  def test_flat_axis_normalizes_to_the_middle(self, monkeypatch):
+    plotter = MagicMock()
+    monkeypatch.setattr(pv, "Plotter", lambda **kwargs: plotter)
+    plane = GDataState()
+    plane.push([
+        np.linspace(0.0, 1.0, 5),
+        np.linspace(0.0, 2.0, 4),
+        np.array([0.3, 0.5])
+    ], np.ones((4, 3, 1, 1)))
+    pyvista(plane,
+            surface=True,
+            aspect_ratio=(1, 2, 3),
+            no_show=True,
+            no_spin=True,
+            hide_axes=True)
+    mesh = plotter.add_mesh.call_args.args[0]
+    np.testing.assert_allclose(mesh.bounds, [-1, 1, -2, 2, 0, 0], atol=1e-14)
+
+  def test_surface_excludes_volume_mode(self):
+    with pytest.raises(ValueError, match="surface is incompatible"):
+      pyvista(_volume(), surface=True, volume=True, no_show=True)
+
+
 class TestPyvistaValidation:
 
   def test_non_3d_dataset_raises(self):
@@ -361,7 +448,13 @@ class TestPyvistaIsosurfaces:
     with pytest.raises(ValueError, match="clevels"):
       pyvista(_volume(), clevels=spec, no_show=True)
 
-  @pytest.mark.parametrize("kwargs", [{"volume": True}, {"is_log": True}])
+  @pytest.mark.parametrize("kwargs", [{
+      "volume": True
+  }, {
+      "surface": True
+  }, {
+      "is_log": True
+  }])
   def test_incompatible_options(self, kwargs):
     with pytest.raises(ValueError, match="clevels"):
       pyvista(_volume(), clevels="0", no_show=True, **kwargs)

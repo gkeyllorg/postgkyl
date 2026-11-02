@@ -88,7 +88,7 @@ class GDataState:
     Header metadata wins: only missing keys are filled from the filename,
     preserving any ``frame`` (or other identity) read from the file. Because
     ``clone`` copies ``ctx``, the identity survives every verb, so a
-    multiblock family is still recognizable after ``interpolate``/``map_to_rz``
+    multiblock family is still recognizable after ``interpolate``/``map_to_torus_rz``
     -- which is what lets terminal verbs draw one field's blocks together
     (see ``gdatastate.collection.group_blocks``).
     """
