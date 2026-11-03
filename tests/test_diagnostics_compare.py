@@ -121,6 +121,58 @@ class TestDefaultLabels:
     ]
 
 
+class TestUnusualComparisonInputs:
+
+  def test_empty_summary_representation(self):
+    assert repr(compare._ReportDict({}, verbose=False)) == "{}"
+
+  def test_explicit_frame_avoids_discovery(self):
+    assert compare._resolve_frame(7, "missing0", "field", "missing1",
+                                  "field") == 7
+
+  def test_disjoint_frame_sets_raise(self, tmp_path):
+    path0 = tmp_path / "baseline"
+    path1 = tmp_path / "candidate"
+    path0.mkdir()
+    path1.mkdir()
+    (path0 / "sim-field_0.gkyl").touch()
+    (path1 / "sim-field_1.gkyl").touch()
+    with pytest.raises(ValueError, match="no frame in common"):
+      compare._latest_common_frame(str(path0), "sim-field", str(path1),
+                                   "sim-field")
+
+  def test_unequal_trace_lengths_raise(self, tmp_path):
+    path0 = _sim(tmp_path, "baseline", n=5)
+    path1 = _sim(tmp_path, "candidate", n=4)
+    with pytest.raises(ValueError, match="has shape"):
+      compare._diff_quantity(path0, path1, "field_energy", "sim-field_energy",
+                             "sim-field_energy", None)
+
+  def test_unequal_block_counts_raise(self, tmp_path):
+    path0 = tmp_path / "baseline"
+    path1 = tmp_path / "candidate"
+    path0.mkdir()
+    path1.mkdir()
+    time = np.array([0.0, 1.0])
+    values = np.array([[1.0], [2.0]])
+    for path, blocks in ((path0, (0, 1)), (path1, (0, ))):
+      for block in blocks:
+        _write_dynvec(str(path), f"sim_b{block}", "field_energy", time, values)
+    with pytest.raises(ValueError, match="2 blocks.*1"):
+      compare._diff_quantity(str(path0), str(path1), "field_energy",
+                             "sim_b0-field_energy", "sim_b0-field_energy", None)
+
+  def test_degenerate_component_has_no_forced_color_scale(self):
+    values = np.ones((3, 4, 2))
+    values[..., 1] = np.arange(12).reshape(3, 4)
+    baseline = TestSliceTitles._field(values)
+    candidate = TestSliceTitles._field(values.copy())
+    difference = TestSliceTitles._field(np.full_like(values, np.nan))
+    zmin, zmax = compare._diff_panel_zbounds(baseline, candidate, difference)
+    assert zmin == {1: 0.0, 3: 0.0}
+    assert zmax == {1: 11.0, 3: 11.0}
+
+
 class TestSliceTitles:
 
   @staticmethod
@@ -377,6 +429,16 @@ class TestDominantAxes:
     assert compare._dominant_axes(values0, values1, grid, [0, 1]) == {}
     assert compare._dominant_axes(values0, values1, grid, [0]) == {}
 
+  def test_singleton_axis_is_pinned_without_a_gradient(self):
+    baseline = np.ones((1, 3, 4, 5))
+    candidate = baseline.copy()
+    candidate += np.arange(3)[None, :, None, None] * 0.1
+    candidate += np.arange(4)[None, None, :, None] * 0.2
+    candidate[0, 1, 2, 3] = 2.0
+    grid = [np.arange(n, dtype=float) for n in baseline.shape]
+    pins = compare._dominant_axes(baseline, candidate, grid, [0, 1, 2, 3])
+    assert pins[0] == 0
+
   def test_pins_the_flattest_axis_at_the_spike_location(self):
     # 3 free axes: axis 0 varies steeply around the spike, axis 1 is where
     # the spike sits, axis 2 is perfectly flat everywhere -- axis 2 should
@@ -401,9 +463,9 @@ class TestDominantAxes:
     # must fall back to |derivative| instead of |derivative / value| to
     # avoid dividing by ~0.
     shape = (5, 5, 5)
-    values0 = np.full(shape, 1e-10)
+    values0 = np.full(shape, 1e-20)
     values1 = values0.copy()
-    values1[2, 2, 2] = 1e-8  # huge relative diff, but a tiny absolute value
+    values1[2, 2, 2] = 1e-18  # huge relative diff, below machine epsilon
     grid = [np.linspace(0, 1, n) for n in shape]
     pins = compare._dominant_axes(values0, values1, grid, [0, 1, 2])
     assert len(pins) == 1  # ran to completion, no division blow-up/crash
