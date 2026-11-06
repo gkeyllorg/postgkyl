@@ -113,6 +113,7 @@ class GData(GDataState):
   growth = operations.growth
   differentiate = operations.differentiate
   map = operations.map
+  map_gk_dir = operations.map_gk_dir
   represent = operations.represent
   apply = operations.apply
   save = io.save

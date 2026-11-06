@@ -54,6 +54,7 @@ from .growth import growth
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
+from .map_gk_dir import map_gk_dir
 from .map_to_torus_rz import map_to_torus_rz, resolve_rz_projection, RzProjection
 from .map_to_torus_3d import (map_to_torus_3d, resolve_torus_projection,
                               TorusProjection)
@@ -85,7 +86,7 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
                         result=ResultPolicy.VALUE)
 
 for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
-                  magsq, grid, differentiate, map, map_to_torus_rz,
+                  magsq, grid, differentiate, map, map_gk_dir, map_to_torus_rz,
                   map_to_torus_3d, map_to_torus_phitheta, fluctuation):
   command(_MAP)(_function)
 command(_APPEND)(val2coord)
@@ -131,9 +132,9 @@ __all__ = [
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
     "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "growth", "map_to_torus_rz",
-    "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
-    "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
-    "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection",
-    "project_vector"
+    "available_evaluate_operators", "map", "map_gk_dir", "growth",
+    "map_to_torus_rz", "resolve_rz_projection", "map_to_torus_3d",
+    "resolve_torus_projection", "map_to_torus_phitheta",
+    "resolve_phitheta_projection", "resolve_geometry", "Geometry",
+    "RzProjection", "TorusProjection", "PhiThetaProjection", "project_vector"
 ]

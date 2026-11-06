@@ -74,6 +74,7 @@ from postgkyl.operations import (
     local_poly,
     magsq,
     map,
+    map_gk_dir,
     mask,
     print,
     represent,
@@ -103,11 +104,11 @@ __all__ = [
     "integrate", "interpolate", "local_poly", "select", "average",
     "fluctuation", "eval_at_coord_proj", "fft", "magsq", "mask", "grid",
     "val2coord", "extract_input", "fit", "growth", "differentiate", "map",
-    "represent", "apply", "Geometry", "RzProjection", "TorusProjection",
-    "PhiThetaProjection", "map_to_torus_rz", "resolve_rz_projection",
-    "map_to_torus_3d", "resolve_torus_projection", "map_to_torus_phitheta",
-    "resolve_phitheta_projection", "resolve_geometry", "save", "collect",
-    "evaluate", "relchange", "animate", "plotly_animate", "sort", "activate",
-    "available_evaluate_operators", "plotly", "pyvista", "gk", "__version__",
-    "version_report"
+    "map_gk_dir", "represent", "apply", "Geometry", "RzProjection",
+    "TorusProjection", "PhiThetaProjection", "map_to_torus_rz",
+    "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
+    "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
+    "save", "collect", "evaluate", "relchange", "animate", "plotly_animate",
+    "sort", "activate", "available_evaluate_operators", "plotly", "pyvista",
+    "gk", "__version__", "version_report"
 ]

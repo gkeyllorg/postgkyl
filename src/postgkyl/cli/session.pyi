@@ -1453,6 +1453,31 @@ class PostgkylSession:
             count does not match the expected ``m * num_basis``.
         """
 
+  def map_gk_dir(self,
+                 *,
+                 dir: int,
+                 coord: str,
+                 psi_file: str | None = None,
+                 inplace: bool = False,
+                 tag: str | None = None,
+                 label: str | None = None) -> PostgkylSession:
+    r"""Map interpolated psi samples to normalized poloidal flux radius.
+
+        The first stage supports ``dir=0, coord='rho_pol'``. The companion
+        ``<geqdsk_file stem>-psi.gkyl`` supplies ``simag`` and either
+        ``psi_lcfs`` (inner-wall limited) or ``psi_sep`` (diverted);
+        ``psi_file`` overrides its inferred path.
+
+        Args:
+          data: Interpolated gyrokinetic dataset.
+          dir: Coordinate direction to map; currently 0.
+          coord: Destination coordinate; currently ``rho_pol``.
+          psi_file: Optional path to Gkeyll's psi field.
+          inplace: Mutate and return ``data`` when true.
+          tag: Optional tag for the result.
+          label: Optional display label for the result.
+        """
+
   def map_to_torus_3d(self,
                       *,
                       mapc2p: str | None = None,
