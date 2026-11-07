@@ -1461,9 +1461,9 @@ class PostgkylSession:
                  inplace: bool = False,
                  tag: str | None = None,
                  label: str | None = None) -> PostgkylSession:
-    r"""Map interpolated psi samples to normalized poloidal flux radius.
+    r"""Map interpolated psi samples to normalized flux radius or OMP radius.
 
-        The first stage supports ``dir=0, coord='rho_pol'``. The companion
+        Supports ``dir=0`` with ``coord='rho_pol'`` or ``coord='R_omp'``. The companion
         ``<geqdsk_file stem>-psi.gkyl`` supplies ``simag`` and either
         ``psi_lcfs`` (inner-wall limited) or ``psi_sep`` (diverted);
         ``psi_file`` overrides its inferred path.
@@ -1471,7 +1471,7 @@ class PostgkylSession:
         Args:
           data: Interpolated gyrokinetic dataset.
           dir: Coordinate direction to map; currently 0.
-          coord: Destination coordinate; currently ``rho_pol``.
+          coord: Destination coordinate: ``rho_pol`` or ``R_omp``.
           psi_file: Optional path to Gkeyll's psi field.
           inplace: Mutate and return ``data`` when true.
           tag: Optional tag for the result.
