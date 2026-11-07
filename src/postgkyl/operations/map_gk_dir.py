@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from typing import Annotated
 import numpy as np
 
+from postgkyl.cli_spec import CliType
 from postgkyl.dg import eval_at_points
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.io import read
@@ -47,10 +49,28 @@ def _flux_reference(file_name: str, geqdsk_file: str | None,
   return axis, boundary
 
 
-def _outboard_radius(psi: np.ndarray, file_name: str, geqdsk_file: str | None,
-                     psi_file: str | None) -> np.ndarray:
+def _outboard_radius(
+    psi: np.ndarray,
+    file_name: str,
+    geqdsk_file: str | None,
+    psi_file: str | None,
+    *,
+    relative_to_boundary: bool = False) -> tuple[np.ndarray, str | None]:
   """Find the first outboard root of the stored piecewise polynomial psi."""
   path, grid, values, ctx = _psi_source(file_name, geqdsk_file, psi_file)
+  if relative_to_boundary:
+    boundary_key = ("psi_lcfs"
+                    if ctx["tokamak_geo_type"] == _TOKAMAK_IWL else "psi_sep")
+    try:
+      boundary_psi = float(ctx[boundary_key])
+    except (KeyError, TypeError, ValueError) as err:
+      raise ValueError(
+          f"'{path}' requires numeric {boundary_key} metadata") from err
+    if not np.isfinite(boundary_psi):
+      raise ValueError(f"'{path}' requires finite {boundary_key} metadata")
+    targets = np.append(psi, boundary_psi)
+  else:
+    targets = psi
   try:
     r_axis = float(ctx["rmaxis"])
     z_axis = float(ctx["zmaxis"])
@@ -96,8 +116,8 @@ def _outboard_radius(psi: np.ndarray, file_name: str, geqdsk_file: str | None,
     polynomials.append(
         (max(lo, r_axis), hi, np.polynomial.Polynomial.fit(radii, flux, order)))
 
-  result = np.empty_like(psi, dtype=float)
-  for index, target in np.ndenumerate(psi):
+  result = np.empty_like(targets, dtype=float)
+  for index, target in np.ndenumerate(targets):
     if not np.isfinite(target):
       raise ValueError("R_omp requires finite computational psi samples")
     for lo, hi, polynomial in polynomials:
@@ -112,60 +132,109 @@ def _outboard_radius(psi: np.ndarray, file_name: str, geqdsk_file: str | None,
         break
     else:
       raise ValueError(f"No outboard R_omp root for psi={target:g} in '{path}'")
-  return result
+  if relative_to_boundary:
+    return result[:-1] - result[-1], boundary_key
+  return result, None
 
 
 def map_gk_dir(data: GDataState,
                *,
-               dir: int,
-               coord: str,
+               dir: Annotated[int | tuple[int, ...] | list[int] | str,
+                              CliType(str)],
+               coord: Annotated[str | tuple[str, ...] | list[str],
+                                CliType(str)],
                psi_file: str | None = None,
                inplace: bool = False,
                tag: str | None = None,
                label: str | None = None) -> GDataState:
-  """Map interpolated psi samples to normalized flux radius or OMP radius.
+  """Map interpolated psi samples to a flux or outboard-midplane coordinate.
 
-  Supports ``dir=0`` with ``coord='rho_pol'`` or ``coord='R_omp'``. The companion
-  ``<geqdsk_file stem>-psi.gkyl`` supplies ``simag`` and either
-  ``psi_lcfs`` (inner-wall limited) or ``psi_sep`` (diverted);
-  ``psi_file`` overrides its inferred path.
+  Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
+  ``'R_omp_R_sep'``, and ``dir=1, coord='rho_s'``. Pair comma-separated
+  directions and coordinates to map several axes in one call. ``rho_s`` maps the
+  binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
+  subtracts the outboard radius at
+  ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
+  ``psi_sep`` for diverted geometry. The companion ``<geqdsk_file stem>-psi.gkyl``
+  supplies the geometry; ``psi_file`` overrides its inferred path.
 
   Args:
     data: Interpolated gyrokinetic dataset.
-    dir: Coordinate direction to map; currently 0.
-    coord: Destination coordinate: ``rho_pol`` or ``R_omp``.
+    dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
+    coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
     psi_file: Optional path to Gkeyll's psi field.
     inplace: Mutate and return ``data`` when true.
     tag: Optional tag for the result.
     label: Optional display label for the result.
   """
-  if dir != 0 or coord not in ("rho_pol", "R_omp"):
-    raise ValueError(
-        "map_gk_dir supports only dir=0 with coord='rho_pol' or 'R_omp'")
+  try:
+    directions = (tuple(int(item.strip())
+                        for item in dir.split(",")) if isinstance(dir, str) else
+                  (dir, ) if isinstance(dir, int) else tuple(dir))
+  except (TypeError, ValueError) as err:
+    raise ValueError("map_gk_dir requires integer directions") from err
+  coordinates = (tuple(
+      item.strip()
+      for item in coord.split(",")) if isinstance(coord, str) else tuple(coord))
+  if not directions or len(directions) != len(coordinates):
+    raise ValueError("map_gk_dir needs one coordinate per direction")
+  if len(set(directions)) != len(directions):
+    raise ValueError("map_gk_dir directions must be distinct")
+  allowed = {0: {"rho_pol", "R_omp", "R_omp_R_sep"}, 1: {"rho_s"}}
+  if any(not isinstance(d, int) or d not in allowed or c not in allowed[d]
+         for d, c in zip(directions, coordinates)):
+    raise ValueError("map_gk_dir supports dir=0 with 'rho_pol', 'R_omp', or "
+                     "'R_omp_R_sep', and dir=1 with 'rho_s'")
   if not data.ctx.get("interpolated") or data.backend != "numpy":
     raise ValueError(
         "map_gk_dir requires interpolated NumPy data; call interp first")
-  axis = np.asarray(data.grid[0])
-  if axis.ndim != 1:
-    raise ValueError("map_gk_dir requires a separable psi axis")
-  psi = sample_coordinates(axis, data.values.shape[0])
-  if coord == "rho_pol":
-    psi_axis, psi_sep = _flux_reference(data.file_name,
-                                        data.ctx.get("geqdsk_file"), psi_file)
-    normalized = (psi - psi_axis) / (psi_sep - psi_axis)
-    if not np.all(np.isfinite(normalized)) or np.any(normalized < 0):
-      raise ValueError(
-          "rho_pol is undefined for psi outside the axis-side domain")
-    mapped = np.sqrt(normalized)
-    axis_label = r"$\rho_{\mathrm{pol}}$"
-  else:
-    mapped = _outboard_radius(psi, data.file_name, data.ctx.get("geqdsk_file"),
-                              psi_file)
-    axis_label = r"$R_{\mathrm{OMP}}$ (m)"
   grid = list(data.grid)
-  grid[0] = mapped
   labels = dict(data.ctx.get("coordinate_labels", {}))
-  labels[0] = axis_label
+  for direction, destination in zip(directions, coordinates):
+    if len(data.grid) <= direction:
+      raise ValueError(
+          f"map_gk_dir requires direction {direction} in the data grid")
+    axis = np.asarray(data.grid[direction])
+    if axis.ndim != 1:
+      raise ValueError("map_gk_dir requires a separable coordinate axis")
+    samples = sample_coordinates(axis, data.values.shape[direction])
+    if destination == "rho_s":
+      if data.ctx.get("geometry_type") != 1:
+        raise ValueError("rho_s requires tokamak geometry metadata")
+      try:
+        cy = float(data.ctx["Cy"])
+        rho_s = float(data.ctx["rho_s"])
+      except (KeyError, TypeError, ValueError) as err:
+        raise ValueError(
+            "rho_s requires numeric Cy and rho_s metadata") from err
+      if not np.isfinite(cy) or cy == 0 or not np.isfinite(rho_s) or rho_s <= 0:
+        raise ValueError("rho_s requires finite nonzero Cy and positive rho_s")
+      mapped = samples * cy / rho_s
+      axis_label = r"$y/\rho_s$"
+    elif destination == "rho_pol":
+      psi_axis, psi_sep = _flux_reference(data.file_name,
+                                          data.ctx.get("geqdsk_file"), psi_file)
+      normalized = (samples - psi_axis) / (psi_sep - psi_axis)
+      if not np.all(np.isfinite(normalized)) or np.any(normalized < 0):
+        raise ValueError(
+            "rho_pol is undefined for psi outside the axis-side domain")
+      mapped = np.sqrt(normalized)
+      axis_label = r"$\rho_{\mathrm{pol}}$"
+    else:
+      mapped, boundary_key = _outboard_radius(
+          samples,
+          data.file_name,
+          data.ctx.get("geqdsk_file"),
+          psi_file,
+          relative_to_boundary=destination == "R_omp_R_sep")
+      if boundary_key == "psi_lcfs":
+        axis_label = r"$R_{\mathrm{omp}} - R_{\mathrm{LCFS}}$ (m)"
+      elif boundary_key == "psi_sep":
+        axis_label = r"$R_{\mathrm{omp}} - R_{\mathrm{sep}}$ (m)"
+      else:
+        axis_label = r"$R_{\mathrm{OMP}}$ (m)"
+    grid[direction] = mapped
+    labels[direction] = axis_label
   return data._result(grid,
                       data.values,
                       inplace=inplace,

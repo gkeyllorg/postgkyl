@@ -1455,23 +1455,27 @@ class PostgkylSession:
 
   def map_gk_dir(self,
                  *,
-                 dir: int,
+                 dir: str | float,
                  coord: str,
                  psi_file: str | None = None,
                  inplace: bool = False,
                  tag: str | None = None,
                  label: str | None = None) -> PostgkylSession:
-    r"""Map interpolated psi samples to normalized flux radius or OMP radius.
+    r"""Map interpolated psi samples to a flux or outboard-midplane coordinate.
 
-        Supports ``dir=0`` with ``coord='rho_pol'`` or ``coord='R_omp'``. The companion
-        ``<geqdsk_file stem>-psi.gkyl`` supplies ``simag`` and either
-        ``psi_lcfs`` (inner-wall limited) or ``psi_sep`` (diverted);
-        ``psi_file`` overrides its inferred path.
+        Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
+        ``'R_omp_R_sep'``, and ``dir=1, coord='rho_s'``. Pair comma-separated
+        directions and coordinates to map several axes in one call. ``rho_s`` maps the
+        binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
+        subtracts the outboard radius at
+        ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
+        ``psi_sep`` for diverted geometry. The companion ``<geqdsk_file stem>-psi.gkyl``
+        supplies the geometry; ``psi_file`` overrides its inferred path.
 
         Args:
           data: Interpolated gyrokinetic dataset.
-          dir: Coordinate direction to map; currently 0.
-          coord: Destination coordinate: ``rho_pol`` or ``R_omp``.
+          dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
+          coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
           psi_file: Optional path to Gkeyll's psi field.
           inplace: Mutate and return ``data`` when true.
           tag: Optional tag for the result.

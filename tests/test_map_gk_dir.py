@@ -77,10 +77,90 @@ def test_invalid_direction_coord_and_domain(monkeypatch):
   data = GDataState(ctx={"interpolated": True})
   data.push([np.array([0., 1.])], np.ones((1, 1)))
   monkeypatch.setattr(map_module, "_flux_reference", lambda *args: (2., 3.))
-  with pytest.raises(ValueError, match="supports only"):
+  with pytest.raises(ValueError, match="supports dir=0"):
     map_gk_dir(data, dir=1, coord="rho_pol")
   with pytest.raises(ValueError, match="undefined"):
     map_gk_dir(data, dir=0, coord="rho_pol")
+
+
+def test_rho_s_maps_binormal_samples_from_run_metadata():
+  values = np.arange(12.).reshape(3, 4, 1)
+  data = GDataState(ctx={
+      "interpolated": True,
+      "geometry_type": 1,
+      "Cy": 0.2,
+      "rho_s": 0.002
+  })
+  data.push([np.array([1., 2., 3., 4.]),
+             np.array([-0.4, -0.2, 0., 0.2, 0.4])], values)
+
+  mapped = map_gk_dir(data, dir=1, coord="rho_s")
+  np.testing.assert_allclose(mapped.grid[1], [-30., -10., 10., 30.])
+  np.testing.assert_array_equal(mapped.grid[0], data.grid[0])
+  np.testing.assert_array_equal(mapped.values, values)
+  assert mapped.ctx["coordinate_labels"][1] == r"$y/\rho_s$"
+  np.testing.assert_array_equal(data.grid[1], [-0.4, -0.2, 0., 0.2, 0.4])
+
+  point_data = GDataState(ctx={
+      "interpolated": True,
+      "geometry_type": 1,
+      "Cy": 0.2,
+      "rho_s": 0.002
+  })
+  point_data.push(
+      [np.array([1., 2.]), np.array([-0.1, 0.1])], np.ones((2, 2, 1)))
+  np.testing.assert_allclose(
+      map_gk_dir(point_data, dir=1, coord="rho_s").grid[1], [-10., 10.])
+
+
+def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
+  values = np.arange(12.).reshape(3, 4, 1)
+  data = GDataState(ctx={
+      "interpolated": True,
+      "geometry_type": 1,
+      "Cy": 0.2,
+      "rho_s": 0.002
+  })
+  data.push([np.array([1., 2., 3., 4.]),
+             np.array([-0.4, -0.2, 0., 0.2, 0.4])], values)
+  monkeypatch.setattr(map_module, "_outboard_radius",
+                      lambda samples, *args, **kwargs: (samples + 10., None))
+
+  mapped = map_gk_dir(data, dir="0,1", coord="R_omp,rho_s")
+  np.testing.assert_allclose(mapped.grid[0], [11.5, 12.5, 13.5])
+  np.testing.assert_allclose(mapped.grid[1], [-30., -10., 10., 30.])
+  np.testing.assert_array_equal(mapped.values, values)
+  assert mapped.ctx["coordinate_labels"] == {
+      0: r"$R_{\mathrm{OMP}}$ (m)",
+      1: r"$y/\rho_s$"
+  }
+  np.testing.assert_array_equal(data.grid[0], [1., 2., 3., 4.])
+  np.testing.assert_allclose(
+      map_gk_dir(data, dir=[1, 0], coord=["rho_s", "R_omp"]).grid[0],
+      mapped.grid[0])
+
+  with pytest.raises(ValueError, match="one coordinate per direction"):
+    map_gk_dir(data, dir="0,1", coord="R_omp")
+  with pytest.raises(ValueError, match="distinct"):
+    map_gk_dir(data, dir="0,0", coord="R_omp,rho_pol")
+
+
+@pytest.mark.parametrize("metadata", [{
+    "Cy": 0.2
+}, {
+    "rho_s": 0.002
+}, {
+    "Cy": 0.,
+    "rho_s": 0.002
+}, {
+    "Cy": 0.2,
+    "rho_s": -0.002
+}])
+def test_rho_s_requires_valid_metadata(metadata):
+  data = GDataState(ctx={"interpolated": True, "geometry_type": 1, **metadata})
+  data.push([np.array([0., 1.]), np.array([0., 1.])], np.ones((1, 1, 1)))
+  with pytest.raises(ValueError, match="Cy and rho_s|positive rho_s"):
+    map_gk_dir(data, dir=1, coord="rho_s")
 
 
 @pytest.mark.skipif(not gpython.available(), reason="Gkeyll basis unavailable")
@@ -99,6 +179,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
       coeffs[i, j] = n2m @ ((r - 1.2)**2 + (z - 0.25)**2)
   ctx = dict(geometry_type=1,
              tokamak_geo_type=20,
+             psi_lcfs=0.25,
              rmaxis=1.2,
              zmaxis=0.25,
              lower=lower,
@@ -122,6 +203,28 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
   np.testing.assert_array_equal(result.values, values)
   assert result.ctx["coordinate_labels"][0] == r"$R_{\mathrm{OMP}}$ (m)"
 
+  limited = map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+  np.testing.assert_allclose(limited.grid[0],
+                             np.sqrt([0.16, 0.64, 1.48]) - 0.5,
+                             rtol=1e-12,
+                             atol=1e-12)
+  np.testing.assert_array_equal(limited.values, values)
+  assert limited.ctx["coordinate_labels"][0] == \
+      r"$R_{\mathrm{omp}} - R_{\mathrm{LCFS}}$ (m)"
+
+  ctx["tokamak_geo_type"] = 2
+  ctx["psi_sep"] = 0.36
+  diverted = map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+  np.testing.assert_allclose(diverted.grid[0],
+                             np.sqrt([0.16, 0.64, 1.48]) - 0.6,
+                             rtol=1e-12,
+                             atol=1e-12)
+  assert diverted.ctx["coordinate_labels"][0] == \
+      r"$R_{\mathrm{omp}} - R_{\mathrm{sep}}$ (m)"
+  del ctx["psi_sep"]
+  with pytest.raises(ValueError, match="psi_sep"):
+    map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+
   with pytest.raises(ValueError, match="No outboard R_omp root"):
     map_module._outboard_radius(np.array([9.]), "", None, "eq-psi.gkyl")
 
@@ -131,7 +234,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
       r = i + 0.5 + nodes[:, 0] / 2
       coeffs[i, j] = n2m @ (1. - (r - 2.)**2)
   np.testing.assert_allclose(map_module._outboard_radius(
-      np.array([0.75]), "", None, "eq-psi.gkyl"), [1.5],
+      np.array([0.75]), "", None, "eq-psi.gkyl")[0], [1.5],
                              rtol=1e-12,
                              atol=1e-12)
 
