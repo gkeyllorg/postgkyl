@@ -1161,7 +1161,7 @@ def fetch_heat_chi_gB(gdatas: list[list["GData"]], **kwargs):
 def load_distf(gdatas, **kwargs):
   """Loader for the registry ``distf`` quantity: wraps
   :func:`~postgkyl.diagnostics.gk.distf.load_distf` with
-  defaults tailored to registry use (never interpolate further, convert
+  defaults tailored to registry use (one sample per cell, convert
   velocity coordinates by default). Extra keyword overrides (via
   ``**extra`` on :func:`~postgkyl.diagnostics.gk.load_quantity.
   load_quantity`): ``suffix``, ``c2p_vel``, ``mc2nu``, ``mapc2p``,
@@ -1186,7 +1186,7 @@ def load_distf(gdatas, **kwargs):
       use_mc2nu=dict_get_bool(extra, "mc2nu", False),
       use_mapc2p=dict_get_bool(extra, "mapc2p", False),
       block_idx=extra.get("block", None),
-      num_interp=0,
+      num_interp=1,
   )
 
 

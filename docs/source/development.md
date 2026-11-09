@@ -4,6 +4,20 @@ Follow [Developer installation](developer-installation) to set
 up an editable checkout and development tools. For native changes, use the
 [rebuild instructions](updating-and-rebuilding).
 
+## Entire checkpoints
+
+[Entire](https://docs.entire.io/) records agent sessions as Git checkpoints.
+Install the [Entire CLI](https://docs.entire.io/installation), then run from
+the Postgkyl checkout:
+
+```bash
+./.agents/entire/setup-entire.sh --agent codex
+```
+
+The script uses the private `gkeyllorg/gkeyll-agvcs` repository by default,
+so your Git credentials need access to it. Omit `--agent codex` to choose an
+agent interactively.
+
 ## Tests
 
 [pytest](https://docs.pytest.org/) runs the automated tests. From the
