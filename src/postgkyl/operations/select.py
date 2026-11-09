@@ -9,7 +9,7 @@ import numpy as np
 
 from postgkyl import dg
 from postgkyl.gdatastate.layout import dg_layout
-from postgkyl.numerics import idx_parser
+from postgkyl.numerics import idx_parser, is_index
 
 from postgkyl.gdatastate.gdatastate import GDataState
 
@@ -200,7 +200,7 @@ def select(data: "GDataState",
     rel = d - offset if curvilinear else d
     len_grid = grid_arr.shape[rel] if curvilinear else grid_arr.shape[0]
     is_matching = values.shape[d] == len_grid
-    if curvilinear and isinstance(z, (int, np.integer)):
+    if curvilinear and is_index(z):  # An index needs no coordinate.
       idx = int(z)
     elif curvilinear and logical[d] is not None:
       idx = idx_parser(z, logical[d], logical[d].size == values.shape[d])

@@ -33,6 +33,7 @@ needs_gkeyll = pytest.mark.skipif(not gpython.available(),
 
 DATA = Path(__file__).parent / "test_data"
 M0_3X = DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-elc_M0_5.gkyl"
+MAPC2P_3X = DATA / "rt_gk_tcv_nt_iwl_3x2v_p1-geo_int_mapc2p.gkyl"
 GENERATED = DATA / "generated"
 
 
@@ -219,9 +220,26 @@ class TestBuildChain:
     assert steps == (gp.Step.of("load", file_name=str(M0_3X)),
                      gp.Step.of("local_poly", npoints=3))
 
-  def test_geometry_transforms_refuse_averages(self):
+  @pytest.mark.parametrize("transform", gp.GEOMETRY_TRANSFORMS)
+  def test_geometry_transforms_refuse_averages(self, transform):
     with pytest.raises(ValueError, match="full configuration space"):
-      gp.build_chain(_file_settings(average=(1, ), transform="map_to_torus_rz"))
+      gp.build_chain(_file_settings(average=(1, ), transform=transform))
+
+  def test_map_interpolates_then_applies_the_simulations_mapc2p(self, tmp_path):
+    steps = gp.build_chain(_file_settings(transform="map", num_interp=3))
+    assert steps == (gp.Step.of("load", file_name=str(M0_3X)),
+                     gp.Step.of("interpolate", num_interp=3),
+                     gp.Step.of("map", mapping=str(MAPC2P_3X)))
+    # A given mapping file replaces the simulation's.
+    other = tmp_path / "other-geo_int_mapc2p.gkyl"
+    other.touch()
+    steps = gp.build_chain(_file_settings(transform="map", mapc2p=str(other)))
+    assert steps[-1] == gp.Step.of("map", mapping=str(other))
+
+  def test_map_names_the_missing_coordinate_map(self, tmp_path):
+    with pytest.raises(ValueError, match="sim-geo_int_mapc2p.gkyl"):
+      gp.build_chain(
+          _file_settings(directory=str(tmp_path), sim="sim", transform="map"))
 
   def test_frames_of_one_output_are_one_pattern_and_a_range(self, tmp_path):
     for frame in range(5):
@@ -383,6 +401,24 @@ class TestRun:
     assert info.curvilinear == (False, False)
     np.testing.assert_allclose(info.lower, (0.0, -np.pi))
     np.testing.assert_allclose(info.upper, (0.12, np.pi))
+
+  def test_mapped_axes_are_selected_by_cell_index(self):
+    settings = _file_settings(transform="map", num_interp=2)
+    info = gp.probe(gp.build_chain(settings, probe_only=True))
+    # Every point holds Cartesian X, Y, Z: no axis has a 1-D coordinate.
+    assert info.curvilinear == (True, True, True)
+    assert info.cells == (96, 64, 32)
+    assert info.lower == (0.0, 0.0, 0.0)
+    assert info.upper == (95.0, 63.0, 31.0)
+    (data, ) = gp.run(
+        gp.build_chain(dataclasses.replace(settings,
+                                           select=((2, 16), )))).datasets
+    direct = pg.load(str(M0_3X)).interpolate(num_interp=2).map(
+        str(MAPC2P_3X)).select(z2=16)
+    assert len(data.grid) == len(direct.grid) == 3
+    for got, want in zip(data.grid, direct.grid):
+      np.testing.assert_array_equal(got, want)
+    np.testing.assert_array_equal(data.values, direct.values)
 
   def test_several_frames_are_overlaid_on_one_figure(self):
     output = gp.Output(label="elc_M0",
@@ -631,6 +667,26 @@ def test_the_flux_surface_slider_spans_every_interpolated_radius(
   assert defs["x_idx"].stop == 95
   assert (defs["settings"].transform,
           defs["settings"].x_idx) == ("map_to_torus_phitheta", 95)
+  assert defs["figure_bytes"].startswith(b"\x89PNG")
+
+
+@needs_gkeyll
+def test_the_map_transform_plots_a_slice_chosen_by_cell_index(
+    monkeypatch, tmp_path):
+  pytest.importorskip("marimo")
+  monkeypatch.chdir(DATA)
+  state = dict(_run_notebook(monkeypatch)["gui_state"],
+               transform="map",
+               sel_enables=[False, False, True],
+               sel_values=[0.0, 0.0, 7.6])
+  defs = _run_notebook(monkeypatch, "--state",
+                       gp.save_state(str(tmp_path / "map.json"), state))
+  assert defs["grid_info"].curvilinear == (True, True, True)
+  # The z slider snaps to whole cells; the default 2 points per cell reach
+  # the interpolation.
+  assert defs["settings"].transform == "map"
+  assert defs["settings"].select == ((2, 8), )
+  assert defs["settings"].num_interp == 2
   assert defs["figure_bytes"].startswith(b"\x89PNG")
 
 

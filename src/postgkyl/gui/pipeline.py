@@ -272,10 +272,10 @@ def python_script(steps: tuple[Step, ...]) -> str:
 
 
 # --------------------------------------------------------- GUI settings
-TRANSFORMS = ("interpolate", "local_poly", "map_to_torus_rz",
+TRANSFORMS = ("interpolate", "local_poly", "map", "map_to_torus_rz",
               "map_to_torus_phitheta", "none")
 # Transforms that need the geometry and the full configuration space.
-GEOMETRY_TRANSFORMS = ("map_to_torus_rz", "map_to_torus_phitheta")
+GEOMETRY_TRANSFORMS = ("map", "map_to_torus_rz", "map_to_torus_phitheta")
 _FLUCT_DIMS = {"y": "1", "yz": "1,2"}
 
 
@@ -304,8 +304,9 @@ class Settings:
       probed layout, :func:`probe`).
     average: Dimensions averaged over, before the transform.
     transform: One of :data:`TRANSFORMS`.
-    num_interp: Points per cell of ``interpolate``/``local_poly``.
-    mapc2p: Mapping file of the geometry transforms (default: found).
+    num_interp: Points per cell of ``interpolate``/``local_poly``/``map``.
+    mapc2p: Mapping file of the geometry transforms (default: found; ``map``
+      uses the simulation's modal ``geo_int_mapc2p``).
     phi_tor: Toroidal angle (radians) of ``map_to_torus_rz``.
     nz_interp: Points per cell along z of the geometry transforms.
     x_idx: Flux surface of ``map_to_torus_phitheta``, an index among
@@ -457,6 +458,15 @@ def _transform_steps(s: Settings) -> tuple[Step, ...]:
     return (Step.of("interpolate", num_interp=s.num_interp), )
   if s.transform == "local_poly":
     return (Step.of("local_poly", npoints=s.num_interp), )
+  if s.transform == "map":
+    # Maps the interpolated points to physical (e.g. Cartesian) coordinates.
+    mapping = s.mapc2p or io.geometry.mapc2p_path(
+        os.path.join(os.path.expanduser(s.directory.strip()), s.sim or ""))
+    if not os.path.isfile(mapping):
+      raise ValueError(f"map needs the coordinate map {mapping}, "
+                       "which does not exist.")
+    interpolate = Step.of("interpolate", num_interp=s.num_interp)
+    return (interpolate, Step.of("map", mapping=mapping))
   if s.transform == "map_to_torus_rz":
     return (Step.of("map_to_torus_rz",
                     mapc2p=s.mapc2p,

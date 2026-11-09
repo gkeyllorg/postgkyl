@@ -67,6 +67,14 @@ def test_string_to_index_parses_a_float_string():
   assert ip._string_to_index("1.4", arr) == 1
 
 
+@pytest.mark.parametrize("value, expected", [(3, True), (np.int64(-1), True),
+                                             ("3", True), ("-1", True),
+                                             ("1.0", False), (1.0, False),
+                                             ("1:3", False), ("", False)])
+def test_is_index_tells_indices_from_coordinates(value, expected):
+  assert ip.is_index(value) is expected
+
+
 def test_idx_parser_slice_with_empty_start_and_stop():
   arr = np.array([0.0, 1.0, 2.0, 3.0])
   s = ip.idx_parser("2:", arr)  # empty stop -> number of cells

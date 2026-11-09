@@ -291,15 +291,16 @@ def _(
 ):
     # --- settings through the transform, and the layout they produce --------
     def _transform_settings():
+        # Each transform reads the points per cell it takes: num_interp, or
+        # nz_interp along z for the torus maps.
         _points = int(interp_pts.value) if interp_pts.value else None
-        _geometry = transform.value in gp.GEOMETRY_TRANSFORMS
         return replace(
             base_settings,
             weight=weight_path,
             source_ndim=base_grid.ndim if base_grid is not None else 0,
             transform=transform.value,
-            num_interp=None if _geometry else _points,
-            nz_interp=_points if _geometry else None,
+            num_interp=_points,
+            nz_interp=_points,
             phi_tor=math.radians(float(phi_tor_deg.value)),
             x_idx=int(x_idx.value),
         )
