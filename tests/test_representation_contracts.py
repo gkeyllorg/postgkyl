@@ -35,7 +35,7 @@ def test_physical_selection_and_magsq_on_packed_affine_fields(form, backend):
   represented = source.represent(to=form)
   if backend == "numpy":
     represented.values = np.array(represented.values)
-  selected = represented.select(comp=1)
+  selected = represented.select(field=1)
   assert dg_layout(selected).num_fields == 1
   actual = materialize_point_values(selected)
   np.testing.assert_allclose(actual.values[:, 0],
@@ -45,7 +45,7 @@ def test_physical_selection_and_magsq_on_packed_affine_fields(form, backend):
   if backend == "gkyl":
     modal = selected.represent(to="modal")
     np.testing.assert_allclose(modal.values,
-                               source.select(comp=1).values,
+                               source.select(field=1).values,
                                rtol=2e-14,
                                atol=2e-14)
   squared = represented.magsq(coords="0:2")
@@ -165,7 +165,7 @@ def test_clone_isolates_nested_metadata_native_values_and_grids():
   assert source.grid[0][0] == -1.
   cloned.ctx["cells"][0] = 2
   assert not np.shares_memory(source.values, cloned.values)
-  result = source.select(comp=1)
+  result = source.select(field=1)
   result.grid[0][0] = -9.
   assert source.grid[0][0] == -1.
 

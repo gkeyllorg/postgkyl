@@ -9,7 +9,8 @@ Expressions use Reverse Polish Notation, e.g. ``"f0 f1 +"`` adds two datasets
 and ``"f 2 *"`` doubles one. Data tokens are:
 
 - ``f`` / ``fN``  -- the ``N``-th provided dataset (``f`` == ``f0``),
-- ``fN[c]``       -- component ``c`` of that dataset (slices like ``0:3`` work),
+- ``fN[c]``       -- physical field ``c``, retaining its full DG block
+  (slices like ``0:3`` work),
 - ``fN.key``      -- the scalar ``ctx[key]`` of that dataset.
 
 Literals supply numbers, component ranges, and axis selectors. Arithmetic on
@@ -368,7 +369,7 @@ def _push_token(token: str, datasets, grid_stack, value_stack,
       grid = dat.grid
       values = dat.native if dat.backend == "gkyl" else dat.values
     else:
-      dat = select(dat, comp=comp)
+      dat = select(dat, field=comp)
       grid = dat.grid
       values = dat.native if dat.backend == "gkyl" else dat.values
     grid_stack.append([grid])

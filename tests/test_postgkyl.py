@@ -128,7 +128,7 @@ def test_capability_guardrails_on_modal_data():
   with pytest.raises(ValueError):
     np.asarray(a)  # coefficients are not point values
   np.testing.assert_allclose(
-      a.select(comp=0).interpolate().values,
+      a.select(field=0).interpolate().values,
       a.interpolate().select(comp=0).values)
   with pytest.raises(ValueError):
     _ = a + a.interpolate()  # mixed modal + field domains

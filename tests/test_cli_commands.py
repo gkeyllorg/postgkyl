@@ -160,6 +160,7 @@ def test_select_prioritizes_the_first_option_for_each_initial():
   options = {option.name: option.opts for option in select.params}
   assert options == {
       "comp": ["--comp", "-c"],
+      "field": ["--field", "-f"],
       "z0": ["--z0", "-z"],
       "z1": ["--z1"],
       "z2": ["--z2"],

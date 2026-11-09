@@ -113,7 +113,7 @@ def test_point_arithmetic_rejects_mixed_backends(add):
 @pytest.mark.parametrize("add", ADD, ids=ADD_IDS)
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_dataset_shapes_are_not_broadcast(add, backend):
-  a, b = _field(backend, "nodal"), _field(backend, "nodal").select(comp=0)
+  a, b = _field(backend, "nodal"), _field(backend, "nodal").select(field=0)
   with pytest.raises(ValueError, match="incompatible shapes"):
     add(a, b)
 

@@ -74,7 +74,7 @@ def _get_ctx_val(gdata: "GData", key: str, **kwargs):
 
 def _component(d: "GData", comp: int | None) -> "GData":
   """Select a physical field while retaining its complete DG expansion."""
-  return d.clone() if comp is None else operations.select(d, comp=comp)
+  return d.clone() if comp is None else operations.select(d, field=comp)
 
 
 def _direction(kwargs, quantity: str) -> int:

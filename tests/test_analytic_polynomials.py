@@ -220,7 +220,7 @@ def test_three_dimensional_reduction_over_nonadjacent_axes():
 def test_weighted_average_preserves_analytic_dependence(case, removed):
   data, factors, grid = _load_case(case)
   result = data.average([removed],
-                        weight=data.select(comp=1)).interpolate(num_interp=3)
+                        weight=data.select(field=1)).interpolate(num_interp=3)
   kept = [d for d in range(data.num_dims) if d != removed]
   weight = factors[1][removed]
   scale = [
@@ -237,7 +237,7 @@ def test_weighted_average_preserves_analytic_dependence(case, removed):
 @pytest.mark.parametrize("weighted", [False, True])
 def test_full_average_returns_physical_mean(integrable_case, weighted):
   data, factors, grid = integrable_case
-  weight = data.select(comp=1) if weighted else None
+  weight = data.select(field=1) if weighted else None
   expected = np.array([
       np.prod([
           _integral(p * factors[1][d], edges) /
@@ -248,7 +248,7 @@ def test_full_average_returns_physical_mean(integrable_case, weighted):
   ])
   result = data.average(range(data.num_dims), weight=weight)
   np.testing.assert_allclose(result, expected, **ROUND_OFF)
-  single = data.select(comp=0).average(range(data.num_dims), weight=weight)
+  single = data.select(field=0).average(range(data.num_dims), weight=weight)
   assert isinstance(single, float)
   np.testing.assert_allclose(single, expected[0], **ROUND_OFF)
 
@@ -407,14 +407,14 @@ def test_coordinate_projection_chooses_the_upper_trace_at_internal_faces(
 def test_scalar_arithmetic_and_field_selection_have_physical_meaning(
     polynomial_case):
   data, factors, _ = polynomial_case
-  result = (3. - 2. * data).select(comp="1,0").interpolate(num_interp=3)
+  result = (3. - 2. * data).select(field="1,0").interpolate(num_interp=3)
   expected = (3. - 2. * _values(factors, _centers(result.grid)))[..., ::-1]
   np.testing.assert_allclose(result.values, expected, **ROUND_OFF)
 
 
 @pytest.mark.parametrize("operation", ["multiply", "power", "apply"])
 def test_p1_square_is_its_l2_projection(operation):
-  f = pg.load(GEN / "polynomial_1d_ms_p1.gkyl").select(comp=0)
+  f = pg.load(GEN / "polynomial_1d_ms_p1.gkyl").select(field=0)
   result = {
       "multiply": lambda: f * f,
       "power": lambda: f**2,
@@ -431,7 +431,7 @@ def test_p1_square_is_its_l2_projection(operation):
 @pytest.mark.parametrize("inverse", [False, True])
 def test_weak_division_solves_the_projected_equations(inverse):
   data = pg.load(GEN / "polynomial_1d_ms_p1.gkyl")
-  f, g = data.select(comp=0), data.select(comp=1)
+  f, g = data.select(field=0), data.select(field=1)
   result = 1. / g if inverse else f / g
   c = _centers(polynomial_grid(1))[0]
   # For g=a+b*xi and f=A+B*xi, require <g*u-f,1>=<g*u-f,xi>=0.

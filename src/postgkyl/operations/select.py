@@ -54,6 +54,8 @@ def select(data: "GDataState",
            *,
            comp: Annotated[int | float | str | None,
                            CliType(str | None)] = None,
+           field: Annotated[int | float | str | None,
+                            CliType(str | None)] = None,
            z0: Annotated[int | float | str | None,
                          CliType(str | None)] = None,
            z1: Annotated[int | float | str | None,
@@ -77,9 +79,12 @@ def select(data: "GDataState",
   the legacy behaviour. Floats snap to the nearest stored point, or cell
   center on an edge grid; ties choose the first index and out-of-domain
   coordinates snap to an endpoint. No values are evaluated or interpolated.
-  Modal DG selection copies whole cells with every coefficient unchanged.
-  ``comp`` on modal DG data selects whole physical fields, retaining each
-  field's complete basis coefficient block. Slice stops are exclusive.
+  Coordinate selection copies whole DG cells with every coefficient unchanged.
+  ``comp`` indexes the stored array's last axis directly. On packed DG data,
+  this extracts raw coefficients (or nodes) as ordinary cell arrays, without
+  evaluating or normalizing them; the result no longer carries a DG basis.
+  Use ``field`` to retain each physical field's complete DG block instead.
+  ``comp`` and ``field`` are mutually exclusive. Slice stops are exclusive.
 
   A curvilinear axis (a multi-dimensional grid array, produced by ``.map()``
   with ``space="conf"``) has no single 1-D coordinate array of its own to
@@ -101,6 +106,7 @@ def select(data: "GDataState",
   Args:
     data: Dataset whose cells or point values are selected.
     comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+    field: Physical field selector, retaining complete DG coefficient blocks.
     z0: Selector for coordinate direction 0.
     z1: Selector for coordinate direction 1.
     z2: Selector for coordinate direction 2.
@@ -116,6 +122,8 @@ def select(data: "GDataState",
       coordinate/slice selector targets a curvilinear axis whose
       physical coordinate still varies along an unresolved sibling axis.
   """
+  if comp is not None and field is not None:
+    raise ValueError("comp and field selectors are mutually exclusive")
   zs = (z0, z1, z2, z3, z4, z5)
   grid = list(data.grid)
   values = data.values
@@ -186,20 +194,20 @@ def select(data: "GDataState",
       grid[d] = grid_arr[g_idx]
     values_idx[d] = v_idx
 
-  if comp is not None:
-    layout = dg_layout(data)
-    if layout is not None:
-      nb = layout.block_size
-      fields = np.arange(values.shape[-1] // nb)
-      selector = idx_parser(comp, fields, nodal=True)
-      if isinstance(selector, tuple):
-        selector = list(selector)
-      selected = np.atleast_1d(fields[selector])
-      if not selected.size:
-        raise ValueError("Component selection is empty.")
-      values_idx[-1] = (selected[:, None] * nb + np.arange(nb)).ravel()
-    else:
-      values_idx[-1] = idx_parser(comp)
+  layout = dg_layout(data) if comp is not None or field is not None else None
+  if comp is not None or field is not None:
+    block_size = layout.block_size if field is not None and layout else 1
+    components = np.arange(values.shape[-1] // block_size)
+    selector = idx_parser(field if field is not None else comp,
+                          components,
+                          nodal=True)
+    if isinstance(selector, tuple):
+      selector = list(selector)
+    selected = np.atleast_1d(components[selector])
+    if not selected.size:
+      raise ValueError("Component selection is empty.")
+    values_idx[-1] = (selected[:, None] * block_size +
+                      np.arange(block_size)).ravel()
 
   values_out = values[tuple(values_idx)]
   if num_dims == values_out.ndim:  # restore the squeezed component axis
@@ -207,9 +215,18 @@ def select(data: "GDataState",
 
   ctx_updates = {}
   if data.backend == "gkyl":
+    ctx_updates["cells"] = np.array(values_out.shape[:-1], dtype=np.int64)
+  if comp is not None and layout is not None:
+    # Extracted coefficients are independent cell arrays, not a DG expansion.
+    ctx_updates.update(basis_type=None,
+                       poly_order=None,
+                       value_form="nodal",
+                       num_quad=None,
+                       quad_rule=None)
+    values_out = np.array(values_out, copy=True)
+  elif data.backend == "gkyl":
     # Copy the selected cells back into native storage, keeping their
     # representation and original-dimensional basis unchanged.
-    ctx_updates["cells"] = np.array(values_out.shape[:-1], dtype=np.int64)
     values_out = dg.rep.wrap(values_out)
 
   return data._result(grid,
