@@ -111,6 +111,7 @@ class GData(GDataState):
   extract_input = operations.extract_input
   fit = operations.fit
   growth = operations.growth
+  frequency = operations.frequency
   differentiate = operations.differentiate
   map = operations.map
   map_gk_dir = operations.map_gk_dir

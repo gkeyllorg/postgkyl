@@ -51,6 +51,7 @@ from .val2coord import val2coord
 from .extract_input import extract_input
 from .fit import fit
 from .growth import growth
+from .frequency import frequency
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
@@ -98,7 +99,9 @@ command(CommandSpec(Section.UTILITY, Execution.ACTIVATE))(activate)
 command(_COMBINE)(evaluate)
 command(_MAP)(mask)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
-command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(growth)
+_MEASURE = CommandSpec(Section.VERBS, Execution.COMBINE, deactivate_inputs=True)
+command(_MEASURE)(growth)
+command(_MEASURE)(frequency)
 command(
     CommandSpec(Section.UTILITY,
                 Execution.TERMINAL_ALL,
@@ -132,7 +135,7 @@ __all__ = [
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
     "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "map_gk_dir", "growth",
+    "available_evaluate_operators", "map", "map_gk_dir", "growth", "frequency",
     "map_to_torus_rz", "resolve_rz_projection", "map_to_torus_3d",
     "resolve_torus_projection", "map_to_torus_phitheta",
     "resolve_phitheta_projection", "resolve_geometry", "Geometry",

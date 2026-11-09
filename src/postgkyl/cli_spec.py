@@ -74,6 +74,7 @@ class CommandSpec:
   result: ResultPolicy = ResultPolicy.DATA
   order: int = 0
   info_options: tuple[InfoOption, ...] = ()
+  deactivate_inputs: bool = False
 
   def __post_init__(self) -> None:
     if not isinstance(self.section, Section) or not isinstance(
@@ -82,6 +83,11 @@ class CommandSpec:
           "CommandSpec section, execution, and result must be enums")
     if not isinstance(self.consumes_inputs, bool):
       raise TypeError("CommandSpec consumes_inputs must be a bool value")
+    if not isinstance(self.deactivate_inputs, bool):
+      raise TypeError("CommandSpec deactivate_inputs must be a bool value")
+    if self.deactivate_inputs and (self.execution is not Execution.COMBINE
+                                   or self.consumes_inputs):
+      raise ValueError("deactivate_inputs requires non-consuming COMBINE")
     if not isinstance(self.order, int) or isinstance(self.order, bool):
       raise TypeError("CommandSpec order must be an integer")
     if not isinstance(self.info_options, tuple) or not all(
@@ -126,6 +132,11 @@ class CliType:
   """Lossless CLI input type for a broader direct-Python annotation."""
 
   annotation: object
+
+
+@dataclass(frozen=True)
+class CommaTuple:
+  """Spell a fixed tuple as one comma-separated CLI option value."""
 
 
 @dataclass(frozen=True)

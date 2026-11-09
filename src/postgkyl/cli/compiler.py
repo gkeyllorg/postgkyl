@@ -20,6 +20,7 @@ from postgkyl.cli_spec import (
     CliArgument,
     CliHidden,
     CliType,
+    CommaTuple,
     CommandSpec,
     DatasetRef,
     Execution,
@@ -244,8 +245,9 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
   cli_types = [marker for marker in markers if isinstance(marker, CliType)]
   unknown = [
       marker for marker in markers
-      if not isinstance(marker, (ChoiceProvider, CliArgument, CliType, KeyValue,
-                                 DatasetRef, PipelineInput))
+      if not isinstance(marker, (ChoiceProvider, CliArgument, CliType,
+                                 CommaTuple, KeyValue, DatasetRef,
+                                 PipelineInput))
   ]
   if unknown:
     raise _error(fn, name, f"unsupported Annotated marker {unknown[0]!r}")
@@ -255,6 +257,7 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
     raise _error(fn, name, "ChoiceProvider and KeyValue cannot be combined")
   if cli_types:
     annotation = cli_types[0].annotation
+  comma_tuple = any(isinstance(marker, CommaTuple) for marker in markers)
   annotation, optional = _optional(annotation)
   if annotation in (Any, inspect.Parameter.empty):
     raise _error(fn, name, "missing or Any annotation")
@@ -328,7 +331,8 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
                      annotation,
                      optional,
                      items=items,
-                     nargs=len(items))
+                     nargs=1 if comma_tuple else len(items),
+                     metavar="comma_tuple" if comma_tuple else None)
   if origin in (dict, Mapping):
     if not key_values:
       raise _error(fn, name, "mapping needs Annotated[..., KeyValue()]")
@@ -553,6 +557,8 @@ def _click_scalar(codec: TypeCodec):
   if codec.kind is CodecKind.MAPPING:
     return click.STRING
   if codec.kind is CodecKind.TUPLE:
+    if codec.metavar == "comma_tuple":
+      return click.STRING
     return click.Tuple([_click_scalar(item) for item in codec.items])
   raise AssertionError(codec.kind)
 
@@ -574,6 +580,13 @@ def _convert(value, codec: TypeCodec):
         for item in entry
     ]
   if codec.kind is CodecKind.TUPLE:
+    if codec.metavar == "comma_tuple":
+      parts = value.split(",")
+      if len(parts) != len(codec.items):
+        raise click.BadParameter("expected two comma-separated numbers")
+      return tuple(
+          _click_scalar(sub).convert(part, None, None)
+          for part, sub in zip(parts, codec.items))
     return tuple(
         _convert_scalar(item, sub) for item, sub in zip(value, codec.items))
   if codec.kind is CodecKind.MAPPING:
@@ -624,6 +637,13 @@ def _value_tokens(value, codec: TypeCodec) -> list[list[str]]:
       raise TypeError(f"expected a list or tuple, got {type(value).__name__}")
     return [[_scalar_token(item, codec.items[0])] for item in value]
   if codec.kind is CodecKind.TUPLE:
+    if codec.metavar == "comma_tuple":
+      if not isinstance(value, (list, tuple)) or len(value) != len(codec.items):
+        raise TypeError(f"expected {len(codec.items)} values")
+      return [[
+          ",".join(
+              _scalar_token(item, sub) for item, sub in zip(value, codec.items))
+      ]]
     if not isinstance(value, (list, tuple)) or len(value) != codec.nargs:
       raise TypeError(f"expected {codec.nargs} values")
     return [[_scalar_token(item, sub) for item, sub in zip(value, codec.items)]]
@@ -881,7 +901,16 @@ def execute_model(ctx, model: CommandModel, values: dict):
             for dataset in ctx.obj.datasets
         ]
         return result
-      if model.spec.consumes_inputs:
+      if model.spec.deactivate_inputs:
+        selected_ids = {id(dataset) for dataset in selected}
+        result_ids = {id(dataset) for dataset in result_datasets}
+        ctx.obj.set_aside.extend(dataset for dataset in selected
+                                 if id(dataset) not in result_ids)
+        ctx.obj.datasets = [
+            dataset for dataset in ctx.obj.datasets
+            if id(dataset) not in selected_ids
+        ]
+      elif model.spec.consumes_inputs:
         consumed = {id(dataset) for dataset in (referenced or selected)}
         ctx.obj.datasets = [
             dataset for dataset in ctx.obj.datasets

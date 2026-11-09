@@ -721,6 +721,38 @@ class PostgkylSession:
             ``data``'s, or ``dims`` is empty, repeated, or out of range.
         """
 
+  def frequency(self,
+                *,
+                spectrum: bool = False,
+                dir: int | None = None,
+                tag: str | None = None,
+                fft: bool = False,
+                guess: str | None = None,
+                min_n: int | None = None,
+                time_norm: str | float | None = None,
+                time_window: tuple[float, float] | None = None,
+                space_norm: str | float | None = None,
+                interpolated: bool = False,
+                inplace: bool = False,
+                label: str | None = None) -> PostgkylSession:
+    r"""Print dominant angular frequencies and return curves or spectra.
+
+        Args:
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Measure frequency versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
+          fft: Use a temporal FFT peak for plain time traces.
+          guess: Initial sinusoid parameters ``amplitude,omega,phase,offset``.
+          min_n: Minimum length of an automatic leading fit window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
+          inplace: Mutate a plain fitted trace instead of creating one.
+          label: Optional label for the returned dataset.
+        """
+
   def gk_energy_balance(self,
                         name: str,
                         species: list[str] | tuple[str, ...],
@@ -1155,19 +1187,31 @@ class PostgkylSession:
 
   def growth(self,
              *,
+             spectrum: bool = False,
+             dir: int | None = None,
+             tag: str | None = None,
              guess: str | None = None,
              min_n: int | None = None,
+             time_norm: str | float | None = None,
+             time_window: tuple[float, float] | None = None,
+             space_norm: str | float | None = None,
+             interpolated: bool = False,
              inplace: bool = False,
-             tag: str | None = None,
              label: str | None = None) -> PostgkylSession:
-    r"""Fit exponential growth on the best leading data window.
+    r"""Print growth rates and return fitted curves, or a spatial rate spectrum.
 
         Args:
-          data: One-dimensional point-value dataset to fit.
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Compute growth rate versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
           guess: Initial ``amplitude,rate`` parameter guess.
           min_n: Minimum number of points in the fitted leading window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
           inplace: Mutate and return ``data`` instead of creating a dataset.
-          tag: Optional tag for the fitted curve.
           label: Optional label for the fitted curve.
 
         Returns:
