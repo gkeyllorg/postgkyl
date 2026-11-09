@@ -36,6 +36,62 @@ def source(tmp_path):
   return write
 
 
+def test_input_metadata_group_preserves_order_and_builtin_sections(
+    reader, source):
+  metadata = {
+      "Cy":
+      0.25,
+      "rho_s":
+      0.002,
+      "future_parameter":
+      "example",
+      "geometry_type":
+      1,
+      "mass":
+      2.,
+      "input_metadata_keys": [
+          "future_parameter", "Cy", "rho_s", "geometry_type", "mass", "Cy",
+          "missing"
+      ],
+  }
+  data = pg.load(source(metadata=metadata))
+  output = data.info()
+  assert ("├─ From input file:\n"
+          "│  ├─ future_parameter: example\n"
+          "│  ├─ Cy: 0.25\n"
+          "│  └─ rho_s: 0.002\n") in output
+  assert output.count("Cy:") == 1
+  assert output.count("future_parameter:") == 1
+  assert "Geometry info:\n│  └─ Type: 1" in output
+  assert "Species properties:\n│  ├─ Mass:" in output
+  assert "input_metadata_keys" not in output
+  assert "input_metadata_keys:" in data.info(all=True)
+  assert data.ctx["Cy"] == 0.25
+  assert data.ctx["rho_s"] == 0.002
+
+
+@pytest.mark.parametrize("extra", [{}, {"input_metadata_keys": []}])
+def test_input_metadata_requires_recorded_keys(reader, source, extra):
+  data = pg.load(
+      source(metadata={
+          "Cy": 0.25,
+          "rho_s": 0.002,
+          "unknown": 5,
+          **extra
+      }))
+  output = data.info()
+  assert "From input file:" not in output
+  assert "├─ Cy: 0.25" in output
+  assert "├─ rho_s: 0.002" in output
+  assert "├─ unknown: 5" in output
+  assert "input_metadata_keys" not in output
+
+
+def test_input_metadata_empty_group_is_omitted(reader, source):
+  output = pg.load(source(metadata={"input_metadata_keys": []})).info()
+  assert "From input file:" not in output
+
+
 @pytest.mark.parametrize("options, verbose", [([], False), (["--all"], True),
                                               (["--all", "False"], False)])
 def test_info_separates_file_metadata_and_modal_assumption(

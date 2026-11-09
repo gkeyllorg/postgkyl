@@ -9,20 +9,20 @@ import numpy as np
 from postgkyl.cli_spec import CliType
 from postgkyl.dg import eval_at_points
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.io import read
+from postgkyl.io import parse_output_name, read
 from postgkyl.numerics.grid_centering import sample_coordinates
 
 # Mirrors GKYL_GEOMETRY_TOKAMAK_IWL in gkyl_tok_geo_type.
 _TOKAMAK_IWL = 20
 
 
-def _psi_source(file_name: str, geqdsk_file: str | None, psi_file: str | None):
+def _psi_source(file_name: str, psi_file: str | None):
   """Read the companion psi field and its geometry metadata once."""
   if psi_file is None:
-    if not file_name or not geqdsk_file:
-      raise ValueError("map_gk_dir requires geqdsk_file metadata or psi_file")
-    stem = os.path.splitext(os.path.basename(geqdsk_file))[0]
-    psi_file = os.path.join(os.path.dirname(file_name), f"{stem}-psi.gkyl")
+    name = parse_output_name(file_name)
+    if name is None:
+      raise ValueError("map_gk_dir requires a source filename or psi_file")
+    psi_file = os.path.join(name.directory, f"{name.sim}-psi.gkyl")
   ctx: dict = {}
   grid, values = read(psi_file, ctx)
   if ctx.get("geometry_type") != 1 or "tokamak_geo_type" not in ctx:
@@ -32,10 +32,10 @@ def _psi_source(file_name: str, geqdsk_file: str | None, psi_file: str | None):
   return psi_file, grid, values, ctx
 
 
-def _flux_reference(file_name: str, geqdsk_file: str | None,
+def _flux_reference(file_name: str,
                     psi_file: str | None) -> tuple[float, float]:
   """Read the axis and boundary flux from this run's companion psi field."""
-  psi_file, _, _, ctx = _psi_source(file_name, geqdsk_file, psi_file)
+  psi_file, _, _, ctx = _psi_source(file_name, psi_file)
   boundary_key = ("psi_lcfs"
                   if ctx["tokamak_geo_type"] == _TOKAMAK_IWL else "psi_sep")
   try:
@@ -52,12 +52,11 @@ def _flux_reference(file_name: str, geqdsk_file: str | None,
 def _outboard_radius(
     psi: np.ndarray,
     file_name: str,
-    geqdsk_file: str | None,
     psi_file: str | None,
     *,
     relative_to_boundary: bool = False) -> tuple[np.ndarray, str | None]:
   """Find the first outboard root of the stored piecewise polynomial psi."""
-  path, grid, values, ctx = _psi_source(file_name, geqdsk_file, psi_file)
+  path, grid, values, ctx = _psi_source(file_name, psi_file)
   if relative_to_boundary:
     boundary_key = ("psi_lcfs"
                     if ctx["tokamak_geo_type"] == _TOKAMAK_IWL else "psi_sep")
@@ -155,8 +154,9 @@ def map_gk_dir(data: GDataState,
   binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
   subtracts the outboard radius at
   ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
-  ``psi_sep`` for diverted geometry. The companion ``<geqdsk_file stem>-psi.gkyl``
-  supplies the geometry; ``psi_file`` overrides its inferred path.
+  ``psi_sep`` for diverted geometry. The companion ``<simulation_name>-psi.gkyl``
+  supplies the geometry and is shared by all blocks. ``psi_file`` overrides
+  this lookup.
 
   Args:
     data: Interpolated gyrokinetic dataset.
@@ -212,8 +212,7 @@ def map_gk_dir(data: GDataState,
       mapped = samples * cy / rho_s
       axis_label = r"$y/\rho_s$"
     elif destination == "rho_pol":
-      psi_axis, psi_sep = _flux_reference(data.file_name,
-                                          data.ctx.get("geqdsk_file"), psi_file)
+      psi_axis, psi_sep = _flux_reference(data.file_name, psi_file)
       normalized = (samples - psi_axis) / (psi_sep - psi_axis)
       if not np.all(np.isfinite(normalized)) or np.any(normalized < 0):
         raise ValueError(
@@ -224,7 +223,6 @@ def map_gk_dir(data: GDataState,
       mapped, boundary_key = _outboard_radius(
           samples,
           data.file_name,
-          data.ctx.get("geqdsk_file"),
           psi_file,
           relative_to_boundary=destination == "R_omp_R_sep")
       if boundary_key == "psi_lcfs":

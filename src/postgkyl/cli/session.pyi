@@ -1469,8 +1469,9 @@ class PostgkylSession:
         binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
         subtracts the outboard radius at
         ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
-        ``psi_sep`` for diverted geometry. The companion ``<geqdsk_file stem>-psi.gkyl``
-        supplies the geometry; ``psi_file`` overrides its inferred path.
+        ``psi_sep`` for diverted geometry. The companion ``<simulation_name>-psi.gkyl``
+        supplies the geometry and is shared by all blocks. ``psi_file`` overrides
+        this lookup.
 
         Args:
           data: Interpolated gyrokinetic dataset.

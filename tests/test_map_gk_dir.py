@@ -11,6 +11,56 @@ from postgkyl import gpython
 map_module = importlib.import_module("postgkyl.operations.map_gk_dir")
 
 
+@pytest.mark.parametrize("source,override,expected", [
+    ("scan-run-ion_M0_0.gkyl", None, "scan-run-psi.gkyl"),
+    ("scan-run_b3-ion_M0_0.gkyl", None, "scan-run-psi.gkyl"),
+    ("scan-run-ion_M0_0.gkyl", "override.gkyl", "override.gkyl"),
+])
+def test_psi_source_discovery(tmp_path, monkeypatch, source, override,
+                              expected):
+  seen = []
+
+  def fake_read(path, ctx):
+    seen.append(path)
+    ctx.update(geometry_type=1, tokamak_geo_type=20)
+    return [], None
+
+  monkeypatch.setattr(map_module, "read", fake_read)
+  map_module._psi_source(str(tmp_path / source),
+                         str(tmp_path / override) if override else None)
+  assert seen == [str(tmp_path / expected)]
+
+
+@pytest.mark.parametrize("coord", ["rho_pol", "R_omp", "R_omp_R_sep"])
+def test_map_gk_dir_does_not_use_legacy_psi_file(tmp_path, coord):
+  (tmp_path / "eq-psi.gkyl").touch()
+  data = GDataState(ctx={"interpolated": True, "geqdsk_file": "eq.geqdsk"})
+  data._file_name = str(tmp_path / "run_b3-ion_M0_0.gkyl")
+  data.push([np.array([0., 1.])], np.ones((1, 1)))
+
+  with pytest.raises(FileNotFoundError, match="run-psi\\.gkyl"):
+    map_gk_dir(data, dir=0, coord=coord)
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_psi_source_does_not_fallback_after_read_error(tmp_path, monkeypatch,
+                                                       explicit):
+  preferred = tmp_path / "run-psi.gkyl"
+  preferred.touch()
+  (tmp_path / "eq-psi.gkyl").touch()
+  seen = []
+
+  def fail_read(path, ctx):
+    seen.append(path)
+    raise OSError("unreadable psi")
+
+  monkeypatch.setattr(map_module, "read", fail_read)
+  with pytest.raises(OSError, match="unreadable psi"):
+    map_module._psi_source(str(tmp_path / "run-ion_M0_0.gkyl"),
+                           str(preferred) if explicit else None)
+  assert seen == [str(preferred)]
+
+
 def test_rho_pol_maps_sample_positions_and_preserves_values(monkeypatch):
   values = np.arange(12.0).reshape(3, 4, 1)
   data = GDataState(ctx={"interpolated": True, "geqdsk_file": "eq.geqdsk"})
@@ -27,7 +77,7 @@ def test_rho_pol_maps_sample_positions_and_preserves_values(monkeypatch):
   assert result.ctx["coordinate_labels"][0] == r"$\rho_{\mathrm{pol}}$"
 
 
-def test_flux_reference_uses_equilibrium_basename_and_lcfs(monkeypatch):
+def test_flux_reference_uses_simulation_name_and_lcfs(monkeypatch):
   seen = []
 
   def fake_read(path, ctx):
@@ -41,10 +91,9 @@ def test_flux_reference_uses_equilibrium_basename_and_lcfs(monkeypatch):
     return [], None
 
   monkeypatch.setattr(map_module, "read", fake_read)
-  assert map_module._flux_reference("run/field.gkyl", "other/eq.geqdsk",
-                                    None) == (5., 1.)
-  assert seen == ["run/eq-psi.gkyl"]
-  assert map_module._flux_reference("", None, "elsewhere/psi.gkyl") == (5., 1.)
+  assert map_module._flux_reference("run/sim-field_0.gkyl", None) == (5., 1.)
+  assert seen == ["run/sim-psi.gkyl"]
+  assert map_module._flux_reference("", "elsewhere/psi.gkyl") == (5., 1.)
   assert seen[-1] == "elsewhere/psi.gkyl"
 
 
@@ -59,7 +108,7 @@ def test_flux_reference_uses_separatrix_for_diverted_tokamak(monkeypatch):
     return [], None
 
   monkeypatch.setattr(map_module, "read", fake_read)
-  assert map_module._flux_reference("", None, "psi.gkyl") == (0., 4.)
+  assert map_module._flux_reference("", "psi.gkyl") == (0., 4.)
 
 
 def test_flux_reference_requires_explicit_tokamak_subtype(monkeypatch):
@@ -70,7 +119,7 @@ def test_flux_reference_requires_explicit_tokamak_subtype(monkeypatch):
 
   monkeypatch.setattr(map_module, "read", fake_read)
   with pytest.raises(ValueError, match="tokamak_geo_type"):
-    map_module._flux_reference("", None, "old-psi.gkyl")
+    map_module._flux_reference("", "old-psi.gkyl")
 
 
 def test_invalid_direction_coord_and_domain(monkeypatch):
@@ -226,7 +275,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
     map_gk_dir(data, dir=0, coord="R_omp_R_sep")
 
   with pytest.raises(ValueError, match="No outboard R_omp root"):
-    map_module._outboard_radius(np.array([9.]), "", None, "eq-psi.gkyl")
+    map_module._outboard_radius(np.array([9.]), "", "eq-psi.gkyl")
 
   # A nonmonotone outboard trace crosses psi=0.75 at R=1.5 and R=2.5.
   for i in range(4):
@@ -234,10 +283,10 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
       r = i + 0.5 + nodes[:, 0] / 2
       coeffs[i, j] = n2m @ (1. - (r - 2.)**2)
   np.testing.assert_allclose(map_module._outboard_radius(
-      np.array([0.75]), "", None, "eq-psi.gkyl")[0], [1.5],
+      np.array([0.75]), "", "eq-psi.gkyl")[0], [1.5],
                              rtol=1e-12,
                              atol=1e-12)
 
   del ctx["zmaxis"]
   with pytest.raises(ValueError, match="zmaxis"):
-    map_module._outboard_radius(np.array([0.75]), "", None, "eq-psi.gkyl")
+    map_module._outboard_radius(np.array([0.75]), "", "eq-psi.gkyl")
