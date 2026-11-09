@@ -9,7 +9,7 @@ Expressions use Reverse Polish Notation, e.g. ``"f0 f1 +"`` adds two datasets
 and ``"f 2 *"`` doubles one. Data tokens are:
 
 - ``f`` / ``fN``  -- the ``N``-th provided dataset (``f`` == ``f0``),
-- ``fN[c]``       -- physical field ``c``, retaining its full DG block
+- ``fN[c]``       -- field ``c``, retaining its full DG block
   (slices like ``0:3`` work),
 - ``fN.key``      -- the scalar ``ctx[key]`` of that dataset.
 
@@ -76,7 +76,7 @@ _POINTWISE_TOKENS = frozenset({
     "min2",
 })
 
-# f, f0, f12 ... with optional [comp] selection and optional .ctxkey suffix.
+# f, f0, f12 ... with optional [field] selection and optional .ctxkey suffix.
 _DATA_TOKEN = re.compile(r"^f(\d*)(?:\[([^\]]*)\])?(?:\.(\w+))?$")
 
 
@@ -244,7 +244,7 @@ def _native_kernel(token: str, tmp_grid, tmp_values, tmp_ctx, func):
 
   # Empty/absent grids belong to scalars, literals, or terminal reductions.
   # Wrap field stack entries without copying buffers so all entry points use
-  # the same compatibility rules, including after component selection.
+  # the same compatibility rules, including after field selection.
   fields = [
       GDataState(ctx=ctx).push(grid, value)
       for grid, value, ctx in zip(tmp_grid, tmp_values, tmp_ctx) if grid
@@ -357,7 +357,7 @@ def _push_token(token: str, datasets, grid_stack, value_stack,
   match = _DATA_TOKEN.match(token)
   if match:
     idx = int(match.group(1)) if match.group(1) else 0
-    comp = match.group(2)
+    field = match.group(2)
     ctx_key = match.group(3)
     dat = datasets[idx]
     if ctx_key is not None:
@@ -365,11 +365,11 @@ def _push_token(token: str, datasets, grid_stack, value_stack,
         raise ValueError(
             f"evaluate: unknown ctx key '{ctx_key}' on dataset f{idx}")
       grid, values = None, np.array(dat.ctx[ctx_key])
-    elif comp is None:
+    elif field is None:
       grid = dat.grid
       values = dat.native if dat.backend == "gkyl" else dat.values
     else:
-      dat = select(dat, field=comp)
+      dat = select(dat, field=field)
       grid = dat.grid
       values = dat.native if dat.backend == "gkyl" else dat.values
     grid_stack.append([grid])
@@ -404,7 +404,10 @@ def evaluate(chain: Annotated[str, CliArgument()],
   """Evaluate an RPN expression over an explicit list of datasets.
 
   ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
-  see the module docstring for the token grammar. The result is built via
+  ``fN[c]`` selects field ``c`` (also accepting slices and comma-separated
+  indices), retaining its complete DG block just like ``select(field=c)``.
+  Use ``select(comp=c)`` before evaluating to extract raw stored components.
+  See the module docstring for the token grammar. The result is built via
   ``datasets[0]._result(...)`` (so it stays the caller's concrete dataset
   class) and holds the single value left on top of the stack.
 

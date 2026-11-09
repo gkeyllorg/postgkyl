@@ -149,7 +149,7 @@ def _vector_magnitude(cov, contra) -> "GData":
 
 # --------------------------------------------------- generic fetch factories
 def _make_fetch_comp(icomp: int | None):
-  """A fetch function that extracts the ``icomp``-th physical component."""
+  """A fetch function that extracts the ``icomp``-th field component."""
 
   def fetch(gdatas: list["GData"], **kwargs):
     return _component(gdatas[0], icomp)

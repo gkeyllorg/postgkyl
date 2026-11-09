@@ -83,7 +83,7 @@ def select(data: "GDataState",
   ``comp`` indexes the stored array's last axis directly. On packed DG data,
   this extracts raw coefficients (or nodes) as ordinary cell arrays, without
   evaluating or normalizing them; the result no longer carries a DG basis.
-  Use ``field`` to retain each physical field's complete DG block instead.
+  Use ``field`` to retain each field's complete DG block instead.
   ``comp`` and ``field`` are mutually exclusive. Slice stops are exclusive.
 
   A curvilinear axis (a multi-dimensional grid array, produced by ``.map()``
@@ -105,8 +105,8 @@ def select(data: "GDataState",
 
   Args:
     data: Dataset whose cells or point values are selected.
-    comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
-    field: Physical field selector, retaining complete DG coefficient blocks.
+    comp: Stored last-axis component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+    field: Field selector, retaining complete DG blocks.
     z0: Selector for coordinate direction 0.
     z1: Selector for coordinate direction 1.
     z2: Selector for coordinate direction 2.
