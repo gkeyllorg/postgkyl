@@ -162,6 +162,69 @@ def test_rho_s_maps_binormal_samples_from_run_metadata():
       map_gk_dir(point_data, dir=1, coord="rho_s").grid[1], [-10., 10.])
 
 
+@pytest.mark.parametrize("optional", [
+    {
+        "rho_s": "rho_s0",
+        "Cy": "0.4"
+    },
+    {
+        "rho_s": "rho_s0,Cy=0.4"
+    },
+    {
+        "Cy": "0.4,rho_s=rho_s0"
+    },
+])
+def test_rho_s_normalization_overrides(optional):
+  data = GDataState(ctx={
+      "interpolated": True,
+      "geometry_type": 1,
+      "Cy": 0.2,
+      "rho_s0": 0.004
+  })
+  data.push([np.array([0., 1.]), np.array([-0.1, 0.1])], np.ones((1, 2, 1)))
+  mapped = map_gk_dir(data, dir=1, coord="rho_s", optional=optional)
+  np.testing.assert_allclose(mapped.grid[1], [-10., 10.])
+  assert "rho_s" not in mapped.ctx
+  assert mapped.ctx["Cy"] == 0.2
+
+
+def test_rho_s_accepts_numeric_normalization_and_cy_metadata_alias():
+  data = GDataState(ctx={"interpolated": True, "geometry_type": 1, "Cy0": 0.22})
+  data.push([np.array([0., 1.]), np.array([-1.1, 1.1])], np.ones((1, 2, 1)))
+  mapped = map_gk_dir(data,
+                      dir=1,
+                      coord="rho_s",
+                      optional={
+                          "rho_s": "1.1",
+                          "Cy": "Cy0"
+                      })
+  np.testing.assert_allclose(mapped.grid[1], [-0.22, 0.22])
+
+
+@pytest.mark.parametrize("optional,match", [
+    ({
+        "wrong": "1"
+    }, "expects Cy or rho_s"),
+    ({
+        "rho_s": "rho_s0,Cy"
+    }, "expects Cy or rho_s"),
+    ({
+        "rho_s": "rho_s0,Cy=0.2,Cy=0.3"
+    }, "repeats Cy"),
+    ({
+        "rho_s": "missing"
+    }, "numeric rho_s"),
+    ({
+        "rho_s": "0"
+    }, "positive rho_s"),
+])
+def test_rho_s_rejects_invalid_overrides(optional, match):
+  data = GDataState(ctx={"interpolated": True, "geometry_type": 1, "Cy": 0.2})
+  data.push([np.array([0., 1.]), np.array([0., 1.])], np.ones((1, 1, 1)))
+  with pytest.raises(ValueError, match=match):
+    map_gk_dir(data, dir=1, coord="rho_s", optional=optional)
+
+
 def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
   values = np.arange(12.).reshape(3, 4, 1)
   data = GDataState(ctx={
@@ -208,7 +271,8 @@ def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
 def test_rho_s_requires_valid_metadata(metadata):
   data = GDataState(ctx={"interpolated": True, "geometry_type": 1, **metadata})
   data.push([np.array([0., 1.]), np.array([0., 1.])], np.ones((1, 1, 1)))
-  with pytest.raises(ValueError, match="Cy and rho_s|positive rho_s"):
+  with pytest.raises(ValueError,
+                     match="numeric Cy|numeric rho_s|positive rho_s"):
     map_gk_dir(data, dir=1, coord="rho_s")
 
 

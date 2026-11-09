@@ -22,6 +22,23 @@ from postgkyl.cli_spec import CommandSpec, Execution, Section, command
 
 _MODELS = {model.name: model for model in MODELS}
 
+
+@pytest.mark.parametrize("tokens,expected", [
+    (["-o", "rho_s=rho_s0,Cy=0.2"], {
+        "rho_s": "rho_s0,Cy=0.2"
+    }),
+    (["-o", "rho_s=rho_s0", "-o", "Cy=0.2"], {
+        "rho_s": "rho_s0",
+        "Cy": "0.2"
+    }),
+])
+def test_map_gk_dir_optional_cli_forms(tokens, expected):
+  parsed = _parse(_MODELS["map_gk_dir"], ["-d", "1", "-c", "rho_s", *tokens])
+  parameter = next(p for p in _MODELS["map_gk_dir"].parameters
+                   if p.name == "optional")
+  assert _convert(parsed["optional"], parameter.codec) == expected
+
+
 # (Python value, what parsing its tokens gives back) per scalar codec.
 _SCALARS = {
     CodecKind.STRING: [("a b $\\alpha$", "a b $\\alpha$"), ("--grid", "--grid"),

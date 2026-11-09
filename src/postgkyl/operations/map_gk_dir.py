@@ -6,7 +6,7 @@ import os
 from typing import Annotated
 import numpy as np
 
-from postgkyl.cli_spec import CliType
+from postgkyl.cli_spec import CliType, KeyValue
 from postgkyl.dg import eval_at_points
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.io import parse_output_name, read
@@ -14,6 +14,36 @@ from postgkyl.numerics.grid_centering import sample_coordinates
 
 # Mirrors GKYL_GEOMETRY_TOKAMAK_IWL in gkyl_tok_geo_type.
 _TOKAMAK_IWL = 20
+
+
+def _normalization_options(optional: dict[str, str] | None) -> dict[str, str]:
+  """Expand comma-separated CLI entries into the two normalization inputs."""
+  result: dict[str, str] = {}
+  for key, value in (optional or {}).items():
+    parts = str(value).split(",")
+    entries = [f"{key}={parts[0]}", *parts[1:]]
+    for entry in entries:
+      name, separator, source = entry.partition("=")
+      name, source = name.strip(), source.strip()
+      if not separator or not source or name not in {"Cy", "rho_s"}:
+        raise ValueError("map_gk_dir optional expects Cy or rho_s as key=value")
+      if name in result:
+        raise ValueError(f"map_gk_dir optional repeats {name}")
+      result[name] = source
+  return result
+
+
+def _normalization_value(ctx: dict, name: str, options: dict[str,
+                                                             str]) -> float:
+  source = options.get(name, name)
+  try:
+    return float(source)
+  except (TypeError, ValueError):
+    pass
+  try:
+    return float(ctx[source])
+  except (KeyError, TypeError, ValueError) as err:
+    raise ValueError(f"rho_s requires numeric {name} from {source!r}") from err
 
 
 def _psi_source(file_name: str, psi_file: str | None):
@@ -136,16 +166,19 @@ def _outboard_radius(
   return result, None
 
 
-def map_gk_dir(data: GDataState,
-               *,
-               dir: Annotated[int | tuple[int, ...] | list[int] | str,
-                              CliType(str)],
-               coord: Annotated[str | tuple[str, ...] | list[str],
-                                CliType(str)],
-               psi_file: str | None = None,
-               inplace: bool = False,
-               tag: str | None = None,
-               label: str | None = None) -> GDataState:
+def map_gk_dir(
+    data: GDataState,
+    *,
+    dir: Annotated[int | tuple[int, ...] | list[int] | str,
+                   CliType(str)],
+    coord: Annotated[str | tuple[str, ...] | list[str],
+                     CliType(str)],
+    psi_file: str | None = None,
+    inplace: bool = False,
+    tag: str | None = None,
+    label: str | None = None,
+    optional: Annotated[dict[str, str] | None,
+                        KeyValue()] = None) -> GDataState:
   """Map interpolated psi samples to a flux or outboard-midplane coordinate.
 
   Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
@@ -163,6 +196,9 @@ def map_gk_dir(data: GDataState,
     dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
     coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
     psi_file: Optional path to Gkeyll's psi field.
+    optional: Normalization inputs as metadata names or numeric values. At the
+      CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
+      ``-o rho_s=rho_s0 -o Cy=0.2``; ``-o rho_s=1.1`` uses a literal value.
     inplace: Mutate and return ``data`` when true.
     tag: Optional tag for the result.
     label: Optional display label for the result.
@@ -188,6 +224,7 @@ def map_gk_dir(data: GDataState,
   if not data.ctx.get("interpolated") or data.backend != "numpy":
     raise ValueError(
         "map_gk_dir requires interpolated NumPy data; call interp first")
+  options = _normalization_options(optional)
   grid = list(data.grid)
   labels = dict(data.ctx.get("coordinate_labels", {}))
   for direction, destination in zip(directions, coordinates):
@@ -201,12 +238,8 @@ def map_gk_dir(data: GDataState,
     if destination == "rho_s":
       if data.ctx.get("geometry_type") != 1:
         raise ValueError("rho_s requires tokamak geometry metadata")
-      try:
-        cy = float(data.ctx["Cy"])
-        rho_s = float(data.ctx["rho_s"])
-      except (KeyError, TypeError, ValueError) as err:
-        raise ValueError(
-            "rho_s requires numeric Cy and rho_s metadata") from err
+      cy = _normalization_value(data.ctx, "Cy", options)
+      rho_s = _normalization_value(data.ctx, "rho_s", options)
       if not np.isfinite(cy) or cy == 0 or not np.isfinite(rho_s) or rho_s <= 0:
         raise ValueError("rho_s requires finite nonzero Cy and positive rho_s")
       mapped = samples * cy / rho_s

@@ -1504,7 +1504,8 @@ class PostgkylSession:
                  psi_file: str | None = None,
                  inplace: bool = False,
                  tag: str | None = None,
-                 label: str | None = None) -> PostgkylSession:
+                 label: str | None = None,
+                 optional: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Map interpolated psi samples to a flux or outboard-midplane coordinate.
 
         Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
@@ -1522,6 +1523,9 @@ class PostgkylSession:
           dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
           coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
           psi_file: Optional path to Gkeyll's psi field.
+          optional: Normalization inputs as metadata names or numeric values. At the
+            CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
+            ``-o rho_s=rho_s0 -o Cy=0.2``; ``-o rho_s=1.1`` uses a literal value.
           inplace: Mutate and return ``data`` when true.
           tag: Optional tag for the result.
           label: Optional display label for the result.
