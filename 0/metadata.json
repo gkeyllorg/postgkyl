@@ -1,0 +1,95 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M70S0JV0WBB46W7K363MAGV3",
+  "session_id": "01a1c17b-05ab-7331-bb7d-3be70d5ab3fb",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-09T18:27:02.097672655Z",
+  "branch": "select-component-dg",
+  "checkpoints_count": 3,
+  "save_step_count": 3,
+  "files_touched": [
+    "docs/source/concepts.rst",
+    "src/postgkyl/cli/session.pyi",
+    "src/postgkyl/diagnostics/gk/quantities.py",
+    "src/postgkyl/diagnostics/mom/enstrophy.py",
+    "src/postgkyl/diagnostics/mom/five_moment.py",
+    "src/postgkyl/operations/evaluate.py",
+    "src/postgkyl/operations/select.py",
+    "tests/test_analytic_polynomials.py",
+    "tests/test_cli_commands.py",
+    "tests/test_coverage_operations.py",
+    "tests/test_diagnostics_gk_modal.py",
+    "tests/test_operations_arithmetic.py",
+    "tests/test_operations_select.py",
+    "tests/test_postgkyl.py",
+    "tests/test_representation_contracts.py",
+    "tests/test_review_composition.py",
+    "tests/test_select_cells.py",
+    "tests/test_surface_fields.py"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "6cf3e80b71e3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 53541,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2603392,
+    "output_tokens": 9300,
+    "api_call_count": 49,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-09T18:27:02.076491928Z",
+    "agent_lines": 169,
+    "agent_removed": 70,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 169,
+    "total_lines_changed": 239,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 201,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".agents/skills/data/SKILL.md": 86,
+        ".agents/skills/design/SKILL.md": 98,
+        ".agents/skills/gkeyll-core/SKILL.md": 17
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 201,
+      "user_lines_removed": 0,
+      "agent_lines_added": 169,
+      "agent_lines_removed": 70,
+      "user_added_per_file": {
+        ".agents/skills/data/SKILL.md": 86,
+        ".agents/skills/design/SKILL.md": 98,
+        ".agents/skills/gkeyll-core/SKILL.md": 17
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 201,
+      "user_lines_removed": 0,
+      "agent_lines_added": 169,
+      "agent_lines_removed": 70,
+      "user_added_per_file": {
+        ".agents/skills/data/SKILL.md": 86,
+        ".agents/skills/design/SKILL.md": 98,
+        ".agents/skills/gkeyll-core/SKILL.md": 17
+      }
+    }
+  ]
+}

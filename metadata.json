@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M70S0JV0WBB46W7K363MAGV3",
+  "strategy": "manual-commit",
+  "branch": "select-component-dg",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/source/concepts.rst",
+    "src/postgkyl/cli/session.pyi",
+    "src/postgkyl/diagnostics/gk/quantities.py",
+    "src/postgkyl/diagnostics/mom/enstrophy.py",
+    "src/postgkyl/diagnostics/mom/five_moment.py",
+    "src/postgkyl/operations/evaluate.py",
+    "src/postgkyl/operations/select.py",
+    "tests/test_analytic_polynomials.py",
+    "tests/test_cli_commands.py",
+    "tests/test_coverage_operations.py",
+    "tests/test_diagnostics_gk_modal.py",
+    "tests/test_operations_arithmetic.py",
+    "tests/test_operations_select.py",
+    "tests/test_postgkyl.py",
+    "tests/test_representation_contracts.py",
+    "tests/test_review_composition.py",
+    "tests/test_select_cells.py",
+    "tests/test_surface_fields.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 53541,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 2603392,
+    "output_tokens": 9300,
+    "api_call_count": 49,
+    "subagent_tokens_complete": true
+  }
+}

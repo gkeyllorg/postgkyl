@@ -1,0 +1,9 @@
+It seems like pgkyl tests/test_data/generated/1d_ms_p1.gkyl sel -c0 pl selects the 0th c-th vector component, not the DG coefficient. Instead, select -c should pick the component of the array, which in this case would be the p0 component of the array. Likewise, select -c1 would pick the p1 coefficient of this array. Right now, it seems like it's picking both components
+
+---
+
+Did  your changes tests the data.select(comp=) feature now? Is the testing comprehensive?
+
+---
+
+Which tests the comp=0 or comp=0 indexing?
