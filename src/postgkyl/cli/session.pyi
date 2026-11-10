@@ -553,7 +553,10 @@ class PostgkylSession:
     r"""Evaluate an RPN expression over an explicit list of datasets.
 
         ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
-        see the module docstring for the token grammar. The result is built via
+        ``fN[c]`` selects field ``c`` (also accepting slices and comma-separated
+        indices), retaining its complete DG block just like ``select(field=c)``.
+        Use ``select(comp=c)`` before evaluating to extract raw stored components.
+        See the module docstring for the token grammar. The result is built via
         ``datasets[0]._result(...)`` (so it stays the caller's concrete dataset
         class) and holds the single value left on top of the stack.
 
@@ -3934,6 +3937,7 @@ class PostgkylSession:
   def select(self,
              *,
              comp: str | float | None = None,
+             field: str | float | None = None,
              z0: str | float | None = None,
              z1: str | float | None = None,
              z2: str | float | None = None,
@@ -3951,9 +3955,12 @@ class PostgkylSession:
         the legacy behaviour. Floats snap to the nearest stored point, or cell
         center on an edge grid; ties choose the first index and out-of-domain
         coordinates snap to an endpoint. No values are evaluated or interpolated.
-        Modal DG selection copies whole cells with every coefficient unchanged.
-        ``comp`` on modal DG data selects whole physical fields, retaining each
-        field's complete basis coefficient block. Slice stops are exclusive.
+        Coordinate selection copies whole DG cells with every coefficient unchanged.
+        ``comp`` indexes the stored array's last axis directly. On packed DG data,
+        this extracts raw coefficients (or nodes) as ordinary cell arrays, without
+        evaluating or normalizing them; the result no longer carries a DG basis.
+        Use ``field`` to retain each field's complete DG block instead.
+        ``comp`` and ``field`` are mutually exclusive. Slice stops are exclusive.
 
         A curvilinear axis (a multi-dimensional grid array, produced by ``.map()``
         with ``space="conf"``) has no single 1-D coordinate array of its own to
@@ -3974,7 +3981,8 @@ class PostgkylSession:
 
         Args:
           data: Dataset whose cells or point values are selected.
-          comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+          comp: Stored last-axis component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+          field: Field selector, retaining complete DG blocks.
           z0: Selector for coordinate direction 0.
           z1: Selector for coordinate direction 1.
           z2: Selector for coordinate direction 2.

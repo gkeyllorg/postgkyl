@@ -53,7 +53,7 @@ def test_surface_load_reconstructs_faces_and_field_blocks(
                                 raw_values[tail + (slice(2 * block, None), )])
   if basis_available:
     np.testing.assert_array_equal(
-        data.select(comp=1).values, data.values[..., block:2 * block])
+        data.select(field=1).values, data.values[..., block:2 * block])
 
 
 @needs_gkeyll
@@ -129,7 +129,7 @@ def test_1d_surface_plots_physical_values_at_faces():
   np.testing.assert_allclose(data.local_poly().values, data.values, **ROUND_OFF)
   np.testing.assert_allclose((data + 2.0).interpolate().values,
                              data.values + 2.0, **ROUND_OFF)
-  figure = data.select(comp=0).plot(no_show=True)
+  figure = data.select(field=0).plot(no_show=True)
   line = figure.axes[0].lines[0]
   np.testing.assert_array_equal(line.get_xdata(), data.grid[0])
   np.testing.assert_allclose(line.get_ydata(), expected, **ROUND_OFF)
@@ -159,8 +159,8 @@ def test_1d_surface_scalar_arithmetic_preserves_face_values():
 @needs_gkeyll
 def test_surface_arithmetic_and_point_operations():
   data = pg.load(_filename(3, 1))
-  shifted = (7.0 - 2.0 * data).select(comp=0).interpolate(num_interp=2)
-  base = data.select(comp=0).interpolate(num_interp=2)
+  shifted = (7.0 - 2.0 * data).select(field=0).interpolate(num_interp=2)
+  base = data.select(field=0).interpolate(num_interp=2)
   np.testing.assert_allclose(shifted.values, 7.0 - 2.0 * base.values,
                              **ROUND_OFF)
   np.testing.assert_allclose((data + data).interpolate(num_interp=2).values,

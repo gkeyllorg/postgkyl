@@ -70,7 +70,7 @@ def _project(samples):
 ])
 def test_scalar_quantities_keep_modal_coefficients(moments, fetch, components,
                                                    formula):
-  sources = [moments.select(comp=c) for c in components]
+  sources = [moments.select(field=c) for c in components]
   before = [s.values.copy() for s in sources]
   expected = _project(formula(*[_samples(s) for s in sources]))
   out = fetch(sources)
@@ -114,7 +114,7 @@ def test_all_components_retained(moments):
 
 @pytest.mark.parametrize("fetch", [ff.fetch_c_s_hot_i, ff.fetch_c_s_cold_i])
 def test_sound_speed_multiple_ions(moments, fetch):
-  n, t = moments.select(comp=0), moments.select(comp=2)
+  n, t = moments.select(field=0), moments.select(field=2)
   sources = [[n, t], [n * 0.6, t * 0.4], [n * 0.2, t * 0.7]]
   # Quasineutral ions with charge states 1 and 2; species overrides also
   # exercise resolution of mass/charge independent of source metadata.
@@ -133,14 +133,14 @@ def test_sound_speed_multiple_ions(moments, fetch):
 
 
 def test_projected_square_root_floors_negative_values(moments):
-  negative = -moments.select(comp=2)
+  negative = -moments.select(field=2)
   out = ff.fetch_vt([negative])
   expected = np.array([[np.sqrt(2.) * 1e-40, 0.]] * 2)
   np.testing.assert_allclose(out.values, expected, rtol=2e-12, atol=1e-55)
 
 
 def test_pressure_differs_from_multiplication_after_interpolation(moments):
-  n, t = moments.select(comp=0), moments.select(comp=2)
+  n, t = moments.select(field=0), moments.select(field=2)
   weak = ff.fetch_press_p([n, t]).interpolate()
   pointwise = n.interpolate() * t.interpolate()
   assert not np.allclose(weak.values, pointwise.values)
@@ -167,8 +167,8 @@ def test_recursive_loader_returns_modal_temperature(tmp_path):
     "fetch", [ff.fetch_ExB_vel, ff.fetch_gradB_vel, ff.fetch_diamag_vel])
 @pytest.mark.parametrize("direction", [0, 1, 2])
 def test_drifts_use_cell_local_derivatives(moments, fetch, direction):
-  jac, bmag, scalar = [moments.select(comp=c) for c in [0, 3, 2]]
-  b_i = moments.select(comp="0:3")
+  jac, bmag, scalar = [moments.select(field=c) for c in [0, 3, 2]]
+  b_i = moments.select(field="0:3")
   sources = [jac, bmag, b_i, scalar]
   if fetch is ff.fetch_diamag_vel:
     sources.append(scalar)
@@ -195,8 +195,8 @@ def test_drifts_use_cell_local_derivatives(moments, fetch, direction):
 
 
 def test_quantities_reject_mixed_representations(moments):
-  n = moments.select(comp=0)
-  t = moments.select(comp=2)
+  n = moments.select(field=0)
+  t = moments.select(field=2)
   with pytest.raises(ValueError, match="value_forms"):
     ff.fetch_press_p([n, t.represent(to="nodal")])
   with pytest.raises(ValueError, match="different backends"):
@@ -207,8 +207,8 @@ def test_quantities_reject_mixed_representations(moments):
 @pytest.mark.parametrize("direction", [0, 1, 2])
 def test_cross_product_in_reduced_and_full_configuration_space(ndim, direction):
   data = pg.load(str(DATA.parent / f"gk_drift_{ndim}d_p1.gkyl"))
-  phi, jac, bi = data.select(comp=0), data.select(comp=1), data.select(
-      comp="2:5")
+  phi, jac, bi = data.select(field=0), data.select(field=1), data.select(
+      field="2:5")
   gradient = np.zeros(3)
   gradient[2] = 2 * ndim
   if ndim > 1:

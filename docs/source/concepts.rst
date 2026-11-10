@@ -94,7 +94,15 @@ lifted back onto the full basis, constant along the averaged directions, so
 ``--dims 1``. ``eval_at_coord_proj`` evaluates at
 specified coordinates and projects into the basis of the surviving directions.
 
-After interpolation, ``select(comp=...)`` selects components and
+``select(comp=...)`` (CLI ``select -c``) indexes the stored array's last
+axis. Before interpolation this selects individual DG coefficients, returned
+as ordinary cell arrays suitable for plotting; it does not evaluate the field
+or normalize the constant coefficient. For example, on scalar 1D p1 data,
+``select -c0`` extracts the constant coefficient and ``select -c1`` the linear
+coefficient. Use ``select(field=...)`` (CLI ``select --field``) to retain an
+array's complete DG expansion for further DG operations.
+
+After interpolation, ``select(comp=...)`` selects array components and
 ``select(z0=..., z1=...)`` selects positions. A selected axis may retain a
 singleton dimension. Rendering squeezes it as needed.
 Use ``local_poly()`` when the plot must preserve jumps between DG cells.
