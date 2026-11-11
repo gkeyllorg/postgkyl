@@ -53,7 +53,7 @@ def test_ranges_preserve_whole_cells(data, selector, expected):
 @pytest.mark.parametrize("comp,fields", [(1, [1]), (-1, [1]), ("0,1", [0, 1]),
                                          ("1,0", [1, 0]), ("1:", [1])])
 def test_components_are_complete_fields(data, comp, fields):
-  result = data.select(comp=comp)
+  result = data.select(field=comp)
   expected = data.values.reshape(4, 3, 2,
                                  9)[...,
                                     fields, :].reshape(4, 3,
@@ -67,7 +67,7 @@ def test_mixed_selection_and_inplace(data):
   expected = data.values[1:2, 1:, 9:].copy()
   result = data.select(z0=1,
                        z1="1:",
-                       comp=1,
+                       field=1,
                        inplace=True,
                        tag="slice",
                        label="Cell slice")
@@ -113,10 +113,10 @@ def test_selecting_all_axes_preserves_one_complete_cell(data):
         "z0": np.inf
     }, ValueError),
     ({
-        "comp": "1:1"
+        "field": "1:1"
     }, ValueError),
     ({
-        "comp": 2
+        "field": 2
     }, IndexError),
 ])
 def test_invalid_selection_does_not_mutate(data, kwargs, error):

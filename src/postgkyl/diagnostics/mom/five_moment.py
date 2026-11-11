@@ -443,11 +443,11 @@ def ke(data: "GDataState",
       lacks native arithmetic support.
   """
   if data.backend == "gkyl":
-    rho = select(data, comp=0)
+    rho = select(data, field=0)
     moments = data.num_comps // rho.num_comps
     if (num_moms is None and moments not in (5, 10)) or moments < 4:
       raise ValueError("ke requires five- or ten-moment fluid data")
-    momentum = [select(data, comp=i) for i in (1, 2, 3)]
+    momentum = [select(data, field=i) for i in (1, 2, 3)]
     squares = [binary(operator.mul, p, p) for p in momentum]
     squared = binary(operator.add, binary(operator.add, squares[0], squares[1]),
                      squares[2])

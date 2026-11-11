@@ -88,7 +88,7 @@ def test_select_by_coordinate_on_a_non_matching_edge_grid():
 @needs_gkeyll
 def test_select_keeps_native_point_values_in_the_native_backend():
   nodal = pg.load(F1).represent(to="nodal")
-  selected = nodal.select(comp=0)
+  selected = nodal.select(field=0)
   assert selected.backend == "gkyl"
   assert selected.ctx["value_form"] == "nodal"
   np.testing.assert_array_equal(selected.ctx["cells"], [24])
