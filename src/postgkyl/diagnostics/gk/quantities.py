@@ -78,8 +78,8 @@ def _get_ctx_val(gdata: "GData", key: str, **kwargs):
 
 
 def _component(d: "GData", comp: int | None) -> "GData":
-  """Select a field while retaining its complete DG expansion."""
-  return d.clone() if comp is None else operations.select(d, comp=comp)
+  """Select a physical field while retaining its complete DG expansion."""
+  return d.clone() if comp is None else operations.select(d, field=comp)
 
 
 def _direction(kwargs, quantity: str) -> int:
@@ -154,7 +154,7 @@ def _vector_magnitude(cov, contra) -> "GData":
 
 # --------------------------------------------------- generic fetch factories
 def _make_fetch_comp(icomp: int | None):
-  """A fetch function that extracts field ``icomp`` with all its DG coefficients."""
+  """A fetch function that extracts the ``icomp``-th field component."""
 
   def fetch(gdatas: list["GData"], **kwargs):
     return _component(gdatas[0], icomp)

@@ -5,6 +5,15 @@ description: Preserve DG representation and backend semantics when changing load
 
 # Preserve data meaning
 
+## Terminology and selection
+
+Avoid "physical" as a distinction between representations: DG coefficients
+and point values, or Cartesian and curvilinear coordinates, can all describe
+the same physical quantity. Name the actual representation or coordinate
+system instead.
+
+## Storage and representation
+
 Storage (`backend`: `gkyl` or `numpy`) and representation
 (`ctx["value_form"]`: `modal`, `nodal`, or `quad`) are separate facts. Do not
 add an `is_modal` flag or infer point-value capabilities from storage alone.
