@@ -59,7 +59,7 @@ def fetch_vector(fetch_component, gdatas, quantity, **kwargs):
   def component(i):
     """Read a packed component or evaluate a native scalar component."""
     if packed is not None:
-      return operations.select(packed, comp=i)
+      return operations.select(packed, field=i)
     return fetch_component(gdatas, **dict(kwargs, dir=i))
 
   if rep == native_rep:

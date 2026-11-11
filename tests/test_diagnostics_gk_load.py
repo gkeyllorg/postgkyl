@@ -190,7 +190,7 @@ class TestLoadGkDistfReal:
                         GK_NAME,
                         "250",
                         path=DATA,
-                        read_options={"c2p_vel": "0"})
+                        options={"c2p_vel": "0"})
     assert len(out) == 1
     data = out[0]
     assert isinstance(data, GData)

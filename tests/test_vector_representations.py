@@ -126,7 +126,7 @@ def test_general_basis_conversion(basis, rep, direction, ndim):
   cartesian = np.stack(
       (1 + .2 * points[..., 0], -.7 + .1 * points[..., 2], .4 + .05 * f),
       axis=-1)
-  out = operations.project_vector([vector.select(comp=i) for i in range(3)],
+  out = operations.project_vector([vector.select(field=i) for i in range(3)],
                                   basis=basis,
                                   rep=rep,
                                   direction=direction,
@@ -313,14 +313,14 @@ def test_metric_conversion_point_representations(form, source, rep):
   expected = read("vector_" +
                   ("contravariant" if rep == "contra" else "covariant"))
   for direction in range(3):
-    out = operations.project_vector([vector.select(comp=i) for i in range(3)],
+    out = operations.project_vector([vector.select(field=i) for i in range(3)],
                                     basis=source,
                                     rep=rep,
                                     direction=direction,
                                     metric_cov=read("geo_int_g_ij"),
                                     metric_contra=read("geo_int_gij"))
     np.testing.assert_allclose(out.values,
-                               expected.select(comp=direction).values,
+                               expected.select(field=direction).values,
                                rtol=2e-13,
                                atol=3e-13)
     assert out.backend == vector.backend
@@ -346,7 +346,7 @@ def test_fluctuating_flux_conversion(rep):
 @needs_gkeyll
 def test_metric_contract_errors():
   vector = _read("drift_cart", "vector_contravariant")
-  components = [vector.select(comp=i) for i in range(3)]
+  components = [vector.select(field=i) for i in range(3)]
   with pytest.raises(ValueError, match="metric_cov"):
     operations.project_vector(components,
                               basis="contravariant",
