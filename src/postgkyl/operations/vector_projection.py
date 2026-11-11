@@ -154,14 +154,14 @@ def project_vector(
             "Cartesian-to-coordinate conversion requires tangents or duals.")
       _require_fields(vectors, 9, template)
       return _dot(components,
-                  [select(vectors, comp=3 * comp + j) for j in range(3)])
+                  [select(vectors, field=3 * comp + j) for j in range(3)])
     metric = metric_cov if rep == "covar" else metric_contra
     if metric is None:
       required = "metric_cov" if rep == "covar" else "metric_contra"
       raise ValueError(f"rep={rep} requires {required}.")
     _require_fields(metric, 6, template)
     return _dot(components,
-                [select(metric, comp=j) for j in _METRIC_COMP[comp]])
+                [select(metric, field=j) for j in _METRIC_COMP[comp]])
   if basis == "cartesian":
     cart = components
   else:
@@ -171,7 +171,7 @@ def project_vector(
       raise ValueError(f"{basis} reconstruction requires {required}.")
     _require_fields(vectors, 9, template)
     cart = [
-        _dot(components, [select(vectors, comp=3 * i + j) for i in range(3)])
+        _dot(components, [select(vectors, field=3 * i + j) for i in range(3)])
         for j in range(3)
     ]
   if rep == "cart":
@@ -182,11 +182,11 @@ def project_vector(
     if normals is None:
       raise ValueError("Normal projections require normals.")
     _require_fields(normals, 9, template)
-    unit = [select(normals, comp=3 * comp + j) for j in range(3)]
+    unit = [select(normals, field=3 * comp + j) for j in range(3)]
   else:
     if positions is None:
       raise ValueError("Cylindrical projections require positions.")
     _require_fields(positions, 3, template)
     target = _cylindrical_unit(positions, ("R", "phi")[comp], position_system)
-    unit = [select(target, comp=j) for j in range(3)]
+    unit = [select(target, field=j) for j in range(3)]
   return _dot(cart, unit)

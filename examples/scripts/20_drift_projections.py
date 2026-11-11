@@ -41,7 +41,7 @@ contravariant, = pg.gk.load_quantity("E_field",
                                      direction=0)
 metric = pg.load(str(TEST_DATA / "generated" /
                      "drift_2x_cart-geo_int_gij.gkyl"))
-raised = sum(metric.select(comp=i) * covariant[i] for i in range(3))
+raised = sum(metric.select(field=i) * covariant[i] for i in range(3))
 np.testing.assert_allclose(contravariant.values,
                            raised.values,
                            rtol=2e-13,
@@ -56,11 +56,11 @@ def load_field(suffix):
 
 vector = load_field("vector_cartesian")
 vertical = pg.operations.project_vector(
-    [vector.select(comp=i) for i in range(3)],
+    [vector.select(field=i) for i in range(3)],
     basis="cartesian",
     rep="cart",
     direction=2)
-np.testing.assert_array_equal(vertical.values, vector.select(comp=2).values)
+np.testing.assert_array_equal(vertical.values, vector.select(field=2).values)
 
 # In 2x, both fluctuation choices subtract a J-weighted parallel (z) mean.
 for quantity in ("flux_particle_ExB", "flux_particle_dB"):

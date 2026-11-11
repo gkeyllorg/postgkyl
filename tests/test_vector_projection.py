@@ -69,7 +69,7 @@ def test_general_vector_projection(ndim, kind, basis, direction):
       (1 + .2 * points[..., 0], -.7 + .1 * points[..., 2], .4 + .05 * scalar),
       axis=-1)
   result = operations.project_vector(
-      [vector.select(comp=i) for i in range(3)],
+      [vector.select(field=i) for i in range(3)],
       basis=basis,
       **_selection(direction),
       tangents=_read(prefix, "geo_int_dxdz"),
@@ -96,14 +96,14 @@ def test_point_representations(ndim, form, direction):
         to=form)
 
   vector, positions = read("vector_cartesian"), read("geo_int_mapc2p")
-  components = [vector.select(comp=i) for i in range(3)]
+  components = [vector.select(field=i) for i in range(3)]
   result = operations.project_vector(components,
                                      basis="cartesian",
                                      **_selection(direction),
                                      positions=positions,
                                      position_system="cartesian",
                                      normals=read("geo_int_normals"))
-  xyz = [positions.select(comp=i).values for i in range(3)]
+  xyz = [positions.select(field=i).values for i in range(3)]
   if direction.startswith("n"):
     unit = drift_projection_reference(ndim)[6][int(direction[1])]
   elif direction == "Z":
@@ -175,7 +175,7 @@ def test_equilibrium_fallback(tmp_path, quantity):
 def test_projection_contract():
   """Reject incomplete vectors and incompatible geometry instead of interpolating."""
   vector = _read("drift_cart", "vector_cartesian")
-  components = [vector.select(comp=i) for i in range(3)]
+  components = [vector.select(field=i) for i in range(3)]
   kwargs = dict(basis="cartesian", rep="cyl", direction=2)
   with pytest.raises(ValueError, match="three scalar"):
     operations.project_vector(components[:2], **kwargs)
