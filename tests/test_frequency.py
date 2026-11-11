@@ -1,6 +1,7 @@
 """Frequency measurements from time traces and spatial Fourier modes."""
 
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 import postgkyl as pg
@@ -14,6 +15,55 @@ def _trace(time, values):
       "tau": 2.0
   }).push([time],
           np.asarray(values)[:, None])
+
+
+def test_frequency_option_contract():
+  trace = _trace(np.arange(12.) * 0.1, np.sin(np.arange(12.) * 0.1))
+  with pytest.raises(ValueError, match="only to plain"):
+    pg.frequency(trace, spectrum=True, dir=0, inplace=True)
+  with pytest.raises(ValueError, match="require --spectrum"):
+    pg.frequency(trace, interpolated=True)
+  with pytest.raises(ValueError, match="do not apply to --fft"):
+    pg.frequency(trace, fft=True, guess="1,1,0,0")
+
+
+def test_frequency_two_traces_and_short_fit(capsys):
+  t = np.linspace(0, 8, 161)
+  traces = [_trace(t, np.sin(omega * t)) for omega in (1.5, 2.5)]
+  result = pg.frequency(*traces, time_window=(0, 8))
+  assert len(result) == 2
+  for data, omega in zip(result, (1.5, 2.5)):
+    np.testing.assert_allclose(abs(data.ctx["fit_params"][0][1]),
+                               omega,
+                               atol=1e-8)
+  assert capsys.readouterr().out.count("frequency component 0:") == 2
+  with pytest.raises(ValueError, match="at least six time samples"):
+    pg.frequency(traces[0], time_window=(0, 0.2))
+  with pytest.raises(ValueError, match="min_n >= 6"):
+    pg.frequency(traces[0], min_n=5)
+
+
+@pytest.mark.parametrize("time,values,message", [
+    (np.arange(4.), np.ones((2, 2, 1)), "one-dimensional time trace"),
+    (np.arange(5.), np.ones((3, 1)), "coordinates do not match"),
+    (np.array([0., 1., 1., 2.]), np.ones((4, 1)), "finite and increasing"),
+])
+def test_frequency_rejects_invalid_trace(time, values, message):
+  grid = [time] if values.ndim == 2 else [time, np.arange(3.)]
+  trace = pg.GData(ctx={"interpolated": True}).push(grid, values)
+  with pytest.raises(ValueError, match=message):
+    pg.frequency(trace)
+
+
+def test_frequency_window_and_fft_contract():
+  t = np.arange(12.) * 0.1
+  trace = _trace(t, np.sin(2 * np.pi * t))
+  with pytest.raises(ValueError, match="increasing finite bounds"):
+    pg.frequency(trace, time_window=(1., 0.))
+  with pytest.raises(ValueError, match="fewer than three samples"):
+    pg.frequency(trace, time_window=(0., 0.1))
+  with pytest.raises(ValueError, match="uniform time samples"):
+    pg.frequency(_trace(np.array([0., 0.1, 0.21, 0.3]), np.ones(4)), fft=True)
 
 
 def test_frequency_spectrum_with_metadata_expressions():

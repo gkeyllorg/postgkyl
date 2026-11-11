@@ -112,8 +112,6 @@ def temporal_fft(data,
   values = source.values[chosen]
   omega = 2 * np.pi * np.fft.rfftfreq(len(times), d=times[1] - times[0])
   amplitudes = np.abs(np.fft.rfft(values, axis=0)) / len(times)
-  if len(omega) < 2:
-    raise ValueError("frequency --fft needs a positive frequency bin")
   peaks = np.argmax(amplitudes[1:], axis=0) + 1
   measured = omega[peaks]
   out = data._result([omega[1:]],

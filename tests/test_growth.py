@@ -1,11 +1,17 @@
 """Growth rates from time traces and spatial Fourier modes."""
 
+import importlib
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 import postgkyl as pg
 from postgkyl.cli.app import cli
 from postgkyl.cli.session import PostgkylSession
+from postgkyl.operations._mode_spectrum import mode_spectrum
+from postgkyl.operations._mode_spectrum import _samples
+
+spectrum_module = importlib.import_module("postgkyl.operations._mode_spectrum")
 
 
 def _frames():
@@ -27,6 +33,140 @@ def _frames():
             "interpolated": True
         }).push([x, y], values))
   return frames
+
+
+@pytest.mark.parametrize("verb", [pg.growth, pg.frequency])
+def test_rate_spectrum_rejects_invalid_frames(verb):
+  frames = _frames()
+  cases = [
+      (frames[:2], {}, "at least three frames"),
+      (frames[:2] + [
+          pg.GData(ctx={
+              "interpolated": True
+          }).push(frames[0].grid, frames[0].values)
+      ], {}, "time metadata"),
+      (frames[:2] + [frames[0]], {}, "finite and distinct"),
+      (frames, {
+          "dir": 2
+      }, "outside the field dimensions"),
+      (frames, {
+          "dir": 0,
+          "time_window": (2, 2)
+      }, "increasing finite"),
+      (frames, {
+          "dir": 0,
+          "time_window": (0, 0.5)
+      }, "fewer than three frames"),
+  ]
+  for source, options, message in cases:
+    with pytest.raises(ValueError, match=message):
+      verb(*source, spectrum=True, **{"dir": 1, **options})
+
+
+@pytest.mark.parametrize("verb", [pg.growth, pg.frequency])
+def test_rate_spectrum_rejects_incompatible_grids_and_samples(verb):
+  frames = _frames()
+  edges = [frames[0].grid[0].copy(), frames[0].grid[1].copy()]
+  edges[1][3] += 0.01
+  bad = pg.GData(ctx=frames[-1].ctx.copy()).push(edges, frames[-1].values)
+  with pytest.raises(ValueError, match="matching grids"):
+    verb(*frames[:-1], bad, spectrum=True, dir=1)
+  edges[1] = frames[0].grid[1].copy()
+  edges[1][3] += 0.01
+  bad = pg.GData(ctx=frames[0].ctx.copy()).push(edges, frames[0].values)
+  with pytest.raises(ValueError, match="uniform grid"):
+    verb(bad, *frames[1:], spectrum=True, dir=1)
+
+
+def test_spectrum_rejects_unknown_quantity():
+  frames = _frames()
+  with pytest.raises(ValueError, match="unknown mode-spectrum quantity"):
+    mode_spectrum(*frames, dir=1, quantity="unsupported")
+
+
+@pytest.mark.parametrize("verb", [pg.growth, pg.frequency])
+def test_rate_option_contract(verb):
+  trace = pg.GData(ctx={
+      "interpolated": True
+  }).push([np.linspace(0, 2, 9)], np.ones((9, 1)))
+  with pytest.raises(ValueError, match="at least one dataset"):
+    verb()
+  with pytest.raises(ValueError, match="requires --dir"):
+    verb(trace, spectrum=True)
+  with pytest.raises(ValueError, match="only to plain"):
+    verb(trace, spectrum=True, dir=0, min_n=6)
+  with pytest.raises(ValueError, match="require --spectrum"):
+    verb(trace, dir=0)
+
+
+def test_spectrum_samples_preserve_modal_mean_and_reject_packed_fields():
+  edges = np.linspace(0., 2., 5)
+  ctx = {"value_form": "modal", "basis_type": "serendipity", "poly_order": 0}
+  modal = pg.GData(ctx=ctx).push([edges],
+                                 np.array([[2.], [4.], [6.], [8.]]) *
+                                 np.sqrt(2.))
+  np.testing.assert_allclose(_samples(modal, False), [2., 4., 6., 8.])
+  np.testing.assert_allclose(_samples(modal, True), [2., 4., 6., 8.],
+                             atol=1e-12)
+  packed = pg.GData(ctx=ctx).push([edges], np.ones((4, 2)))
+  with pytest.raises(ValueError, match="one volume scalar field"):
+    _samples(packed, False)
+  point = pg.GData(ctx={"interpolated": True}).push([edges], np.ones((4, 2)))
+  with pytest.raises(ValueError, match="one scalar field"):
+    _samples(point, False)
+
+
+def test_modal_cell_averages_survive_missing_bridge(monkeypatch):
+  frame = pg.GData(ctx={
+      "value_form": "modal",
+      "basis_type": "serendipity",
+      "poly_order": 0
+  }).push([np.array([0., 1., 2.])], np.array([[np.sqrt(2.)],
+                                              [2 * np.sqrt(2.)]]))
+
+  def unavailable(_):
+    raise RuntimeError("Gkeyll bridge is unavailable")
+
+  monkeypatch.setattr(spectrum_module, "dg_layout", unavailable)
+  np.testing.assert_allclose(_samples(frame, False), [1., 2.])
+
+  def broken(_):
+    raise RuntimeError("invalid DG layout")
+
+  monkeypatch.setattr(spectrum_module, "dg_layout", broken)
+  with pytest.raises(RuntimeError, match="invalid DG layout"):
+    _samples(frame, False)
+
+
+def test_spectrum_rejects_bad_fft_layouts():
+  frames = _frames()
+  reversed_edges = [frames[0].grid[0], frames[0].grid[1][::-1]]
+  first = pg.GData(ctx=frames[0].ctx.copy()).push(reversed_edges,
+                                                  frames[0].values)
+  with pytest.raises(ValueError, match="domain length must be positive"):
+    pg.growth(first, *frames[1:], spectrum=True, dir=1)
+  point_grid = [frames[0].grid[0], frames[0].grid[1][:-1]]
+  point_frames = [
+      pg.GData(ctx=frame.ctx.copy()).push(point_grid, frame.values)
+      for frame in frames[:3]
+  ]
+  with pytest.raises(ValueError, match="cell-edge coordinates"):
+    pg.growth(*point_frames, spectrum=True, dir=1)
+  fewer = pg.GData(ctx=frames[2].ctx.copy()).push(frames[2].grid,
+                                                  frames[2].values[:, :-1])
+  with pytest.raises(ValueError, match="incompatible samples"):
+    pg.growth(frames[0],
+              frames[1],
+              fewer,
+              spectrum=True,
+              dir=1,
+              interpolated=True)
+  one = [
+      pg.GData(ctx=frame.ctx.copy()).push(frame.grid, frame.values[:, :1])
+      for frame in frames[:3]
+  ]
+  with pytest.raises(ValueError, match="at least two samples"):
+    pg.growth(*one, spectrum=True, dir=1, interpolated=True)
 
 
 def test_plain_growth_prints_rate_and_returns_curve(capsys):

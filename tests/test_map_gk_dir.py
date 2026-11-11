@@ -61,6 +61,11 @@ def test_psi_source_does_not_fallback_after_read_error(tmp_path, monkeypatch,
   assert seen == [str(preferred)]
 
 
+def test_psi_source_needs_a_simulation_name():
+  with pytest.raises(ValueError, match="source filename or psi_file"):
+    map_module._psi_source("", None)
+
+
 def test_rho_pol_maps_sample_positions_and_preserves_values(monkeypatch):
   values = np.arange(12.0).reshape(3, 4, 1)
   data = GDataState(ctx={"interpolated": True, "geqdsk_file": "eq.geqdsk"})
@@ -120,6 +125,78 @@ def test_flux_reference_requires_explicit_tokamak_subtype(monkeypatch):
   monkeypatch.setattr(map_module, "read", fake_read)
   with pytest.raises(ValueError, match="tokamak_geo_type"):
     map_module._flux_reference("", "old-psi.gkyl")
+
+
+def test_flux_reference_rejects_invalid_axis_and_boundary(monkeypatch):
+  metadata = {"geometry_type": 1, "tokamak_geo_type": 20}
+
+  def fake_read(path, ctx):
+    ctx.update(metadata)
+    return [], None
+
+  monkeypatch.setattr(map_module, "read", fake_read)
+  with pytest.raises(ValueError, match="numeric simag and psi_lcfs"):
+    map_module._flux_reference("", "psi.gkyl")
+  metadata.update(simag=1., psi_lcfs=1.)
+  with pytest.raises(ValueError, match="finite and distinct"):
+    map_module._flux_reference("", "psi.gkyl")
+  metadata["psi_lcfs"] = np.inf
+  with pytest.raises(ValueError, match="finite and distinct"):
+    map_module._flux_reference("", "psi.gkyl")
+
+
+def test_outboard_radius_rejects_bad_psi_metadata(monkeypatch):
+  ctx = dict(geometry_type=1,
+             tokamak_geo_type=20,
+             rmaxis=1.,
+             zmaxis=0.,
+             poly_order=1,
+             basis_type="tensor",
+             lower=[0., -1.],
+             upper=[2., 1.],
+             cells=[2, 2],
+             psi_lcfs=0.5)
+  grid = [np.array([0., 1., 2.]), np.array([-1., 0., 1.])]
+  coeffs = np.zeros((2, 2, 4))
+  monkeypatch.setattr(map_module, "_psi_source", lambda *args:
+                      ("psi.gkyl", grid, coeffs, ctx))
+  ctx["psi_lcfs"] = np.nan
+  with pytest.raises(ValueError, match="finite psi_lcfs"):
+    map_module._outboard_radius(np.array([0.2]),
+                                "",
+                                None,
+                                relative_to_boundary=True)
+  ctx["psi_lcfs"] = 0.5
+  ctx["rmaxis"] = 3.
+  with pytest.raises(ValueError, match="axis inside the grid"):
+    map_module._outboard_radius(np.array([0.2]), "", None)
+  ctx["rmaxis"] = 1.
+  coeffs = np.zeros((1, 2, 4))
+  with pytest.raises(ValueError, match="coefficients do not match"):
+    map_module._outboard_radius(np.array([0.2]), "", None)
+
+
+def test_map_gk_dir_rejects_invalid_input_layout():
+  grid = [np.array([0., 1.]), np.array([0., 1.])]
+  values = np.ones((1, 1, 1))
+  data = GDataState().push(grid, values)
+  with pytest.raises(ValueError, match="integer directions"):
+    map_gk_dir(data, dir="bad", coord="rho_pol")
+  with pytest.raises(ValueError, match="interpolated NumPy"):
+    map_gk_dir(data, dir=0, coord="rho_pol")
+  data.ctx["interpolated"] = True
+  with pytest.raises(ValueError, match="direction 1 in the data grid"):
+    map_gk_dir(GDataState(ctx={
+        "interpolated": True
+    }).push([grid[0]], values[:, 0]),
+               dir=1,
+               coord="rho_s")
+  data.grid[1] = np.ones((2, 2))
+  with pytest.raises(ValueError, match="separable coordinate axis"):
+    map_gk_dir(data, dir=1, coord="rho_s")
+  data.grid[1] = np.array([0., 1.])
+  with pytest.raises(ValueError, match="tokamak geometry metadata"):
+    map_gk_dir(data, dir=1, coord="rho_s")
 
 
 def test_invalid_direction_coord_and_domain(monkeypatch):
@@ -350,6 +427,12 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
       np.array([0.75]), "", "eq-psi.gkyl")[0], [1.5],
                              rtol=1e-12,
                              atol=1e-12)
+
+  with pytest.raises(ValueError, match="finite computational psi"):
+    map_module._outboard_radius(np.array([np.nan]), "", "eq-psi.gkyl")
+  coeffs[:] = np.nan
+  with pytest.raises(ValueError, match="non-finite psi"):
+    map_module._outboard_radius(np.array([0.75]), "", "eq-psi.gkyl")
 
   del ctx["zmaxis"]
   with pytest.raises(ValueError, match="zmaxis"):
