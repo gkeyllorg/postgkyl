@@ -230,5 +230,5 @@ arithmetic semantics and representation. The operation performs no file
 discovery or unit inference; GK diagnostics provide those. It is a Python
 operation, not a separate CLI command.
 
-.. literalinclude:: ../../examples/scripts/20_drift_projections.py
+.. literalinclude:: _inputs/examples/scripts/20_drift_projections.py
    :language: python
