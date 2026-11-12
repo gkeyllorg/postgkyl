@@ -24,8 +24,8 @@ def available_quantities() -> list[str]:
   return gk_quant_registry.list()
 
 
-def _quantity_catalog() -> list[tuple[str, str]]:
-  """Return sorted names and descriptions, including default representations."""
+def quantity_catalog() -> list[tuple[str, str]]:
+  """Return sorted quantity names and descriptions, including defaults."""
   rows = []
   for name in available_quantities():
     quantity = gk_quant_registry.get(name)
@@ -73,7 +73,7 @@ def load_quantity(
   Call ``interpolate()`` on the returned datasets when point samples are needed.
 
   Args:
-    quantity: Quantity to load, see -a, --avail_quant for available quantities.
+    quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
     species: Species name, or a comma-separated list of them; ``None`` for
       species-independent quantities.
     name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -89,7 +89,7 @@ def load_quantity(
       unit normals. In 2x the full indices remain 0=radial, 1=binormal,
       2=parallel.
     rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
-      uses the quantity's native representation, shown by --avail_quant.
+      uses the quantity's native representation, shown by ``quantity_catalog()``.
       Only for vector quantities.
     mass: Species mass used by quantities that require it.
     charge: Species charge used by quantities that require it.

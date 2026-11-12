@@ -53,6 +53,7 @@ class InfoOption:
   name: str
   rows: Callable[[], list[tuple[str, str]]]
   help: str
+  heading: str | None = None
 
   def __post_init__(self) -> None:
     if not isinstance(
@@ -62,6 +63,9 @@ class InfoOption:
       raise TypeError("InfoOption requires a callable rows provider")
     if not isinstance(self.help, str) or not self.help.strip():
       raise ValueError("InfoOption requires non-empty help")
+    if self.heading is not None and (not isinstance(self.heading, str)
+                                     or not self.heading.strip()):
+      raise ValueError("InfoOption heading must be non-empty text")
 
 
 @dataclass(frozen=True)

@@ -55,7 +55,7 @@ from .frequency import frequency
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
-from .map_gk_dir import map_gk_dir
+from .map_interp import available_maps, map_interp
 from .map_to_torus_rz import map_to_torus_rz, resolve_rz_projection, RzProjection
 from .map_to_torus_3d import (map_to_torus_3d, resolve_torus_projection,
                               TorusProjection)
@@ -70,6 +70,7 @@ from .geometry import Geometry, resolve_geometry
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    InfoOption,
     ResultPolicy,
     Section,
     command,
@@ -87,9 +88,19 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
                         result=ResultPolicy.VALUE)
 
 for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
-                  magsq, grid, differentiate, map, map_gk_dir, map_to_torus_rz,
+                  magsq, grid, differentiate, map, map_to_torus_rz,
                   map_to_torus_3d, map_to_torus_phitheta, fluctuation):
   command(_MAP)(_function)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_REPLACE,
+                info_options=(InfoOption(
+                    "avail_maps",
+                    available_maps,
+                    "List available coordinate maps, then exit.",
+                    heading="Supported mappings:"), )))(map_interp)
+hidden("Python map catalog; exposed through map_interp --avail_maps")(
+    available_maps)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
 command(_COMBINE)(collect)
@@ -135,9 +146,9 @@ __all__ = [
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
     "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
     "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "map_gk_dir", "growth", "frequency",
-    "map_to_torus_rz", "resolve_rz_projection", "map_to_torus_3d",
-    "resolve_torus_projection", "map_to_torus_phitheta",
+    "available_evaluate_operators", "map", "map_interp", "available_maps",
+    "growth", "frequency", "map_to_torus_rz", "resolve_rz_projection",
+    "map_to_torus_3d", "resolve_torus_projection", "map_to_torus_phitheta",
     "resolve_phitheta_projection", "resolve_geometry", "Geometry",
     "RzProjection", "TorusProjection", "PhiThetaProjection", "project_vector"
 ]

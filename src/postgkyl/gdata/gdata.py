@@ -114,7 +114,7 @@ class GData(GDataState):
   frequency = operations.frequency
   differentiate = operations.differentiate
   map = operations.map
-  map_gk_dir = operations.map_gk_dir
+  map_interp = operations.map_interp
   represent = operations.represent
   apply = operations.apply
   save = io.save

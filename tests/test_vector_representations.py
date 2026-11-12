@@ -8,7 +8,7 @@ from click.testing import CliRunner
 import postgkyl as pg
 from postgkyl import gpython, operations
 from postgkyl.cli.app import cli, COMMANDS
-from postgkyl.diagnostics.gk.load_quantity import load_quantity, _quantity_catalog
+from postgkyl.diagnostics.gk.load_quantity import load_quantity, quantity_catalog
 from postgkyl.diagnostics.gk.registry import gk_quant_registry
 from postgkyl.diagnostics.gk import quantities as ff
 from postgkyl.diagnostics.gk.vector_projection import fetch_vector
@@ -243,7 +243,7 @@ def test_named_and_invalid_directions_rejected(direction):
 
 
 def test_catalog_defaults_and_short_options():
-  for name, description in _quantity_catalog():
+  for name, description in quantity_catalog():
     quantity = gk_quant_registry.get(name)
     assert not description.startswith(("Covariant", "Contravariant"))
     if quantity.component_basis:

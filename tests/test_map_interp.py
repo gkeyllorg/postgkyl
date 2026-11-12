@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 
 from postgkyl.gdatastate.gdatastate import GDataState
-from postgkyl.operations import map_gk_dir
+from postgkyl.operations import map_interp
 from postgkyl import gpython
 
-map_module = importlib.import_module("postgkyl.operations.map_gk_dir")
+map_module = importlib.import_module("postgkyl.operations.map_interp")
 
 
 @pytest.mark.parametrize("source,override,expected", [
@@ -32,14 +32,14 @@ def test_psi_source_discovery(tmp_path, monkeypatch, source, override,
 
 
 @pytest.mark.parametrize("coord", ["rho_pol", "R_omp", "R_omp_R_sep"])
-def test_map_gk_dir_does_not_use_legacy_psi_file(tmp_path, coord):
+def test_map_interp_does_not_use_legacy_psi_file(tmp_path, coord):
   (tmp_path / "eq-psi.gkyl").touch()
   data = GDataState(ctx={"interpolated": True, "geqdsk_file": "eq.geqdsk"})
   data._file_name = str(tmp_path / "run_b3-ion_M0_0.gkyl")
   data.push([np.array([0., 1.])], np.ones((1, 1)))
 
   with pytest.raises(FileNotFoundError, match="run-psi\\.gkyl"):
-    map_gk_dir(data, dir=0, coord=coord)
+    map_interp(data, axes=0, dest=coord)
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -72,7 +72,7 @@ def test_rho_pol_maps_sample_positions_and_preserves_values(monkeypatch):
   data.push([np.array([2., 3., 6., 11.]), np.arange(5.)], values)
   monkeypatch.setattr(map_module, "_flux_reference", lambda *args: (1., 17.))
 
-  result = map_gk_dir(data, dir=0, coord="rho_pol")
+  result = map_interp(data, axes=0, dest="rho_pol")
 
   np.testing.assert_allclose(result.grid[0],
                              np.sqrt((np.array([2.5, 4.5, 8.5]) - 1.) / 16.))
@@ -176,37 +176,41 @@ def test_outboard_radius_rejects_bad_psi_metadata(monkeypatch):
     map_module._outboard_radius(np.array([0.2]), "", None)
 
 
-def test_map_gk_dir_rejects_invalid_input_layout():
+def test_map_interp_rejects_invalid_input_layout():
   grid = [np.array([0., 1.]), np.array([0., 1.])]
   values = np.ones((1, 1, 1))
   data = GDataState().push(grid, values)
-  with pytest.raises(ValueError, match="integer directions"):
-    map_gk_dir(data, dir="bad", coord="rho_pol")
+  with pytest.raises(ValueError, match="integer axes"):
+    map_interp(data, axes="bad", dest="rho_pol")
   with pytest.raises(ValueError, match="interpolated NumPy"):
-    map_gk_dir(data, dir=0, coord="rho_pol")
+    map_interp(data, axes=0, dest="rho_pol")
   data.ctx["interpolated"] = True
   with pytest.raises(ValueError, match="direction 1 in the data grid"):
-    map_gk_dir(GDataState(ctx={
+    map_interp(GDataState(ctx={
         "interpolated": True
     }).push([grid[0]], values[:, 0]),
-               dir=1,
-               coord="rho_s")
+               axes=1,
+               dest="rho_s")
   data.grid[1] = np.ones((2, 2))
   with pytest.raises(ValueError, match="separable coordinate axis"):
-    map_gk_dir(data, dir=1, coord="rho_s")
+    map_interp(data, axes=1, dest="rho_s")
   data.grid[1] = np.array([0., 1.])
   with pytest.raises(ValueError, match="tokamak geometry metadata"):
-    map_gk_dir(data, dir=1, coord="rho_s")
+    map_interp(data, axes=1, dest="rho_s")
 
 
 def test_invalid_direction_coord_and_domain(monkeypatch):
   data = GDataState(ctx={"interpolated": True})
   data.push([np.array([0., 1.])], np.ones((1, 1)))
   monkeypatch.setattr(map_module, "_flux_reference", lambda *args: (2., 3.))
-  with pytest.raises(ValueError, match="supports dir=0"):
-    map_gk_dir(data, dir=1, coord="rho_pol")
+  with pytest.raises(ValueError, match="supports axes=0"):
+    map_interp(data, axes=1, dest="rho_pol")
   with pytest.raises(ValueError, match="undefined"):
-    map_gk_dir(data, dir=0, coord="rho_pol")
+    map_interp(data, axes=0, dest="rho_pol")
+  with pytest.raises(ValueError, match="supports axes=0"):
+    map_interp(data, axes=0, source="alpha", dest="rho_pol")
+  with pytest.raises(ValueError, match="one source per axis"):
+    map_interp(data, axes=0, source="psi_pol,alpha", dest="rho_pol")
 
 
 def test_rho_s_maps_binormal_samples_from_run_metadata():
@@ -220,7 +224,7 @@ def test_rho_s_maps_binormal_samples_from_run_metadata():
   data.push([np.array([1., 2., 3., 4.]),
              np.array([-0.4, -0.2, 0., 0.2, 0.4])], values)
 
-  mapped = map_gk_dir(data, dir=1, coord="rho_s")
+  mapped = map_interp(data, axes=1, dest="rho_s")
   np.testing.assert_allclose(mapped.grid[1], [-30., -10., 10., 30.])
   np.testing.assert_array_equal(mapped.grid[0], data.grid[0])
   np.testing.assert_array_equal(mapped.values, values)
@@ -236,7 +240,7 @@ def test_rho_s_maps_binormal_samples_from_run_metadata():
   point_data.push(
       [np.array([1., 2.]), np.array([-0.1, 0.1])], np.ones((2, 2, 1)))
   np.testing.assert_allclose(
-      map_gk_dir(point_data, dir=1, coord="rho_s").grid[1], [-10., 10.])
+      map_interp(point_data, axes=1, dest="rho_s").grid[1], [-10., 10.])
 
 
 @pytest.mark.parametrize("optional", [
@@ -259,7 +263,7 @@ def test_rho_s_normalization_overrides(optional):
       "rho_s0": 0.004
   })
   data.push([np.array([0., 1.]), np.array([-0.1, 0.1])], np.ones((1, 2, 1)))
-  mapped = map_gk_dir(data, dir=1, coord="rho_s", optional=optional)
+  mapped = map_interp(data, axes=1, dest="rho_s", optional=optional)
   np.testing.assert_allclose(mapped.grid[1], [-10., 10.])
   assert "rho_s" not in mapped.ctx
   assert mapped.ctx["Cy"] == 0.2
@@ -268,9 +272,9 @@ def test_rho_s_normalization_overrides(optional):
 def test_rho_s_accepts_numeric_normalization_and_cy_metadata_alias():
   data = GDataState(ctx={"interpolated": True, "geometry_type": 1, "Cy0": 0.22})
   data.push([np.array([0., 1.]), np.array([-1.1, 1.1])], np.ones((1, 2, 1)))
-  mapped = map_gk_dir(data,
-                      dir=1,
-                      coord="rho_s",
+  mapped = map_interp(data,
+                      axes=1,
+                      dest="rho_s",
                       optional={
                           "rho_s": "1.1",
                           "Cy": "Cy0"
@@ -299,10 +303,10 @@ def test_rho_s_rejects_invalid_overrides(optional, match):
   data = GDataState(ctx={"interpolated": True, "geometry_type": 1, "Cy": 0.2})
   data.push([np.array([0., 1.]), np.array([0., 1.])], np.ones((1, 1, 1)))
   with pytest.raises(ValueError, match=match):
-    map_gk_dir(data, dir=1, coord="rho_s", optional=optional)
+    map_interp(data, axes=1, dest="rho_s", optional=optional)
 
 
-def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
+def test_map_interp_maps_two_directions_in_one_result(monkeypatch):
   values = np.arange(12.).reshape(3, 4, 1)
   data = GDataState(ctx={
       "interpolated": True,
@@ -315,7 +319,13 @@ def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
   monkeypatch.setattr(map_module, "_outboard_radius",
                       lambda samples, *args, **kwargs: (samples + 10., None))
 
-  mapped = map_gk_dir(data, dir="0,1", coord="R_omp,rho_s")
+  mapped = map_interp(data, axes="0,1", dest="R_omp,rho_s")
+  explicit = map_interp(data,
+                        axes="0,1",
+                        source="psi_pol,alpha",
+                        dest="R_omp,rho_s")
+  np.testing.assert_allclose(explicit.grid[0], mapped.grid[0])
+  np.testing.assert_allclose(explicit.grid[1], mapped.grid[1])
   np.testing.assert_allclose(mapped.grid[0], [11.5, 12.5, 13.5])
   np.testing.assert_allclose(mapped.grid[1], [-30., -10., 10., 30.])
   np.testing.assert_array_equal(mapped.values, values)
@@ -325,13 +335,13 @@ def test_map_gk_dir_maps_two_directions_in_one_result(monkeypatch):
   }
   np.testing.assert_array_equal(data.grid[0], [1., 2., 3., 4.])
   np.testing.assert_allclose(
-      map_gk_dir(data, dir=[1, 0], coord=["rho_s", "R_omp"]).grid[0],
+      map_interp(data, axes=[1, 0], dest=["rho_s", "R_omp"]).grid[0],
       mapped.grid[0])
 
-  with pytest.raises(ValueError, match="one coordinate per direction"):
-    map_gk_dir(data, dir="0,1", coord="R_omp")
+  with pytest.raises(ValueError, match="one destination per axis"):
+    map_interp(data, axes="0,1", dest="R_omp")
   with pytest.raises(ValueError, match="distinct"):
-    map_gk_dir(data, dir="0,0", coord="R_omp,rho_pol")
+    map_interp(data, axes="0,0", dest="R_omp,rho_pol")
 
 
 @pytest.mark.parametrize("metadata", [{
@@ -350,7 +360,7 @@ def test_rho_s_requires_valid_metadata(metadata):
   data.push([np.array([0., 1.]), np.array([0., 1.])], np.ones((1, 1, 1)))
   with pytest.raises(ValueError,
                      match="numeric Cy|numeric rho_s|positive rho_s"):
-    map_gk_dir(data, dir=1, coord="rho_s")
+    map_interp(data, axes=1, dest="rho_s")
 
 
 @pytest.mark.skipif(not gpython.available(), reason="Gkeyll basis unavailable")
@@ -385,7 +395,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
   data = GDataState(ctx={"interpolated": True})
   values = np.arange(3.).reshape(3, 1)
   data.push([np.array([0., 0.32, 0.96, 2.]), np.array([0.])], values)
-  result = map_gk_dir(data, dir=0, coord="R_omp")
+  result = map_interp(data, axes=0, dest="R_omp")
   np.testing.assert_allclose(result.grid[0],
                              1.2 + np.sqrt([0.16, 0.64, 1.48]),
                              rtol=1e-12,
@@ -393,7 +403,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
   np.testing.assert_array_equal(result.values, values)
   assert result.ctx["coordinate_labels"][0] == r"$R_{\mathrm{OMP}}$ (m)"
 
-  limited = map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+  limited = map_interp(data, axes=0, dest="R_omp_R_sep")
   np.testing.assert_allclose(limited.grid[0],
                              np.sqrt([0.16, 0.64, 1.48]) - 0.5,
                              rtol=1e-12,
@@ -404,7 +414,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
 
   ctx["tokamak_geo_type"] = 2
   ctx["psi_sep"] = 0.36
-  diverted = map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+  diverted = map_interp(data, axes=0, dest="R_omp_R_sep")
   np.testing.assert_allclose(diverted.grid[0],
                              np.sqrt([0.16, 0.64, 1.48]) - 0.6,
                              rtol=1e-12,
@@ -413,7 +423,7 @@ def test_r_omp_inverts_modal_psi_on_outboard_midplane(monkeypatch):
       r"$R_{\mathrm{omp}} - R_{\mathrm{sep}}$ (m)"
   del ctx["psi_sep"]
   with pytest.raises(ValueError, match="psi_sep"):
-    map_gk_dir(data, dir=0, coord="R_omp_R_sep")
+    map_interp(data, axes=0, dest="R_omp_R_sep")
 
   with pytest.raises(ValueError, match="No outboard R_omp root"):
     map_module._outboard_radius(np.array([9.]), "", "eq-psi.gkyl")

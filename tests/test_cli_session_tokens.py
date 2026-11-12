@@ -32,11 +32,37 @@ _MODELS = {model.name: model for model in MODELS}
         "Cy": "0.2"
     }),
 ])
-def test_map_gk_dir_optional_cli_forms(tokens, expected):
-  parsed = _parse(_MODELS["map_gk_dir"], ["-d", "1", "-c", "rho_s", *tokens])
-  parameter = next(p for p in _MODELS["map_gk_dir"].parameters
+def test_map_interp_optional_cli_forms(tokens, expected):
+  parsed = _parse(_MODELS["map_interp"], ["-a", "1", "-d", "rho_s", *tokens])
+  parameter = next(p for p in _MODELS["map_interp"].parameters
                    if p.name == "optional")
   assert _convert(parsed["optional"], parameter.codec) == expected
+
+
+def test_map_interp_coordinate_options_round_trip():
+  model = _MODELS["map_interp"]
+  values = {"axes": "0,1", "dest": "R_omp,rho_s", "source": "psi_pol,alpha"}
+  parsed = _parse(
+      model,
+      ["-a", values["axes"], "-d", values["dest"], "-s", values["source"]])
+  assert {name: parsed[name] for name in values} == values
+  assert {
+      name: _parse(model, command_tokens(model, values))[name]
+      for name in values
+  } == values
+
+
+def test_map_interp_available_maps_matches_python_catalog():
+  from click.testing import CliRunner
+  from postgkyl.operations import available_maps
+
+  result = CliRunner().invoke(cli, ["map_interp", "--avail_maps"])
+  assert result.exit_code == 0, result.output
+  assert result.output.startswith("Supported mappings:\n")
+  for pairing, description in available_maps():
+    assert pairing in result.output
+    assert description in " ".join(result.output.split())
+  assert "-d R_omp_R_sep" in result.output
 
 
 # (Python value, what parsing its tokens gives back) per scalar codec.

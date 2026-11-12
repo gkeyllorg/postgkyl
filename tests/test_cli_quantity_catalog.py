@@ -11,6 +11,7 @@ from postgkyl.cli.state import DataSpace
 from postgkyl.cli_spec import (ChoiceProvider, CommandSpec, Execution,
                                InfoOption, ResultPolicy, Section, command)
 from postgkyl.diagnostics.gk.registry import gk_quant_registry
+from postgkyl.diagnostics.gk import quantity_catalog
 
 
 @pytest.mark.parametrize("name", ["gk_load_q", "gk_load_quantity"])
@@ -29,6 +30,7 @@ def test_catalog_requires_no_inputs_and_never_loads(name, flag, monkeypatch):
       if line and not line[0].isspace()
   ]
   assert [row[0] for row in rows] == gk_quant_registry.list()
+  assert [name for name, _ in quantity_catalog()] == gk_quant_registry.list()
   assert all(len(row) == 2 for row in rows)
   for quantity in gk_quant_registry.list():
     description = gk_quant_registry.get(quantity).description
@@ -73,7 +75,7 @@ def test_quantity_help_is_concise(name):
   assert result.exit_code == 0, result.output
   normalized = " ".join(result.output.split())
   assert "-q, --quantity TEXT" in normalized
-  assert "Quantity to load, see -a, --avail_quant for available quantities." in normalized
+  assert "Quantity to load, see ``quantity_catalog()`` for names and descriptions." in normalized
   assert "-a, --avail_quant" in normalized
   assert "ExB_vel" not in result.output
   assert "geo_int_b_i" not in result.output

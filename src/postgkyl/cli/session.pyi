@@ -936,7 +936,7 @@ class PostgkylSession:
         Call ``interpolate()`` on the returned datasets when point samples are needed.
 
         Args:
-          quantity: Quantity to load, see -a, --avail_quant for available quantities.
+          quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
           species: Species name, or a comma-separated list of them; ``None`` for
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -952,7 +952,7 @@ class PostgkylSession:
             unit normals. In 2x the full indices remain 0=radial, 1=binormal,
             2=parallel.
           rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
-            uses the quantity's native representation, shown by --avail_quant.
+            uses the quantity's native representation, shown by ``quantity_catalog()``.
             Only for vector quantities.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
@@ -1500,31 +1500,25 @@ class PostgkylSession:
             count does not match the expected ``m * num_basis``.
         """
 
-  def map_gk_dir(self,
+  def map_interp(self,
                  *,
-                 dir: str | float,
-                 coord: str,
+                 axes: str | float,
+                 dest: str,
+                 source: str | None = None,
                  psi_file: str | None = None,
                  inplace: bool = False,
                  tag: str | None = None,
                  label: str | None = None,
                  optional: Mapping[str, str] | None = None) -> PostgkylSession:
-    r"""Map interpolated psi samples to a flux or outboard-midplane coordinate.
+    r"""Map one or multiple coordinates of an interpolated dataset.
 
-        Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
-        ``'R_omp_R_sep'``, and ``dir=1, coord='rho_s'``. Pair comma-separated
-        directions and coordinates to map several axes in one call. ``rho_s`` maps the
-        binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
-        subtracts the outboard radius at
-        ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
-        ``psi_sep`` for diverted geometry. The companion ``<simulation_name>-psi.gkyl``
-        supplies the geometry and is shared by all blocks. ``psi_file`` overrides
-        this lookup.
+        See ``--avail_maps`` for a list of currently available maps.
 
         Args:
           data: Interpolated gyrokinetic dataset.
-          dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
-          coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+          axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
+          dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+          source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
           psi_file: Optional path to Gkeyll's psi field.
           optional: Normalization inputs as metadata names or numeric values. At the
             CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as

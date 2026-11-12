@@ -937,6 +937,8 @@ def _info_callback(option: InfoOption):
       return
     rows = option.rows()
     formatter = ctx.make_formatter()
+    if option.heading:
+      formatter.write_text(option.heading)
     formatter.write_dl(rows,
                        col_max=max((len(name) for name, _ in rows), default=0))
     click.echo(formatter.getvalue().rstrip())

@@ -1,4 +1,4 @@
-"""Map one gyrokinetic computational coordinate to a physical coordinate."""
+"""Map one or multiple coordinates of an interpolated dataset."""
 
 from __future__ import annotations
 
@@ -26,9 +26,9 @@ def _normalization_options(optional: dict[str, str] | None) -> dict[str, str]:
       name, separator, source = entry.partition("=")
       name, source = name.strip(), source.strip()
       if not separator or not source or name not in {"Cy", "rho_s"}:
-        raise ValueError("map_gk_dir optional expects Cy or rho_s as key=value")
+        raise ValueError("map_interp optional expects Cy or rho_s as key=value")
       if name in result:
-        raise ValueError(f"map_gk_dir optional repeats {name}")
+        raise ValueError(f"map_interp optional repeats {name}")
       result[name] = source
   return result
 
@@ -51,7 +51,7 @@ def _psi_source(file_name: str, psi_file: str | None):
   if psi_file is None:
     name = parse_output_name(file_name)
     if name is None:
-      raise ValueError("map_gk_dir requires a source filename or psi_file")
+      raise ValueError("map_interp requires a source filename or psi_file")
     psi_file = os.path.join(name.directory, f"{name.sim}-psi.gkyl")
   ctx: dict = {}
   grid, values = read(psi_file, ctx)
@@ -166,35 +166,90 @@ def _outboard_radius(
   return result, None
 
 
-def map_gk_dir(
+def _psi_pol_to_rho_pol(samples, data, psi_file, options):
+  psi_axis, psi_sep = _flux_reference(data.file_name, psi_file)
+  normalized = (samples - psi_axis) / (psi_sep - psi_axis)
+  if not np.all(np.isfinite(normalized)) or np.any(normalized < 0):
+    raise ValueError(
+        "rho_pol is undefined for psi outside the axis-side domain")
+  return np.sqrt(normalized), r"$\rho_{\mathrm{pol}}$"
+
+
+def _psi_pol_to_R_omp(samples, data, psi_file, options):
+  mapped, _ = _outboard_radius(samples, data.file_name, psi_file)
+  return mapped, r"$R_{\mathrm{OMP}}$ (m)"
+
+
+def _psi_pol_to_R_omp_R_sep(samples, data, psi_file, options):
+  mapped, boundary_key = _outboard_radius(samples,
+                                          data.file_name,
+                                          psi_file,
+                                          relative_to_boundary=True)
+  label = (r"$R_{\mathrm{omp}} - R_{\mathrm{LCFS}}$ (m)" if boundary_key
+           == "psi_lcfs" else r"$R_{\mathrm{omp}} - R_{\mathrm{sep}}$ (m)")
+  return mapped, label
+
+
+def _alpha_to_rho_s(samples, data, psi_file, options):
+  if data.ctx.get("geometry_type") != 1:
+    raise ValueError("rho_s requires tokamak geometry metadata")
+  cy = _normalization_value(data.ctx, "Cy", options)
+  rho_s = _normalization_value(data.ctx, "rho_s", options)
+  if not np.isfinite(cy) or cy == 0 or not np.isfinite(rho_s) or rho_s <= 0:
+    raise ValueError("rho_s requires finite nonzero Cy and positive rho_s")
+  return samples * cy / rho_s, r"$y/\rho_s$"
+
+
+_MAPPINGS = {
+    (0, "psi_pol", "rho_pol"):
+    (_psi_pol_to_rho_pol, "Poloidal flux to rho poloidal."),
+    (0, "psi_pol", "R_omp"):
+    (_psi_pol_to_R_omp, "Poloidal flux to major radius at OMP."),
+    (0, "psi_pol", "R_omp_R_sep"):
+    (_psi_pol_to_R_omp_R_sep,
+     "Poloidal flux to R_omp minus separatrix/LCFS major radius."),
+    (1, "alpha", "rho_s"):
+    (_alpha_to_rho_s, "Binormal alpha to ion sound gyroradius units."),
+}
+_DEFAULT_SOURCES = {0: "psi_pol", 1: "alpha"}
+
+
+def available_maps() -> list[tuple[str, str]]:
+  """Return the supported map options and their descriptions."""
+  return [(f"* -a {axis}, -s {source}, -d {dest}", description)
+          for (axis, source, dest), (_, description) in _MAPPINGS.items()]
+
+
+def _names(value):
+  return tuple(
+      item.strip()
+      for item in value.split(",")) if isinstance(value, str) else tuple(value)
+
+
+def map_interp(
     data: GDataState,
     *,
-    dir: Annotated[int | tuple[int, ...] | list[int] | str,
-                   CliType(str)],
-    coord: Annotated[str | tuple[str, ...] | list[str],
-                     CliType(str)],
+    axes: Annotated[int | tuple[int, ...] | list[int] | str,
+                    CliType(str)],
+    dest: Annotated[str | tuple[str, ...] | list[str],
+                    CliType(str)],
+    source: Annotated[str | tuple[str, ...] | list[str] | None,
+                      CliType(str)] = None,
     psi_file: str | None = None,
     inplace: bool = False,
     tag: str | None = None,
     label: str | None = None,
     optional: Annotated[dict[str, str] | None,
                         KeyValue()] = None) -> GDataState:
-  """Map interpolated psi samples to a flux or outboard-midplane coordinate.
+  """Map one or multiple coordinates of an interpolated dataset.
 
-  Supports ``dir=0`` with ``coord='rho_pol'``, ``'R_omp'``, or
-  ``'R_omp_R_sep'``, and ``dir=1, coord='rho_s'``. Pair comma-separated
-  directions and coordinates to map several axes in one call. ``rho_s`` maps the
-  binormal angle to ``Cy * alpha / rho_s`` using run metadata. ``R_omp_R_sep``
-  subtracts the outboard radius at
-  ``psi_lcfs`` for inner-wall limited geometry (including Miller), or at
-  ``psi_sep`` for diverted geometry. The companion ``<simulation_name>-psi.gkyl``
-  supplies the geometry and is shared by all blocks. ``psi_file`` overrides
-  this lookup.
+  See ``--avail_maps`` for a list of currently available maps.
 
   Args:
     data: Interpolated gyrokinetic dataset.
-    dir: Computational directions, e.g. ``0`` or ``0,1`` at the CLI.
-    coord: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+    axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
+    dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+    source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
     psi_file: Optional path to Gkeyll's psi field.
     optional: Normalization inputs as metadata names or numeric values. At the
       CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
@@ -204,66 +259,41 @@ def map_gk_dir(
     label: Optional display label for the result.
   """
   try:
-    directions = (tuple(int(item.strip())
-                        for item in dir.split(",")) if isinstance(dir, str) else
-                  (dir, ) if isinstance(dir, int) else tuple(dir))
+    directions = (tuple(
+        int(item.strip())
+        for item in axes.split(",")) if isinstance(axes, str) else
+                  (axes, ) if isinstance(axes, int) else tuple(axes))
   except (TypeError, ValueError) as err:
-    raise ValueError("map_gk_dir requires integer directions") from err
-  coordinates = (tuple(
-      item.strip()
-      for item in coord.split(",")) if isinstance(coord, str) else tuple(coord))
+    raise ValueError("map_interp requires integer axes") from err
+  coordinates = _names(dest)
   if not directions or len(directions) != len(coordinates):
-    raise ValueError("map_gk_dir needs one coordinate per direction")
+    raise ValueError("map_interp needs one destination per axis")
   if len(set(directions)) != len(directions):
-    raise ValueError("map_gk_dir directions must be distinct")
-  allowed = {0: {"rho_pol", "R_omp", "R_omp_R_sep"}, 1: {"rho_s"}}
-  if any(not isinstance(d, int) or d not in allowed or c not in allowed[d]
-         for d, c in zip(directions, coordinates)):
-    raise ValueError("map_gk_dir supports dir=0 with 'rho_pol', 'R_omp', or "
-                     "'R_omp_R_sep', and dir=1 with 'rho_s'")
+    raise ValueError("map_interp axes must be distinct")
+  sources = (tuple(_DEFAULT_SOURCES.get(d)
+                   for d in directions) if source is None else _names(source))
+  if len(sources) != len(directions):
+    raise ValueError("map_interp needs one source per axis")
+  if any((d, s, c) not in _MAPPINGS
+         for d, s, c in zip(directions, sources, coordinates)):
+    raise ValueError("map_interp supports axes=0 from psi_pol to rho_pol, "
+                     "R_omp, or R_omp_R_sep, and axes=1 from alpha to rho_s")
   if not data.ctx.get("interpolated") or data.backend != "numpy":
     raise ValueError(
-        "map_gk_dir requires interpolated NumPy data; call interp first")
+        "map_interp requires interpolated NumPy data; call interp first")
   options = _normalization_options(optional)
   grid = list(data.grid)
   labels = dict(data.ctx.get("coordinate_labels", {}))
-  for direction, destination in zip(directions, coordinates):
+  for direction, incoming, outgoing in zip(directions, sources, coordinates):
     if len(data.grid) <= direction:
       raise ValueError(
-          f"map_gk_dir requires direction {direction} in the data grid")
+          f"map_interp requires direction {direction} in the data grid")
     axis = np.asarray(data.grid[direction])
     if axis.ndim != 1:
-      raise ValueError("map_gk_dir requires a separable coordinate axis")
+      raise ValueError("map_interp requires a separable coordinate axis")
     samples = sample_coordinates(axis, data.values.shape[direction])
-    if destination == "rho_s":
-      if data.ctx.get("geometry_type") != 1:
-        raise ValueError("rho_s requires tokamak geometry metadata")
-      cy = _normalization_value(data.ctx, "Cy", options)
-      rho_s = _normalization_value(data.ctx, "rho_s", options)
-      if not np.isfinite(cy) or cy == 0 or not np.isfinite(rho_s) or rho_s <= 0:
-        raise ValueError("rho_s requires finite nonzero Cy and positive rho_s")
-      mapped = samples * cy / rho_s
-      axis_label = r"$y/\rho_s$"
-    elif destination == "rho_pol":
-      psi_axis, psi_sep = _flux_reference(data.file_name, psi_file)
-      normalized = (samples - psi_axis) / (psi_sep - psi_axis)
-      if not np.all(np.isfinite(normalized)) or np.any(normalized < 0):
-        raise ValueError(
-            "rho_pol is undefined for psi outside the axis-side domain")
-      mapped = np.sqrt(normalized)
-      axis_label = r"$\rho_{\mathrm{pol}}$"
-    else:
-      mapped, boundary_key = _outboard_radius(
-          samples,
-          data.file_name,
-          psi_file,
-          relative_to_boundary=destination == "R_omp_R_sep")
-      if boundary_key == "psi_lcfs":
-        axis_label = r"$R_{\mathrm{omp}} - R_{\mathrm{LCFS}}$ (m)"
-      elif boundary_key == "psi_sep":
-        axis_label = r"$R_{\mathrm{omp}} - R_{\mathrm{sep}}$ (m)"
-      else:
-        axis_label = r"$R_{\mathrm{OMP}}$ (m)"
+    mapping, _ = _MAPPINGS[(direction, incoming, outgoing)]
+    mapped, axis_label = mapping(samples, data, psi_file, options)
     grid[direction] = mapped
     labels[direction] = axis_label
   return data._result(grid,
