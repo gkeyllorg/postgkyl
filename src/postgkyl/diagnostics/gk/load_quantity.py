@@ -59,7 +59,8 @@ def load_quantity(
       species-independent quantities.
     name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
     frame: Frame number, comma-separated list, or ``'start:stop[:step]'``
-      range; ``':'``/``None`` selects all available frames.
+      range; ``':'``/``None`` selects all available frames, and negative
+      values count back from the last one (``'-10:'`` the last ten).
     path: Directory containing the simulation files.
     tag: Tag for the output dataset(s); suffixed with the species when more
       than one species is requested.

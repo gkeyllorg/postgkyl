@@ -43,6 +43,11 @@ def geometry_prefix(file_name: str | None) -> str | None:
   return name.prefix if name is not None else None
 
 
+def mapc2p_path(prefix: str) -> str:
+  """The modal coordinate map written by the simulation with ``prefix``."""
+  return f"{prefix}-geo_int_mapc2p.gkyl"
+
+
 def per_block_path(path: str | None, block: int | None) -> str | None:
   """Substitute a block index for '*' in an explicit geometry path."""
   if path is None or block is None or "*" not in path:
@@ -70,12 +75,12 @@ def resolve_geometry_files(file_name: str | None,
   if nodes_file is not None:
     path, kind = nodes_file, "nodes"
   elif mapc2p is not None:
-    path = mapc2p or (f"{prefix}-geo_int_mapc2p.gkyl" if prefix else None)
+    path = mapc2p or (mapc2p_path(prefix) if prefix else None)
     kind = "mapc2p"
   elif prefix is not None:
     path, kind = f"{prefix}-geo_int_nodes.gkyl", "nodes"
     if not os.path.exists(path):
-      path, kind = f"{prefix}-geo_int_mapc2p.gkyl", "mapc2p"
+      path, kind = mapc2p_path(prefix), "mapc2p"
   else:
     path, kind = None, "nodes"
 
