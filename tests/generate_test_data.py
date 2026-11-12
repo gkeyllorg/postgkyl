@@ -792,6 +792,25 @@ def _generate_representation_fields(out_dir: Path) -> None:
                        "generation_method":
                        "One exact normalized product Legendre mode."
                    })
+  tensor_coefficients = np.zeros((1, 1, 1, 18))
+  tensor_coefficients[..., 17] = 1.
+  write_gkyl_field(out_dir / "hybrid_tensor_1x2v_highest.gkyl", [1, 1, 1],
+                   [-1.] * 3, [1.] * 3,
+                   tensor_coefficients,
+                   1,
+                   "hybrid",
+                   metadata={
+                       "num_cdim":
+                       1,
+                       "num_vdim":
+                       2,
+                       "description":
+                       "Highest 1x2v tensor-hybrid mode, coefficient 17 = 1.",
+                       "analytic_function":
+                       "f=5*sqrt(3/8)/4*x*(3*v1^2-1)*(3*v2^2-1)",
+                       "generation_method":
+                       "One exact normalized tensor-product Legendre mode."
+                   })
 
 
 def _generate_fourier_samples(out_dir: Path) -> None:
