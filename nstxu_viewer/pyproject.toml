@@ -1,0 +1,3 @@
+# marimo reads [tool.marimo] from the nearest pyproject.toml: the viewer always opens in the dark theme.
+[tool.marimo.display]
+theme = "dark"

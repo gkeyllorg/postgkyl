@@ -1,0 +1,5 @@
+# a data directory's own files, when it is this directory (NSTXU_VIEWER_DATA unset), and the viewer's venv
+runs/
+viewer.json
+flux.env
+.venv/

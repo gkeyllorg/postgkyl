@@ -1,0 +1,10 @@
+{
+  "base": "..",
+  "sims": [
+    ["Sim 1", "sims/sim1", "prod", "one line on what this simulation is"],
+    ["Sim 2", "/absolute/path/to/another/simulation", "prod", "absolute paths work too"]
+  ],
+  "pgkyl": "../tools/postgkyl/.venv/bin/pgkyl",
+  "thomson_fallback": "nstxu_sim_init_workflow/data/h5_slim",
+  "theme_files": {"NSTX-U": "poster/aps_dpp_2025_poster_jjosephyzack.pptx"}
+}
