@@ -121,7 +121,7 @@ jobs:
   coverage:
     name: Full suite and branch coverage / Linux
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       MPLBACKEND: Agg
       POSTGKYL_REQUIRE_GKEYLL: "1"
