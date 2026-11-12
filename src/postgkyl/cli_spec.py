@@ -43,6 +43,32 @@ class ResultPolicy(Enum):
 
 
 @dataclass(frozen=True)
+class InfoOption:
+  """An eager CLI-only flag displaying provider-supplied name/description rows.
+
+  The command owner supplies the rows; the CLI owns formatting and exits
+  before validating required inputs or executing the command pipeline.
+  """
+
+  name: str
+  rows: Callable[[], list[tuple[str, str]]]
+  help: str
+  heading: str | None = None
+
+  def __post_init__(self) -> None:
+    if not isinstance(
+        self.name, str) or not self.name.isidentifier() or self.name == "help":
+      raise ValueError("InfoOption requires an identifier other than 'help'")
+    if not callable(self.rows):
+      raise TypeError("InfoOption requires a callable rows provider")
+    if not isinstance(self.help, str) or not self.help.strip():
+      raise ValueError("InfoOption requires non-empty help")
+    if self.heading is not None and (not isinstance(self.heading, str)
+                                     or not self.heading.strip()):
+      raise ValueError("InfoOption heading must be non-empty text")
+
+
+@dataclass(frozen=True)
 class CommandSpec:
   """Pipeline metadata attached to one canonical API callable."""
 
@@ -51,6 +77,8 @@ class CommandSpec:
   consumes_inputs: bool = False
   result: ResultPolicy = ResultPolicy.DATA
   order: int = 0
+  info_options: tuple[InfoOption, ...] = ()
+  deactivate_inputs: bool = False
 
   def __post_init__(self) -> None:
     if not isinstance(self.section, Section) or not isinstance(
@@ -59,8 +87,20 @@ class CommandSpec:
           "CommandSpec section, execution, and result must be enums")
     if not isinstance(self.consumes_inputs, bool):
       raise TypeError("CommandSpec consumes_inputs must be a bool value")
+    if not isinstance(self.deactivate_inputs, bool):
+      raise TypeError("CommandSpec deactivate_inputs must be a bool value")
+    if self.deactivate_inputs and (self.execution is not Execution.COMBINE
+                                   or self.consumes_inputs):
+      raise ValueError("deactivate_inputs requires non-consuming COMBINE")
     if not isinstance(self.order, int) or isinstance(self.order, bool):
       raise TypeError("CommandSpec order must be an integer")
+    if not isinstance(self.info_options, tuple) or not all(
+        isinstance(option, InfoOption) for option in self.info_options):
+      raise TypeError(
+          "CommandSpec info_options must be a tuple of InfoOption records")
+    names = [option.name for option in self.info_options]
+    if len(set(names)) != len(names):
+      raise ValueError("CommandSpec has duplicate informational option names")
     if self.execution is Execution.LOAD:
       if self.consumes_inputs:
         raise ValueError("LOAD commands cannot consume working-set inputs")
@@ -105,13 +145,21 @@ class CliArgument:
 
 @dataclass(frozen=True)
 class ChoiceProvider:
-  """Obtain an option's choices from the API registry returned by provider."""
+  """Obtain choices from an API registry, optionally overriding the help metavar.
+
+  A custom metavar changes presentation only; validation and completion still
+  use all provider-supplied choices.
+  """
 
   provider: Callable[[], object]
+  metavar: str | None = None
 
   def __post_init__(self) -> None:
     if not callable(self.provider):
       raise TypeError("ChoiceProvider requires a callable provider")
+    if self.metavar is not None and (not isinstance(self.metavar, str)
+                                     or not self.metavar.strip()):
+      raise ValueError("ChoiceProvider metavar must be non-empty text")
 
 
 @dataclass(frozen=True)
@@ -185,6 +233,7 @@ __all__ = [
     "CommandSpec",
     "DatasetRef",
     "Execution",
+    "InfoOption",
     "KeyValue",
     "PipelineInput",
     "ResultPolicy",

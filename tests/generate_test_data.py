@@ -792,6 +792,25 @@ def _generate_representation_fields(out_dir: Path) -> None:
                        "generation_method":
                        "One exact normalized product Legendre mode."
                    })
+  tensor_coefficients = np.zeros((1, 1, 1, 18))
+  tensor_coefficients[..., 17] = 1.
+  write_gkyl_field(out_dir / "hybrid_tensor_1x2v_highest.gkyl", [1, 1, 1],
+                   [-1.] * 3, [1.] * 3,
+                   tensor_coefficients,
+                   1,
+                   "hybrid",
+                   metadata={
+                       "num_cdim":
+                       1,
+                       "num_vdim":
+                       2,
+                       "description":
+                       "Highest 1x2v tensor-hybrid mode, coefficient 17 = 1.",
+                       "analytic_function":
+                       "f=5*sqrt(3/8)/4*x*(3*v1^2-1)*(3*v2^2-1)",
+                       "generation_method":
+                       "One exact normalized tensor-product Legendre mode."
+                   })
 
 
 def _generate_fourier_samples(out_dir: Path) -> None:
@@ -1011,10 +1030,162 @@ def _generate_native_physics_fields(out_dir: Path) -> None:
                        })
 
 
+def drift_projection_reference(ndim=3):
+  """Affine 2x/3x map and analytic drift samples at tensor two-point Gauss nodes.
+
+  X=(2,-1,0.4)+A*x, A=[[2,.6,0],[0,1.5,0],[.2,-.1,3]].
+  b=(0,0,1), B=2+.1*f, phi=1+.4*f, p=3+.7*f,
+  n=2, Tperp=4, charge=1. In 3x, f=x0. In 2x, f=x0+.3*x2,
+  with x1=.3 fixed and all three geometry vectors retained. The 2x
+  scalars vary in both stored directions; their binormal derivative is zero.
+  Apar=.2+.6*f gives dB=.6*grad(f) cross b. A separate vector
+  V=(1+.2*x0, -.7+.1*x2, .4+.05*f) is stored as Cartesian, contravariant
+  (inv(A)*V), and covariant (A.T*V) components.
+  Polynomial fields are exact p1; reciprocal fields are Gauss projections.
+  """
+  from itertools import product
+  dims = [0, 2] if ndim == 2 else [0, 1, 2]
+  cells = tuple(np.array([2, 3, 4])[dims])
+  lower = np.array([0., -.2, .1])[dims]
+  upper = np.array([.7, 1.1, 2.2])[dims]
+  widths = (upper - lower) / cells
+  centers = np.stack(np.meshgrid(*[
+      lower[d] + widths[d] * (np.arange(n) + .5) for d, n in enumerate(cells)
+  ],
+                                 indexing="ij"),
+                     axis=-1)
+  signs = np.array(list(product((-1., 1.), repeat=ndim)))
+  grid_points = centers[..., None, :] + widths * signs / np.sqrt(3) / 2
+  points = np.full((*cells, 2**ndim, 3), .3)
+  points[..., dims] = grid_points
+  if ndim == 2:
+    sx, sz = signs.T
+    basis = np.stack([np.ones(4), sx, sz, sx * sz], axis=-1) / 2
+  else:
+    sx, sy, sz = signs.T
+    basis = np.stack(
+        [np.ones(8), sx, sy, sz, sx * sy, sx * sz, sy * sz, sx * sy * sz],
+        axis=-1) / np.sqrt(8)
+  tangents = np.array([[2., .6, 0.], [0., 1.5, 0.], [.2, -.1, 3.]])
+  duals = np.linalg.inv(tangents)
+  normals = duals / np.linalg.norm(duals, axis=1)[:, None]
+  positions = np.array([2., -1., .4]) + points @ tangents.T
+  parallel_slope = .3 if ndim == 2 else 0.
+  scalar = points[..., 0] + parallel_slope * points[..., 2]
+  bmag = 2 + .1 * scalar
+  cross = np.cross([0., 0., 1.], duals[0] + parallel_slope * duals[2])
+  speeds = {
+      "ExB_vel": .4 / bmag,
+      "gradB_vel": .4 / bmag**2,
+      "diamag_vel": .7 / (2 * bmag)
+  }
+  return cells, lower, upper, points, basis, tangents, normals, positions, bmag, cross, speeds
+
+
+def _generate_drift_projection_fields(out_dir: Path, ndim=3) -> None:
+  """Write independently projected affine-map drift inputs for both position layouts."""
+  (cells, lower, upper, points, basis, tangents, normals, positions, bmag, _,
+   _) = drift_projection_reference(ndim)
+
+  def write(stem, samples, geometry_type, analytic_function=None):
+    """Project tensor Gauss samples with explicit p1 Legendre basis values."""
+    samples = np.broadcast_to(samples, (*cells, 2**ndim, np.shape(samples)[-1]))
+    coeff = np.einsum("...qc,qm->...cm", samples, basis).reshape(*cells, -1)
+    write_gkyl_field(out_dir / f"{stem}.gkyl",
+                     cells,
+                     lower,
+                     upper,
+                     coeff,
+                     1,
+                     "serendipity",
+                     metadata={
+                         "geometry_type":
+                         geometry_type,
+                         "charge":
+                         1.,
+                         "mass":
+                         1.,
+                         "time":
+                         0.,
+                         "frame":
+                         0,
+                         "description":
+                         "Affine geometry and analytic drift fields",
+                         "analytic_function":
+                         analytic_function
+                         or drift_projection_reference.__doc__,
+                         "generation_method":
+                         "Explicit tensor two-point Gauss Legendre projection"
+                     })
+
+  for kind, geometry_type in (("cart", 3), ("cyl", 1)):
+    prefix = f"drift_{kind}" if ndim == 3 else f"drift_2x_{kind}"
+    scalar = points[..., 0] + (.3 * points[..., 2] if ndim == 2 else 0.)
+    position = positions.copy()
+    if kind == "cyl":
+      position[..., 0] = np.hypot(positions[..., 0], positions[..., 1])
+      position[..., 1] = positions[..., 2]
+      position[..., 2] = np.arctan2(positions[..., 1], positions[..., 0])
+    duals = np.linalg.inv(tangents)
+    metric_indices = np.triu_indices(3)
+    # A separate affine vector tests all reconstruction bases independently.
+    vector = np.stack(
+        [1 + .2 * points[..., 0], -.7 + .1 * points[..., 2], .4 + .05 * scalar],
+        axis=-1)
+    fields = {
+        "vector_cartesian": vector,
+        "vector_contravariant": vector @ duals.T,
+        "vector_covariant": vector @ tangents,
+        "geo_int_dzdx": duals.ravel(),
+        "geo_int_g_ij": (tangents.T @ tangents)[metric_indices],
+        "geo_int_gij": (duals @ duals.T)[metric_indices],
+        "geo_int_jacobgeo_inv": np.array([1 / np.linalg.det(tangents)]),
+        "geo_int_jacobgeo": np.array([np.linalg.det(tangents)]),
+        "apar_0": (.2 + .6 * scalar)[..., None],
+        "geo_int_dxdz": tangents.T.ravel(),
+        "geo_int_normals": normals.ravel(),
+        "geo_int_mapc2p": position,
+        "geo_int_b_i": tangents[2, :],
+        "geo_int_bmag": bmag[..., None],
+        "geo_int_jacobtot_inv": (1 / (np.linalg.det(tangents) * bmag))[...,
+                                                                       None],
+        "field_0": (1 + .4 * scalar)[..., None],
+        "ion_M0_0": np.array([2.]),
+        "ion_M2perp_0": (3 + .7 * scalar)[..., None],
+        "ion_BiMaxwellianMoments_0": np.array([2., 0., 4., 4.]),
+    }
+    for suffix, values in fields.items():
+      write(f"{prefix}-{suffix}", values, geometry_type)
+    # Full vector diagnostics: n=2+.2*f, upar=.3, Tpar=Tperp=4, mass=charge=1.
+    # Maxwellian moments are M1=n*u, M2=n*(u^2+3T), M3=n*(u^3+5uT).
+    # Each field is projected with the same independent tensor Gauss rule.
+    density = 2 + .2 * scalar
+    fields.update({
+        "ion_M0_0":
+        density[..., None],
+        "ion_M1_0": (.3 * density)[..., None],
+        "ion_M2_0": ((.3**2 + 12) * density)[..., None],
+        "ion_M2perp_0": (8 * density)[..., None],
+        "ion_M3_0": ((.3**3 + 6) * density)[..., None],
+        "ion_BiMaxwellianMoments_0":
+        np.stack((density, density * 0 + .3, density * 0 + 4, density * 0 + 4),
+                 axis=-1),
+    })
+    for suffix, values in fields.items():
+      write(f"{prefix.replace('drift_', 'repr_', 1)}-{suffix}",
+            values,
+            geometry_type,
+            analytic_function=drift_projection_reference.__doc__ +
+            " For repr_* fields, n=2+.2*f, upar=.3, Tpar=Tperp=4, p=n*T; "
+            "M1=n*u, M2=n*(u^2+3T), M3=n*(u^3+5*u*T).")
+
+
 def generate_all(out_dir: Path | str) -> None:
   """Write all synthetic test files to *out_dir*."""
   out_dir = Path(out_dir)
   out_dir.mkdir(parents=True, exist_ok=True)
+  _generate_drift_projection_fields(out_dir)
+  _generate_drift_projection_fields(out_dir, ndim=2)
   _generate_analytic_fields(out_dir)
   _generate_polynomial_fields(out_dir)
   _generate_native_physics_fields(out_dir)

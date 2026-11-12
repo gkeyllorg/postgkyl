@@ -190,7 +190,7 @@ class TestLoadGkDistfReal:
                         GK_NAME,
                         "250",
                         path=DATA,
-                        read_options={"c2p_vel": "0"})
+                        options={"c2p_vel": "0"})
     assert len(out) == 1
     data = out[0]
     assert isinstance(data, GData)
@@ -675,7 +675,7 @@ class TestNormalizedQuantities:
 
 
 class TestDriftVelocities:
-  """``fetch_gradB_vel``/``fetch_diamag_vel`` and the remaining
+  """``fetch_gradB_vel_contra``/``fetch_diamag_vel_contra`` and the remaining
   ``_b_cross_grad_div_b_component`` branches (comp 1/2, cdim 1/2/3)."""
 
   def _synthetic(self, cdim, comp):
@@ -702,7 +702,7 @@ class TestDriftVelocities:
     Tperp = _field(np.full(scalar.values.shape, 3.0),
                    grid=scalar.grid,
                    charge=2.0)
-    out = ff.fetch_gradB_vel([jacobtot_inv, scalar, b_i, Tperp], dir=0)
+    out = ff.fetch_gradB_vel_contra([jacobtot_inv, scalar, b_i, Tperp], dir=0)
     assert np.all(np.isfinite(out.values))
 
   def test_diamag_vel(self):
@@ -711,16 +711,17 @@ class TestDriftVelocities:
     pressperp = _field(np.full(scalar.values.shape, 3.0),
                        grid=scalar.grid,
                        charge=2.0)
-    out = ff.fetch_diamag_vel([jacobtot_inv, scalar, b_i, m0, pressperp], dir=0)
+    out = ff.fetch_diamag_vel_contra([jacobtot_inv, scalar, b_i, m0, pressperp],
+                                     dir=0)
     assert np.all(np.isfinite(out.values))
 
   def test_gradB_vel_requires_dir(self):
     with pytest.raises(ValueError, match="direction="):
-      ff.fetch_gradB_vel([None, None, None, None])
+      ff.fetch_gradB_vel_contra([None, None, None, None])
 
   def test_diamag_vel_requires_dir(self):
     with pytest.raises(ValueError, match="direction="):
-      ff.fetch_diamag_vel([None, None, None, None, None])
+      ff.fetch_diamag_vel_contra([None, None, None, None, None])
 
 
 class TestLoadDistf:
@@ -799,7 +800,7 @@ class TestCrossGradDivB:
 
   def test_ExB_vel_requires_dir(self):
     with pytest.raises(ValueError, match="direction="):
-      ff.fetch_ExB_vel([None, None, None, None])
+      ff.fetch_ExB_vel_contra([None, None, None, None])
 
 
 class TestLoadQuantity:
@@ -841,8 +842,8 @@ class TestLoadQuantity:
 
   @pytest.mark.parametrize("quantity, species, direction, expected", [
       ("flux_particle", "ion", 1, r"$\Gamma^{y}_{i}$"),
-      ("inv_L_T", "elc", 2, r"$1/L^{z}_{T,e}$ (1/m)"),
-      ("ExB_vel", None, 0, r"$v_{E,x}$ (m/s)"),
+      ("inv_L_T", "elc", 2, r"$1/L_{T,e,z}$ (1/coordinate unit)"),
+      ("ExB_vel", None, 0, r"$v_{E}^{x}$ (contravariant component units)"),
       ("M0", "ion", None, r"$M_{0i}$ (m$^{-3}$)"),
   ])
   def test_labels_name_the_direction_and_species(self, quantity, species,
@@ -933,8 +934,8 @@ def _extra_for(quant) -> dict:
 
 
 # The synthetic data are 1x: cross-field fluxes, and the diffusivities built
-# on them, need the binormal direction y of a 3x run and must refuse.
-_NEEDS_3X = {
+# on them, require a 2x or 3x configuration grid and must refuse.
+_NEEDS_2X_OR_3X = {
     "flux_particle_ExB", "flux_energy_ExB", "flux_particle_dB",
     "flux_energy_dB", "flux_particle", "flux_energy", "particle_D", "heat_chi",
     "particle_D_gB", "heat_chi_gB"
@@ -973,8 +974,8 @@ def test_every_registered_quantity_produces_a_dataset(quantity, tmp_path,
 
   monkeypatch.setattr(qmod, "GData", _SyntheticSource())
 
-  if quantity in _NEEDS_3X:
-    with pytest.raises(ValueError, match="need 3x"):
+  if quantity in _NEEDS_2X_OR_3X:
+    with pytest.raises(ValueError, match="need 2x .* or 3x"):
       load_quantity(quantity,
                     species,
                     name,
