@@ -246,7 +246,7 @@ def map_interp(
   See ``--avail_maps`` for a list of currently available maps.
 
   Args:
-    data: Interpolated gyrokinetic dataset.
+    data: Interpolated dataset.
     axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
     dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
     source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
