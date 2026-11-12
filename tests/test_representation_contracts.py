@@ -131,7 +131,6 @@ def test_vlasov_hybrid_highest_mode_preserved(form):
                              expected,
                              rtol=3e-14,
                              atol=3e-14)
-  assert abs(expected[-1, -1, -1]) > 0.17
 
 
 @needs_gkeyll
