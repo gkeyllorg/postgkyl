@@ -87,8 +87,9 @@ def growth(*datasets: GDataState,
                             inplace=inplace,
                             tag=tag,
                             label=label)
-    for component, params in enumerate(result.ctx["fit_params"]):
-      print(f"growth component {component}: {params[1]:.12g}")
+    if isinstance(result, GDataState):
+      for component, params in enumerate(result.ctx["fit_params"]):
+        print(f"growth component {component}: {params[1]:.12g}")
     results.append(result)
   return results[0] if len(results) == 1 else results
 
