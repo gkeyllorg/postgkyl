@@ -27,7 +27,7 @@ select a tag later in the chain. Each command activates only its result;
 previous inputs are set aside and can be restored by their load-time tag::
 
    pgkyl "run-field_[0-9]*.gkyl" --tag raw growth --spectrum -d 1 -t gamma \
-     --time_norm R_axis/c_s --time_window 1.,5.0 \
+     --time_norm R_axis/c_s --time_window 1. 5.0 \
      --space_norm rho_s/Cy plot
 
 Append ``activate --tags raw`` later in the same chain to restore the source

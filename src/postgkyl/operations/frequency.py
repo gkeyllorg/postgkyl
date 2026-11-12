@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from postgkyl.cli_spec import CliType, CommaTuple
+from postgkyl.cli_spec import CliType
 from postgkyl.gdatastate import flatten_datasets
 from postgkyl.gdatastate.gdatastate import GDataState
 
@@ -21,8 +21,7 @@ def frequency(*datasets: GDataState,
               min_n: int | None = None,
               time_norm: Annotated[float | str | None,
                                    CliType(str | None)] = None,
-              time_window: Annotated[tuple[float, float] | None,
-                                     CommaTuple()] = None,
+              time_window: tuple[float, float] | None = None,
               space_norm: Annotated[float | str | None,
                                     CliType(str | None)] = None,
               interpolated: bool = False,

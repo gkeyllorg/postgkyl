@@ -23,6 +23,26 @@ from postgkyl.cli_spec import CommandSpec, Execution, Section, command
 _MODELS = {model.name: model for model in MODELS}
 
 
+@pytest.mark.parametrize("name", ["growth", "frequency"])
+@pytest.mark.parametrize("bounds", [("1", "2"), ("1.0", "2.5")])
+def test_time_window_uses_two_float_tokens(name, bounds):
+  model = _MODELS[name]
+  parsed = _parse(model, ["--time_window", *bounds])
+  expected = tuple(float(value) for value in bounds)
+  assert parsed["time_window"] == expected
+  assert _parse(model, command_tokens(
+      model, {"time_window": expected}))["time_window"] == expected
+
+
+@pytest.mark.parametrize("name", ["growth", "frequency"])
+def test_time_window_requires_two_tokens(name):
+  from click.testing import CliRunner
+
+  result = CliRunner().invoke(cli, [name, "--time_window", "1"])
+  assert result.exit_code == 2
+  assert "--time_window" in result.output
+
+
 @pytest.mark.parametrize("tokens,expected", [
     (["-o", "rho_s=rho_s0,Cy=0.2"], {
         "rho_s": "rho_s0,Cy=0.2"

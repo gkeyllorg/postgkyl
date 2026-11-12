@@ -327,7 +327,7 @@ def test_cli_growth_spectrum_spelling(tmp_path):
     paths.append(pg.save(frame, str(tmp_path / f"sample-field_{i}.gkyl")))
   result = CliRunner().invoke(cli, [
       str(tmp_path / "sample-field_*.gkyl"), "growth", "--spectrum", "-d", "1",
-      "-t", "gamma", "--time_norm", "R_axis/c_s", "--time_window", "0,2",
+      "-t", "gamma", "--time_norm", "R_axis/c_s", "--time_window", "0", "2",
       "--space_norm", "rho_s/Cy", "activate", "--tags", "gamma", "info"
   ])
   assert result.exit_code == 0, result.output
@@ -335,7 +335,7 @@ def test_cli_growth_spectrum_spelling(tmp_path):
   assert "gamma" in result.output
   numeric = CliRunner().invoke(cli, [
       str(tmp_path / "sample-field_*.gkyl"), "growth", "--spectrum", "-d", "1",
-      "--time_norm", "0.5", "--space_norm", "0.5", "--time_window", "0,8",
+      "--time_norm", "0.5", "--space_norm", "0.5", "--time_window", "0", "8",
       "info"
   ])
   assert numeric.exit_code == 0, numeric.output

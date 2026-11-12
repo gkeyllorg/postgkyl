@@ -139,11 +139,6 @@ class CliType:
 
 
 @dataclass(frozen=True)
-class CommaTuple:
-  """Spell a fixed tuple as one comma-separated CLI option value."""
-
-
-@dataclass(frozen=True)
 class CliArgument:
   """Expose this API parameter as a positional command-line argument."""
 

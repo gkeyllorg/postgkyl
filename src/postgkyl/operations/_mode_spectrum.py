@@ -12,7 +12,7 @@ from typing import Annotated
 import numpy as np
 
 from postgkyl import numerics
-from postgkyl.cli_spec import CliType, CommaTuple
+from postgkyl.cli_spec import CliType
 from postgkyl.gdatastate import flatten_datasets, materialize_point_values
 from postgkyl.gdatastate.gdatastate import GDataState
 from postgkyl.gdatastate.layout import dg_layout
@@ -49,8 +49,7 @@ def mode_spectrum(
     quantity: str,
     time_norm: Annotated[float | str | None,
                          CliType(str | None)] = None,
-    time_window: Annotated[tuple[float, float] | None,
-                           CommaTuple()] = None,
+    time_window: tuple[float, float] | None = None,
     space_norm: Annotated[float | str | None,
                           CliType(str | None)] = None,
     interpolated: bool = False,
