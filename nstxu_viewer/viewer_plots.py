@@ -17,6 +17,7 @@ Validated with the data-viz validator on each look's surface (white; #1B262B):
   crimson/gold at CVD 7.9 (the 6-8 band), so the region lines also carry direct end labels.
 """
 import colorsys
+import itertools
 import os
 import re
 import zipfile
@@ -26,7 +27,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker  # noqa: E402
-from matplotlib import font_manager, patheffects  # noqa: E402
+from matplotlib import font_manager, ft2font, patheffects  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, LogNorm, Normalize  # noqa: E402
 import numpy as np  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
@@ -34,10 +35,8 @@ from plotly.subplots import make_subplots  # noqa: E402
 
 import gkview as gv  # noqa: E402
 import pgkyl_cmd as pc  # noqa: E402
+import texlabel as tl  # noqa: E402
 import thomson  # noqa: E402
-
-# metric-compatible stand-ins, used only where the theme font is not installed (Arial is not, on Perlmutter)
-STANDIN = {'Arial': 'Liberation Sans', 'Helvetica': 'Liberation Sans'}
 
 
 def read_theme(pptx):
@@ -68,9 +67,44 @@ SCHEMES = {
                     accent3='9BBB59', accent4='8064A2', accent5='4BACC6', accent6='F79646', hlink='0000FF',
                     folHlink='800080', navy='00217B'), 'Century Gothic'),
 }
-THEME, FONT = SCHEMES['NSTX-U']
-RENDER_FONT = FONT if FONT in {f.name for f in font_manager.fontManager.ttflist} else STANDIN.get(FONT, 'DejaVu Sans')
-CSS_FONT = ', '.join(f"'{f}'" for f in dict.fromkeys([FONT, STANDIN.get(FONT, FONT)])) + ', Helvetica, sans-serif'
+THEME = SCHEMES['NSTX-U'][0]
+
+# Each theme's fonts: text in its slide master's body font (SCHEMES), titles too except PPPL's (Roboto Condensed, the
+# template's 'Fonts in Use'). Arial and Century Gothic are proprietary: where one is not installed it is drawn in a
+# free stand-in tracked in fonts/ (README there: Liberation Sans = Arial's metrics; TeX Gyre Adventor, a Century
+# Gothic look-alike), registered with matplotlib here and with the page by movie_widget.FontLoader.
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+FONT_FILES = sorted(os.path.join(FONT_DIR, f) for f in os.listdir(FONT_DIR) if f.endswith(('.ttf', '.otf')))
+# The tracked files win over a system copy of the same family (Perlmutter's /usr/share/fonts has Liberation Sans
+# 1.07.4, without the thin space of \,): of equal matches matplotlib takes the first, and the system's come first
+_TRACKED = {font_manager.ttfFontProperty(ft2font.FT2Font(p)).name for p in FONT_FILES}
+font_manager.fontManager.ttflist = [f for f in font_manager.fontManager.ttflist if f.name not in _TRACKED]
+for _path in FONT_FILES:
+    font_manager.fontManager.addfont(_path)
+STANDIN = {'Arial': 'Liberation Sans', 'Helvetica': 'Liberation Sans', 'Century Gothic': 'TeX Gyre Adventor'}
+TITLE_FONT = {'PPPL': 'Roboto Condensed'}
+FALLBACK = 'DejaVu Sans'   # matplotlib: the glyphs a theme font lacks (fonts/README.md)
+SYMBOLS = 'Viewer Symbols'   # the page and its charts: the same, a few symbols cut from DejaVu Sans (fonts/)
+_INSTALLED = {f.name for f in font_manager.fontManager.ttflist}
+
+
+def theme_fonts(theme):
+    """(text, titles): a theme's fonts by name (an unknown theme: NSTX-U's)."""
+    text = SCHEMES.get(theme, SCHEMES['NSTX-U'])[1]
+    return text, TITLE_FONT.get(theme, text)
+
+
+def render_font(name):
+    """The font matplotlib draws `name` in: itself where installed, else its tracked stand-in."""
+    return name if name in _INSTALLED else STANDIN.get(name, FALLBACK)
+
+
+def css_font(name):
+    """A CSS font stack: the font, its stand-in (in the page: movie_widget.FontLoader), the symbols they lack
+    (SYMBOLS), then the generic family."""
+    return ', '.join(f"'{f}'" for f in dict.fromkeys([name, STANDIN.get(name, name), SYMBOLS])) + ', sans-serif'
+
+
 STEPS = {'': (1, 0), 'L60': (0.4, 0.6), 'L40': (0.6, 0.4), 'L20': (0.8, 0.2), 'L10': (0.9, 0.1), 'D10': (0.9, 0),
          'D25': (0.75, 0), 'D40': (0.6, 0), 'D50': (0.5, 0), 'D75': (0.25, 0)}
 
@@ -184,33 +218,29 @@ REGION_NAME = {'core': 'core', 'sol': 'SOL', 'pf': 'private flux'}
 
 
 def _page(theme):
-    """The page's look in a theme: fonts (text, headings, an @import), heading styles, the light mode's accents
+    """The page's look in a theme: fonts (text, headings: theme_fonts), heading styles, the light mode's accents
     and the dark mode's surfaces (marimo's CSS variables)."""
+    text, head = (css_font(f) for f in theme_fonts(theme))
     if theme == 'PPPL':
         d, li = LOOKS['pppl-dark'], LOOKS['pppl-light']
-        # the template's 'Fonts in Use': Roboto Condensed for titles (a Google font; Arial Narrow, Arial otherwise)
-        head = "'Roboto Condensed', 'Arial Narrow', " + CSS_FONT
-        return dict(src=THEME_SOURCES['PPPL'], text=CSS_FONT, head=head,
-                    imp="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&display=swap",
+        return dict(src=THEME_SOURCES['PPPL'], text=text, head=head,
                     light=dict(primary=li.accent, link=li.inner), h_light=f'color: {li.accent};', h_dark=f'color: {d.accent};',
                     h2='', dark=dict(background=d.surf, card=d.grid, popover=d.grid, muted=d.surf, border=d.axis,
                                      input=tone('dk2', 'L10', 'PPPL'), foreground=d.ink, muted_foreground=d.ink2,
                                      primary=d.accent, accent=d.grid, link=tone('hlink', '', 'PPPL')))
     if theme == 'DIII-D':
         d, li = LOOKS['diii-d-dark'], LOOKS['diii-d-light']
-        # Century Gothic, as the talks (a Microsoft font: geometric look-alikes where it is not installed)
-        text = "'Century Gothic', 'URW Gothic', 'Avant Garde', Futura, " + CSS_FONT
         # a level-2 heading as the slides' title bar: the navy gradient of the rendered deck (darker at its ends)
         bar = (f'background: linear-gradient(90deg, #172250, #21409A 50%, #172250); color: {tone("lt1", "", "DIII-D")}; '
                'padding: 0.2em 0.6em; border-radius: 2px;')
-        return dict(src=THEME_SOURCES['DIII-D'], text=text, head=text, imp='',
+        return dict(src=THEME_SOURCES['DIII-D'], text=text, head=head,
                     light=dict(primary=li.accent, link='#0070C0'), h_light='color: inherit;', h_dark='color: inherit;',
                     h2=bar, dark=dict(background=d.surf, card=tone('navy', 'D25', 'DIII-D'),
                                       popover=tone('navy', 'D25', 'DIII-D'), muted=d.surf, border=d.axis,
                                       input=tone('navy', '', 'DIII-D'), foreground=d.ink, muted_foreground=d.ink2,
                                       primary=d.accent, accent=tone('navy', 'D25', 'DIII-D'), link=d.ink2))
     d = LOOKS['dark']
-    return dict(src=THEME_SOURCES['NSTX-U'], text=CSS_FONT, head=CSS_FONT, imp='',
+    return dict(src=THEME_SOURCES['NSTX-U'], text=text, head=head,
                 light=dict(primary=tone('hlink', 'D25'), link=tone('hlink', 'D25')), h_light='color: inherit;',
                 h_dark='color: inherit;', h2='',
                 dark=dict(background=d.surf, card=tone('dk2', 'D25'), popover=tone('dk2', 'D25'), muted=tone('dk2', 'D50'),
@@ -229,7 +259,6 @@ def page_css(theme='NSTX-U'):
     dark = dict(t['dark'])
     dark['card_foreground'] = dark['popover_foreground'] = dark['foreground']
     return f"""/* NSTX-U run viewer, {theme} theme ({os.path.basename(t['src'])}), written by viewer_plots.page_css */
-{f"@import url('{t['imp']}');" if t['imp'] else ''}
 :root {{
   --marimo-text-font: {t['text']};
   --marimo-heading-font: {t['head']};
@@ -260,11 +289,30 @@ def target_style(pal, tg):
                 symbol='square' if up else 'circle', lam_dash='dashdot' if up else 'dot')
 
 
-def mpl_style(pal):
+# A slide: 16:9 (13.33 x 7.5 in). Laid out at the size a figure takes there (inches; full: the width less margins,
+# half: two side by side), every text at SLIDE_PT or more and every data line at SLIDE_LW pt or more at that size.
+SLIDE_SIZES = {'full': (12.0, 6.8), 'half': (6.2, 6.8)}   # width, the most height (a chart: by its rows)
+SLIDE_PT = 16
+SLIDE_LW = 2.0
+SLIDE_DPI = 300
+SLIDE_NAMES = {'full': 'slide, full width', 'half': 'slide, half width'}
+
+
+def mpl_fonts(pal):
+    """(text, titles) as matplotlib font families: the theme's (render_font), then FALLBACK for missing glyphs."""
+    return tuple([render_font(f), FALLBACK] for f in theme_fonts(pal.theme))
+
+
+def mpl_style(pal, slide=None):
+    """rc of a matplotlib figure in a look; slide: text sizes for a slide (SLIDE_PT and up)."""
     return {'figure.facecolor': pal.surf, 'axes.facecolor': pal.surf, 'savefig.facecolor': pal.surf,
             'text.color': pal.ink, 'axes.labelcolor': pal.ink2, 'xtick.color': pal.ink2, 'ytick.color': pal.ink2,
-            'axes.edgecolor': pal.axis, 'font.family': [RENDER_FONT], 'font.size': 10.5, 'axes.titlesize': 12,
-            'axes.titlecolor': pal.ink}
+            'axes.edgecolor': pal.axis, 'font.family': mpl_fonts(pal)[0], 'font.size': SLIDE_PT if slide else 10.5,
+            'axes.titlesize': SLIDE_PT + 2 if slide else 12, 'axes.titlecolor': pal.ink,
+            # the labels' math (texlabel.py) in the theme's text font, as LaTeX sets it: italic symbols
+            'mathtext.fontset': 'custom', 'mathtext.rm': mpl_fonts(pal)[0][0],
+            'mathtext.it': mpl_fonts(pal)[0][0] + ':italic', 'mathtext.bf': mpl_fonts(pal)[0][0] + ':bold',
+            'mathtext.cal': mpl_fonts(pal)[0][0]}
 
 
 def _scale(steps):
@@ -322,7 +370,7 @@ def fixed_scale(run, V, qty, mode, log, step_first=False):
     'step' change against itself (zero), left out."""
     label, sym, unit, scale, kind = gv.quantities(run)[qty]
     rel = mode != 'value' and kind == 'pos'
-    u = f' ({unit})' if unit else ''
+    u = f' (${unit}$)' if unit else ''
     fin = V[1:] if step_first and len(V) > 1 else V
     fin = fin[np.isfinite(fin)]
     if mode == 'value' and kind == 'pos':
@@ -340,10 +388,10 @@ def fixed_scale(run, V, qty, mode, log, step_first=False):
         norm = Normalize(-lim, lim)
         ticks = matplotlib.ticker.MaxNLocator(5, symmetric=True).tick_values(-lim, lim)
         cmap = 'div'
-        cblabel = f'{label}{u}' if mode == 'value' else f'{sym} change since {SINCE[mode]}' + ('' if rel else u)
+        cblabel = f'{label}{u}' if mode == 'value' else f'${sym}$ change since {SINCE[mode]}' + ('' if rel else u)
     lo_, hi_ = norm.vmin, norm.vmax
     ticks = [t for t in ticks if lo_ - 1e-12 * abs(hi_) <= t <= hi_ * (1 + 1e-12) + 1e-300]
-    fmt = (lambda t: f'{t * 100:+.3g} %' if t else '0') if rel else (lambda t: f'{t:.4g}')
+    fmt = (lambda t: f'{t * 100:+.3g} %'.replace('-', '−') if t else '0') if rel else (lambda t: f'{t:.4g}'.replace('-', '−'))
     return dict(cmap=cmap, norm=norm, ticks=ticks, fmt=fmt, label=cblabel, rel=rel,
                 extend=[bool((fin < lo_).any()), bool((fin > hi_).any())])
 
@@ -352,7 +400,7 @@ def colour_norm(run, vals, qty, mode, whole_run, log, summ, pal, cells=None):
     """(cmap, norm, colour-bar label, tick formatter, extend) for the map. cells: the shown cells (cell_offsets
     order), for the whole-run scale of a block selection (None: the run's percentiles, every cell)."""
     label, sym, unit, scale, kind = gv.quantities(run)[qty]
-    u = f' ({unit})' if unit else ''
+    u = f' (${unit}$)' if unit else ''
     div = LinearSegmentedColormap.from_list(f'div_{pal.name}', pal.div)
     allv = np.concatenate([v.ravel() for v in vals.values()])
     allv = allv[np.isfinite(allv)]
@@ -382,17 +430,27 @@ def colour_norm(run, vals, qty, mode, whole_run, log, summ, pal, cells=None):
             lim = max(abs(np.nanmin(p[:, 1])), abs(np.nanmax(p[:, 3])))
         else:
             lim = np.percentile(np.abs(allv), 99) if len(allv) else 1.0
-        lab = f'{label}{u}' if mode == 'value' else f'{sym} change since {SINCE[mode]}{u}'
+        lab = f'{label}{u}' if mode == 'value' else f'${sym}$ change since {SINCE[mode]}{u}'
         return div, Normalize(-lim, lim), lab, None, 'both'
     lim = 1.0 if whole_run and mode == 'change' else nice_limit(np.percentile(np.abs(allv), 99) if len(allv) else 1.0)
-    fmt = lambda x, _: f'{x * 100:+.3g} %' if x else '0'  # noqa: E731
-    return div, Normalize(-lim, lim), f'{sym} change since {SINCE[mode]}', fmt, 'both'
+    fmt = lambda x, _: f'{x * 100:+.3g} %'.replace('-', '−') if x else '0'  # noqa: E731
+    return div, Normalize(-lim, lim), f'${sym}$ change since {SINCE[mode]}', fmt, 'both'
 
 
 def shown_blocks(run, blocks=None):
     """The blocks to draw: the chosen ones (None or none chosen: every block), in block order."""
     out = [b for b in range(run.nb) if blocks is None or b in blocks]
     return out or list(range(run.nb))
+
+
+def wall_within(w, z0, z1):
+    """The points of the wall polyline w [n, (R, Z)] between heights z0 and z1, with the points where it crosses them."""
+    pts = [p for p in w if z0 <= p[1] <= z1]
+    for p, q in zip(w[:-1], w[1:]):
+        for z in (z0, z1):
+            if (p[1] - z) * (q[1] - z) < 0:
+                pts.append(p + (q - p) * (z - p[1]) / (q[1] - p[1]))
+    return np.array(pts).reshape(-1, 2)
 
 
 def zoom_boxes(run, blocks=None):
@@ -408,7 +466,11 @@ def zoom_boxes(run, blocks=None):
             zc = 0.5 * (z0 + z1); z0, z1 = zc - dz / 2, zc + dz / 2
         return (r0 - pad * dr, r1 + pad * dr, z0 - pad * dz, z1 + pad * dz)
 
-    out = {'whole domain': box(allp, 0.03)}
+    whole = allp
+    w = gv.wall(run) if len(shown_blocks(run, blocks)) == run.nb else None
+    if w is not None:   # the vessel too, as far as it runs within the grid's height (a half domain's other half not)
+        whole = np.concatenate([allp, wall_within(w, allp[:, 1].min(), allp[:, 1].max())])
+    out = {'whole domain': box(whole, 0.03)}
     for ud in ('lower', 'upper'):
         div = [b for t in run.layout.targets if t.updown == ud for b in (t.leg, t.pf) if b is not None]
         if div:
@@ -421,11 +483,12 @@ def zoom_boxes(run, blocks=None):
 
 
 def map_figure(run, fr, fr0, qty, mode='value', whole_run=False, log=False, summ=None, zoom='whole domain', title='',
-               pal=LOOKS['dark'], fr_prev=None, scale=None, blocks=None, vals=None):
+               pal=LOOKS['dark'], fr_prev=None, scale=None, blocks=None, vals=None, slide=None):
     """Poloidal plane (true R-Z, wall, separatrix) + every cell unrolled; x = cells with n <= 0 (any species).
     scale: a fixed_scale() dict (one colour scale over a movie's frames), else colour_norm's. blocks: draw only these
     (None: all; the colour scale and the 'whole domain' view are theirs). vals: block -> values to draw instead of the
-    quantity (with scale; no n <= 0 marks), e.g. the diffusivity."""
+    quantity (with scale; no n <= 0 marks), e.g. the diffusivity. slide: laid out for a slide (SLIDE_SIZES): 'full',
+    the whole figure; 'half', the poloidal plane alone (the strips need the width); None: the page's."""
     shown = shown_blocks(run, blocks)
     sel = None if len(shown) == run.nb else set(shown)
     if vals is None:
@@ -439,7 +502,11 @@ def map_figure(run, fr, fr0, qty, mode='value', whole_run=False, log=False, summ
         norm, cblabel, extend = scale['norm'], scale['label'], {(0, 0): 'neither', (1, 0): 'min', (0, 1): 'max',
                                                                 (1, 1): 'both'}[tuple(map(int, scale['extend']))]
         fmt = (lambda x, _: scale['fmt'](x)) if scale['rel'] else None
-    halo = [patheffects.withStroke(linewidth=2.4, foreground=pal.surf)]   # x marks readable on light and dark cells
+    # on a slide: text at SLIDE_PT and up, lines 2.5 x (the wall 2.5 pt, the separatrix 2 pt)
+    fs = (lambda pt: pt) if slide is None else (lambda pt: max(SLIDE_PT, pt * SLIDE_PT / 10.5))  # noqa: E731
+    lw = (lambda w: w) if slide is None else (lambda w: 2.5 * w)  # noqa: E731
+    title_font = mpl_fonts(pal)[1]
+    halo = [patheffects.withStroke(linewidth=lw(2.4), foreground=pal.surf)]   # x marks readable on light and dark cells
     lay = run.layout
     strips = gv.select_strips(lay, sel)
     nstrip = max(len(strips), 1)
@@ -448,29 +515,49 @@ def map_figure(run, fr, fr0, qty, mode='value', whole_run=False, log=False, summ
         for b in shown:
             for s in run.species:
                 bad[b] |= fr[b][f'n_{s}'] <= 0
-    height = {1: 5.2, 2: 6.4}.get(nstrip, 6.4 + 1.7 * (nstrip - 2))
-    # a title (the movie's frames) takes a band of its own above the strips' titles: 13 pt, 6 pt from the top edge
-    title_band = (6 + 13 * 1.25 + 6) / 72 / height if title else 0.0
-    with plt.rc_context(mpl_style(pal)):
-        fig = plt.figure(figsize=(15.5, height), dpi=110)
-        gs = fig.add_gridspec(nstrip + 1, 2, width_ratios=[1.0, 3.3], height_ratios=[1] * nstrip + [0.09],
-                              wspace=0.14, hspace=0.62 if nstrip >= 2 else 0.45, left=0.05, right=0.985,
-                              top=(0.92 if nstrip >= 2 else 0.86) - title_band, bottom=0.08 if nstrip >= 2 else 0.12)
+    if slide is None:
+        width, height = 15.5, {1: 5.2, 2: 6.4}.get(nstrip, 6.4 + 1.7 * (nstrip - 2))
+    elif slide == 'full':
+        width, height = SLIDE_SIZES['full'][0], min(SLIDE_SIZES['full'][1], {1: 5.2, 2: 6.4}.get(nstrip, 6.8))
+    else:
+        width, height = SLIDE_SIZES['half'][0], 6.0
+    # a title (the movie's frames) takes a band of its own above the strips' titles, 6 pt from the top edge, in as many
+    # lines as the figure's width needs
+    text_font = theme_fonts(pal.theme)[0]
+    if title:
+        title = wrap_text(title, fs(13), theme_fonts(pal.theme)[1], (width - 0.4) * 72)
+    title_band = (6 + fs(13) * 1.25 * (title.count('\n') + 1) + 6) / 72 / height if title else 0.0
+    with plt.rc_context(mpl_style(pal, slide)):
+        fig = plt.figure(figsize=(width, height), dpi=110)
+        fig.nstxu_slide = slide
+        fig.nstxu_fonts = {render_font(f): f for f in theme_fonts(pal.theme) if render_font(f) != f}   # save_figure
+        if slide == 'half':
+            gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 0.05], wspace=0.06, left=0.17, right=0.80,
+                                  top=0.9 - title_band, bottom=0.11)
+        elif slide == 'full':
+            gs = fig.add_gridspec(nstrip + 1, 2, width_ratios=[1.0, 2.6], height_ratios=[1] * nstrip + [0.1],
+                                  wspace=0.22, hspace=0.95 if nstrip >= 2 else 0.7, left=0.085, right=0.985,
+                                  top=(0.88 if nstrip >= 2 else 0.82) - title_band, bottom=0.11 if nstrip >= 2 else 0.15)
+        else:
+            gs = fig.add_gridspec(nstrip + 1, 2, width_ratios=[1.0, 3.3], height_ratios=[1] * nstrip + [0.09],
+                                  wspace=0.14, hspace=0.62 if nstrip >= 2 else 0.45, left=0.05, right=0.985,
+                                  top=(0.92 if nstrip >= 2 else 0.86) - title_band, bottom=0.08 if nstrip >= 2 else 0.12)
         ax = fig.add_subplot(gs[:, 0])
         kw = dict(cmap=cmap, norm=norm, shading='flat')
         for b in shown:
             nd = run.nodes[b]
             m = ax.pcolormesh(nd[..., 0], nd[..., 1], np.ma.masked_invalid(vals[b]), edgecolors='none', **kw)
             outline = np.concatenate([nd[0, :], nd[:, -1], nd[-1, ::-1], nd[::-1, 0]])
-            ax.plot(outline[:, 0], outline[:, 1], color=pal.muted, lw=0.35, alpha=0.7)
+            ax.plot(outline[:, 0], outline[:, 1], color=pal.muted, lw=lw(0.35), alpha=0.7)
             if lay.region[b] == 'sol' and lay.under.get(b) is not None:   # its inner edge: the separatrix
-                ax.plot(nd[0, :, 0], nd[0, :, 1], color=pal.ink, lw=0.8, ls=(0, (4, 2)))
+                ax.plot(nd[0, :, 0], nd[0, :, 1], color=pal.ink, lw=lw(0.8), ls=(0, (4, 2)))
         w = gv.wall(run)
         if w is not None:
-            ax.plot(w[:, 0], w[:, 1], color=pal.ink2, lw=1.0)
+            ax.plot(w[:, 0], w[:, 1], color=pal.ink2, lw=lw(1.0))
         pts = np.array([gv.cell_centres(run.nodes[b])[i, j] for b in shown for i, j in np.argwhere(bad[b])])
         if len(pts):
-            ax.scatter(pts[:, 0], pts[:, 1], marker='x', s=16, lw=0.9, color=pal.ink, zorder=5, path_effects=halo)
+            ax.scatter(pts[:, 0], pts[:, 1], marker='x', s=lw(1) ** 2 * 16, lw=lw(0.9), color=pal.ink, zorder=5,
+                       path_effects=halo)
         boxes = zoom_boxes(run, sel)
         r0, r1, z0, z1 = boxes.get(zoom, boxes['whole domain'])
         ax.set_xlim(r0, r1); ax.set_ylim(z0, z1); ax.set_aspect('equal')
@@ -481,49 +568,54 @@ def map_figure(run, fr, fr0, qty, mode='value', whole_run=False, log=False, summ
             axis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f'{v:.6g}'.replace('-', '−')))
         ax.set_xlabel('R (m)'); ax.set_ylabel('Z (m)', labelpad=1)
         ax.set_title('poloidal plane' + ('' if zoom == 'whole domain' else f': {zoom}') +
-                     ('' if sel is None else f' (blocks {block_list(shown)})'), loc='left')
+                     ('' if sel is None else f' (blocks {block_list(shown)})'), loc='left', fontfamily=title_font)
         for s in ax.spines.values():
             s.set_visible(False)
 
-        axs = [fig.add_subplot(gs[i, 1]) for i in range(nstrip)]
+        axs = [] if slide == 'half' else [fig.add_subplot(gs[i, 1]) for i in range(nstrip)]
         for axk, st in zip(axs, strips):
             for b, x0, band in st.items:
                 nr, nt = vals[b].shape
                 y0, h = gv.BANDS[band]
                 X, Y = np.meshgrid(x0 + np.arange(nt + 1), y0 + h * np.arange(nr + 1) / nr)
                 axk.pcolormesh(X, Y, np.ma.masked_invalid(vals[b]), edgecolors=pal.surf,
-                               linewidth=0.3 if nr <= 8 else 0.0, **kw)
+                               linewidth=lw(0.3) if nr <= 8 else 0.0, **kw)
                 yc = y0 + h * (np.arange(nr) + 0.5) / nr
                 p = [(x0 + j + 0.5, yc[i]) for i, j in np.argwhere(bad[b])]
                 if p:
-                    axk.scatter(*np.array(p).T, marker='x', s=18, lw=0.9, color=pal.ink, zorder=5, path_effects=halo)
+                    axk.scatter(*np.array(p).T, marker='x', s=lw(1) ** 2 * 18, lw=lw(0.9), color=pal.ink, zorder=5,
+                                path_effects=halo)
             if st.sep is not None:
-                axk.axhline(st.sep, color=pal.ink, lw=0.9, ls=(0, (4, 2)))
-            for xa, xb, lab in st.segments:
-                axk.text(0.5 * (xa + xb), 8.25, lab, ha='center', va='bottom', fontsize=9.5, color=pal.ink2)
+                axk.axhline(st.sep, color=pal.ink, lw=lw(0.9), ls=(0, (4, 2)))
+            per_pt = st.width / (axk.get_position().width * width * 72)   # cells per point across the strip
+            places = segment_labels([(0.5 * (xa + xb), 0.5 * text_px(lab, fs(9.5), text_font) * per_pt)
+                                     for xa, xb, lab in st.segments], st.width, 6 * per_pt)
+            for (xa, xb, lab), x in zip(st.segments, places):
+                axk.text(x, 8.25, lab, ha='center', va='bottom', fontsize=fs(9.5), color=pal.ink2)
                 if xa > 0:
-                    axk.axvline(xa, color=pal.muted, lw=0.6)
+                    axk.axvline(xa, color=pal.muted, lw=lw(0.6))
             if st.mirror_x is not None:
-                axk.axvline(st.mirror_x, color=pal.ink, lw=1.4)
+                axk.axvline(st.mirror_x, color=pal.ink, lw=lw(1.4))
                 # x runs right to left (below): the strip's end is at the left
-                axk.text(st.mirror_x, -0.35, 'midplane', va='top', fontsize=9, color=pal.ink,
+                axk.text(st.mirror_x, -0.35, 'midplane', va='top', fontsize=fs(9), color=pal.ink,
                          ha='left' if st.mirror_x >= st.width - 0.5 else 'right' if st.mirror_x <= 0.5 else 'center')
             # reflected left-right: turned a quarter turn (outboard strip clockwise, inboard anticlockwise) a strip
             # lies as its cells do in the poloidal plane (upper leg up, core inside, SOL outside)
             axk.set_xlim(st.width, 0); axk.set_ylim(0, 8)
             axk.set_yticks([y for _, y in st.ylabels]); axk.set_yticklabels([lab for lab, _ in st.ylabels])
             axk.tick_params(axis='y', length=0); axk.set_xticks([])
-            axk.set_title(st.title, loc='left', pad=24)
+            axk.set_title(st.title, loc='left', pad=fs(9.5) * 1.25 + 12, fontfamily=title_font)
             for s in axk.spines.values():
                 s.set_visible(False)
-        cax = fig.add_subplot(gs[nstrip, 1])
-        cb = fig.colorbar(m, cax=cax, orientation='horizontal', extend=extend)
+        cax = fig.add_subplot(gs[0, 1] if slide == 'half' else gs[nstrip, 1])
+        cb = fig.colorbar(m, cax=cax, orientation='vertical' if slide == 'half' else 'horizontal', extend=extend)
         cb.outline.set_visible(False)
         if fmt:
             cb.formatter = matplotlib.ticker.FuncFormatter(fmt); cb.update_ticks()
         cb.set_label(cblabel + ('   (x: n ≤ 0)' if len(pts) else ''), color=pal.ink2)
         if title:
-            fig.text(0.05, 1 - 6 / 72 / height, title, fontsize=13, color=pal.ink, va='top')
+            fig.text(0.05 if slide is None else 0.02, 1 - 6 / 72 / height, title, fontsize=fs(13), color=pal.ink,
+                     va='top', fontfamily=title_font, linespacing=1.25)
     return fig
 
 
@@ -566,14 +658,56 @@ END_LABEL_COLUMN = 310   # px of plot per column of the time traces on a ~760 px
 _FT = {}
 
 
-def text_px(s, size=12):
-    """Width (px) of s in the theme font (its metric twin where the theme's is not installed); HTML tags dropped."""
-    from matplotlib.ft2font import FT2Font, LoadFlags
-    path = font_manager.findfont(font_manager.FontProperties(family=RENDER_FONT))
-    f = _FT.get(path) or _FT.setdefault(path, FT2Font(path))
-    f.set_size(size, 72)
-    f.set_text(re.sub(r'<[^>]+>', '', s), 0.0, flags=LoadFlags.NO_HINTING)
-    return f.get_width_height()[0] / 64.0
+def _face(family):
+    """(FT2Font, its character map) of the font matplotlib finds for `family`, opened once."""
+    from matplotlib.ft2font import FT2Font
+    path = font_manager.findfont(font_manager.FontProperties(family=family))
+    if path not in _FT:
+        f = FT2Font(path)
+        _FT[path] = (f, f.get_charmap())
+    return _FT[path]
+
+
+def text_px(s, size=12, font='Arial'):
+    """Width (px) of s as the page draws it (css_font): in the font (render_font: its stand-in where it is not
+    installed), each run of characters it lacks in SYMBOLS; HTML tags dropped."""
+    from matplotlib.ft2font import LoadFlags
+    main, chars = _face(render_font(font))
+    width = 0.0
+    for lacks, run in itertools.groupby(re.sub(r'<[^>]+>', '', s), key=lambda c: ord(c) not in chars):
+        f = _face(SYMBOLS)[0] if lacks else main
+        f.set_size(size, 72)
+        f.set_text(''.join(run), 0.0, flags=LoadFlags.NO_HINTING)
+        width += f.get_width_height()[0] / 64.0
+    return width
+
+
+def segment_labels(labels, width, gap):
+    """Centres for labels [(centre, half width)] along [0, width]: each where asked, unless that would run past an end
+    or into its neighbour (gap apart), then moved as little as that takes."""
+    order = sorted(range(len(labels)), key=lambda i: labels[i][0])
+    x = [min(max(labels[i][0], labels[i][1]), width - labels[i][1]) for i in order]
+    h = [labels[i][1] for i in order]
+    for k in range(1, len(x)):                       # pushed up, past the one below
+        x[k] = max(x[k], x[k - 1] + h[k - 1] + h[k] + gap)
+    x[-1] = min(x[-1], width - h[-1]) if x else 0
+    for k in range(len(x) - 2, -1, -1):              # then down, below the one above (the upper end holds)
+        x[k] = min(x[k], x[k + 1] - h[k + 1] - h[k] - gap)
+    out = [0.0] * len(x)
+    for k, i in enumerate(order):
+        out[i] = x[k]
+    return out
+
+
+def wrap_text(s, size, font, width_pt):
+    """s broken into lines (at spaces) no wider than width_pt points at size pt in font (text_px's measure)."""
+    lines = []
+    for word in s.split(' '):
+        if lines and text_px(lines[-1] + ' ' + word, size, font) <= width_pt:
+            lines[-1] += ' ' + word
+        else:
+            lines.append(word)
+    return '\n'.join(lines)
 
 
 def subplots(**kw):
@@ -593,9 +727,10 @@ def legend_key(fig, name, line=None, marker=None, row=1, col=1):
 
 def _layout(fig, height, pal, t=60, b=50, l=60, r=20, gap=LEGEND_GAP, **kw):
     """The look, and the legend in rows above the plots, gap px above them (8 where there are no subplot titles)."""
+    text, head = (css_font(f) for f in theme_fonts(pal.theme))
     fig.update_layout(template=pal.plotly_template, paper_bgcolor=pal.surf, plot_bgcolor=pal.surf, height=height,
-                      font=dict(family=CSS_FONT, size=12, color=pal.ink2), margin=dict(l=l, r=r, t=t, b=b),
-                      hoverlabel=dict(bgcolor=pal.grid, font_color=pal.ink, font_family=CSS_FONT),
+                      font=dict(family=text, size=12, color=pal.ink2), margin=dict(l=l, r=r, t=t, b=b),
+                      hoverlabel=dict(bgcolor=pal.grid, font_color=pal.ink, font_family=text),
                       legend=dict(orientation='h', yanchor='bottom', y=1 + gap / (height - t - b), xanchor='left', x=0,
                                   font_color=pal.ink2),
                       **kw)
@@ -606,7 +741,392 @@ def _layout(fig, height, pal, t=60, b=50, l=60, r=20, gap=LEGEND_GAP, **kw):
     for a in fig.layout.annotations:
         if a.font.color is None:
             a.font.color = pal.ink
+        if a.xref == 'paper' and a.yref == 'paper':   # subplot and column titles (no other text sits on the paper)
+            a.font.family = head
     return fig
+
+
+SCREEN_WIDTH = 1000   # px: the width of a chart on the page its layout was made for (a laptop's, the sidebar open)
+SLIDE_KEYS = ('line', 'marker', 'error_x', 'error_y', 'colorbar', 'textfont')   # what a slide changes in a trace
+
+
+def slide_lw(w):
+    """A line's width on a slide (px at 96 per inch) from its width on the page: SLIDE_LW pt or more, keeping the
+    wider ones wider."""
+    least = SLIDE_LW * 96 / 72
+    return max(least, least * ((2.0 if w is None else w) + 1) / 2)
+
+
+def slide_figure(fig, size, pal):
+    """A plotly chart laid out for a slide (SLIDE_SIZES[size], px at 96 per inch): as tall as its page height would be
+    at SCREEN_WIDTH, within 3.2 in and the slide; every text at SLIDE_PT or more (titles a step up), every line at
+    SLIDE_LW pt or more (slide_lw), markers scaled alike; the subplot grid laid out again around its text
+    (_slide_grid); a label at a curve's end still ends inside its plot."""
+    f = go.Figure(fig)
+    lay = f.layout
+    W = SLIDE_SIZES[size][0] * 96
+    H = min(SLIDE_SIZES[size][1] * 96, max(3.2 * 96, W * (lay.height or 450) / SCREEN_WIDTH))
+    F = SLIDE_PT * 96 / 72
+    T = F * 1.07   # titles
+    font = theme_fonts(pal.theme)[0]
+    f.update_layout(width=W, height=H, autosize=False, font_size=F, legend_font_size=F)
+    if lay.title.text:
+        lay.title.font.size = T
+    for tr in f.data:
+        if 'line' in tr and tr.type in ('scatter', 'scattergl'):
+            tr.line.width = slide_lw(tr.line.width)
+        if 'marker' in tr and tr.type in ('scatter', 'scattergl'):
+            if isinstance(tr.marker.size, (int, float)):
+                tr.marker.size = tr.marker.size * 1.6
+            if tr.marker.line.width:
+                tr.marker.line.width = slide_lw(tr.marker.line.width)
+        for e in ('error_x', 'error_y'):
+            if e in tr and tr[e].array is not None:
+                tr[e].thickness, tr[e].width = slide_lw(tr[e].thickness), (tr[e].width or 3) * 1.6
+        if 'colorbar' in tr:
+            tr.colorbar.thickness = (tr.colorbar.thickness or 30) * F / 12
+            tr.colorbar.title.font.size = F
+    for sh in lay.shapes:
+        if sh.line.width is not None or sh.type == 'line':
+            sh.line.width = slide_lw(sh.line.width)
+    for a in lay.annotations:
+        a.font.size = T if a.xref == 'paper' and a.yref == 'paper' else F
+        a.xshift, a.yshift = (a.xshift or 0) * F / 12, (a.yshift or 0) * F / 12
+    _slide_grid(f, W, H, F, T, font)
+    return f
+
+
+def _axis_data(f, ax, name):
+    """(lo, hi) an axis shows: its range, else its traces' data span (plotly's 5 % pad)."""
+    if ax.range is not None:
+        return tuple(ax.range)
+    key = 'y' if name.startswith('y') else 'x'
+    ref = key + name[5:]
+    vals = []
+    for tr in f.data:
+        if (getattr(tr, f'{key}axis', None) or key) == ref and getattr(tr, key, None) is not None:
+            v = np.asarray(tr[key], dtype=float).ravel()
+            vals.append(v[np.isfinite(v)])
+    v = np.concatenate(vals) if vals else np.array([0.0, 1.0])
+    if not len(v):
+        v = np.array([0.0, 1.0])
+    lo, hi = float(v.min()), float(v.max())
+    if ax.type == 'log':
+        lo, hi = np.log10(max(lo, 1e-300)), np.log10(max(hi, 1e-300))
+    pad = 0.05 * ((hi - lo) or 1.0)
+    return lo - pad, hi + pad
+
+
+def _tick_width(f, ax, name, F, font):
+    """Roughly the widest tick label (px) an axis draws: its ends and middle on a nice step, as plotly writes them."""
+    if ax.showticklabels is False:
+        return 0.0
+    lo, hi = _axis_data(f, ax, name)
+    if ax.type == 'log':
+        return text_px('10', F, font) + text_px('−' + str(int(max(abs(lo), abs(hi)))), 0.7 * F, font) + 4
+    vals = matplotlib.ticker.MaxNLocator(5).tick_values(min(lo, hi), max(lo, hi))
+    w = 0.0
+    for v in vals:
+        if ax.exponentformat == 'power' and v and not 1e-3 <= abs(v) < 1e5:
+            e = int(np.floor(np.log10(abs(v))))
+            w = max(w, text_px(f'{v / 10 ** e:.2g}×10', F, font) + text_px(f'−{abs(e)}', 0.7 * F, font))
+        else:
+            w = max(w, text_px(f'{v:.4g}'.replace('-', '−'), F, font))
+    return w + 4
+
+
+def _lines(s, font, size, width):
+    """s in lines of at most width px (plotly's <br>), a word too long for one kept whole. 12 % to spare: the
+    browser draws TeX Gyre Adventor up to 10 % wider than its metrics here say."""
+    width *= 0.88
+    return wrap_text(re.sub(r'<br>', ' ', s), size * 72 / 96, font, width * 72 / 96).replace('\n', '<br>') \
+        if s and text_px(s, size, font) > width else s
+
+
+STANDOFF = 0.3   # tick labels from their axis on a slide, in lines of text
+
+
+def _legend_rows(f, F, font, width):
+    """How many rows plotly's horizontal legend takes across width px (its entries: line sample, text, gap)."""
+    if f.layout.showlegend is False:
+        return 0
+    names = [tr.name for tr in f.data if tr.name and tr.visible is not False and
+             (tr.showlegend if tr.showlegend is not None else tr.type not in ('heatmap', 'contour', 'surface'))]
+    rows, used = (1 if names else 0), 0.0
+    for n in names:
+        w = 40 + text_px(re.sub(r'<[^>]+>', '', n), F, font) + 0.9 * F
+        if used and used + w > width:
+            rows, used = rows + 1, 0.0
+        used += w
+    return rows
+
+
+def _slide_grid(f, W, H, F, T, font):
+    """The subplot grid laid out again for slide-sized text. Every gap is sized from what sits in it: above a row, its
+    subplot titles and the labels of y axes whose titles are longer than the row is tall (moved there, horizontal);
+    below it, its x tick labels and title; left of a column, its y tick labels and title; and between neighbours, the
+    half of a tick label that overhangs a plot's edge. The plots share what is left in their page proportions. An x
+    title repeated down a column is kept on the bottom row, titles longer than their column wrap, tick counts follow
+    the axis length (log axes: decades, or 1-2-5 over less than 1.5), the legend sits just above the plots, and labels
+    at curves' ends are spaced by their height inside their plot."""
+    lay = f.layout
+    xs = sorted(k for k in lay.to_plotly_json() if re.fullmatch(r'xaxis\d*', k)) or ['xaxis']
+    pairs = [(x, 'yaxis' + (lay[x].anchor or 'y')[1:]) for x in xs]
+    for x, y in pairs:   # a single plot's axes may carry no domain: the whole paper
+        for n in (x, y):
+            if lay[n].domain is None:
+                lay[n].domain = [0, 1]
+    rnd = lambda d: (round(d[0], 4), round(d[1], 4))  # noqa: E731
+    rows = sorted({rnd(lay[y].domain) for _, y in pairs}, key=lambda d: -d[1])
+    cols = sorted({rnd(lay[x].domain) for x, _ in pairs})
+    rc = {x: (rows.index(rnd(lay[y].domain)), cols.index(rnd(lay[x].domain))) for x, y in pairs}
+    titles = {}   # subplot and column titles: the paper annotations at a subplot's top centre
+    for a in lay.annotations:
+        if a.xref == 'paper' and a.yref == 'paper':
+            r = min(range(len(rows)), key=lambda i: abs(rows[i][1] - a.y))
+            c = min(range(len(cols)), key=lambda i: abs(0.5 * sum(cols[i]) - a.x))
+            titles.setdefault((r, c), []).append(a)
+    for c in range(len(cols)):   # an x title repeated down a column: the bottom row's only
+        xa = sorted((rc[x][0], x) for x, _ in pairs if rc[x][1] == c)
+        texts = {lay[x].title.text for _, x in xa}
+        if len(xa) > 1 and len(texts) == 1 and None not in texts:
+            for _, x in xa[:-1]:
+                lay[x].title.text = None
+    nl = lambda s: (s or '').count('<br>') + 1  # noqa: E731
+    xtick = {x: _tick_width(f, lay[x], x, F, font) for x, _ in pairs}
+    ylab = {}   # y titles moved above their plot: (row, col) -> annotation
+
+    def bands():
+        top, bottom, left, gapx = [], [], [], []
+        for r in range(len(rows)):
+            tls = [nl(a.text) for c in range(len(cols)) for a in titles.get((r, c), [])]
+            yl = [nl(a['text']) for (rr, c), a in ylab.items() if rr == r]
+            top.append((T * 1.3 * max(tls) if tls else 0) + (F * 1.3 * max(yl) if yl else 0) + 0.7 * F)
+            # x tick labels (set off their axis by STANDOFF) and title; at least the halves of two rows' end
+            # tick labels that overhang the plots' edges
+            bottom.append(max([(F * 1.5 + STANDOFF * F if lay[x].showticklabels is not False else 0.25 * F) +
+                               (F * 1.3 * nl(lay[x].title.text) if lay[x].title.text else 0)
+                               for x, _ in pairs if rc[x][0] == r] + [0]) + 0.3 * F)
+        for c in range(len(cols)):
+            left.append(max([_tick_width(f, lay[y], y, F, font) + STANDOFF * F +
+                             (F * 1.3 * nl(lay[y].title.text) if lay[y].title.text else 0)
+                             for x, y in pairs if rc[x][1] == c] + [0]) + 0.6 * F)
+            half = max([0.5 * xtick[x] for x, _ in pairs if rc[x][1] == c] + [0])
+            gapx.append(half)
+        gaps = [max(left[c + 1] + 0.6 * F, gapx[c] + gapx[c + 1] + 0.6 * F) for c in range(len(cols) - 1)]
+        return top, bottom, left, gaps
+
+    def place():
+        nonlocal H
+        top, bottom, left, gaps = bands()
+        t, r = head(), max(0.6 * F, gapx_last())
+        b, l = bottom[-1], max(left[0], 0.5 * xtick_first())
+        # every plot at least 2.5 lines of text tall: a chart with more rows than the slide holds grows taller; a
+        # single plot as tall as 0.6 of its width, as far as the slide allows
+        H = max(H, t + b + sum(top) + sum(bottom[:-1]) + 2.5 * F * len(rows))
+        if len(rows) == 1 and len(cols) == 1:
+            H = max(H, min(SLIDE_SIZES['full'][1] * 96, t + b + top[0] + 0.6 * (W - l - r)))
+        Hp, Wp = H - t - b, W - l - r
+        hs = [d[1] - d[0] for d in rows]
+        avail = Hp - sum(top) - sum(bottom[:-1])
+        ydom, y = [], 1 - top[0] / Hp
+        for i, hh in enumerate(hs):
+            h = max(avail * hh / sum(hs), 2.5 * F) / Hp
+            ydom.append((max(y - h, 0.0), y))
+            y = y - h - (bottom[i] + (top[i + 1] if i + 1 < len(rows) else 0)) / Hp
+        ws = [d[1] - d[0] for d in cols]
+        availw = Wp - sum(gaps)
+        xdom, x = [], 0.0
+        for i, ww in enumerate(ws):
+            w = max(availw * ww / sum(ws), F) / Wp
+            xdom.append((x, min(x + w, 1.0)))
+            x = x + w + (gaps[i] if i < len(gaps) else 0) / Wp
+        return t, r, b, l, Hp, Wp, ydom, xdom
+
+    def gapx_last():
+        return max([0.5 * xtick[x] for x, _ in pairs if rc[x][1] == len(cols) - 1] + [0])
+
+    def xtick_first():
+        return max([xtick[x] for x, _ in pairs if rc[x][1] == 0] + [0])
+
+    # the top margin: the chart's own title (wrapped to the figure), then the legend's rows under it
+    if lay.title.text:
+        lay.title.text = _lines(lay.title.text, font, T, W - 0.8 * F)
+    title_h = (T * 1.3 * nl(lay.title.text) + 0.45 * F) if lay.title.text else 0.0
+    legend_h = _legend_rows(f, F, font, W - 0.8 * F) * F * 1.6
+
+    def head():
+        return 0.3 * F + title_h + legend_h + (0.3 * F if legend_h else 0)
+
+    t, r, b, l, Hp, Wp, ydom, xdom = place()
+    for x, y in pairs:   # titles and labels wrapped to their column; y titles longer than their row: moved above it
+        ri, ci = rc[x]
+        hpx, wpx = (ydom[ri][1] - ydom[ri][0]) * Hp, (xdom[ci][1] - xdom[ci][0]) * Wp
+        if lay[x].title.text:
+            lay[x].title.text = _lines(lay[x].title.text, font, F, wpx)
+        s = lay[y].title.text
+        if s and text_px(s, F, font) > 0.95 * hpx:
+            lay[y].title.text = None
+            ylab[(ri, ci)] = dict(text=_lines(s, font, F, wpx), xref='paper', yref='paper', xanchor='left',
+                                  yanchor='bottom', showarrow=False, font=dict(size=F))
+    for key, ann in titles.items():
+        for a in ann:
+            a.text = _lines(a.text, font, T, (xdom[key[1]][1] - xdom[key[1]][0]) * Wp)
+    t, r, b, l, Hp, Wp, ydom, xdom = place()
+    f.update_layout(margin=dict(t=t, r=r, b=b, l=l), height=H)
+    for x, y in pairs:
+        ri, ci = rc[x]
+        lay[x].domain, lay[y].domain = list(xdom[ci]), list(ydom[ri])
+        lay[x].automargin = lay[y].automargin = True
+        hpx, wpx = (ydom[ri][1] - ydom[ri][0]) * Hp, (xdom[ci][1] - xdom[ci][0]) * Wp
+        for ax, n, room in ((lay[y], y, hpx / (F * 2.2)), (lay[x], x, wpx / (xtick[x] + 1.5 * F))):
+            if ax.type == 'log':   # every decade, or every few, as many as the length holds; over a short span 1-2-5
+                lo, hi = sorted(_axis_data(f, ax, n))
+                span = hi - lo
+                vals = [m * 10.0 ** e for e in range(int(np.floor(lo)), int(np.ceil(hi)) + 1) for m in (1, 2, 5)
+                        if lo <= np.log10(m * 10.0 ** e) <= hi]
+                if span < 1.5 and 2 <= len(vals) <= max(room, 2):
+                    ax.tickvals = vals   # full-size labels (plotly's 'D2' draws the 2 and 5 small)
+                else:
+                    ax.dtick = int(np.ceil(span / max(room - 1, 1)))
+            else:
+                ax.nticks = max(2, int(room))
+        lay[x].title.standoff = lay[y].title.standoff = 0.3 * F
+        # tick labels set off their axes: the lowest y label and the first x label clear each other at the corner
+        lay[x].ticklabelstandoff = lay[y].ticklabelstandoff = round(STANDOFF * F)
+    for (ri, ci), ann in titles.items():   # centred above the plot (and above a moved y label)
+        lift = (F * 1.3 * max([(ylab[k]['text'].count('<br>') + 1) for k in ylab if k[0] == ri] or [0]))
+        for a in ann:
+            a.update(x=0.5 * sum(xdom[ci]), y=ydom[ri][1], yshift=lift + 0.3 * F)
+    for (ri, ci), a in ylab.items():
+        f.add_annotation(**a, x=xdom[ci][0], y=ydom[ri][1], yshift=0.3 * F)
+    if lay.title.text:
+        # (plotly sets a title of several lines half a line higher for each line past the first)
+        lay.title.update(yref='container', y=1 - (0.45 * F + 0.65 * T * 1.3 * (nl(lay.title.text) - 1)) / H,
+                         yanchor='top', x=0.4 * F / W, xref='container')
+    if legend_h:
+        lay.legend.update(orientation='h', yref='container', y=1 - (0.3 * F + title_h) / H, yanchor='top',
+                          xref='container', x=0.4 * F / W, xanchor='left')
+    # labels at curves' ends (data x, left-anchored): spaced by their height, inside the plot's span; the x axis runs
+    # on until the longest ends inside the plot
+    ends = {}
+    for a in lay.annotations:
+        if re.fullmatch(r'x\d*', a.xref or '') and a.xanchor == 'left':
+            ends.setdefault((a.xref, a.yref), []).append(a)
+    for (xr, yr), ann in ends.items():
+        xn, yn = 'xaxis' + xr[1:], 'yaxis' + yr[1:]
+        ri, ci = rc[xn]
+        lo, hi = _axis_data(f, lay[yn], yn)
+        if lay[yn].range is None and lay[yn].type != 'log':
+            lay[yn].range = [lo, hi]   # plotly's autorange counts annotations: moving them would move the axis
+        gap = F * 1.25 / ((ydom[ri][1] - ydom[ri][0]) * Hp) * (hi - lo)
+        ann.sort(key=lambda a: a.y)
+        for a0, a1 in zip(ann, ann[1:]):
+            a1.y = max(a1.y, a0.y + gap)
+        over = ann[-1].y + gap / 2 - hi
+        if over > 0:
+            for a in ann:
+                a.y -= over
+        ax = lay[xn]
+        if ax.range is not None:
+            x0, x1 = ax.range
+            plot = 0.95 * (xdom[ci][1] - xdom[ci][0]) * Wp
+            need = max(text_px(str(a.text), F, font) + (a.xshift or 0) for a in ann) + 6
+            xa = max(a.x for a in ann)
+            if need < plot and (xa - x0) / (x1 - x0) * plot + need > plot:
+                ax.range = [x0, x0 + (xa - x0) * plot / (plot - need)]
+
+
+def subplot_refs(fig):
+    """The x axis refs ('x', 'x2', ...) of a chart's subplots, row by row from the top, left to right."""
+    lay = fig.layout
+    xs = [k for k in lay.to_plotly_json() if re.fullmatch(r'xaxis\d*', k)] or ['xaxis']
+
+    def place(k):
+        ydom = lay['yaxis' + (lay[k].anchor or 'y')[1:]].domain or (0, 1)
+        return -ydom[1], (lay[k].domain or (0, 1))[0]
+    return ['x' + k[5:] for k in sorted(xs, key=place)]
+
+
+def panel_figure(fig, x):
+    """One subplot of a chart (x: its x axis ref) as a chart of its own: its traces, the legend keys, its lines, its
+    end labels, its axes, its title. Returns (figure, the traces' indices in the chart, its shapes' indices)."""
+    lay = fig.layout
+    xn = 'xaxis' + x[1:]
+    yn = 'yaxis' + ((lay[xn].anchor or 'y')[1:] if xn in lay.to_plotly_json() else '')
+    y = 'y' + yn[5:]
+    idx = [i for i, tr in enumerate(fig.data) if (tr.xaxis or 'x') == x or tr.legendgroup == 'key']
+    f = go.Figure()
+    seen = set()
+    for i in idx:
+        tr = fig.data[i].to_plotly_json()
+        tr.update(xaxis='x', yaxis='y')
+        g = tr.get('legendgroup') or tr.get('name')
+        if g != 'key':   # each legend group once (on the page its entry sits on the first column's trace)
+            tr['showlegend'] = bool(tr.get('name')) and g not in seen
+            seen.add(g)
+        f.add_trace(tr)
+    keep = {k: v for k, v in lay.to_plotly_json().items() if not re.fullmatch(r'[xy]axis\d*|annotations|shapes', k)}
+    f.update_layout(**keep)
+    strip = lambda d: {k: v for k, v in d.items() if k not in ('domain', 'anchor', 'matches', 'overlaying')}  # noqa
+    f.update_layout(xaxis=strip(lay[xn].to_plotly_json()), yaxis=strip(lay[yn].to_plotly_json()))
+    ref = lambda r, a: (r.replace(x, 'x', 1) if r and r.split(' ')[0] == x else  # noqa: E731
+                        r.replace(y, 'y', 1) if r and r.split(' ')[0] == y else None)
+    sidx = []
+    for i, sh in enumerate(lay.shapes):
+        xr, yr = ref(sh.xref or 'x', 'x'), ref(sh.yref or 'y', 'y')
+        if xr and yr:
+            d = sh.to_plotly_json()
+            d.update(xref=xr, yref=yr)
+            f.add_shape(d)
+            sidx.append(i)
+    dom_x = lay[xn].domain if lay[xn].domain is not None else (0, 1)
+    dom_y = lay[yn].domain if lay[yn].domain is not None else (0, 1)
+    for a in lay.annotations:
+        if a.xref == x:
+            d = a.to_plotly_json()
+            d.update(xref='x', yref='y')
+            f.add_annotation(d)
+        elif a.xref == 'paper' and a.yref == 'paper' and dom_x[0] - 1e-6 <= a.x <= dom_x[1] + 1e-6 and \
+                abs(a.y - dom_y[1]) < 0.02:   # its subplot title: the chart's title
+            f.update_layout(title=dict(text=a.text, x=0, xanchor='left'))
+    return f, idx, sidx
+
+
+def _no_arrays(d):
+    """A trace part's style: its scalars and nested styles, without the data arrays (they come from the page)."""
+    if isinstance(d, dict):
+        return {k: _no_arrays(v) for k, v in d.items() if not isinstance(v, (list, tuple))}
+    return d
+
+
+def slide_spec(fig, size, pal, name):
+    """What the page needs to download a chart for a slide: the slide layout (slide_figure), each trace's slide style
+    (SLIDE_KEYS and its axes; no data: the page's current data is drawn), the traces and shapes it takes from the page
+    (indices), the size in px at 96 per inch, the PNG's dpi, a file name. At half width a chart of several subplots
+    gives one spec per subplot ('panels', keyed by x axis ref: the page downloads the one last pointed at); a
+    whole chart of them goes full width."""
+    import json
+    refs = subplot_refs(fig)
+    if size == 'half' and len(refs) > 1:
+        panels = {}
+        for k, x in enumerate(refs):
+            pf, idx, sidx = panel_figure(fig, x)
+            panels[x] = _spec(slide_figure(pf, size, pal), idx, sidx, f'{name}_panel{k + 1}_slide_{size}.png')
+        return dict(panels=panels, first=refs[0], dpi=SLIDE_DPI, label=SLIDE_NAMES[size] + ' (the panel pointed at)')
+    sf = slide_figure(fig, size, pal)
+    return dict(_spec(sf, list(range(len(fig.data))), list(range(len(fig.layout.shapes))), f'{name}_slide_{size}.png'),
+                label=SLIDE_NAMES[size])
+
+
+def _spec(sf, idx, sidx, file):
+    import json
+    j = json.loads(sf.to_json())
+    lay = j['layout']
+    traces = [dict({k: _no_arrays(t[k]) for k in SLIDE_KEYS + ('showlegend',) if k in t}, xaxis=t.get('xaxis', 'x'),
+                   yaxis=t.get('yaxis', 'y')) for t in j['data']]
+    return dict(layout=lay, traces=traces, indices=idx, shapes=sidx, width=lay['width'], height=lay['height'],
+                dpi=SLIDE_DPI, file=file)
 
 
 def envelope(t, v, nmax=8000):
@@ -627,15 +1147,15 @@ def envelope(t, v, nmax=8000):
 def side_coordinate(R, rsep, side, x_mode):
     """Distance from the separatrix (mm, positive into the SOL on either side) or R (m)."""
     if x_mode == 'R':
-        return R, rsep, 'R at the midplane (m)'
+        return R, rsep, '$R$ at the midplane (m)'
     sign = 1.0 if side == 'outboard' else -1.0
     return sign * (R - rsep) * 1e3, 0.0, 'distance from the separatrix (mm)'
 
 
 # plotly labels: HTML sub/superscripts and ASCII bars (the theme font, Arial, has no parallel sign U+2225)
-PROFILE_ROWS = [('density', 'n', 'n (10<sup>19</sup> m<sup>-3</sup>)'), ('temperature', 'T', 'T (eV)'),
-                ('parallel flow', 'upar', 'u<sub>||</sub> (km/s)'),
-                ('ion Mach number', 'mach', 'u<sub>||,i</sub> / c<sub>s</sub>'), ('potential', 'phi', 'φ (V)')]
+PROFILE_ROWS = [('density', 'n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'), ('temperature', 'T', '$T$ (eV)'),
+                ('parallel flow', 'upar', r'$u_\parallel$ (km/s)'),
+                ('ion Mach number', 'mach', r'$u_{\parallel,\mathrm{i}}/c_\mathrm{s}$'), ('potential', 'phi', r'$\phi$ (V)')]
 
 
 def thomson_trace(th, t0, t1, eq_s, side, rsep, x_mode, span, scale, pal, showlegend):
@@ -658,7 +1178,7 @@ def thomson_trace(th, t0, t1, eq_s, side, rsep, x_mode, span, scale, pal, showle
                       marker=dict(symbol='circle-open', size=7, color=pal.elc, line=dict(width=1.5)),
                       error_y=dict(type='data', array=(bar * scale)[inside], color=pal.elc, thickness=1, width=3),
                       error_x=dict(type='data', array=xbar[inside], color=pal.elc, thickness=1, width=0),
-                      name=f'Thomson n<sub>e</sub> {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms', legendgroup='thomson',
+                      name=tl.html(f'Thomson $n_\\mathrm{{e}}$ {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms'), legendgroup='thomson',
                       showlegend=showlegend, meta=dict(pgkyl=pc.NONE['thomson']),
                       hovertemplate='Thomson n_e: %{y:.4g} ± %{customdata[1]:.2g} (%{customdata[2]}), channel at R '
                                     '%{customdata[0]:.3f} m<extra></extra>')
@@ -706,12 +1226,13 @@ def thomson_timeline(th, t0, t1, eq_s, pal=LOOKS['dark']):
             fig.add_vrect(x0=th.flat[0] * 1e3, x1=th.flat[1] * 1e3, fillcolor=pal.grid, opacity=0.6, line_width=0,
                           row=1, col=1)
             legend_key(fig, 'beam flattop', marker=dict(symbol='square', size=12, color=pal.grid, opacity=0.6))
-        fig.update_yaxes(title_text='P<sub>NBI</sub> (MW)', row=1, col=1)
+        fig.update_yaxes(title_text=tl.html(r'$P_\mathrm{NBI}$ (MW)'), row=1, col=1)
     fig.add_trace(go.Scatter(x=th.t * 1e3, y=th.ld * 1e-19, mode='lines+markers', line=dict(color=pal.elc, width=1),
                              marker=dict(color=pal.elc, size=5), name='Thomson line density', showlegend=False,
                              meta=dict(pgkyl=pc.NONE['thomson']),
                              hovertemplate='%{x:.1f} ms: %{y:.3g} × 10^19 m^-2<extra></extra>'), row=rows, col=1)
-    fig.update_yaxes(title_text='∫n<sub>e</sub> dl (10<sup>19</sup> m<sup>-2</sup>)', row=rows, col=1)
+    fig.update_yaxes(title_text=tl.html(r'$\int n_\mathrm{e}\,\mathrm{d}l$ ($10^{19}\,\mathrm{m^{-2}}$)'),
+                     row=rows, col=1)
     half = 0.5 * np.median(np.diff(th.t)) * 1e3   # the band reaches half a frame past the window's end frames
     for r in range(1, rows + 1):
         fig.add_vrect(x0=t0 * 1e3 - half, x1=t1 * 1e3 + half, fillcolor=pal.elc, opacity=0.18, line_width=0, row=r, col=1)
@@ -833,8 +1354,8 @@ def profiles_figure(run, fr, fr0, frame_label, x_mode='distance', pal=LOOKS['dar
                     seen.add('thomson')
                     fig.add_trace(tr, row=r, col=c)
             fig.add_vline(x=xsep, line=dict(color=pal.muted, width=1, dash='dash'), row=r, col=c)
-            fig.update_yaxes(title_text=ylab if c == 1 else None, row=r, col=c)
-        fig.update_xaxes(title_text=xlab, row=len(rows), col=c)
+            fig.update_yaxes(title_text=tl.html(ylab) if c == 1 else None, row=r, col=c)
+        fig.update_xaxes(title_text=tl.html(xlab), row=len(rows), col=c)
     # solid: the shown frame (the species' own entries); the overlay has its entry (long dashes)
     legend_key(fig, 'first frame', line=dict(color=pal.ink2, width=1.5, dash='dot'))
     legend_key(fig, 'separatrix', line=dict(color=pal.muted, width=1, dash='dash'))
@@ -853,15 +1374,15 @@ def history_figure(run, summ, qty, mode, t_now, x_mode='distance', pal=LOOKS['da
         x, xsep, xlab = side_coordinate(R, rsep, side, x_mode)
         with np.errstate(divide='ignore', invalid='ignore'):
             if mode == 'value':
-                z, zl = Z * scale, f'{sym} ({unit})' if unit else sym
+                z, zl = Z * scale, tl.html(tl.unit(f'${sym}$', unit))
                 cs = 'Inferno' if kind == 'pos' else _scale(pal.div)
             else:
                 ref = np.vstack([Z[:1], Z[:-1]]) if mode == 'step' else Z[:1]   # the previous frame, or the first
                 lab = 'change since the previous frame' if mode == 'step' else 'change'
                 if kind == 'pos':
-                    z, cs, zl = (Z / ref - 1) * 100, _scale(pal.div), f'{sym} {lab} (%)'
+                    z, cs, zl = (Z / ref - 1) * 100, _scale(pal.div), tl.html(f'${sym}$ {lab} (%)')
                 else:
-                    z, cs, zl = (Z - ref) * scale, _scale(pal.div), f'{sym} {lab}' + (f' ({unit})' if unit else '')
+                    z, cs, zl = (Z - ref) * scale, _scale(pal.div), tl.html(tl.unit(f'${sym}$ {lab}', unit))
         o = np.argsort(x)
         fin = z[np.isfinite(z)]
         lim = np.percentile(np.abs(fin), 99) if len(fin) else 1.0
@@ -874,12 +1395,13 @@ def history_figure(run, summ, qty, mode, t_now, x_mode='distance', pal=LOOKS['da
                                  hovertemplate=f'%{{x:.4g}}, t = %{{y:.4g}} {tu}: %{{z:.4g}}<extra></extra>'), row=1, col=c)
         fig.add_hline(y=t_now * ts, line=dict(color=pal.ink, width=1), row=1, col=c, name='cursor-y')
         fig.add_vline(x=xsep, line=dict(color=pal.ink2, width=1, dash='dash'), row=1, col=c)
-        fig.update_xaxes(title_text=xlab, row=1, col=c)
-    fig.update_yaxes(title_text=f't ({tu})', row=1, col=1)
+        fig.update_xaxes(title_text=tl.html(xlab), row=1, col=c)
+    fig.update_yaxes(title_text=tl.html(f'$t$ ({tu})'), row=1, col=1)
     fig = _layout(fig, 380, pal, t=80)
     fig.update_layout(meta=dict(tscale=ts))
     fig.update_layout(title=dict(text=f'{label} at the midplane over time (line: shown frame)',
-                                 font=dict(color=pal.ink, size=14), x=0, xref='paper', xanchor='left'))
+                                 font=dict(color=pal.ink, size=14, family=css_font(theme_fonts(pal.theme)[1])), x=0,
+                                 xref='paper', xanchor='left'))
     return fig
 
 
@@ -906,7 +1428,7 @@ def targets_figure(run, fr, summ, t_now, pal=LOOKS['dark'], cmp=None, blocks=Non
         raise ValueError('no target among the chosen blocks (a target belongs to the SOL block holding its plate)'
                          if run.layout.targets else 'this run has no target plate (no physical theta face off Z = 0)')
     fig = subplots(rows=1, cols=3, horizontal_spacing=0.07, column_widths=[0.38, 0.31, 0.31],
-                   subplot_titles=['heat flux at the targets (shown frame)', 'heat-flux width λ<sub>q</sub>',
+                   subplot_titles=['heat flux at the targets (shown frame)', tl.html(r'heat-flux width $\lambda_\mathrm{q}$'),
                                    'peak heat flux'])
     flow = summ['t'] > 0   # t = 0 has no flow yet (q_par = 0): left out of the time traces, as on the posters
     t = summ['t'][flow] * ts
@@ -970,13 +1492,15 @@ def targets_figure(run, fr, summ, t_now, pal=LOOKS['dark'], cmp=None, blocks=Non
     # where a leg's SOL never reaches Z = 0 its surfaces sit along the plate (targets_along: said under the chart)
     fig.update_xaxes(title_text='midplane distance from the separatrix (mm)' if not targets_along(run, blocks) else
                      'distance from the separatrix (mm)', row=1, col=1)
-    fig.update_xaxes(title_text=f't ({tu})', row=1, col=2); fig.update_xaxes(title_text=f't ({tu})', row=1, col=3)
-    fig.update_yaxes(title_text='|q<sub>||</sub>| at the plate (MW/m²)', rangemode='tozero', row=1, col=1)
-    fig.update_yaxes(title_text='λ<sub>q</sub> (mm)', rangemode='tozero', row=1, col=2)
-    fig.update_yaxes(title_text='max |q<sub>||</sub>| (MW/m²)', type='log', exponentformat='power', dtick='D2',
+    fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=1, col=2); fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=1, col=3)
+    fig.update_yaxes(title_text=tl.html(r'$|q_\parallel|$ at the plate ($\mathrm{MW\,m^{-2}}$)'), rangemode='tozero',
+                     row=1, col=1)
+    fig.update_yaxes(title_text=tl.html(r'$\lambda_\mathrm{q}$ (mm)'), rangemode='tozero', row=1, col=2)
+    fig.update_yaxes(title_text=tl.html(r'max $|q_\parallel|$ ($\mathrm{MW\,m^{-2}}$)'), type='log', exponentformat='power',
+                     dtick='D2',
                      row=1, col=3)
     # each target's entry shows its hue (side) and dash (upper / lower); the overlay has its own entry
-    legend_key(fig, 'λ<sub>q</sub> (vertical lines)', line=dict(color=pal.ink2, width=1.4, dash='dot'))
+    legend_key(fig, tl.html(r'$\lambda_\mathrm{q}$ (vertical lines)'), line=dict(color=pal.ink2, width=1.4, dash='dot'))
     return _layout(fig, 450, pal, hovermode='x unified')
 
 
@@ -997,7 +1521,7 @@ def timetraces_figure(run, summ, dt, integ, fenergy, t_now, pal=LOOKS['dark'], c
     fig.add_trace(go.Scatter(x=td * ts, y=vd, mode='lines', line=dict(color=pal.ink2, width=1.5), name='time step',
                              showlegend=False, hovertemplate='dt = %{y:.4g} s<extra></extra>',
                              meta=dict(pgkyl=pc.dt(run))), row=1, col=1)
-    fig.update_yaxes(type='log', exponentformat='power', title_text='dt (s)', row=1, col=1)
+    fig.update_yaxes(type='log', exponentformat='power', title_text=tl.html(r'$\Delta t$ (s)'), row=1, col=1)
     t = summ['t'] * ts
     for s in run.species:
         name = gv.species_tag(s)[0] + 's'
@@ -1092,20 +1616,20 @@ def timetraces_figure(run, summ, dt, integ, fenergy, t_now, pal=LOOKS['dark'], c
             if over > 0:   # the stack moves down as a whole, its spacing kept
                 for e in ends:
                     e[0] -= over
-            for yl, tl, name, _, _ in ends:
-                fig.add_annotation(x=tl, y=yl, text=f' {name}', showarrow=False, xanchor='left',
+            for yl, te, name, _, _ in ends:
+                fig.add_annotation(x=te, y=yl, text=f' {name}', showarrow=False, xanchor='left',
                                    font=dict(color=pal.ink2, size=11), row=3, col=c)
             # the time axis runs on past the last frame far enough that the longest label ends inside its column,
             # at the narrowest page the viewer is laid out for (END_LABEL_COLUMN px of plot per column)
-            w = max(text_px(f' {e[2]}', 11) for e in ends) + 6
+            w = max(text_px(f' {e[2]}', 11, theme_fonts(pal.theme)[0]) for e in ends) + 6
             room = w / max(END_LABEL_COLUMN - w, 1.0)
-        fig.update_yaxes(title_text=f'{base}_{tag} change (%)', row=3, col=c)
+        fig.update_yaxes(title_text=tl.html(f'${base}_\\mathrm{{{tag}}}$ change (%)'), row=3, col=c)
         fig.update_xaxes(range=[t[0], t[-1] + room * (t[-1] - t[0])], row=3, col=c)
-    fig.update_yaxes(title_text='N / N(first)', row=2, col=1)
+    fig.update_yaxes(title_text=tl.html('$N/N_0$'), row=2, col=1)
     fig.update_yaxes(title_text='cells', rangemode='tozero', row=1, col=2)
     for r in (1, 2, 3):
         for c in (1, 2):
-            fig.update_xaxes(title_text=f't ({tu})', row=r, col=c)
+            fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=r, col=c)
     _cursor(fig, t_now, ts, [(r, c) for r in (1, 2, 3) for c in (1, 2)], pal)
     return _layout(fig, 900, pal, hovermode='x unified')
 
@@ -1114,7 +1638,7 @@ def cell_rows(run, fr, fr0, qty, blocks=None):
     """One row per cell for the table view: block, region, psi and theta index (the file's), R, Z, value, first frame,
     change; the chosen blocks only (None: all)."""
     label, sym, unit, scale, kind = gv.quantities(run)[qty]
-    u = f' ({unit})' if unit else ''
+    sym, u = tl.plain(f'${sym}$'), tl.plain(f' (${unit}$)') if unit else ''   # a table's headers: plain text
     cols = {'block': [], 'region': [], 'i (psi)': [], 'j (theta)': [], 'R (m)': [], 'Z (m)': [],
             f'{sym}{u}': [], f'{sym}, first frame{u}': [], 'change': []}
     for b in shown_blocks(run, blocks):
@@ -1270,7 +1794,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
     fig.update_yaxes(title_text='MW', row=2, col=2)
     for r in (1, 2):
         for c in (1, 2):
-            fig.update_xaxes(title_text=f't ({tu})', row=r, col=c)
+            fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=r, col=c)
     _cursor(fig, t_now, ts, [(r, c) for r in (1, 2) for c in (1, 2)], pal)
     return _layout(fig, 720, pal, hovermode='x unified'), notes
 
@@ -1309,7 +1833,7 @@ def diffusivity_figure(run, Dinfo, x_mode='distance', pal=LOOKS['dark'], cmp=Non
             allD.append(Dm[np.isfinite(Dm)])
             if first_label:
                 fig.add_vline(x=xsep, line=dict(color=pal.muted, width=1, dash='dash'), row=1, col=c)
-                fig.update_xaxes(title_text=xlab, row=1, col=c)
+                fig.update_xaxes(title_text=tl.html(xlab), row=1, col=c)
 
     for c, side in enumerate(sides, 1):
         if Dinfo['kind']:
@@ -1319,7 +1843,7 @@ def diffusivity_figure(run, Dinfo, x_mode='distance', pal=LOOKS['dark'], cmp=Non
     allD = np.concatenate(allD) if allD else np.zeros(0)
     pos = allD[allD > 0]
     log = len(pos) and pos.max() / pos.min() > 20
-    fig.update_yaxes(title_text='D (m²/s)', row=1, col=1)
+    fig.update_yaxes(title_text=tl.html(r'$D$ ($\mathrm{m^2/s}$)'), row=1, col=1)
     fig.update_yaxes(type='log' if log else 'linear', rangemode=None if log else 'tozero', exponentformat='power')
     # what the curves are (the D at each node row, core then SOL) is said under the chart; the overlay has its entry
     legend_key(fig, 'separatrix', line=dict(color=pal.muted, width=1, dash='dash'))
@@ -1334,12 +1858,13 @@ def diffusivity_map(run, Dinfo, zoom='whole domain', pal=LOOKS['dark'], blocks=N
     pos = V[np.isfinite(V) & (V > 0)]
     log = len(pos) and pos.max() / pos.min() > 20
     who = '' if Dinfo['same'] else f', {gv.species_tag(s)[0]}s'
-    sc = value_scale(V, f'anomalous diffusivity D{who} (m²/s), cell averages', log=bool(log))
+    sc = value_scale(V, f'anomalous diffusivity $D${who} ($\\mathrm{{m^2/s}}$), cell averages', log=bool(log))
     return map_figure(run, None, None, None, zoom=zoom, pal=pal, scale=sc, blocks=blocks, vals=cells)
 
 
-PROBE_ROWS = [('n', 'n (10<sup>19</sup> m<sup>-3</sup>)'), ('T', 'T (eV)'), ('upar', 'u<sub>||</sub> (km/s)'),
-              ('mach', 'u<sub>||,i</sub> / c<sub>s</sub>'), ('phi', 'φ (V)'), ('q_par', 'q<sub>||</sub> (MW m<sup>-2</sup>)')]
+PROBE_ROWS = [('n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'), ('T', '$T$ (eV)'), ('upar', r'$u_\parallel$ (km/s)'),
+              ('mach', r'$u_{\parallel,\mathrm{i}}/c_\mathrm{s}$'), ('phi', r'$\phi$ (V)'),
+              ('q_par', r'$q_\parallel$ ($\mathrm{MW\,m^{-2}}$)')]
 
 
 def probe_cell(run, c):
@@ -1364,7 +1889,7 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
     rows = [r for r in PROBE_ROWS if r[0] in qs or any(f'{r[0]}_{s}' in qs for s in run.species)]
     nrow = (len(rows) + 1) // 2
     fig = subplots(rows=nrow, cols=2, vertical_spacing=0.11, horizontal_spacing=0.09, shared_xaxes=True,
-                   subplot_titles=[lab for _, lab in rows])
+                   subplot_titles=[tl.html(lab) for _, lab in rows])
     seen = set()
     for n, (base, _) in enumerate(rows):
         r, cc = n // 2 + 1, n % 2 + 1
@@ -1401,11 +1926,11 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
                                      showlegend=False, meta=dict(pgkyl=pc.cell_history(run, b, i, j, 'q_perp')),
                                      hovertemplate=f'q_perp: %{{y:.4g}} {unit}<extra></extra>'), row=r, col=cc)
         if r == nrow:
-            fig.update_xaxes(title_text=f't ({tu})', row=r, col=cc)
+            fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=r, col=cc)
     _cursor(fig, t_now, ts, [(n // 2 + 1, n % 2 + 1) for n in range(len(rows))], pal)
     legend_key(fig, f'{REGION_NAME[reg]} volume mean', line=dict(color=pal.ink2, width=1.4, dash='dot'))
     if 'q_perp' in qs and any(base == 'q_par' for base, _ in rows):
-        legend_key(fig, 'q<sub>⊥</sub> part of q<sub>||</sub>', line=dict(color=pal.ink2, width=1.6, dash='dash'))
+        legend_key(fig, tl.html(r'$q_\perp$ part of $q_\parallel$'), line=dict(color=pal.ink2, width=1.6, dash='dash'))
     return _layout(fig, 250 * ((len(rows) + 1) // 2) + 90, pal, hovermode='x unified')
 
 
@@ -1424,22 +1949,26 @@ def probe_note(run, c, cmp=None):
 
 # --------------------------------------------------------------------------------------------------- exports
 def save_figure(fig, path, dpi=200):
-    """Write a matplotlib figure by the path's extension (png / pdf / svg); the SVG names the theme font first, the
-    metric-twin stand-in it was set in as the fallback (the progress posters' rule). Returns the path."""
+    """Write a matplotlib figure by the path's extension (png / pdf / svg; a slide's PNG at SLIDE_DPI); the SVG names
+    each theme font first and the stand-in it was drawn in after it (map_figure's fig.nstxu_fonts), so PowerPoint
+    uses the real font where it is installed. Returns the path."""
     ext = os.path.splitext(path)[1].lower().lstrip('.')
     with plt.rc_context({'svg.fonttype': 'none', 'pdf.fonttype': 42}):
-        fig.savefig(path, dpi=dpi if ext == 'png' else None, format=ext)
-    if ext == 'svg' and RENDER_FONT != FONT:
+        fig.savefig(path, dpi=(SLIDE_DPI if getattr(fig, 'nstxu_slide', None) else dpi) if ext == 'png' else None,
+                    format=ext)
+    if ext == 'svg':
         txt = open(path).read()
-        open(path, 'w').write(txt.replace(f"'{RENDER_FONT}'", f"'{FONT}', '{RENDER_FONT}'")
-                              .replace(f'"{RENDER_FONT}"', f'"{FONT}", "{RENDER_FONT}"'))
+        for drawn, real in getattr(fig, 'nstxu_fonts', {}).items():
+            txt = txt.replace(f"'{drawn}'", f"'{real}', '{drawn}'").replace(f'"{drawn}"', f'"{real}", "{drawn}"')
+        open(path, 'w').write(txt)
     return path
 
 
-def render_movie(run, summ, frames, qty, mode, log, zoom, pal, path, fps=10, progress=None, title='', blocks=None):
+def render_movie(run, summ, frames, qty, mode, log, zoom, pal, path, fps=10, progress=None, title='', blocks=None,
+                 slide=None):
     """An MP4 of the map over the given frame numbers, one colour scale for all of them, the time and frame on each.
     H.264 from imageio-ffmpeg's ffmpeg (the system ffmpeg has no H.264 encoder). progress(iterable, total) wraps the
-    loop. Returns the path."""
+    loop. slide: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
     import imageio_ffmpeg
     allf = [int(k) for k in summ['frames']]
     rows = [allf.index(k) for k in frames]
@@ -1457,7 +1986,9 @@ def render_movie(run, summ, frames, qty, mode, log, zoom, pal, path, fps=10, pro
         for k, row in it:
             fig = map_figure(run, gv.frame(run, k), fr0, qty, mode, False, log, None, zoom, pal=pal,
                              fr_prev=gv.frame(run, allf[max(row - 1, 0)]), scale=scale, blocks=blocks,
-                             title=f'{title}   t = {summ["t"][row] * ts:.4g} {tu}   (frame {k})')
+                             title=f'{title}   t = {summ["t"][row] * ts:.4g} {tu}   (frame {k})', slide=slide)
+            if slide:
+                fig.set_dpi(165)   # 1980 px across a full-width slide
             fig.canvas.draw()
             img = np.asarray(fig.canvas.buffer_rgba())[..., :3]
             plt.close(fig)

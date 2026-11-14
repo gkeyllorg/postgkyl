@@ -27,6 +27,7 @@ import shlex
 import numpy as np
 
 import gkview as gv
+import texlabel as tl
 
 _EXE = gv.data_path('pgkyl')   # viewer.json: a pgkyl executable (e.g. a venv's), else pgkyl from PATH
 PGKYL = _EXE if _EXE and os.path.exists(_EXE) else 'pgkyl'
@@ -92,7 +93,7 @@ def recipe(run, qty, suffix=''):
         else:
             s = next(sp for sp in run.species if t.startswith(_sp(sp)) and t[len(_sp(sp)):].startswith('M'))
             what[tg] = f'{s}_{t[len(_sp(s)):]}'
-    return [(tg, what[tg]) for tg in tags], e, f'{label}' + (f' ({unit})' if unit else '')
+    return [(tg, what[tg]) for tg in tags], e, tl.plain(tl.unit(label, unit))
 
 
 def _file(run, b, what, k):

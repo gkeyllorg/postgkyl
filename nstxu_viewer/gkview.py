@@ -626,16 +626,33 @@ def sim_runs(simdir):
     return runs_in(runs_root(simdir))
 
 
-def geqdsk_path(run):
-    """The geqdsk the run read: options_used.txt, else the -o geqdsk= of command.txt (relative to the run), else None."""
-    path = run.options.get('geqdsk')
-    cmd = os.path.join(run.path, 'command.txt')
-    if not path and os.path.exists(cmd):
+def geqdsk_named(path, options):
+    """The geqdsk the run at path read, as its files name it: options_used.txt (options), else the -o geqdsk= of
+    command.txt; a relative name made absolute from the run. None when neither names one."""
+    name = options.get('geqdsk')
+    cmd = os.path.join(path, 'command.txt')
+    if not name and os.path.exists(cmd):
         m = re.search(r'geqdsk=(\S+)', open(cmd).read())
-        path = m.group(1) if m else None
-    if path and not os.path.isabs(path):
-        path = os.path.join(run.path, path)
+        name = m.group(1) if m else None
+    return os.path.join(path, name) if name else None   # join keeps an absolute name as it is
+
+
+def geqdsk_path(run):
+    """The geqdsk the run read, here (here()), or None when it is not."""
+    path = geqdsk_named(run.path, run.options)
+    path = path and here(path)
     return path if path and os.path.exists(path) else None
+
+
+def here(path):
+    """A path that a run's files name on the machine that wrote them, on this one: one under viewer.json's "remote"
+    base is at the same place under the base here (sync.py mirrors it there), when it is there."""
+    base = (CONFIG.get('remote') or {}).get('base', '').rstrip('/')
+    if base and path.startswith(base + '/'):
+        mirrored = os.path.join(NSTXU, os.path.relpath(path, base))
+        if os.path.exists(mirrored):
+            return mirrored
+    return path
 
 
 def wall(run):
@@ -663,20 +680,22 @@ def species_tag(s):
 
 
 def quantities(run):
-    """Quantity key -> (label, symbol, unit, scale to the unit, kind: 'pos' | 'signed')."""
+    """Quantity key -> (label, symbol, unit, scale to the unit, kind: 'pos' | 'signed'). Symbol and unit are LaTeX
+    math without the dollars (texlabel.py sets them); descriptive subscripts upright."""
     q = {}
     for s in run.species:
         full, t = species_tag(s)
-        q[f'n_{s}'] = (f'{full} density', f'n_{t}', '1e19 m^-3', 1e-19, 'pos')
-        q[f'T_{s}'] = (f'{full} temperature', f'T_{t}', 'eV', 1.0, 'pos')
-        q[f'Tpar_{s}'] = (f'{full} parallel temperature', f'T_par,{t}', 'eV', 1.0, 'pos')
-        q[f'Tperp_{s}'] = (f'{full} perpendicular temperature', f'T_perp,{t}', 'eV', 1.0, 'pos')
-        q[f'upar_{s}'] = (f'{full} parallel flow', f'u_par,{t}', 'km/s', 1e-3, 'signed')
+        q[f'n_{s}'] = (f'{full} density', rf'n_\mathrm{{{t}}}', r'10^{19}\,\mathrm{m^{-3}}', 1e-19, 'pos')
+        q[f'T_{s}'] = (f'{full} temperature', rf'T_\mathrm{{{t}}}', r'\mathrm{eV}', 1.0, 'pos')
+        q[f'Tpar_{s}'] = (f'{full} parallel temperature', rf'T_{{\parallel,\mathrm{{{t}}}}}', r'\mathrm{eV}', 1.0, 'pos')
+        q[f'Tperp_{s}'] = (f'{full} perpendicular temperature', rf'T_{{\perp,\mathrm{{{t}}}}}', r'\mathrm{eV}', 1.0,
+                           'pos')
+        q[f'upar_{s}'] = (f'{full} parallel flow', rf'u_{{\parallel,\mathrm{{{t}}}}}', r'\mathrm{km/s}', 1e-3, 'signed')
     if 'elc' in run.species and 'ion' in run.species:
-        q['mach'] = ('ion parallel Mach number', 'u_par,i / c_s', '', 1.0, 'signed')
-    q['phi'] = ('electrostatic potential', 'phi', 'V', 1.0, 'signed')
-    q['q_par'] = ('total parallel energy flux', 'q_par', 'MW m^-2', 1e-6, 'signed')
-    q['q_perp'] = ('parallel flux of perpendicular energy', 'q_perp', 'MW m^-2', 1e-6, 'signed')
+        q['mach'] = ('ion parallel Mach number', r'u_{\parallel,\mathrm{i}}/c_\mathrm{s}', '', 1.0, 'signed')
+    q['phi'] = ('electrostatic potential', r'\phi', r'\mathrm{V}', 1.0, 'signed')
+    q['q_par'] = ('total parallel energy flux', r'q_\parallel', r'\mathrm{MW\,m^{-2}}', 1e-6, 'signed')
+    q['q_perp'] = ('parallel flux of perpendicular energy', r'q_\perp', r'\mathrm{MW\,m^{-2}}', 1e-6, 'signed')
     return q
 
 
@@ -802,8 +821,9 @@ def _summary_one(run, k, fr0):
     return out
 
 
-def _cache_path(run):
-    rel = os.path.relpath(run.path, NSTXU).replace(os.sep, '__')
+def cache_path(run_path):
+    """The summary cache file of the run at run_path (named by its place under base: the same on a mirror)."""
+    rel = os.path.relpath(run_path, NSTXU).replace(os.sep, '__')
     return os.path.join(CACHE_DIR, f'{rel}__v{CACHE_VERSION}.npz')
 
 
@@ -819,7 +839,7 @@ def summary(run, progress=None):
     memo = _SUMMARY.get(run.path)
     if memo is not None and np.array_equal(memo['stamp'], stamps):
         return memo
-    path = _cache_path(run)
+    path = cache_path(run.path)
     old = {}
     if os.path.exists(path):
         with np.load(path) as z:

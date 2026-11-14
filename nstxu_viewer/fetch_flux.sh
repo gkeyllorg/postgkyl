@@ -34,12 +34,32 @@ DEST=${FLUX_DEST:-$DATA/runs/flux}
 FLUX_SOCK=${FLUX_SOCK:-/tmp/$USER-flux.sock}
 # -x: Perlmutter's ssh_config forwards X11 to every host, and Flux then warns that xauth failed
 VIA_SOCK=(-x -o "ProxyCommand=socat - UNIX-CONNECT:$FLUX_SOCK" -o ServerAliveInterval=60 -o ServerAliveCountMax=3)
-NO_SOCK="no $FLUX_SOCK on $(hostname): the laptop forwards it only to the login node its connection lands on
-(laptop ~/.ssh/config, Perlmutter host entry: RemoteForward $FLUX_SOCK flux.pppl.gov:22, then reconnect)"
+RECONNECT="A NEW ssh connection from the laptop forwards it, to the login node that connection lands on (a VS Code window
+reload keeps the old connection: close the remote connection, or open a plain ssh from a laptop terminal)."
+NO_SOCK="no $FLUX_SOCK on $(hostname).
+$RECONNECT
+(laptop ~/.ssh/config, Perlmutter host entry: RemoteForward $FLUX_SOCK flux.pppl.gov:22)"
+
+# The laptop's forward is there and answers. sshd does not remove the socket when the laptop disconnects, and a later
+# connection landing on this node cannot make it again while the file is there ("Connection refused" from socat):
+# a dead one of ours is removed here so that the next connection can
+sock_ready() {
+    [ -S "$FLUX_SOCK" ] || { echo "$NO_SOCK" >&2; return 1; }
+    timeout 10 socat -u /dev/null "UNIX-CONNECT:$FLUX_SOCK" 2>/dev/null && return 0
+    local made
+    made=$(date -r "$FLUX_SOCK" '+%F %R')
+    if [ -O "$FLUX_SOCK" ] && rm -f "$FLUX_SOCK"; then
+        echo "$FLUX_SOCK on $(hostname) was left by a laptop connection that has ended (made $made): removed it." >&2
+    else
+        echo "$FLUX_SOCK on $(hostname) was left by a laptop connection that has ended (made $made): rm it." >&2
+    fi
+    echo "$RECONNECT" >&2
+    return 1
+}
 
 case "${1:-}" in
     --login)   # asks for the password + Duo here, then serves commands at control path $2 until --logout
-        [ -S "$FLUX_SOCK" ] || { echo "$NO_SOCK" >&2; exit 4; }
+        sock_ready || exit 4
         exec ssh "${VIA_SOCK[@]}" -M -S "$2" -f -N "$FLUX_HOST" ;;
     --check)   exec ssh -S "$2" -O check "$FLUX_HOST" 2>/dev/null ;;
     --logout)  exec ssh -S "$2" -O exit "$FLUX_HOST" 2>/dev/null ;;
@@ -53,10 +73,10 @@ trap 'rm -rf "$WORK"' EXIT
 if [ -r "$TOOL" ]; then   # on Perlmutter
     if [ -n "${FLUX_CM:-}" ] && ssh -S "$FLUX_CM" -O check "$FLUX_HOST" 2>/dev/null; then
         FLUX_SSH=(ssh -x -S "$FLUX_CM" -o BatchMode=yes "$FLUX_HOST")   # view.sh --flux's login
-    elif [ -S "$FLUX_SOCK" ]; then
+    elif sock_ready; then
         FLUX_SSH=(ssh "${VIA_SOCK[@]}" "$FLUX_HOST")
     else
-        echo "$NO_SOCK" >&2; exit 4
+        exit 4
     fi
     cp "$TOOL" "$WORK/extract_slim_h5.py"
     deliver() { mkdir -p "$DEST" && tar -C "$DEST" -xf - && ls -l "$DEST"; }

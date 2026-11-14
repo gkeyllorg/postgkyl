@@ -20,7 +20,9 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.lock.txt   # o
     directories (a topology file, or a single-block run's files, and a frame) in its `runs/`, else in it;
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
-  - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with.
+  - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
+  - `remote` (optional): `{"host": <ssh host name>, "base": <the path there of base>}`, the machine that holds the
+    runs, for a mirror here (Run it anywhere, below).
 - `flux.env` (from `flux.env.example`): Fetch from Flux's login and paths (`fetch_flux.sh`).
 - `runs/`: everything the viewer writes.
 
@@ -51,9 +53,36 @@ In a VS Code terminal the page opens on your own machine (`$BROWSER` is VS Code'
 Chrome: a workspace's `.vscode/settings.json` can set `"workbench.externalBrowser": "chrome"` (it applies to every
 external link opened from this window; delete the line to go back to the system default browser). If VS Code ignores
 it as a workspace setting, put the same line in your user settings. Outside VS Code, view.sh prints the `ssh -L`
-line to run on your machine. The access token stays on: anyone on a shared login node can reach 127.0.0.1. Ctrl-C
+line to run on your machine. A terminal that VS Code revived after a window reload keeps the old window's socket
+(`$VSCODE_IPC_HOOK_CLI`, gone): view.sh then opens the page through another live VS Code socket on this login node, or
+prints the URL. The access token stays on: anyone on a shared login node can reach 127.0.0.1. Ctrl-C
 stops the server. Python: the venv of Setup (marimo 0.25.2, plotly 7.1.0, anywidget 0.11.0, imageio-ffmpeg 0.6.0,
 h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.txt`).
+
+## Run it anywhere: a mirror (2026-11-13)
+On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
+holds them is down. Set up there: a checkout of this branch, the venv (Setup), and a data directory whose
+`viewer.json` is the same one plus `"remote"` naming that machine (its ssh name here, and the path there of `base`).
+Then
+```sh
+./view.sh --sync      # log in to the remote once, bring the runs up to date, start the viewer
+```
+`sync.py` (also by hand: `python sync.py [--sim LABEL] [--run RUN]... [--dry-run]`) copies each simulation's default
+run, or the runs named, to the same place under the base here: the run's files but distribution-function and source
+frames and restart files (Sim 2's production run: 6,914 files, 0.14 GB of its 2.5 GB), its summary cache, the geqdsk
+it read and its shot's Thomson files (runs/flux and `thomson_fallback`). The run's files name the remote's paths; the
+viewer looks for those under the base here first (`gkview.here`). Symlinks on the remote arrive as what they point
+to. The first mirror of all three default runs: 193,489 files, 816 MB. After that rsync copies only what changed. The
+sidebar's **sync from <host>** button, next to reload frames, copies the open run again and re-reads its frames: it
+uses `--sync`'s login, or else your own ssh, never asking for a password (it fails instead). On the remote itself
+(its base is this one) there is nothing to sync and no button. Needs `rsync` and `ssh` here and `python3` there.
+
+Checked (`check_viewer.py` part_sync, with a stand-in ssh that runs the remote's side on Perlmutter): Sim 2's run
+mirrored file for file without the skipped kinds, a second sync copies nothing, the viewer opens the mirror with
+every tab and its own geqdsk, Thomson file and cache, and offers the button. By hand, the same stand-in:
+`--sync`'s login, the first mirror of the three runs through it, every tab of each from the mirror, the login closed
+on exit. Not yet run against a real second machine (and not on macOS: its rsync, `--copy-links` and `--files-from`).
+Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetch_flux.sh`), not the mirror.
 
 ## What it shows
 - **Sidebar:** shot (searchable: type `203899`), run (every run directory of that simulation with a topology file
@@ -127,6 +156,8 @@ Simulations offered: `viewer.json`'s `sims` (`gkview.SIMS`). Shot and equilibriu
 | `viewer_state.py` | where the viewer opens: the view keys, state files, the `./view.sh` line, the blocks syntax |
 | `run_options.py` | the Options tab: the driver's options read from its source, the run's values, its jobs, its start-up report |
 | `thomson.py` | measured n_e: Thomson (MPTS) of the run's shot from `runs/flux/<shot>.h5`, the beam flattop, the averaging window, channel placement |
+| `sync.py` | the mirror: copies runs, caches, geqdsks and Thomson files from viewer.json's `remote` (Run it anywhere) |
+| `fonts/make_symbols.py` | builds Viewer Symbols, the symbols the theme fonts lack (fonts/README.md) |
 | `fetch_flux.sh` | everything about reaching PPPL Flux: copies a shot's Thomson / EFIT01 / CHERS / beam power to `runs/flux/`, through the laptop's forwarded socket (or from the laptop); the login `view.sh --flux` keeps |
 | `gkyl_read.py` | the `.gkyl` reader (2D fields, topology files, their MessagePack metadata; numpy only) |
 | `check_gkview.py` | data checks, against the poster and movie scripts (`sims_20261022/` under `base`; with a postgkyl venv: they need postgkyl and scipy) |
@@ -324,7 +355,10 @@ RemoteForward /tmp/<your Perlmutter user name>-flux.sock flux.pppl.gov:22
 `WF:\PNB`, and delivers `runs/flux/<shot>.h5` (~10 MB). Flux's login prints a banner and module lines, so the files
 come back base64-encoded between marker lines. The data directory's `flux.env` sets `FLUX_HOST` (your Flux
 user@host), `FLUX_PY` (a Flux python with h5py; python3 if it is not there) and `FLUX_TOOL` (where that tool is). The socket only exists on the login node the laptop's connection landed on: run `./view.sh --flux` in a
-terminal of that connection. Without a fetched file, 203899 falls back to the workflow's slim copy (no beam power,
+terminal of that connection. sshd leaves the socket behind when the laptop disconnects, and a later connection landing
+on the same node cannot make it again while the file is there (socat: "Connection refused"): `fetch_flux.sh` tests
+that the socket answers, removes a dead one of yours and asks for a new connection. A VS Code window reload keeps the
+old ssh connection (no new forward): close the remote connection, or ssh from a laptop terminal. Without a fetched file, 203899 falls back to the workflow's slim copy (no beam power,
 so no flattop); 203655 (Sim 1, 2025 re-run) has none.
 
 Checked here with a stand-in for ssh that prints Flux's banner on stdout (same tool, the workflow's file as the
@@ -353,7 +387,12 @@ flux-login2). Not yet run: a real fetch from Flux.
 Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame n_e = 0.90-1.08 on 6 of 7 channels
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
-## Checks (2026-11-12: headless all pass, 28; the browser part not run)
+## Checks (2026-11-13: headless all pass; the browser part not run)
+2026-11-13: `check_viewer.py` adds fonts (Viewer Symbols complete and reproducible, the page gets it, matplotlib
+takes the tracked fonts before a system copy, no missing glyph in any theme's notebook) and sync (above).
+`check_gkview.py` all pass after the geqdsk / cache path helpers moved (`geqdsk_named`, `here`, `cache_path`).
+
+### 2026-11-12
 2026-11-12, after the move into postgkyl's branch and the port to pgkyl 2.0.0 (run from the branch against a data
 directory offering the three NSTX-U simulations; `check_gkview.py` with postgkyl 2.0.0 / NumPy 2.5, `check_viewer.py`
 with the viewer venv): `check_gkview.py` all pass (unchanged by the move: the caches are found under their old names).

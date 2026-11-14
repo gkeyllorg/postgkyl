@@ -24,18 +24,21 @@ def _():
     import movie_widget as mm
     import pgkyl_cmd as pc
     import run_options as ro
+    import sync
     import thomson
     import viewer_plots as vp
     import viewer_state as vs
-    return HERE, glob, gv, html, json, mm, mo, np, os, pc, ro, subprocess, thomson, traceback, vp, vs
+    return HERE, glob, gv, html, json, mm, mo, np, os, pc, ro, subprocess, sync, sys, thomson, traceback, vp, vs
 
 
 @app.cell
 def _(mm, mo):
-    # plotly.js for the tabs' live charts, put into the page once (hidden): marimo does not expose its own copy
+    # plotly.js for the tabs' live charts, put into the page once (hidden): marimo does not expose its own copy; and
+    # the themes' tracked fonts (fonts/), registered with the page
     import plotly.offline as _po
     _loader = mo.ui.anywidget(mm.PlotlyLoader(src=_po.get_plotlyjs()))
-    _loader
+    _fonts = mo.ui.anywidget(mm.font_loader())
+    mo.vstack([_loader, _fonts])
     return
 
 
@@ -157,6 +160,38 @@ def _(gv, os, run_pick, sim_pick):
 
 
 @app.cell
+def _(mo, sync):
+    # a mirror (viewer.json "remote", sync.py): the sidebar's Sync button copies the open run's new frames, its cache
+    # and its Thomson files from the machine that holds the runs (through ./view.sh --sync's login, SYNC_CM; else the
+    # user's own ssh, never prompting)
+    sync_from = sync.remote()
+    sync_btn = mo.ui.run_button(label=f'sync from {sync_from[0]}', kind='neutral',
+                                tooltip=f"copy this run's new frames from {sync_from[0]}") if sync_from else None
+    return sync_btn, sync_from
+
+
+@app.cell
+def _(HERE, html, mo, os, run_pick, sim_pick, subprocess, sync_btn, sync_from, sys):
+    # one sync of the open run per click; the frames and the Thomson files are re-read after it
+    sync_log, sync_note = None, mo.md('')
+    if sync_btn is not None and sync_btn.value:
+        with mo.status.spinner(title=f'Copying {run_pick.value} from {sync_from[0]}'):
+            try:
+                _p = subprocess.run([sys.executable, os.path.join(HERE, 'sync.py'), '--batch', '--sim',
+                                     sim_pick.value[0], '--run', run_pick.value], capture_output=True, text=True,
+                                    timeout=1800)
+                sync_log = (_p.returncode, (_p.stdout + _p.stderr).strip())
+            except subprocess.TimeoutExpired as _e:
+                sync_log = (-1, f'timed out after {_e.timeout:.0f} s')
+        _rc, _out = sync_log
+        _tail = html.escape('\n'.join(_out.splitlines()[-4:]))
+        sync_note = (mo.md(f'<small><pre>{_tail}</pre></small>') if _rc == 0 else mo.callout(mo.md(
+            f'Sync from {sync_from[0]} failed (exit {_rc}). Without a login kept by `./view.sh --sync`, it uses your '
+            f'own ssh and never asks for a password.<pre>{_tail}</pre>'), kind='warn'))
+    return sync_log, sync_note
+
+
+@app.cell
 def _(boot, mo, prefs, run, vp, vs):
     # the blocks drawn (the movie, the maps, the cells table, the profiles' and targets' blocks): none chosen = all
     _role = {}
@@ -232,8 +267,8 @@ def _(cmp_pick, gv, mo):
 
 
 @app.cell
-def _(gv, reload_btn, run):
-    reload_btn.value  # re-list the frames (and re-read the time histories) when clicked
+def _(gv, reload_btn, run, sync_log):
+    reload_btn.value, sync_log  # re-list the frames (and re-read the time histories) when clicked, and after a sync
     frames = run.frames()
     dt_hist = gv.dt_history(run)
     integ = gv.integrated(run)
@@ -266,10 +301,10 @@ def _(HERE, fetch_btn, flux_cm, mo, os, run, subprocess):
 
 
 @app.cell
-def _(fetch_log, mo, reload_btn, run, thomson):
+def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
     # Thomson n_e of the run's shot (thomson.py) and the frames to average: the window snaps to the Thomson frames of
     # the beam flattop (every frame when the file has no beam power) and opens on thomson.default_window
-    reload_btn.value, fetch_log  # re-read after a fetch
+    reload_btn.value, fetch_log, sync_log  # re-read after a fetch or a sync
     th, th_note, th_pick, th_show = None, '', None, None
     try:
         th = thomson.read(run.shot)
@@ -296,7 +331,7 @@ def _(boot, gv, mo, prefs, run, vp, vs):
         return v if v in options else (str(v) if str(v) in options else default)
 
     _qs = gv.quantities(run)
-    _qlab = {k: f'{v[0]} ({v[1]})' for k, v in _qs.items()}
+    _qlab = {k: f'{v[0]} ({vp.tl.plain("$" + v[1] + "$")})' for k, v in _qs.items()}
     _q = _first('qty', _qs, f'n_{run.species[0]}')
     qty_pick = mo.ui.dropdown({lab: k for k, lab in _qlab.items()}, value=_qlab[_q], label='quantity',
                               full_width=True, on_change=lambda v: prefs.update(qty=v))
@@ -423,12 +458,15 @@ def _(
     reload_btn,
     run_pick,
     sim_pick,
+    sync_btn,
+    sync_note,
     theme_pick,
     x_pick,
     zoom_pick,
 ):
     mo.sidebar(
-        [mo.md('### NSTX-U run viewer'), sim_pick, run_pick, mo.hstack([reload_btn], justify='start'), frame_pick,
+        [mo.md('### NSTX-U run viewer'), sim_pick, run_pick,
+         mo.hstack([reload_btn] + ([sync_btn] if sync_btn is not None else []), justify='start'), sync_note, frame_pick,
          mo.md('<small>Play: the movie\'s play button (it runs in the browser; the notebook follows when it '
                'pauses)</small>'),
          frames_text, frames_msg or mo.md(''), probe_text,
@@ -635,12 +673,13 @@ def _(
 
 @app.cell
 def _(blocks, fr, fr0, fr_prev, log_pick, mode_pick, pal, qty_pick, run, scale_pick, summ, vp, zoom_pick):
-    def static_figure(title=''):
-        """The map of the shown frame as a matplotlib figure (the Static figure tab, the figure export)."""
+    def static_figure(title='', slide=None):
+        """The map of the shown frame as a matplotlib figure (the Static figure tab, the figure export; slide: laid
+        out for a slide, viewer_plots.SLIDE_SIZES)."""
         _whole = scale_pick.value == 'whole run'
         return vp.map_figure(run, fr, fr0, qty_pick.value, mode_pick.value, _whole, log_pick.value,
                              summ if _whole else None, zoom_pick.value, pal=pal, fr_prev=fr_prev, title=title,
-                             blocks=blocks)
+                             blocks=blocks, slide=slide)
     return (static_figure,)
 
 
@@ -656,7 +695,12 @@ def _(mo):
     movie_name = mo.ui.text(label='movie file', placeholder='automatic (runs/exports/<name>.mp4)', full_width=True)
     movie_fps = mo.ui.number(start=1, stop=60, step=1, value=10, label='frames/s')
     make_movie_btn = mo.ui.run_button(label='Make movie')
-    return (fig_fmt, fig_name, make_movie_btn, movie_fps, movie_name, save_fig_btn, save_view_btn, state_name)
+    # the figure and the movie laid out for the page or for a slide (viewer_plots.SLIDE_SIZES: text >= 16 pt there)
+    export_size = mo.ui.dropdown({'the page': 'page', 'a slide, full width': 'full',
+                                  'a slide, half width (the poloidal plane)': 'half'}, value='the page',
+                                 label='laid out for')
+    return (export_size, fig_fmt, fig_name, make_movie_btn, movie_fps, movie_name, save_fig_btn, save_view_btn,
+            state_name)
 
 
 @app.cell
@@ -693,29 +737,32 @@ def _(gv, mo, os, out_path, save_view_btn, state_name, view, vs):
 
 
 @app.cell
-def _(base_name, fig_fmt, fig_name, mo, os, out_path, save_fig_btn, static_figure, traceback, vp):
+def _(base_name, export_size, fig_fmt, fig_name, mo, os, out_path, save_fig_btn, static_figure, traceback, vp):
+    _slide = None if export_size.value == 'page' else export_size.value
+    _stem = base_name + (f'_slide_{_slide}' if _slide else '')
+
     def _render(path=None):
-        _fig = static_figure()
+        # save_figure either way: a slide's PNG dpi, the SVG naming the theme's fonts
+        _fig = static_figure(slide=_slide)
         try:
             if path:
                 return vp.save_figure(_fig, path)
-            import io
-            _buf = io.BytesIO()
-            _fig.savefig(_buf, format=fig_fmt.value, dpi=200 if fig_fmt.value == 'png' else None)
-            return _buf.getvalue()
+            import tempfile
+            with tempfile.TemporaryDirectory() as _d:
+                return open(vp.save_figure(_fig, os.path.join(_d, f'figure.{fig_fmt.value}')), 'rb').read()
         finally:
             vp.plt.close(_fig)
 
     fig_msg = mo.md('')
     if save_fig_btn.value:
-        _path = out_path(fig_name.value, base_name, fig_fmt.value)
+        _path = out_path(fig_name.value, _stem, fig_fmt.value)
         try:
             os.makedirs(os.path.dirname(_path), exist_ok=True)
             fig_msg = mo.callout(mo.md(f'Saved `{_render(_path)}`'), kind='success')
         except Exception as _e:
             fig_msg = mo.callout(mo.md(f'**{type(_e).__name__}:** {_e}\n\n```\n{traceback.format_exc()}\n```'),
                                  kind='danger')
-    fig_download = mo.download(data=lambda: _render(), filename=f'{base_name}.{fig_fmt.value}',
+    fig_download = mo.download(data=lambda: _render(), filename=f'{_stem}.{fig_fmt.value}',
                                label=f'Download the figure ({fig_fmt.value})')
     return fig_download, fig_msg
 
@@ -724,6 +771,7 @@ def _(base_name, fig_fmt, fig_name, mo, os, out_path, save_fig_btn, static_figur
 def _(
     base_name,
     blocks,
+    export_size,
     log_pick,
     make_movie_btn,
     mo,
@@ -745,13 +793,14 @@ def _(
                       f'{len(movie_frames) / max(movie_fps.value, 1):.1f} s; about '
                       f'{0.3 * len(movie_frames):.0f} s to render._')
     if make_movie_btn.value:
+        _slide = None if export_size.value == 'page' else export_size.value
         _path = out_path(movie_name.value, base_name.rsplit('_frame', 1)[0] +
-                         f'_{movie_frames[0]}-{movie_frames[-1]}', 'mp4')
+                         f'_{movie_frames[0]}-{movie_frames[-1]}' + (f'_slide_{_slide}' if _slide else ''), 'mp4')
         try:
             os.makedirs(os.path.dirname(_path), exist_ok=True)
             _label, _sym = vp.gv.quantities(run)[qty_pick.value][:2]
             vp.render_movie(run, summ, movie_frames, qty_pick.value, mode_pick.value, log_pick.value,
-                            zoom_pick.value, pal, _path, fps=int(movie_fps.value), blocks=blocks,
+                            zoom_pick.value, pal, _path, fps=int(movie_fps.value), blocks=blocks, slide=_slide,
                             title=f'{run.title} · {run.sim} · {run.name} · {_label}',
                             progress=lambda it, n: mo.status.progress_bar(it, total=n, title='Rendering the movie',
                                                                           remove_on_exit=True))
@@ -777,6 +826,7 @@ def _(
     ro,
     zoom_pick,
     dt_hist,
+    export_size,
     fenergy,
     fetch_btn,
     fetch_log,
@@ -850,10 +900,11 @@ def _(
             'white-space: pre; overflow-x: auto; font-size: 11.5px; padding: 6px 8px; border-radius: 4px; border: 1px '
             f'solid var(--border, #8888); user-select: all">{html.escape(cmd)}</pre></details>')
 
-    def _live(fig):
+    def _live(fig, chart):
         # a chart that follows the movie in the page (its profiles, target curves and time cursors), the kernel idle;
-        # its y axes span the movie's frames
-        return mo.ui.anywidget(mm.live_plot(fig, live_summ, k, movie_frames))
+        # its y axes span the movie's frames; its toolbar downloads it for a slide (<run>_<chart>_frame<k>_slide_*.png)
+        _name = f"{run.sim.replace(' ', '').lower()}_{run.name}_{chart}_frame{k}"
+        return mo.ui.anywidget(mm.live_plot(fig, live_summ, k, movie_frames, pal, _name))
 
     def _fetch():
         # the Fetch button where the shot has no Flux copy yet (no data, or the workflow's copy without beam power)
@@ -881,18 +932,19 @@ def _(
             if th_show.value:
                 _measured = (th, _t0, _t1)
             _top += [mo.hstack([th_show, th_pick], align='center', widths=[1, 6]),
-                     _live(vp.thomson_timeline(th, _t0, _t1, run.eq_ms / 1e3, pal=pal))]
+                     _live(vp.thomson_timeline(th, _t0, _t1, run.eq_ms / 1e3, pal=pal), 'thomson')]
             _notes.append(mo.md(f'<small>{vp.thomson_note(run, fr, th, _t0, _t1)}</small>'))
         return mo.vstack(_top + [
             _live(vp.profiles_figure(run, fr, fr0, f'frame {k}', x_pick.value, pal=pal, measured=_measured, cmp=cmp,
-                                     blocks=blocks)),
+                                     blocks=blocks), 'midplane_profiles'),
             *_notes,
-            _live(vp.history_figure(run, summ, qty_pick.value, mode_pick.value, t_now, x_pick.value, pal=pal)),
+            _live(vp.history_figure(run, summ, qty_pick.value, mode_pick.value, t_now, x_pick.value, pal=pal),
+                  'midplane_history'),
         ])
 
     def _targets():
         return mo.vstack([
-            _live(vp.targets_figure(run, fr, summ, t_now, pal=pal, cmp=cmp, blocks=blocks)),
+            _live(vp.targets_figure(run, fr, summ, t_now, pal=pal, cmp=cmp, blocks=blocks), 'targets'),
             mo.md('<small>λq: the midplane width holding 63 % of the parallel heat flux reaching the target, each SOL '
                   'flux surface placed at its midplane radius (DPP 2025 definition, as on the progress posters). '
                   'Heat flux: q_par = sum over species of m (M3par + M3perp) / 2, cell average in the plate cell. '
@@ -903,7 +955,8 @@ def _(
 
     def _traces():
         return mo.vstack([
-            _live(vp.timetraces_figure(run, summ, dt_hist, integ, fenergy, t_now, pal=pal, cmp=cmp, blocks=blocks)),
+            _live(vp.timetraces_figure(run, summ, dt_hist, integ, fenergy, t_now, pal=pal, cmp=cmp, blocks=blocks),
+                  'time_traces'),
             mo.md('<small>Region changes: the Jacobian-weighted (volume) mean over the region\'s cells, relative to '
                   'the first frame.</small>'),
         ])
@@ -914,7 +967,7 @@ def _(
             return mo.callout(mo.md('Click a cell in the movie (poloidal plane, strips or the space-time strip), or '
                                     'type block,i,j in the sidebar.'), kind='neutral')
         return mo.vstack([mo.md(vp.probe_note(run, _c, cmp)),
-                          _live(vp.probe_figure(run, summ, _c, t_now, pal=pal, cmp=cmp))])
+                          _live(vp.probe_figure(run, summ, _c, t_now, pal=pal, cmp=cmp), 'probe')])
 
     def _balance():
         _B = gv.balance(run)
@@ -928,7 +981,7 @@ def _(
                         for name, v in _B['targets'].items())
         _share = sum(v['power'][_i] for v in _B['targets'].values()) / _B['E']['out'][_i] * 100
         return mo.vstack([
-            _live(_fig),
+            _live(_fig, 'balance'),
             mo.md(f"At {_B['t'][_i] * vp.time_unit(_B['t'][-1])[0]:.4g} {vp.time_unit(_B['t'][-1])[1]}: source "
                   f"{_B['E']['src'][_i] * gv.full_device(run) / 1e6:.3g} MW (whole device); targets: {_tg} "
                   f"({_share:.0f} % of all boundary energy losses; the rest leaves through the radial walls). "
@@ -1028,7 +1081,7 @@ def _(
                 kind='neutral')])
         try:
             _items.append(_live(vp.diffusivity_figure(run, _D, x_pick.value, pal=pal, cmp=cmp, D_cmp=_Db,
-                                                      blocks=blocks)))
+                                                      blocks=blocks), 'diffusivity'))
         except ValueError as _e:
             _items.append(mo.callout(mo.md(str(_e)), kind='neutral'))
         if _D['kind']:
@@ -1098,6 +1151,10 @@ def _(
     _export = mo.vstack([
         mo.md('#### The view'), view_cmd, mo.hstack([state_name, save_view_btn], align='end', justify='start'),
         view_msg,
+        mo.md('#### The figure and a movie, laid out for the page or a slide'), export_size,
+        mo.md('_A slide: 16:9, text 16 pt or more and lines 2 pt or more at the size given (full width 12 in, half '
+              'width 6.2 in: the poloidal plane alone); PNG at 300 dpi; an SVG names the theme\'s fonts. The charts '
+              'of the other tabs: the two slide buttons in each chart\'s toolbar (top right)._'),
         mo.md('#### The figure (the Static figure tab\'s map of the shown frame)'),
         mo.hstack([fig_name, fig_fmt, save_fig_btn], align='end', justify='start'), fig_msg, fig_download,
         mo.md('#### A movie (the map over the sidebar\'s movie frames, one colour scale)'),

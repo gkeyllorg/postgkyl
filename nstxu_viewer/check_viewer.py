@@ -24,6 +24,10 @@
    --theme opens a theme's look, its page CSS, the overlay's side-by-side options tinted by row.
 5. (2026-11-12) the colour schemes kept in viewer_plots equal their PowerPoint files, where viewer.json's
    "theme_files" names files that are there.
+6. (2026-11-13) fonts: every symbol the sources write that a theme font lacks is in Viewer Symbols (fonts/), whose
+   files equal a fresh build; the page gets it; matplotlib finds the tracked files before a system copy; no missing
+   glyph in text_px or in any theme's notebook. sync: sync.py mirrors Sim 2's run into a stand-in laptop tree (a
+   stand-in ssh) and the viewer opens the mirror with its own geqdsk, Thomson file and cache.
 Exit status: the number of failures.
 """
 import argparse
@@ -201,7 +205,8 @@ def part_exports():
         fig = vp.map_figure(r, gv.frame(r, 30), gv.frame(r, 0), 'T_elc', 'value', pal=vp.LOOKS['light'])
         path = vp.save_figure(fig, f'{tmp}/fig.{ext}')
         vp.plt.close(fig)
-        font = ext != 'svg' or vp.RENDER_FONT == vp.FONT or f"'{vp.FONT}', '{vp.RENDER_FONT}'" in open(path).read()
+        font = ext != 'svg' or all(f"'{real}', '{drawn}'" in open(path).read()
+                                   for drawn, real in getattr(fig, 'nstxu_fonts', {}).items())
         check(os.path.getsize(path) > 10000 and font, f'figure saves as {ext} ({os.path.getsize(path)} bytes)'
               + (', the theme font named first' if ext == 'svg' else ''))
     path = vp.render_movie(r, summ, list(range(10)), 'n_elc', 'step', False, 'whole domain', vp.LOOKS['dark'],
@@ -445,6 +450,120 @@ def part_themes():
         ok &= all(styles[str(i)][col].get('backgroundColor') == tint[r['compare']]
                   for i, r in enumerate(order) for col in r)
     check(ok, 'options side by side: every cell of a row tinted by its compare value (differs / same), either order')
+
+
+# ------------------------------------------------------------------------------------------------- fonts (11-13)
+def part_fonts():
+    """The symbols the sources write that a theme face lacks (∥, ⊥, ...) are all in Viewer Symbols, whose tracked
+    files equal a fresh build (fonts/make_symbols.py); the page receives both faces; text_px measures each symbol, in
+    every theme's fonts, without a missing glyph."""
+    import warnings
+    import movie_widget as mw
+    import viewer_plots as vp
+    spec = importlib.util.spec_from_file_location('make_symbols', os.path.join(HERE, 'fonts', 'make_symbols.py'))
+    ms = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ms)
+    need = ms.lacking(ms.source_chars())
+    tracked = {out: os.path.join(ms.FONTS, out) for out, _, _ in ms.FACES}
+    short = {out: ''.join(c for c in need if ord(c) not in ms.cmap(p)) if os.path.exists(p) else 'no file'
+             for out, p in tracked.items()}
+    check(not any(short.values()), f'Viewer Symbols has the {len(need)} symbols the theme fonts lack '
+          f'(short: {short}; else run fonts/make_symbols.py)')
+    with tempfile.TemporaryDirectory() as tmp:
+        same = {}
+        for out, face, style in ms.FACES:
+            ms.build(face, style, need, os.path.join(tmp, out))
+            same[out] = (os.path.exists(tracked[out]) and
+                         open(os.path.join(tmp, out), 'rb').read() == open(tracked[out], 'rb').read())
+    check(all(same.values()), f'the tracked Viewer Symbols files == a fresh build: {same}')
+    sent = {(f['family'], f['weight']) for f in mw.font_loader().faces}
+    check({(vp.SYMBOLS, 400), (vp.SYMBOLS, 700)} <= sent and
+          all(vp.SYMBOLS in vp.css_font(f) for t in vp.THEME_LOOKS for f in vp.theme_fonts(t)),
+          'the page gets both Viewer Symbols faces, and every theme font\'s CSS stack falls back to them')
+    from matplotlib import font_manager
+    found = {f'{fam} {w}': font_manager.findfont(font_manager.FontProperties(family=fam, weight=w),
+                                                 fallback_to_default=False)
+             for fam in vp._TRACKED for w in ('normal', 'bold')}
+    check(all(os.path.dirname(p) == vp.FONT_DIR for p in found.values()),
+          f'matplotlib finds each tracked family in its tracked file, not a system copy: '
+          f'{ {k: p for k, p in found.items() if os.path.dirname(p) != vp.FONT_DIR} }')
+    with warnings.catch_warnings(record=True) as got:
+        warnings.simplefilter('always')
+        for f in {f for t in vp.THEME_LOOKS for f in vp.theme_fonts(t)}:
+            vp.text_px(''.join(need), 16, f)
+        for theme in vp.THEME_LOOKS:
+            headless({'sim': 'Sim 2', 'theme': theme})
+    lost = sorted({str(w.message) for w in got if 'missing from font' in str(w.message)})
+    check(not lost, f'no missing glyph: text_px over every symbol in each theme\'s fonts, and each theme\'s notebook '
+          f'(Sim 2, every tab) {lost[:3]}')
+
+
+# ------------------------------------------------------------------------------------------------- sync (11-13)
+# ssh for part_sync: a kept login (-M -S cm) is a file at cm, -O check / exit test / remove it; any other call drops
+# the options and the host and runs the command here, as the remote's shell would
+STAND_IN_SSH = r'''#!/bin/bash
+cm= master= op=
+while [ $# -gt 0 ]; do
+  case "$1" in -M) master=1; shift ;; -S) cm=$2; shift 2 ;; -O) op=$2; shift 2 ;; -o|-l|-p) shift 2 ;;
+               -*) shift ;; *) break ;; esac
+done
+shift
+[ -n "$master" ] && { touch "$cm"; exit 0; }
+[ -n "$op" ] && { [ -e "$cm" ] || exit 255; [ "$op" = exit ] && rm -f "$cm"; exit 0; }
+[ -z "$cm" ] || [ -e "$cm" ] || exit 255
+exec sh -c "$*"
+'''
+
+
+def part_sync():
+    """sync.py mirrors Sim 2's default run into a stand-in laptop's tree (a temporary directory; ssh a stand-in that
+    runs the remote's side here): the run without its distribution-function frames, its cache, its geqdsk and its
+    Thomson files, each at its place under the base; a second sync copies nothing; the viewer opens the mirror with
+    every tab, the geqdsk and Thomson the mirror's own; where the remote base is this machine's, nothing to do."""
+    import gkview as gv
+    import sync
+    lab, simdir, run, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+    with tempfile.TemporaryDirectory() as tmp:
+        data = os.path.join(tmp, 'nstxu', os.path.relpath(gv.DATA, gv.NSTXU))
+        os.makedirs(data)
+        json.dump(dict(gv.CONFIG, remote={'host': 'stand-in', 'base': gv.NSTXU}), open(f'{data}/viewer.json', 'w'))
+        os.makedirs(f'{tmp}/bin')
+        with open(f'{tmp}/bin/ssh', 'w') as f:
+            f.write(STAND_IN_SSH)
+        os.chmod(f'{tmp}/bin/ssh', 0o755)
+        env = dict(os.environ, NSTXU_VIEWER_DATA=data, PATH=f'{tmp}/bin:' + os.environ['PATH'])
+        env.pop('SYNC_CM', None)
+        sync_cmd = [sys.executable, os.path.join(HERE, 'sync.py'), '--batch', '--sim', lab]
+        first, again = (subprocess.run(sync_cmd, env=env, capture_output=True, text=True, timeout=1200)
+                        for _ in range(2))
+        base = os.path.normpath(os.path.join(data, gv.CONFIG.get('base', '.')))
+        src, dst = os.path.join(gv.NSTXU, simdir, 'runs', run), os.path.join(base, simdir, 'runs', run)
+        want = sorted(os.path.relpath(os.path.join(d, f), src) for d, _, fs in os.walk(src) for f in fs
+                      if not re.search(r'-(?!field_)[A-Za-z0-9]+_[0-9]+\.gkyl$|_source_[0-9]+\.gkyl$|restart', f))
+        got = sorted(os.path.relpath(os.path.join(d, f), dst) for d, _, fs in os.walk(dst) for f in fs)
+        check(first.returncode == 0 and got == want and len(want) > 0,
+              f'sync: {lab} / {run} mirrored without distribution-function, source and restart files '
+              f'({len(got)} of {len(want)} files; rc {first.returncode} {first.stderr.strip()[-200:]})')
+        check(again.returncode == 0 and again.stdout.count('copied 0 files') == 3,
+              f'sync: a second sync copies nothing (runs and caches, geqdsks, Thomson files): {again.stdout!r}')
+        p = subprocess.run([sys.executable, '-c', 'import json, os, check_viewer as c, gkview as gv, thomson\n'
+                            f'd, built = c.headless({{"sim": "{lab}"}})\n'
+                            'r = d["run"]\n'
+                            'print(json.dumps([gv.geqdsk_path(r), thomson.shot_file(r.shot), d["sync_from"], '
+                            'os.path.exists(gv.cache_path(r.path)), sorted(set(built.values()))]))'],
+                           env=env, capture_output=True, text=True, timeout=900, cwd=HERE)
+        out = json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 else None
+        check(out is not None and out[0].startswith(base) and out[1] and out[1].startswith(base) and
+              out[2] == ['stand-in', gv.NSTXU] and out[3] and out[4] == ['ok'],
+              f'sync: the viewer opens the mirror, every tab, its geqdsk, Thomson file and cache the mirror\'s own, '
+              f'and offers the Sync button: {out or p.stderr.strip()[-300:]}')
+    keep = gv.CONFIG.get('remote')
+    try:
+        gv.CONFIG['remote'] = {'host': 'stand-in', 'base': gv.NSTXU}
+        own = sync.remote()
+    finally:
+        gv.CONFIG.pop('remote') if keep is None else gv.CONFIG.update(remote=keep)
+    check(own is None, 'sync: a remote whose base is this machine\'s own base: nothing to sync')
 
 
 # ---------------------------------------------------------------------------------------------------- browser
@@ -860,6 +979,8 @@ if __name__ == '__main__':
     part_labels()
     part_pgkyl()
     part_themes()
+    part_fonts()
+    part_sync()
     if a.browser:
         part_browser(a.browser, a.shots)
         part_liveplot(a.browser)

@@ -21,6 +21,7 @@ import traitlets
 
 import gkview as gv
 import pgkyl_cmd as pc
+import texlabel as tl
 import viewer_plots as vp
 
 NAN = 255   # colour index of a cell with no value (a temperature where n <= 0, 0/0 in a relative change)
@@ -94,7 +95,8 @@ def movie_look(pal):
     """Colours and font of the page for one look (light / dark): inks, accent, both colour tables."""
     div = LinearSegmentedColormap.from_list(f'div_{pal.name}', pal.div)
     return dict(surf=pal.surf, ink=pal.ink, ink2=pal.ink2, muted=pal.muted, grid=pal.grid, axis=pal.axis,
-                accent=pal.accent or vp.tone('hlink'), elc=pal.elc, ion=pal.ion, font=vp.CSS_FONT,
+                accent=pal.accent or vp.tone('hlink'), elc=pal.elc, ion=pal.ion,
+                font=vp.css_font(vp.theme_fonts(pal.theme)[0]),
                 lut_seq=_hexes(colormaps[vp.SEQ]), lut_div=_hexes(div), nan=pal.surf)
 
 
@@ -103,7 +105,7 @@ def movie_data(run, summ, qty, mode='value', log=False, x_mode='distance', frame
     numbers to play (default: all); changes stay relative to the run's first / the previous written frame. blocks:
     draw only these (None: all): the colour scale, the poloidal view and the strips are theirs."""
     label, sym, unit, scale, kind = gv.quantities(run)[qty]
-    u = f' ({unit})' if unit else ''
+    sym, u = tl.plain(f'${sym}$'), tl.plain(f' (${unit}$)') if unit else ''   # the canvas draws plain text
     allf = [int(k) for k in summ['frames']]
     have = set(allf)
     frames = allf if frames is None else [int(k) for k in frames if int(k) in have]
@@ -173,7 +175,7 @@ def movie_data(run, summ, qty, mode='value', log=False, x_mode='distance', frame
         o = np.argsort(x)
         o = o[gv.stack_rows(run, side, sel)[o]]   # the chosen blocks' rows
         pg = pc.midplane(run, side, qty, '{frame}', sel)
-        sides.append(dict(name=f'{side} midplane', x=rnd(x[o]), sep=float(xsep), xlabel=xlab,
+        sides.append(dict(name=f'{side} midplane', x=rnd(x[o]), sep=float(xsep), xlabel=tl.plain(xlab),
                           v=_b64(P[:, o].astype(np.float32)),
                           pg=pg if mode == 'value' else '# the chart shows the change; this, the values\n' + pg))
     pv = np.concatenate([np.frombuffer(base64.b64decode(s['v']), np.float32) for s in sides]) if sides else np.zeros(1)
@@ -202,7 +204,7 @@ def movie_data(run, summ, qty, mode='value', log=False, x_mode='distance', frame
               hist=pc.cell_history(run, '{b}', '{i}', '{j}', qty))
     return dict(
         frames=frames, tnum=[round(float(t) * ts, 6) for t in summ['t'][rows]], tunit=tu, ncell=int(V.shape[1]),
-        idx=_b64(idx), cmap=cmap, cbar=dict(label=cblabel, ticks=[[float(norm(t)), fmt(t)] for t in ticks],
+        idx=_b64(idx), cmap=cmap, cbar=dict(label=tl.plain(cblabel), ticks=[[float(norm(t)), fmt(t)] for t in ticks],
                                             extend=extend),
         quads=_b64(quads), lines=lines, boxes={k: list(v) for k, v in vp.zoom_boxes(run, sel).items()},
         rz=_b64(keep.astype(np.int32)), rz_note='' if sel is None else f' (blocks {vp.block_list(shown)})',
@@ -684,14 +686,61 @@ export default { render };
 """
 
 
+class FontLoader(anywidget.AnyWidget):
+    """The tracked stand-in fonts (fonts/, viewer_plots.FONT_FILES; upright faces) for the page: registered with
+    FontFace, so the page and its charts draw a theme's fonts where the real ones are not installed, and kept as
+    @font-face rules (window.__nstxuFontCSS) for the charts' slide downloads, which draw in an image that sees no font
+    of the page. Hidden; ~1.6 MB, sent once per page load."""
+    faces = traitlets.List().tag(sync=True)
+    _esm = r"""
+async function render({ model, el }) {
+  el.style.display = 'none';
+  if (window.__nstxuFontCSS !== undefined) return;
+  window.__nstxuFontCSS = '';
+  const rules = [];
+  for (const f of model.get('faces')) {
+    try {
+      const face = new FontFace(f.family, bytes(f.b64), { weight: String(f.weight), style: 'normal' });
+      document.fonts.add(await face.load());
+    } catch (e) { console.warn('nstxu: font', f.family, e); }
+    rules.push(`@font-face { font-family: '${f.family}'; font-weight: ${f.weight}; font-style: normal; ` +
+               `src: url(data:${f.mime};base64,${f.b64}); }`);
+  }
+  window.__nstxuFontCSS = rules.join('\n');
+  window.dispatchEvent(new Event('nstxu:fonts'));
+}
+function bytes(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+export default { render };
+"""
+
+
+def font_loader():
+    """A FontLoader with the upright faces of every tracked font (family and weight from the files themselves)."""
+    from matplotlib.ft2font import FT2Font
+    faces = []
+    for p in vp.FONT_FILES:
+        ft = FT2Font(p)
+        if 'Italic' in ft.style_name:
+            continue
+        faces.append(dict(family=ft.family_name, weight=700 if 'Bold' in ft.style_name else 400,
+                          mime='font/otf' if p.endswith('.otf') else 'font/ttf',
+                          b64=base64.b64encode(open(p, 'rb').read()).decode()))
+    return FontLoader(faces=faces)
+
+
 class LivePlot(anywidget.AnyWidget):
     """A plotly figure that follows the movie in the page: on each 'nstxu:frame' event (the movie draws a frame) its
     tagged traces take that frame's y and its tagged shapes that frame's position (viewer_plots.live_spec), without
     the kernel. While the movie plays it rewrites plotly's own SVG (the line paths, markers and shape lines, through
     plotly's axis maps: ~1 ms a frame); when playback stops it hands plotly the shown frame (Plotly.restyle /
     relayout), so hover and a resize agree with the drawing. Where plotly's SVG is not laid out as expected it uses
-    those calls throughout, at most a third of the time. fig: the figure's JSON; frame: the notebook's frame."""
+    those calls throughout, at most a third of the time. fig: the figure's JSON; frame: the notebook's frame.
+    slides: viewer_plots.slide_spec for 'full' and 'half': two buttons in the chart's toolbar download it laid out for
+    a slide, as a PNG (300 dpi) of the frame it shows, its fonts embedded (window.__nstxuSlides[name](size): the same
+    image as a data URL; (size, true): the slide figure)."""
     fig = traitlets.Dict().tag(sync=True)
+    slides = traitlets.Dict().tag(sync=True)
+    name = traitlets.Unicode('chart').tag(sync=True)
     live = traitlets.Dict().tag(sync=True)
     frame = traitlets.Int(-1).tag(sync=True)
     _css = CMD_CSS + """.nstxu-live { width: 100%; }
@@ -764,6 +813,60 @@ function drawSVG(F, j) {
     const q = (a._offset + a.c2p(v)).toFixed(2);
     p.setAttribute('d', sh.axis === 'x' ? `M${q},${keep[0]}L${q},${keep[1]}` : `M${keep[0]},${q}L${keep[1]},${q}`);
   }
+}
+
+// A chart for a slide (viewer_plots.slide_spec): the page's current traces (the frame shown) in the slide's styles,
+// the slide's layout with the cursors where they are now, drawn by plotly as SVG, the tracked fonts embedded (an
+// image sees no font of the page), then rasterized at the spec's dpi. Returns a PNG data URL.
+function merge(a, b) {
+  for (const [k, v] of Object.entries(b)) a[k] = (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object')
+    ? merge(a[k], v) : v;
+  return a;
+}
+function slideFigure(gd, spec) {
+  // spec.indices / spec.shapes: the page's traces and shapes it draws (a whole chart, or one subplot of it)
+  const data = spec.indices.map((i, k) => merge(structuredClone(gd.data[i]), spec.traces[k] || {}));
+  const layout = structuredClone(spec.layout);
+  (layout.shapes || []).forEach((s, k) => { const c = (gd.layout.shapes || [])[spec.shapes[k]]; if (c) for (const q of ['x0', 'x1', 'y0', 'y1']) s[q] = c[q]; });
+  return { data, layout };
+}
+function pick(spec, gd) {   // a half-width spec of several subplots: the one last pointed at
+  return spec.panels ? (spec.panels[gd.__nstxuPanel] || spec.panels[spec.first]) : spec;
+}
+async function slideImage(gd, spec) {
+  const url = await Plotly.toImage(slideFigure(gd, spec), { format: 'svg', width: spec.width, height: spec.height });
+  let svg = decodeURIComponent(url.slice(url.indexOf(',') + 1));
+  svg = svg.replace(/<svg[^>]*>/, m => `${m}<style>${window.__nstxuFontCSS || ''}</style>`);
+  const img = new Image(), src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    img.src = src; await img.decode();
+    const k = spec.dpi / 96, c = document.createElement('canvas'), g = c.getContext('2d');
+    c.width = Math.round(spec.width * k); c.height = Math.round(spec.height * k);
+    // the image's own fonts (the embedded @font-face) load once it is first drawn, its text invisible until then:
+    // draw, let them load, draw again
+    g.drawImage(img, 0, 0, c.width, c.height);
+    await new Promise(ok => setTimeout(ok, 300));
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  } finally { URL.revokeObjectURL(src); }
+}
+const SLIDE_ICON = {   // a slide (outlined), the figure filling all of it or its left half
+  full: { width: 24, height: 24, path: 'M1 4H23V20H1Z M3 6V18H21V6Z M5 8H19V16H5Z' },
+  half: { width: 24, height: 24, path: 'M1 4H23V20H1Z M3 6V18H21V6Z M5 8H11V16H5Z' },
+};
+function slideButtons(model, gd) {
+  const sl = model.get('slides') || {};
+  return Object.entries(sl).map(([size, spec]) => ({
+    name: `nstxu-slide-${size}`, title: `Download for a ${spec.label} (PNG, ${spec.dpi} dpi)`, icon: SLIDE_ICON[size],
+    click: async () => {
+      try {
+        const a = document.createElement('a'), sp = pick(spec, gd);
+        a.href = await slideImage(gd, sp); a.download = sp.file;
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (e) { console.error('nstxu: slide download', e); }
+    },
+  }));
 }
 
 async function render({ model, el }) {
@@ -847,7 +950,20 @@ async function render({ model, el }) {
     try { await plotlyTo(j, shown); } catch (e) { el.dataset.error = String((e && e.message) || e); }
     finally { busy = false; if (want !== null && want !== shown) schedule(); }
   }
-  await Plotly.newPlot(div, Fg.data, Fg.layout, { responsive: true, displaylogo: false });
+  await Plotly.newPlot(div, Fg.data, Fg.layout, { responsive: true, displaylogo: false,
+                                                   modeBarButtonsToAdd: slideButtons(model, div) });
+  const sl = model.get('slides') || {};
+  // the subplot last pointed at (hover or click): what a half-width download takes
+  const point = ev => { const p = ev && ev.points && ev.points[0]; if (p) div.__nstxuPanel = p.data.xaxis || 'x'; };
+  div.on('plotly_hover', point);
+  div.on('plotly_click', point);
+  // window.__nstxuSlides[name](size, figure, panel): the PNG's data URL, or (figure) the slide figure itself; panel: an
+  // x axis ref to take instead of the one last pointed at (checks)
+  (window.__nstxuSlides = window.__nstxuSlides || {})[model.get('name')] = (size, figure, panel) => {
+    if (panel) div.__nstxuPanel = panel;
+    const sp = pick(sl[size], div);
+    return figure ? slideFigure(div, sp) : slideImage(div, sp);
+  };
   if (gone) return done;
   const rebind = () => {   // every redraw by plotly (a resize, settle) draws plotly's data: bind again, redraw ours
     F = bind(div, traces, L.shapes);
@@ -890,11 +1006,13 @@ export default { render };
 """
 
 
-def live_plot(fig, summ, frame, frames=None):
+def live_plot(fig, summ, frame, frames=None, pal=None, name='chart'):
     """A LivePlot of a plotly figure built by viewer_plots: its tagged parts follow the movie in the page (the y
-    axes they move on fixed to their span over frames, the movie's: viewer_plots.live_spec, on a copy of fig)."""
+    axes they move on fixed to their span over frames, the movie's: viewer_plots.live_spec, on a copy of fig), and it
+    downloads for a slide (pal: its look; name: the files' stem)."""
     import json
     import plotly.graph_objects as go
     fig = go.Figure(fig)
     live = vp.live_spec(fig, summ, frames, shown=frame)
-    return LivePlot(fig=json.loads(fig.to_json()), live=live, frame=int(frame))
+    slides = {} if pal is None else {size: vp.slide_spec(fig, size, pal, name) for size in vp.SLIDE_SIZES}
+    return LivePlot(fig=json.loads(fig.to_json()), live=live, frame=int(frame), slides=slides, name=name)
