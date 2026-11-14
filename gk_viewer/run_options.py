@@ -1,4 +1,4 @@
-"""The options a run was started with, made readable for the viewer's Options tab (nstxu_viewer.py).
+"""The options a run was started with, made readable for the viewer's Options tab (gk_viewer.py).
 
 - launch options: options_used.txt, else the -o key=value of the run's command file (gkview.launch_options);
 - what each option is, from the driver's own source: every opt_get_<type>_comma_kv(<opts>, "<key>", <target>) call

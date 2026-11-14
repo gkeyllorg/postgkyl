@@ -1,4 +1,4 @@
-"""Where the NSTX-U run viewer (nstxu_viewer.py) opens: a saved view (./view.sh --state <file>), then the launch
+"""Where the Gkeyll run viewer (gk_viewer.py) opens: a saved view (./view.sh --state <file>), then the launch
 command line (./view.sh --shot 203899 --frame 30 ...), then the page's address (the viewer writes the view there, so
 a reload or a bookmark comes back to it), each overriding the one before; the defaults under all three. One set of
 keys everywhere. A state file is versioned JSON (runs/states/*.json). A value that no longer fits (a run removed, a
@@ -58,8 +58,12 @@ def load_state(path):
       data = json.load(f)
     except json.JSONDecodeError as e:
       raise ValueError(f'{path} is not a viewer state file: {e}') from None
-  if not (isinstance(data, dict) and data.get('nstxu_viewer_state')
-          == STATE_VERSION and isinstance(data.get('view'), dict)):
+  tag = data.get(
+      'gk_viewer_state', data.get('nstxu_viewer_state')
+  ) if isinstance(
+      data, dict
+  ) else None  # nstxu_viewer_state: the tag before the viewer's rename (2026-11-14)
+  if not (tag == STATE_VERSION and isinstance(data.get('view'), dict)):
     raise ValueError(
         f'{path} is not a version-{STATE_VERSION} viewer state file')
   return data['view']
@@ -69,7 +73,7 @@ def save_state(path, view):
   """Write the view to path (its directory made if needed); returns the path."""
   os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
   with open(path, 'w') as f:
-    json.dump({'nstxu_viewer_state': STATE_VERSION, 'view': view}, f, indent=2)
+    json.dump({'gk_viewer_state': STATE_VERSION, 'view': view}, f, indent=2)
     f.write('\n')
   return path
 

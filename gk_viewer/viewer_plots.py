@@ -1,4 +1,4 @@
-"""Figures of the NSTX-U run viewer (nstxu_viewer.py), light or dark. The poloidal plane and the unrolled strips are
+"""Figures of the Gkeyll run viewer (gk_viewer.py), light or dark. The poloidal plane and the unrolled strips are
 drawn with matplotlib (the cells are curvilinear quadrilaterals); profiles, target heat flux and time traces with
 plotly (hover readouts, zoom).
 
@@ -426,14 +426,14 @@ def _page(theme):
 def page_css(theme='NSTX-U'):
   """CSS for the marimo page in a theme (_page): its fonts and headings, its light-mode accents, and in dark mode
     its surfaces (body.dark is marimo's). The page puts the chosen theme's into the document at run time
-    (nstxu_viewer.py); view.sh writes the NSTX-U one to runs/viewer.css, the first paint. Every theme sets every
+    (gk_viewer.py); view.sh writes the NSTX-U one to runs/viewer.css, the first paint. Every theme sets every
     rule, so switching from one to another leaves nothing behind."""
   t = _page(theme if theme in SCHEMES else 'NSTX-U')
   var = lambda d: '\n'.join(f'  --{k.replace("_", "-")}: {v};'
                             for k, v in d.items())  # noqa: E731
   dark = dict(t['dark'])
   dark['card_foreground'] = dark['popover_foreground'] = dark['foreground']
-  return f"""/* NSTX-U run viewer, {theme} theme ({os.path.basename(t['src'])}), written by viewer_plots.page_css */
+  return f"""/* Gkeyll run viewer, {theme} theme ({os.path.basename(t['src'])}), written by viewer_plots.page_css */
 :root {{
   --marimo-text-font: {t['text']};
   --marimo-heading-font: {t['head']};
@@ -788,8 +788,8 @@ def map_figure(run,
                 (title.count('\n') + 1) + 6) / 72 / height if title else 0.0
   with plt.rc_context(mpl_style(pal, slide)):
     fig = plt.figure(figsize=(width, height), dpi=110)
-    fig.nstxu_slide = slide
-    fig.nstxu_fonts = {
+    fig.gkv_slide = slide
+    fig.gkv_fonts = {
         render_font(f): f
         for f in theme_fonts(pal.theme) if render_font(f) != f
     }  # save_figure
@@ -3121,17 +3121,17 @@ def probe_note(run, c, cmp=None):
 # --------------------------------------------------------------------------------------------------- exports
 def save_figure(fig, path, dpi=200):
   """Write a matplotlib figure by the path's extension (png / pdf / svg; a slide's PNG at SLIDE_DPI); the SVG names
-    each theme font first and the stand-in it was drawn in after it (map_figure's fig.nstxu_fonts), so PowerPoint
+    each theme font first and the stand-in it was drawn in after it (map_figure's fig.gkv_fonts), so PowerPoint
     uses the real font where it is installed. Returns the path."""
   ext = os.path.splitext(path)[1].lower().lstrip('.')
   with plt.rc_context({'svg.fonttype': 'none', 'pdf.fonttype': 42}):
     fig.savefig(path,
-                dpi=(SLIDE_DPI if getattr(fig, 'nstxu_slide', None) else dpi)
+                dpi=(SLIDE_DPI if getattr(fig, 'gkv_slide', None) else dpi)
                 if ext == 'png' else None,
                 format=ext)
   if ext == 'svg':
     txt = open(path).read()
-    for drawn, real in getattr(fig, 'nstxu_fonts', {}).items():
+    for drawn, real in getattr(fig, 'gkv_fonts', {}).items():
       txt = txt.replace(f"'{drawn}'",
                         f"'{real}', '{drawn}'").replace(f'"{drawn}"',
                                                         f'"{real}", "{drawn}"')

@@ -1,4 +1,4 @@
-"""Data layer of the NSTX-U run viewer (nstxu_viewer.py): finds the runs of each simulation, reads their frames, works out
+"""Data layer of the Gkeyll run viewer (gk_viewer.py): finds the runs of each simulation, reads their frames, works out
 each run's block layout from its own topology file, and computes what the progress posters and movies show.
 
 Layout (derived, never typed in): a block whose psi-upper face is physical is SOL, one whose psi-lower face is physical
@@ -35,21 +35,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gkyl_read import read_gkyl  # noqa: E402
 
 # The data directory: viewer.json (what to offer, below) and runs/ (everything the viewer writes: cache, saved views,
-# exports, Flux copies, logs). $NSTXU_VIEWER_DATA (view.sh exports it), else this directory.
+# exports, Flux copies, logs). $GK_VIEWER_DATA (view.sh exports it), else this directory.
 DATA = os.path.abspath(
-    os.environ.get('NSTXU_VIEWER_DATA')
+    os.environ.get('GK_VIEWER_DATA')
     or os.path.dirname(os.path.abspath(__file__)))
 RUNS = os.path.join(DATA, 'runs')
 CONFIG_FILE = os.path.join(DATA, 'viewer.json')
 CONFIG = json.load(open(CONFIG_FILE)) if os.path.exists(CONFIG_FILE) else {}
 # Simulation directories and cache names are relative to 'base' (relative to the data directory; absolute paths too).
-NSTXU = os.path.normpath(os.path.join(DATA, CONFIG.get('base', '.')))
+BASE = os.path.normpath(os.path.join(DATA, CONFIG.get('base', '.')))
 
 
 def data_path(key):
   """A file or directory viewer.json names under `key` (relative to base), or None when it does not name one."""
   return os.path.normpath(os.path.join(
-      NSTXU, CONFIG[key])) if CONFIG.get(key) else None
+      BASE, CONFIG[key])) if CONFIG.get(key) else None
 
 
 CACHE_DIR = os.path.join(RUNS, 'cache')
@@ -58,6 +58,8 @@ CACHE_VERSION = 3  # bump when a summary definition changes: old cache files are
 # The simulations the viewer offers: (label, directory under base, default run, one-line description), from
 # viewer.json's "sims". The shot and equilibrium time come from each run's own files.
 SIMS = [tuple(s) for s in CONFIG.get('sims', [])]
+# The device the runs simulate, named in a run's title before its shot (viewer.json "device"; blank: none).
+DEVICE = CONFIG.get('device', '')
 
 PHYSICAL = 5  # gkyl_oriented_edge (core/zero/gkyl_block_topo.h)
 LOWER_POS, LOWER_NEG, UPPER_POS, UPPER_NEG = 1, 2, 3, 4
@@ -591,8 +593,11 @@ class Run:
 
   @property
   def title(self):
-    """'NSTX-U #203899 @ 325 ms' when the run's geqdsk names a shot, else its directory."""
-    return f'NSTX-U #{self.shot} @ {self.eq_ms} ms' if self.shot else self.name
+    """'NSTX-U #203899 @ 325 ms' (viewer.json's "device", then the shot) when the run's geqdsk names a shot,
+    else its directory."""
+    if not self.shot:
+      return self.name
+    return (f'{DEVICE} ' if DEVICE else '') + f'#{self.shot} @ {self.eq_ms} ms'
 
 
 def find_stem(path):
@@ -707,8 +712,8 @@ def is_run_dir(p):
 
 
 def runs_root(simdir):
-  """Where a simulation's runs are: <simdir>/runs (simdir under research/nstxu or absolute), else simdir itself."""
-  base = os.path.join(NSTXU, simdir)
+  """Where a simulation's runs are: <simdir>/runs (simdir under base, or absolute), else simdir itself."""
+  base = os.path.join(BASE, simdir)
   return os.path.join(base, 'runs') if os.path.isdir(os.path.join(
       base, 'runs')) else base
 
@@ -749,7 +754,7 @@ def here(path):
     base is at the same place under the base here (sync.py mirrors it there), when it is there."""
   base = (CONFIG.get('remote') or {}).get('base', '').rstrip('/')
   if base and path.startswith(base + '/'):
-    mirrored = os.path.join(NSTXU, os.path.relpath(path, base))
+    mirrored = os.path.join(BASE, os.path.relpath(path, base))
     if os.path.exists(mirrored):
       return mirrored
   return path
@@ -952,7 +957,7 @@ def _summary_one(run, k, fr0):
 
 def cache_path(run_path):
   """The summary cache file of the run at run_path (named by its place under base: the same on a mirror)."""
-  rel = os.path.relpath(run_path, NSTXU).replace(os.sep, '__')
+  rel = os.path.relpath(run_path, BASE).replace(os.sep, '__')
   return os.path.join(CACHE_DIR, f'{rel}__v{CACHE_VERSION}.npz')
 
 

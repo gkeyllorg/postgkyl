@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Checks of the viewer itself (the data layer is check_gkview.py's), with the marimo venv:
 
-  NSTXU_VIEWER_DATA=<data dir> <viewer venv>/bin/python check_viewer.py                    headless + exports
-  NSTXU_VIEWER_DATA=<data dir> <viewer venv>/bin/python check_viewer.py --browser CHROME   also the page in a browser
+  GK_VIEWER_DATA=<data dir> <viewer venv>/bin/python check_viewer.py                    headless + exports
+  GK_VIEWER_DATA=<data dir> <viewer venv>/bin/python check_viewer.py --browser CHROME   also the page in a browser
 (the data directory's viewer.json must offer 'Sim 1', 'Sim 2' and '2025 re-run'; the checks read those runs)
 
 1. headless: the notebook runs with every tab built (mo.ui.tabs made eager), for each simulation; a launch view
@@ -82,7 +82,7 @@ def headless(cli, sims_first=None):
   mo.cli_args, mo.ui.tabs = (lambda: CLIArgs(cli)), eager
   try:
     spec = importlib.util.spec_from_file_location(
-        'nstxu_viewer', os.path.join(HERE, 'nstxu_viewer.py'))
+        'gk_viewer', os.path.join(HERE, 'gk_viewer.py'))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     _, defs = m.app.run()
@@ -159,7 +159,7 @@ def part_headless():
       f'blocks and an overlay that do not fit fall back to none, with notes: {notes}'
   )
   sim2 = gv.open_run(
-      os.path.join(gv.NSTXU,
+      os.path.join(gv.BASE,
                    'sims_20261022/sim2_dense_rho09/runs/prod_th02q4_coll'))
   with tempfile.TemporaryDirectory() as tmp:
     sb = os.path.join(tmp, 'single_b2')
@@ -193,7 +193,7 @@ def part_thomson():
   import viewer_plots as vp
   # the reader against the sim-init workflow's own export of 203899's channels at its TS frame nearest 325 ms
   th = thomson.read(203899)
-  ref = os.path.join(gv.NSTXU, 'nstxu_sim_init_workflow', 'reference_run',
+  ref = os.path.join(gv.BASE, 'nstxu_sim_init_workflow', 'reference_run',
                      'shot203899_ms325',
                      'mpts_fit_channels_exact_geqdsk_rho.csv')
   rows = list(csv.DictReader(open(ref)))
@@ -230,7 +230,7 @@ def part_thomson():
         f'beam flattop == the scan\'s loop on {agree}/200 random traces')
   # Sim 2 (203899) draws the Thomson points on its density row, inside the run's span on each side
   lab, d, dflt, _ = gv.SIMS[[s[0] for s in gv.SIMS].index('Sim 2')]
-  run = gv.open_run(os.path.join(gv.NSTXU, d, 'runs', dflt), lab)
+  run = gv.open_run(os.path.join(gv.BASE, d, 'runs', dflt), lab)
   fs = run.frames()
   fr = gv.frame(run, fs[-1])
   t0, t1 = thomson.default_window(th, run.eq_ms / 1e3)
@@ -270,7 +270,7 @@ def part_exports():
   except ValueError:
     check(True, 'a foreign json is refused as a state file')
   r = gv.open_run(
-      f'{gv.NSTXU}/sims_20261022/sim2_dense_rho09/runs/prod_th02q4_coll',
+      f'{gv.BASE}/sims_20261022/sim2_dense_rho09/runs/prod_th02q4_coll',
       'Sim 2')
   summ = gv.summary(r)
   for ext in ('png', 'pdf', 'svg'):
@@ -284,7 +284,7 @@ def part_exports():
     vp.plt.close(fig)
     font = ext != 'svg' or all(
         f"'{real}', '{drawn}'" in open(path).read()
-        for drawn, real in getattr(fig, 'nstxu_fonts', {}).items())
+        for drawn, real in getattr(fig, 'gkv_fonts', {}).items())
     check(
         os.path.getsize(path) > 10000 and font,
         f'figure saves as {ext} ({os.path.getsize(path)} bytes)' +
@@ -643,8 +643,8 @@ def part_themes():
   )
   files = {t: f for t, f in (gv.CONFIG.get('theme_files') or {}).items()}
   read = {
-      t: vp.read_theme(os.path.join(gv.NSTXU, f))
-      for t, f in files.items() if os.path.exists(os.path.join(gv.NSTXU, f))
+      t: vp.read_theme(os.path.join(gv.BASE, f))
+      for t, f in files.items() if os.path.exists(os.path.join(gv.BASE, f))
   }
   navy = dict(vp.SCHEMES['DIII-D'][0])
   navy.pop('navy')
@@ -783,9 +783,9 @@ def part_sync():
   import sync
   lab, simdir, run, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
   with tempfile.TemporaryDirectory() as tmp:
-    base, data = os.path.join(tmp, 'nstxu'), os.path.join(tmp, 'data')
+    base, data = os.path.join(tmp, 'base'), os.path.join(tmp, 'data')
     os.makedirs(data)
-    remote = {'host': 'stand-in', 'base': gv.NSTXU, 'data': gv.DATA}
+    remote = {'host': 'stand-in', 'base': gv.BASE, 'data': gv.DATA}
     json.dump(dict(gv.CONFIG, base=base, remote=remote),
               open(f'{data}/viewer.json', 'w'))
     os.makedirs(f'{tmp}/bin')
@@ -793,7 +793,7 @@ def part_sync():
       f.write(STAND_IN_SSH)
     os.chmod(f'{tmp}/bin/ssh', 0o755)
     env = dict(os.environ,
-               NSTXU_VIEWER_DATA=data,
+               GK_VIEWER_DATA=data,
                PATH=f'{tmp}/bin:' + os.environ['PATH'])
     env.pop('SYNC_CM', None)
     sync_cmd = [
@@ -805,7 +805,7 @@ def part_sync():
                                    capture_output=True,
                                    text=True,
                                    timeout=1200) for _ in range(2))
-    src, dst = os.path.join(gv.NSTXU, simdir, 'runs',
+    src, dst = os.path.join(gv.BASE, simdir, 'runs',
                             run), os.path.join(base, simdir, 'runs', run)
     want = sorted(
         os.path.relpath(os.path.join(d, f), src) for d, _, fs in os.walk(src)
@@ -843,14 +843,14 @@ def part_sync():
     check(
         out is not None and out[0].startswith(base) and out[1]
         and out[1].startswith(base)
-        and out[2] == ['stand-in', gv.NSTXU, gv.DATA] and out[3]
+        and out[2] == ['stand-in', gv.BASE, gv.DATA] and out[3]
         and out[4] == ['ok'],
         f'sync: the viewer opens the mirror, every tab, its geqdsk, Thomson file and cache the mirror\'s own, '
         f'and offers the Sync button: {out or p.stderr.strip()[-300:]}; the sync said {first.stdout!r}'
     )
   keep = gv.CONFIG.get('remote')
   try:
-    gv.CONFIG['remote'] = {'host': 'stand-in', 'base': gv.NSTXU}
+    gv.CONFIG['remote'] = {'host': 'stand-in', 'base': gv.BASE}
     own = sync.remote()
   finally:
     gv.CONFIG.pop('remote') if keep is None else gv.CONFIG.update(remote=keep)
@@ -876,7 +876,7 @@ window.__tab = t => __deep('[role=tab]').find(b => (b.textContent || '').trim() 
 # until they are all up), else every chart on the page now (marked old)
 DRAWN = r"""(new_ => {
   const plot = e => e.querySelector('.js-plotly-plot');   // a redraw: the same element, a new plot in it
-  const els = __deep('.nstxu-live').filter(e => plot(e) && (new_ ? !plot(e).__old : true));
+  const els = __deep('.gkv-live').filter(e => plot(e) && (new_ ? !plot(e).__old : true));
   if (new_ && !(els.length && els.every(e => plot(e).querySelector('svg.main-svg')))) return null;
   const nums = d => (d || '').match(/-?[\d.]+(e[-+]?\d+)?/g) || [];
   const out = {frames: els.map(e => +e.dataset.frame), charts: [], n: 0};
@@ -896,7 +896,7 @@ DRAWN = r"""(new_ => {
   return out;
 })(NEW)"""
 
-MARK_OLD = "__deep('.nstxu-live .js-plotly-plot').forEach(d => { d.__old = true; })"
+MARK_OLD = "__deep('.gkv-live .js-plotly-plot').forEach(d => { d.__old = true; })"
 
 
 def drawn_diff(a, b):
@@ -1022,7 +1022,7 @@ async def drive(url, dbg, shots):
     await c.js(DEEP)
     k = await c.until('window.__frame && __frame() !== null && __frame()', 120)
     await c.until(
-        "__deep('.nstxu-movie')[0] && +(__deep('.nstxu-movie')[0].dataset.draws || 0) > 0",
+        "__deep('.gkv-movie')[0] && +(__deep('.gkv-movie')[0].dataset.draws || 0) > 0",
         120)
     await asyncio.sleep(3)
     await c.js(DEEP)
@@ -1044,7 +1044,7 @@ async def drive(url, dbg, shots):
     check(
         bool(light) and bool(back),
         'the dark-mode switch goes light and back, live')
-    W = "__deep('.nstxu-movie')[0]"
+    W = "__deep('.gkv-movie')[0]"
     await c.js(
         f"(s => {{ s.value = '30'; s.dispatchEvent(new Event('change')); }})({W}.querySelector('.fps'))"
     )
@@ -1053,11 +1053,11 @@ async def drive(url, dbg, shots):
         "(__deep('[role=tablist]')[0] || document.body).scrollIntoView({block: 'start'})"
     )
     await c.until(
-        "!!window.Plotly && __deep('.nstxu-live svg.main-svg').length > 0", 120)
+        "!!window.Plotly && __deep('.gkv-live svg.main-svg').length > 0", 120)
     await asyncio.sleep(2)
-    LIVE = "__deep('.nstxu-live').map(e => +e.dataset.frame)"
+    LIVE = "__deep('.gkv-live').map(e => +e.dataset.frame)"
     lv0, nplots = await c.js(LIVE), await c.js(
-        "__deep('.nstxu-live svg.main-svg').length")
+        "__deep('.gkv-live svg.main-svg').length")
     d0, f0 = await c.js(f'+{W}.dataset.draws'), await c.js('__frame()')
     await c.js(f"{W}.querySelector('button.play').click()")
     t0 = time.time()
@@ -1066,7 +1066,7 @@ async def drive(url, dbg, shots):
         '__frame()'), await c.js(f"{W}.querySelector('.time').textContent")
     elapsed = time.time() - t0
     lv1, how = await c.js(LIVE), await c.js(
-        "__deep('.nstxu-live').map(e => [e.dataset.path, +e.dataset.ms, e.dataset.error || ''])"
+        "__deep('.gkv-live').map(e => [e.dataset.path, +e.dataset.ms, e.dataset.error || ''])"
     )
     rate = (d1 - d0) / elapsed
     if shots:
@@ -1111,9 +1111,9 @@ async def drive(url, dbg, shots):
         f"(r => r && r.frames.length && r.frames.every(f => f === r.frames[0]) && "
         f"r.frames[0] !== {paused} ? r : null)({NEW})", 120)
     f_scrub = theirs_f and theirs_f['frames'][0]
-    await c.until("__deep('.nstxu-live').every(e => e.dataset.path)", 30)
+    await c.until("__deep('.gkv-live').every(e => e.dataset.path)", 30)
     send = lambda f: c.js(
-        f"window.dispatchEvent(new CustomEvent('nstxu:frame', {{detail: {{frame: {f}}}}}))"
+        f"window.dispatchEvent(new CustomEvent('gkv:frame', {{detail: {{frame: {f}}}}}))"
     )
     await send(paused)
     await asyncio.sleep(0.25)
@@ -1191,7 +1191,7 @@ async def drive(url, dbg, shots):
     )
     FRESH = (
         "(p => p.length >= 2 && p.every(d => !d.__old && d.querySelector('svg.main-svg')))"
-        "(__deep('.nstxu-live .js-plotly-plot'))")
+        "(__deep('.gkv-live .js-plotly-plot'))")
     await c.press("__tab('Balance & power')")
     await c.until(f"{OPEN} === 'Balance & power' && {FRESH}", 120)
     kept = []
@@ -1202,7 +1202,7 @@ async def drive(url, dbg, shots):
       await asyncio.sleep(1)
       kept.append((bool(redrawn), await c.js(OPEN)))
     axes = await c.js(
-        "__deep('.nstxu-live .js-plotly-plot').map(d => (d.layout && d.layout.yaxis || {}).type || '')"
+        "__deep('.gkv-live .js-plotly-plot').map(d => (d.layout && d.layout.yaxis || {}).type || '')"
     )
     check(
         kept == [(True, 'Balance & power')] * 2
@@ -1302,7 +1302,7 @@ async def drive_liveplot(page, dbg, n_ev=60):
     await c.call('Page.navigate', url='file://' + page)
     ready = await c.until('window.__ready', 60)
     send = lambda f: c.js(
-        f"window.dispatchEvent(new CustomEvent('nstxu:frame', {{detail: {{frame: {f}}}}}))"
+        f"window.dispatchEvent(new CustomEvent('gkv:frame', {{detail: {{frame: {f}}}}}))"
     )
     L = await c.js('__L')
     op = lambda: c.js(
@@ -1326,7 +1326,7 @@ async def drive_liveplot(page, dbg, n_ev=60):
         "['a', 'b'].map(i => document.getElementById(i).dataset.path)")
     out = [f for f, o in zip(L['frames'], L['over']) if o]
     note = lambda: c.js(
-        "document.getElementById('a').querySelector('.nstxu-live-note').textContent"
+        "document.getElementById('a').querySelector('.gkv-live-note').textContent"
     )
     notes = []
     for f in (out[:1] + [K]):
@@ -1347,7 +1347,7 @@ async def drive_liveplot(page, dbg, n_ev=60):
     ticks = await c.js(
         f"""(async () => {{ let n = 0, on = true; const tick = () => {{ n++; if (on) requestAnimationFrame(tick); }};
           requestAnimationFrame(tick); const t0 = performance.now();
-          for (let i = 0; i < {n_ev}; i++) {{ window.dispatchEvent(new CustomEvent('nstxu:frame', {{detail: {{frame: __L.frames[i % __L.frames.length]}}}}));
+          for (let i = 0; i < {n_ev}; i++) {{ window.dispatchEvent(new CustomEvent('gkv:frame', {{detail: {{frame: __L.frames[i % __L.frames.length]}}}}));
             await new Promise(r => setTimeout(r, 33)); }}
           on = false; return [n, performance.now() - t0]; }})()""")
     await asyncio.sleep(1.5)
@@ -1370,7 +1370,7 @@ def part_liveplot(chrome):
   import movie_widget as mm
   import viewer_plots as vp
   lab, d, dflt, _ = gv.SIMS[1]
-  run = gv.open_run(os.path.join(gv.NSTXU, d, 'runs', dflt), lab)
+  run = gv.open_run(os.path.join(gv.BASE, d, 'runs', dflt), lab)
   summ = dict(gv.summary(run))
   frames = [int(f) for f in summ['frames']]
   K, hole, tg = frames[-1], frames[len(frames) // 2], run.layout.targets[0]

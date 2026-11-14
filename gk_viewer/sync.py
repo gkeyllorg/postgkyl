@@ -59,11 +59,11 @@ def remote():
   r = gv.CONFIG.get('remote') or {}
   if not r.get('host') or not r.get('base'):
     return None
-  if os.path.isdir(r['base']) and os.path.isdir(gv.NSTXU) and os.path.samefile(
-      r['base'], gv.NSTXU):
+  if os.path.isdir(r['base']) and os.path.isdir(gv.BASE) and os.path.samefile(
+      r['base'], gv.BASE):
     return None  # (a first mirror: no base here yet)
   base = r['base'].rstrip('/')
-  here = under(gv.DATA, gv.NSTXU)
+  here = under(gv.DATA, gv.BASE)
   data = r['data'].rstrip('/') if r.get(
       'data') else f'{base}/{here}' if here else None
   return r['host'], base, data
@@ -165,7 +165,7 @@ def main(argv=None):
     runs += [(lab, run, f'{simdir}/runs/{run}') for run in a.run or [dflt]]
   verb = 'would copy' if a.dry_run else 'copied'
 
-  def copy(what, rels, rroot=rbase, root=gv.NSTXU):
+  def copy(what, rels, rroot=rbase, root=gv.BASE):
     files = listing(host, rroot, rels, a.batch)
     print(
         f'{what}: {len(files)} files there; {verb} {pull(host, rroot, files, root, a.dry_run, a.batch)}',
@@ -184,18 +184,18 @@ def main(argv=None):
           ('' if n else f' (no run {rbase}/{rel} on {host}?)'))
   if rdata is not None and not a.no_cache:
     copy('caches', [
-        os.path.relpath(gv.cache_path(os.path.join(gv.NSTXU, rel)), gv.DATA)
+        os.path.relpath(gv.cache_path(os.path.join(gv.BASE, rel)), gv.DATA)
         for _, _, rel in runs
     ], rdata, gv.DATA)
   if a.dry_run:
     return 0
   # the geqdsks they read (a relative name is under the run, so under the base)
-  local = [(lab, run, os.path.join(gv.NSTXU, rel)) for lab, run, rel in runs
-           if gv.is_run_dir(os.path.join(gv.NSTXU, rel))]
+  local = [(lab, run, os.path.join(gv.BASE, rel)) for lab, run, rel in runs
+           if gv.is_run_dir(os.path.join(gv.BASE, rel))]
   geq = []
   for lab, run, path in local:
     g = gv.geqdsk_named(path, gv.read_options(path))
-    g_rel = g and (under(g, rbase) or under(g, gv.NSTXU))
+    g_rel = g and (under(g, rbase) or under(g, gv.BASE))
     if g and not g_rel:
       print(
           f'  {lab} / {run}: its geqdsk {g} is not under the base: not synced',
@@ -204,7 +204,7 @@ def main(argv=None):
   copy('geqdsks', sorted(set(geq)))
   # their shots' Thomson files: the sim-init workflow's (under the base), the Flux copies (the data directory)
   shots = sorted({gv.open_run(path, lab).shot for lab, _, path in local} - {0})
-  wf = thomson.WORKFLOW and under(thomson.WORKFLOW, gv.NSTXU)
+  wf = thomson.WORKFLOW and under(thomson.WORKFLOW, gv.BASE)
   if wf:
     copy('Thomson files (sim-init workflow)', [f'{wf}/{s}.h5' for s in shots])
   if rdata is not None:

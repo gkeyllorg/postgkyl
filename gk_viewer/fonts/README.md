@@ -31,10 +31,10 @@ gains a symbol the font lacks, or when the files differ from a fresh build: then
 <viewer venv>/bin/python fonts/make_symbols.py
 ```
 
-SHA-256 (fetched 2026-11-12; Viewer Symbols built 2026-11-13 from matplotlib 3.11.0's DejaVu Sans, fontTools 4.68.0):
+SHA-256 (fetched 2026-11-12; Viewer Symbols built 2026-11-14 (renamed viewer) from matplotlib 3.11.0's DejaVu Sans, fontTools 4.68.0):
 ```
-1d371637a4df5bb34899c16d1485ddb11ab1712239301fd543926fe9c99fa5fb  ViewerSymbols-Bold.ttf
-241aa929794c65000c4ce28917575493aee37c3b45b5a5ebc41dcfe4a4905fc5  ViewerSymbols.ttf
+5b1c62df5f799e41d38f00043483f2d763ddad23910e977649e8163c60e0193a  ViewerSymbols-Bold.ttf
+6e9b5a78ea2a1b6b1daeb8e4ee966bbdab704382e4dcf068e14c2294360cb1f8  ViewerSymbols.ttf
 698da70fc191cc5f33ad4d6d3fe830fe4624b898ea2e3169955928b7c491f1ee  LiberationSans-BoldItalic.ttf
 788abee4c806d660e8aee46689dd8540cd4bb98da03dcc9d171ce3efd99a9173  LiberationSans-Bold.ttf
 e5bae5c4cde31f22142753855f4f8fb86da6ff39955ed3c0a11248b0d16948b0  LiberationSans-Italic.ttf

@@ -1,4 +1,4 @@
-"""Measured profiles for the NSTX-U run viewer: Thomson scattering (MPTS) n_e of a run's shot, read from a slim copy of
+"""Measured profiles for the run viewer: NSTX-U's Thomson scattering (MPTS) n_e of a run's shot, read from a slim copy of
 the PPPL MDSplus HDF5 dump (runs/flux/<shot>.h5 in the data directory, written by fetch_flux.sh; else viewer.json's
 "thomson_fallback", the sim-init workflow's data/h5_slim, which has no beam power).
 

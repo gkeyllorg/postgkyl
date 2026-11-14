@@ -14,7 +14,6 @@ The output is reproducible (no build time stamped in the files), so the tracked 
 """
 import glob
 import os
-import shutil
 import sys
 import unicodedata
 
@@ -91,7 +90,7 @@ def build(face, style, chars, out):
       6:
       f'ViewerSymbols-{style}',
       10:
-      f'A subset of DejaVu Sans ({version}, as matplotlib ships it) for the NSTX-U run viewer: the '
+      f'A subset of DejaVu Sans ({version}, as matplotlib ships it) for the Gkeyll run viewer: the '
       f'symbols its theme fonts lack. Not DejaVu: renamed as the Bitstream Vera license asks.'
   }
   name.names = [n for n in name.names if n.nameID not in (16, 17, 18, 21, 22)]
@@ -119,8 +118,11 @@ def main():
     print(
         f'{out}: {len(need)} characters from {face} {version}, {os.path.getsize(os.path.join(FONTS, out))} B'
     )
-  shutil.copyfile(os.path.join(DEJAVU, 'LICENSE_DEJAVU'),
-                  os.path.join(FONTS, 'LICENSE-DejaVu.txt'))
+  # the license as matplotlib ships it, less trailing spaces (the repo's whitespace hook removes them)
+  with open(os.path.join(DEJAVU, 'LICENSE_DEJAVU')) as f:
+    text = ''.join(line.rstrip() + '\n' for line in f)
+  with open(os.path.join(FONTS, 'LICENSE-DejaVu.txt'), 'w') as f:
+    f.write(text)
   print(''.join(need))
   return 0
 

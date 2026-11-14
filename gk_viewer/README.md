@@ -1,6 +1,7 @@
-# NSTX-U run viewer (2026-11-02)
+# Gkeyll run viewer (2026-11-02; until 2026-11-14 the NSTX-U run viewer)
 
-A marimo notebook for looking through the NSTX-U runs frame by frame, in the DPP 2025 poster's theme (dark by
+A marimo notebook for looking through Gkeyll gyrokinetic runs frame by frame (multiblock tokamak runs of any
+device, and single-block ones), in a slide theme (the NSTX-U DPP 2025 poster's by default; dark by
 default, light on a switch): open it on a shot, a run and a frame, or play the run as a movie, probe any cell over
 time, read the particle and energy budgets and the power to each target, and save the view, the figure or a movie.
 Nothing here writes into a run directory; the outputs go to the data directory's `runs/` (Setup): the per-frame
@@ -14,14 +15,16 @@ import postgkyl (it reads the `.gkyl` files itself, `gkyl_read.py`); the pgkyl c
 cp viewer.example.json viewer.json     # then name your simulations in it (and flux.env from flux.env.example)
 ./view.sh                              # the first run makes .venv from requirements.lock.txt (Python 3.12+; ~30 s)
 ```
-`.venv` can also be a link to an existing venv with these packages, or `NSTXU_VIEWER_VENV` names one.
-**The data directory** (`NSTXU_VIEWER_DATA`; default: this directory, where git ignores `viewer.json`, `flux.env`,
+`.venv` can also be a link to an existing venv with these packages, or `GK_VIEWER_VENV` names one.
+**The data directory** (`GK_VIEWER_DATA`; default: this directory, where git ignores `viewer.json`, `flux.env`,
 `runs/` and `.venv`) holds what the viewer reads and writes:
 - `viewer.json` (start from `viewer.example.json`): paths relative to `base`, itself relative to the data directory
   (or absolute).
   - `base`: what the simulation directories (and the cache's file names) are relative to;
   - `sims`: `[label, simulation directory, default run, one-line description]` each; a simulation's runs are the run
     directories (a topology file, or a single-block run's files, and a frame) in its `runs/`, else in it;
+  - `device` (optional): the device the runs simulate, named in a run's title before its shot (`NSTX-U #203899 @ 325
+    ms`; none: `#203899 @ 325 ms`);
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
   - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
@@ -30,7 +33,7 @@ cp viewer.example.json viewer.json     # then name your simulations in it (and f
 - `flux.env` (from `flux.env.example`): Fetch from Flux's login and paths (`fetch_flux.sh`).
 - `runs/`: everything the viewer writes.
 
-Another data directory (`NSTXU_VIEWER_DATA=DIR ./view.sh`) keeps its own settings and outputs; a `view.sh` there can
+Another data directory (`GK_VIEWER_DATA=DIR ./view.sh`) keeps its own settings and outputs; a `view.sh` there can
 set it and run this one. On Perlmutter (post-generals-2) this directory is the data directory since 2026-11-14:
 `viewer.json` with `base` = `research/nstxu`, `flux.env`, `runs/` (the caches and the 203655 Flux copy, copied from
 `research/nstxu/viewer_20261102/runs`), `.venv` a link to `tools/marimo/.venv`; that research directory's `view.sh`
@@ -70,7 +73,7 @@ h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.tx
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
 holds them is down. Set up there: a checkout of this branch (Setup), and its `viewer.json`: the remote's `sims`, a
 `base` for the mirror here (any empty directory), and `"remote"` naming that machine: its ssh name here, the path
-there of `base`, and the viewer's data directory there (`"data"`; on Perlmutter: its `nstxu_viewer/` checkout).
+there of `base`, and the viewer's data directory there (`"data"`; on Perlmutter: its `gk_viewer/` checkout).
 Then
 ```sh
 ./view.sh --sync      # log in to the remote once, bring the runs up to date, start the viewer
@@ -160,7 +163,7 @@ Simulations offered: `viewer.json`'s `sims` (`gkview.SIMS`). Shot and equilibriu
 ## Files
 | file | what it is |
 |---|---|
-| `nstxu_viewer.py` | the marimo notebook (UI only) |
+| `gk_viewer.py` | the marimo notebook (UI only) |
 | `gkview.py` | data layer: run discovery (multiblock and single-block), readers (fields, dynvectors), block layout from the topology file (any layout, psi either way), derived quantities, profiles, target heat flux, per-frame cache, frame ranges, cell volumes and region means, particle / energy balance and target power, the diffusivity, the overlay's frame matching |
 | `viewer_plots.py` | figures: map (matplotlib), profiles / targets / traces / probe / balance (plotly); the shared colour scale; figure and movie export; the poster theme's two looks; the page CSS |
 | `movie_widget.py` | the browser-side movie (anywidget: the payload from the cache, and the canvas player in JavaScript), and LivePlot: the tab charts that follow it |
@@ -194,7 +197,7 @@ dash-dot, residual ink dotted (clear of the targets' hues). Charts are SVG (no W
 
 The dark/light switch sets `body[data-vscode-theme-kind]`, which marimo 0.25.2 reads before its own theme setting
 (its VS Code hook), from a zero-height iframe: a marimo upgrade may need this checked. The same iframe puts the chosen
-theme's page CSS (`viewer_plots.page_css`) into one `<style id="nstxu-theme">` of the page's head.
+theme's page CSS (`viewer_plots.page_css`) into one `<style id="gkv-theme">` of the page's head.
 
 **Three themes** (`--theme`, the sidebar's radio; `viewer_plots.THEME_LOOKS`), each a PowerPoint theme read at
 start-up, each light and dark, the same roles throughout (targets orange outer / blue-teal inner; electrons and PF the
@@ -358,7 +361,7 @@ simulations (to 1e-16, 7e-8 for the float32 cache). 2026-11-12: ported to pgkyl 
 
 **The output path**: the header gives the run's directory in full (and the overlay's), with the file name pattern.
 
-## Measured profiles: Thomson n_e (2026-11-03)
+## Measured profiles: Thomson n_e (2026-11-03; NSTX-U shots, through PPPL Flux)
 The Midplane profiles tab overlays the shot's Thomson n_e (open circles, electron colour) on the density row, above
 a strip of the shot's beam power and Thomson line density with the averaging window shaded. A switch hides it; a
 range slider picks the frames (it snaps to Thomson frames in the beam flattop).
@@ -374,7 +377,7 @@ RemoteForward /tmp/<your Perlmutter user name>-flux.sock flux.pppl.gov:22
   Flux copy, the Midplane profiles tab shows **Fetch from Flux**: it runs `fetch_flux.sh <shot>` through that login
   (never a prompt) and re-reads the file. Without `--flux`, or when the login has closed, the tab says how to get one.
 - `./fetch_flux.sh 203655 203899` on that login node: the same fetch with its own login (asks for the password + Duo).
-- On the laptop instead: `NSTXU_VIEWER_DATA=<data dir> bash <(ssh perlmutter cat <viewer dir>/fetch_flux.sh) 203655
+- On the laptop instead: `GK_VIEWER_DATA=<data dir> bash <(ssh perlmutter cat <viewer dir>/fetch_flux.sh) 203655
   203899` (`FLUX=`, `PM=`: the laptop's ssh names; the data directory's `flux.env` is read over ssh).
 
 `fetch_flux.sh` runs the sim-init workflow's `tools/extract_slim_h5.py` on Flux in a temporary directory, adding

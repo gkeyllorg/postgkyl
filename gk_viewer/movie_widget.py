@@ -1,4 +1,4 @@
-"""Browser-side movie of one run (nstxu_viewer.py). Every frame of one quantity is sent to the page once, as 8-bit colour
+"""Browser-side movie of one run (gk_viewer.py). Every frame of one quantity is sent to the page once, as 8-bit colour
 indices on a colour scale fixed over the whole run, and the page animates it on canvases: playback makes no kernel
 round trips. (Stepping the notebook's own frame re-runs its cells, a PNG every ~0.3 s, and marimo dims the stale
 outputs meanwhile: the fade between frames.)
@@ -39,20 +39,20 @@ def _b64(a):
 # The pgkyl box (pgkyl_cmd.py): under a chart or the movie, the commands for what was clicked, each with a Copy
 # button; shared by Movie and LivePlot. Colours from marimo's own variables, so it follows the page's theme.
 CMD_CSS = """
-.nstxu-cmd { display: none; margin: 8px 0 2px; border: 1px solid var(--border, #8888); border-radius: 6px;
+.gkv-cmd { display: none; margin: 8px 0 2px; border: 1px solid var(--border, #8888); border-radius: 6px;
   padding: 6px 10px 8px; font-size: 12px; background: var(--card, transparent); color: var(--foreground, inherit); }
-.nstxu-cmd.on { display: block; }
-.nstxu-cmd .hd { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.nstxu-cmd .hd .what { flex: 1; opacity: 0.85; }
-.nstxu-cmd button { cursor: pointer; border-radius: 4px; border: 1px solid var(--border, #8888); padding: 1px 8px;
+.gkv-cmd.on { display: block; }
+.gkv-cmd .hd { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.gkv-cmd .hd .what { flex: 1; opacity: 0.85; }
+.gkv-cmd button { cursor: pointer; border-radius: 4px; border: 1px solid var(--border, #8888); padding: 1px 8px;
   background: transparent; color: inherit; font: inherit; font-size: 11px; }
-.nstxu-cmd pre { margin: 3px 0 2px; padding: 6px 8px; overflow-x: auto; white-space: pre; font-size: 11.5px;
+.gkv-cmd pre { margin: 3px 0 2px; padding: 6px 8px; overflow-x: auto; white-space: pre; font-size: 11.5px;
   line-height: 1.35; border-radius: 4px; background: var(--muted, #8881); user-select: all; }
 """
 CMD_JS = r"""
 function cmdBox(parent) {
   const box = document.createElement('div');
-  box.className = 'nstxu-cmd';
+  box.className = 'gkv-cmd';
   parent.append(box);
   async function copy(text, btn) {
     try { await navigator.clipboard.writeText(text); }
@@ -319,21 +319,21 @@ class Movie(anywidget.AnyWidget):
   )  # the probed cell (cell_offsets order), set by a click on the page
 
   _css = CMD_CSS + """
-.nstxu-movie { font-family: var(--nm-font); color: var(--nm-ink); background: var(--nm-surf); padding: 10px 12px 12px;
+.gkv-movie { font-family: var(--nm-font); color: var(--nm-ink); background: var(--nm-surf); padding: 10px 12px 12px;
   border-radius: 8px; outline: none; box-sizing: border-box; width: 100%; }
-.nstxu-movie .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
-.nstxu-movie button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px;
+.gkv-movie .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.gkv-movie button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px;
   border-radius: 6px; border: 1px solid var(--nm-axis); background: var(--nm-grid); color: var(--nm-ink); cursor: pointer;
   padding: 0; }
-.nstxu-movie button.play { width: 40px; background: var(--nm-accent); border-color: var(--nm-accent); color: #fff; }
-.nstxu-movie input[type=range] { flex: 1 1 200px; accent-color: var(--nm-accent); min-width: 120px; }
-.nstxu-movie select { background: var(--nm-grid); color: var(--nm-ink); border: 1px solid var(--nm-axis);
+.gkv-movie button.play { width: 40px; background: var(--nm-accent); border-color: var(--nm-accent); color: #fff; }
+.gkv-movie input[type=range] { flex: 1 1 200px; accent-color: var(--nm-accent); min-width: 120px; }
+.gkv-movie select { background: var(--nm-grid); color: var(--nm-ink); border: 1px solid var(--nm-axis);
   border-radius: 6px; padding: 3px 6px; font: inherit; }
-.nstxu-movie .time { font-variant-numeric: tabular-nums; min-width: 17em; color: var(--nm-ink); }
-.nstxu-movie label { display: inline-flex; gap: 4px; align-items: center; color: var(--nm-ink2); }
-.nstxu-movie .grid { display: flex; gap: 12px; align-items: flex-start; }
-.nstxu-movie canvas { display: block; cursor: crosshair; }
-.nstxu-movie .hint { color: var(--nm-ink2); font-size: 12px; margin-top: 6px; }
+.gkv-movie .time { font-variant-numeric: tabular-nums; min-width: 17em; color: var(--nm-ink); }
+.gkv-movie label { display: inline-flex; gap: 4px; align-items: center; color: var(--nm-ink2); }
+.gkv-movie .grid { display: flex; gap: 12px; align-items: flex-start; }
+.gkv-movie canvas { display: block; cursor: crosshair; }
+.gkv-movie .hint { color: var(--nm-ink2); font-size: 12px; margin-top: 6px; }
 """
 
   _esm = CMD_JS + r"""
@@ -371,7 +371,7 @@ function render({ model, el }) {
   let pos = Math.max(0, D.frames.indexOf(model.get('frame'))); if (D.frames.indexOf(model.get('frame')) < 0) pos = n - 1;
   let playing = false, raf = 0, last = 0, ring = 0, lastSent = null;
 
-  el.classList.add('nstxu-movie'); el.tabIndex = 0;
+  el.classList.add('gkv-movie'); el.tabIndex = 0;
   el.innerHTML = `<div class="bar">
       <button class="play" title="play / pause (space)"></button>
       <button class="prev" title="previous frame (left arrow)">${ICON.prev}</button>
@@ -664,7 +664,7 @@ function render({ model, el }) {
     scrub.value = i0;
     if (D.frames[i0] !== lastSent) {   // the tabs' live charts (LivePlot) follow, in the page
       lastSent = D.frames[i0];
-      window.dispatchEvent(new CustomEvent('nstxu:frame', { detail: { frame: lastSent } }));
+      window.dispatchEvent(new CustomEvent('gkv:frame', { detail: { frame: lastSent } }));
     }
     const t = D.tnum[i0] + (a ? (D.tnum[i1] - D.tnum[i0]) * a : 0);
     tlab.textContent = `t = ${fmt(t)} ${D.tunit}   frame ${D.frames[i0]}${a ? ' (interpolated)' : ''} of ${D.frames[0]}–${D.frames[n - 1]}`;
@@ -767,12 +767,12 @@ class PlotlyLoader(anywidget.AnyWidget):
   _esm = r"""
 function render({ model, el }) {
   el.style.display = 'none';
-  if (window.Plotly || window.__nstxuPlotlyLoading) return;
-  window.__nstxuPlotlyLoading = true;
+  if (window.Plotly || window.__gkvPlotlyLoading) return;
+  window.__gkvPlotlyLoading = true;
   const s = document.createElement('script');
   s.textContent = model.get('src');   // plotly.min.js: a UMD bundle, sets window.Plotly
   document.head.appendChild(s);
-  window.dispatchEvent(new Event('nstxu:plotly'));
+  window.dispatchEvent(new Event('gkv:plotly'));
 }
 export default { render };
 """
@@ -781,25 +781,25 @@ export default { render };
 class FontLoader(anywidget.AnyWidget):
   """The tracked stand-in fonts (fonts/, viewer_plots.FONT_FILES; upright faces) for the page: registered with
     FontFace, so the page and its charts draw a theme's fonts where the real ones are not installed, and kept as
-    @font-face rules (window.__nstxuFontCSS) for the charts' slide downloads, which draw in an image that sees no font
+    @font-face rules (window.__gkvFontCSS) for the charts' slide downloads, which draw in an image that sees no font
     of the page. Hidden; ~1.6 MB, sent once per page load."""
   faces = traitlets.List().tag(sync=True)
   _esm = r"""
 async function render({ model, el }) {
   el.style.display = 'none';
-  if (window.__nstxuFontCSS !== undefined) return;
-  window.__nstxuFontCSS = '';
+  if (window.__gkvFontCSS !== undefined) return;
+  window.__gkvFontCSS = '';
   const rules = [];
   for (const f of model.get('faces')) {
     try {
       const face = new FontFace(f.family, bytes(f.b64), { weight: String(f.weight), style: 'normal' });
       document.fonts.add(await face.load());
-    } catch (e) { console.warn('nstxu: font', f.family, e); }
+    } catch (e) { console.warn('gkv: font', f.family, e); }
     rules.push(`@font-face { font-family: '${f.family}'; font-weight: ${f.weight}; font-style: normal; ` +
                `src: url(data:${f.mime};base64,${f.b64}); }`);
   }
-  window.__nstxuFontCSS = rules.join('\n');
-  window.dispatchEvent(new Event('nstxu:fonts'));
+  window.__gkvFontCSS = rules.join('\n');
+  window.dispatchEvent(new Event('gkv:fonts'));
 }
 function bytes(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
 export default { render };
@@ -823,22 +823,22 @@ def font_loader():
 
 
 class LivePlot(anywidget.AnyWidget):
-  """A plotly figure that follows the movie in the page: on each 'nstxu:frame' event (the movie draws a frame) its
+  """A plotly figure that follows the movie in the page: on each 'gkv:frame' event (the movie draws a frame) its
     tagged traces take that frame's y and its tagged shapes that frame's position (viewer_plots.live_spec), without
     the kernel. While the movie plays it rewrites plotly's own SVG (the line paths, markers and shape lines, through
     plotly's axis maps: ~1 ms a frame); when playback stops it hands plotly the shown frame (Plotly.restyle /
     relayout), so hover and a resize agree with the drawing. Where plotly's SVG is not laid out as expected it uses
     those calls throughout, at most a third of the time. fig: the figure's JSON; frame: the notebook's frame.
     slides: viewer_plots.slide_spec for 'full' and 'half': two buttons in the chart's toolbar download it laid out for
-    a slide, as a PNG (300 dpi) of the frame it shows, its fonts embedded (window.__nstxuSlides[name](size): the same
+    a slide, as a PNG (300 dpi) of the frame it shows, its fonts embedded (window.__gkvSlides[name](size): the same
     image as a data URL; (size, true): the slide figure)."""
   fig = traitlets.Dict().tag(sync=True)
   slides = traitlets.Dict().tag(sync=True)
   name = traitlets.Unicode('chart').tag(sync=True)
   live = traitlets.Dict().tag(sync=True)
   frame = traitlets.Int(-1).tag(sync=True)
-  _css = CMD_CSS + """.nstxu-live { width: 100%; }
-.nstxu-live .nstxu-live-note { min-height: 1.3em; font-size: 12px; opacity: 0.75; padding-left: 60px; }"""
+  _css = CMD_CSS + """.gkv-live { width: 100%; }
+.gkv-live .gkv-live-note { min-height: 1.3em; font-size: 12px; opacity: 0.75; padding-left: 60px; }"""
   _esm = CMD_JS + r"""
 function plotlyReady() {
   return new Promise((ok, fail) => {
@@ -925,12 +925,12 @@ function slideFigure(gd, spec) {
   return { data, layout };
 }
 function pick(spec, gd) {   // a half-width spec of several subplots: the one last pointed at
-  return spec.panels ? (spec.panels[gd.__nstxuPanel] || spec.panels[spec.first]) : spec;
+  return spec.panels ? (spec.panels[gd.__gkvPanel] || spec.panels[spec.first]) : spec;
 }
 async function slideImage(gd, spec) {
   const url = await Plotly.toImage(slideFigure(gd, spec), { format: 'svg', width: spec.width, height: spec.height });
   let svg = decodeURIComponent(url.slice(url.indexOf(',') + 1));
-  svg = svg.replace(/<svg[^>]*>/, m => `${m}<style>${window.__nstxuFontCSS || ''}</style>`);
+  svg = svg.replace(/<svg[^>]*>/, m => `${m}<style>${window.__gkvFontCSS || ''}</style>`);
   const img = new Image(), src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     img.src = src; await img.decode();
@@ -952,35 +952,35 @@ const SLIDE_ICON = {   // a slide (outlined), the figure filling all of it or it
 function slideButtons(model, gd) {
   const sl = model.get('slides') || {};
   return Object.entries(sl).map(([size, spec]) => ({
-    name: `nstxu-slide-${size}`, title: `Download for a ${spec.label} (PNG, ${spec.dpi} dpi)`, icon: SLIDE_ICON[size],
+    name: `gkv-slide-${size}`, title: `Download for a ${spec.label} (PNG, ${spec.dpi} dpi)`, icon: SLIDE_ICON[size],
     click: async () => {
       try {
         const a = document.createElement('a'), sp = pick(spec, gd);
         a.href = await slideImage(gd, sp); a.download = sp.file;
         document.body.appendChild(a); a.click(); a.remove();
-      } catch (e) { console.error('nstxu: slide download', e); }
+      } catch (e) { console.error('gkv: slide download', e); }
     },
   }));
 }
 
 async function render({ model, el }) {
   // marimo renders a re-run cell's chart into the same element: the earlier one goes first
-  if (el.__nstxuDone) el.__nstxuDone();
+  if (el.__gkvDone) el.__gkvDone();
   for (const k of ['frame', 'updates', 'path', 'ms', 'error']) delete el.dataset[k];
-  el.classList.add('nstxu-live');
+  el.classList.add('gkv-live');
   const div = document.createElement('div'), note = document.createElement('div');
-  note.className = 'nstxu-live-note';
+  note.className = 'gkv-live-note';
   el.append(div, note);
   const cmd = cmdBox(el);
   let gone = false, stop = () => {};
   const done = () => {
     if (gone) return;
     gone = true; stop();
-    if (el.__nstxuDone === done) el.__nstxuDone = null;
+    if (el.__gkvDone === done) el.__gkvDone = null;
     if (window.Plotly) window.Plotly.purge(div);
     div.remove(); note.remove(); cmd.el.remove();
   };
-  el.__nstxuDone = done;
+  el.__gkvDone = done;
   let Plotly;
   try { Plotly = await plotlyReady(); }
   catch (e) { div.textContent = 'This chart needs plotly.js, which did not load: ' + e.message; return done; }
@@ -1048,13 +1048,13 @@ async function render({ model, el }) {
                                                    modeBarButtonsToAdd: slideButtons(model, div) });
   const sl = model.get('slides') || {};
   // the subplot last pointed at (hover or click): what a half-width download takes
-  const point = ev => { const p = ev && ev.points && ev.points[0]; if (p) div.__nstxuPanel = p.data.xaxis || 'x'; };
+  const point = ev => { const p = ev && ev.points && ev.points[0]; if (p) div.__gkvPanel = p.data.xaxis || 'x'; };
   div.on('plotly_hover', point);
   div.on('plotly_click', point);
-  // window.__nstxuSlides[name](size, figure, panel): the PNG's data URL, or (figure) the slide figure itself; panel: an
+  // window.__gkvSlides[name](size, figure, panel): the PNG's data URL, or (figure) the slide figure itself; panel: an
   // x axis ref to take instead of the one last pointed at (checks)
-  (window.__nstxuSlides = window.__nstxuSlides || {})[model.get('name')] = (size, figure, panel) => {
-    if (panel) div.__nstxuPanel = panel;
+  (window.__gkvSlides = window.__gkvSlides || {})[model.get('name')] = (size, figure, panel) => {
+    if (panel) div.__gkvPanel = panel;
     const sp = pick(sl[size], div);
     return figure ? slideFigure(div, sp) : slideImage(div, sp);
   };
@@ -1089,11 +1089,11 @@ async function render({ model, el }) {
     if (items.length) cmd.show(items, `· frame ${shown}`);
   });
   const onFrame = e => request(e.detail.frame);
-  window.addEventListener('nstxu:frame', onFrame);
+  window.addEventListener('gkv:frame', onFrame);
   model.on('change:frame', () => request(model.get('frame')));
   el.dataset.frame = shown;
   tell(L.frames.indexOf(shown));
-  stop = () => { clearTimeout(idle); window.removeEventListener('nstxu:frame', onFrame); };
+  stop = () => { clearTimeout(idle); window.removeEventListener('gkv:frame', onFrame); };
   return done;
 }
 export default { render };

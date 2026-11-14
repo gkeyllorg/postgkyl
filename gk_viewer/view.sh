@@ -1,5 +1,5 @@
 #!/bin/bash
-# Serve the NSTX-U run viewer and open it in the browser. Runs from this directory: the first run makes its Python
+# Serve the Gkeyll run viewer and open it in the browser. Runs from this directory: the first run makes its Python
 # environment here (.venv, from requirements.lock.txt); its settings (viewer.json: copy viewer.example.json; flux.env)
 # and everything it writes (runs/) are here too, all ignored by git.
 #   ./view.sh [run|edit] [--KEY VALUE ...]
@@ -16,8 +16,8 @@
 #   ./view.sh --help                             every key
 #   OPEN=0 ./view.sh      do not open a browser: print the URL only
 #   PORT=2750 ./view.sh   a fixed port (default: marimo picks a free one)
-#   NSTXU_VIEWER_DATA=DIR   the data directory: viewer.json (the simulations), flux.env, runs/ (default: here)
-#   NSTXU_VIEWER_VENV=DIR   the Python environment with the viewer's packages, requirements.lock.txt (default: ./.venv,
+#   GK_VIEWER_DATA=DIR   the data directory: viewer.json (the simulations), flux.env, runs/ (default: here)
+#   GK_VIEWER_VENV=DIR   the Python environment with the viewer's packages, requirements.lock.txt (default: ./.venv,
 #                           made on the first run with PYTHON, default python3.12 or python3; 3.12 or newer)
 # In a VS Code terminal, $BROWSER is VS Code's opener: the page opens on your own machine through the port VS Code
 # forwards, in the browser named by the VS Code setting workbench.externalBrowser ("chrome" in this workspace's
@@ -25,10 +25,10 @@
 # The access token stays on: anyone on a shared login node can reach 127.0.0.1. Ctrl-C stops the server.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-export NSTXU_VIEWER_DATA=$(cd "${NSTXU_VIEWER_DATA:-$HERE}" && pwd)
-BIN=${NSTXU_VIEWER_VENV:-$HERE/.venv}/bin
+export GK_VIEWER_DATA=$(cd "${GK_VIEWER_DATA:-$HERE}" && pwd)
+BIN=${GK_VIEWER_VENV:-$HERE/.venv}/bin
 if [ ! -x "$BIN/marimo" ]; then
-    [ -z "${NSTXU_VIEWER_VENV:-}" ] || { echo "no marimo in $BIN: NSTXU_VIEWER_VENV names no viewer venv" >&2; exit 2; }
+    [ -z "${GK_VIEWER_VENV:-}" ] || { echo "no marimo in $BIN: GK_VIEWER_VENV names no viewer venv" >&2; exit 2; }
     # the first run: the viewer's own environment here, its packages pinned (requirements.lock.txt)
     PY=${PYTHON:-$(command -v python3.12 || command -v python3 || true)}
     "${PY:-false}" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2>/dev/null ||
@@ -40,8 +40,8 @@ if [ ! -x "$BIN/marimo" ]; then
         exit 2
     fi
 fi
-[ -e "$NSTXU_VIEWER_DATA/viewer.json" ] ||
-    echo "no viewer.json in $NSTXU_VIEWER_DATA: copy viewer.example.json there and name your simulations (--path DIR opens one run without it)" >&2
+[ -e "$GK_VIEWER_DATA/viewer.json" ] ||
+    echo "no viewer.json in $GK_VIEWER_DATA: copy viewer.example.json there and name your simulations (--path DIR opens one run without it)" >&2
 MODE=run
 case "${1:-}" in run|edit) MODE=$1; shift ;; esac
 if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
@@ -70,7 +70,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 cd "$HERE"
-mkdir -p runs "$NSTXU_VIEWER_DATA/runs"
+mkdir -p runs "$GK_VIEWER_DATA/runs"
 SERVER= TAIL= LOG= FLUX_DIR= SYNC_DIR= REMOTE=
 cleanup() {
     [ -n "$SERVER" ] && kill $SERVER 2>/dev/null
@@ -110,11 +110,11 @@ if [ "$SYNC" = 1 ]; then
         fi
     fi
 fi
-# the page's font and dark-mode surfaces, from the poster theme (nstxu_viewer.py loads runs/viewer.css, next to it)
+# the page's font and dark-mode surfaces, from the poster theme (gk_viewer.py loads runs/viewer.css, next to it)
 "$BIN/python" -c 'import viewer_plots as vp; open("runs/viewer.css", "w").write(vp.page_css())'
-LOG=$NSTXU_VIEWER_DATA/runs/view_$$.log
+LOG=$GK_VIEWER_DATA/runs/view_$$.log
 # -y: Ctrl-C stops marimo at once, without asking
-"$BIN/marimo" -y "$MODE" nstxu_viewer.py --headless --token ${PORT:+--port $PORT} -- "${ARGS[@]}" > "$LOG" 2>&1 &
+"$BIN/marimo" -y "$MODE" gk_viewer.py --headless --token ${PORT:+--port $PORT} -- "${ARGS[@]}" > "$LOG" 2>&1 &
 SERVER=$!
 tail -n +1 -f "$LOG" &   # stopped with the server (cleanup): BSD tail (macOS) has no --pid
 TAIL=$!

@@ -3,7 +3,7 @@ import marimo
 __generated_with = "0.25.2"
 # runs/viewer.css: the poster theme's font and dark-mode surfaces, written by view.sh from viewer_plots.page_css()
 app = marimo.App(width="full",
-                 app_title="NSTX-U run viewer",
+                 app_title="Gkeyll run viewer",
                  css_file="runs/viewer.css")
 
 
@@ -95,7 +95,7 @@ def _(dark_pick, json, mo, theme_pick, vp):
   mo.iframe(
       "<script>const d = parent.document; d.body.dataset.vscodeThemeKind = '" +
       _kind + "'; "
-      "let s = d.getElementById('nstxu-theme'); if (!s) { s = d.createElement('style'); s.id = 'nstxu-theme'; "
+      "let s = d.getElementById('gkv-theme'); if (!s) { s = d.createElement('style'); s.id = 'gkv-theme'; "
       "d.head.appendChild(s); } s.textContent = " + _css + ";</script>",
       height='0px')
   return (pal, )
@@ -601,7 +601,7 @@ def _(
 ):
   mo.sidebar(
       [
-          mo.md('### NSTX-U run viewer'), sim_pick, run_pick,
+          mo.md('### Gkeyll run viewer'), sim_pick, run_pick,
           mo.hstack([reload_btn] + ([sync_btn] if sync_btn is not None else []),
                     justify='start'), sync_note, frame_pick,
           mo.
@@ -1175,7 +1175,7 @@ def _(
     # summary; one click on the command selects all of it)
     _img = mo.as_html(fig).text
     return mo.Html(
-        '<details class="nstxu-pg"><summary style="list-style: none; cursor: pointer" title="click: the pgkyl '
+        '<details class="gkv-pg"><summary style="list-style: none; cursor: pointer" title="click: the pgkyl '
         f'command for this figure">{_img}</summary><div style="margin: 6px 0; font-size: 12px; opacity: 0.85">'
         '<b>pgkyl</b> (click the figure again to hide; one click on the command selects it)</div><pre style="'
         'white-space: pre; overflow-x: auto; font-size: 11.5px; padding: 6px 8px; border-radius: 4px; border: 1px '
@@ -1216,7 +1216,7 @@ def _(
         'The Flux login has closed (the laptop\'s connection dropped?): restart `./view.sh --flux`.'
         if flux_cm else
         'Start the viewer with `./view.sh --flux` (one Flux login, password + Duo) to fetch it from '
-        f'here, or on the laptop: `NSTXU_VIEWER_DATA={gv.DATA} bash <(ssh perlmutter cat {HERE}/fetch_flux.sh) '
+        f'here, or on the laptop: `GK_VIEWER_DATA={gv.DATA} bash <(ssh perlmutter cat {HERE}/fetch_flux.sh) '
         f'{run.shot}`.')
     return _items + [mo.callout(mo.md(f'{_why} {_how}'), kind='neutral')]
 

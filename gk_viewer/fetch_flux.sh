@@ -11,21 +11,21 @@
 #    then reconnect). On that login node:
 #        ./fetch_flux.sh 203655 203899      asks for the Flux password + Duo
 #        ./view.sh --flux                   asks once at start-up; the viewer's Fetch button then uses that login
-#  ON THE LAPTOP:  NSTXU_VIEWER_DATA=<the data directory on Perlmutter> bash <(ssh perlmutter cat <this file>) 203655
+#  ON THE LAPTOP:  GK_VIEWER_DATA=<the data directory on Perlmutter> bash <(ssh perlmutter cat <this file>) 203655
 #    (FLUX, PM: the laptop's ssh names for Flux and Perlmutter)
 # view.sh's: fetch_flux.sh --login | --check | --logout <control path>  (a master connection kept for the viewer)
 # Settings: the data directory's flux.env (shell assignments, see flux.env.example; read over ssh on the laptop):
 # FLUX_HOST (Flux's user@host), FLUX_PY (a Flux python with h5py), FLUX_TOOL (the sim-init workflow's
 # tools/extract_slim_h5.py on Perlmutter). FLUX_SOCK: the forwarded socket; FLUX_DEST: where the files go
-# (default: the data directory's runs/flux). The data directory: $NSTXU_VIEWER_DATA (view.sh exports it), else here.
+# (default: the data directory's runs/flux). The data directory: $GK_VIEWER_DATA (view.sh exports it), else here.
 set -euo pipefail
-DATA=${NSTXU_VIEWER_DATA:-$(cd "$(dirname "$0")" && pwd)}
+DATA=${GK_VIEWER_DATA:-$(cd "$(dirname "$0")" && pwd)}
 if [ -r "$DATA/flux.env" ]; then
     . "$DATA/flux.env"
 elif ENV=$(ssh -x "${PM:-perlmutter}" cat "$DATA/flux.env"); then   # on the laptop
     eval "$ENV"
 else
-    echo "no $DATA/flux.env here or on ${PM:-perlmutter}: set NSTXU_VIEWER_DATA to the viewer's data directory" >&2
+    echo "no $DATA/flux.env here or on ${PM:-perlmutter}: set GK_VIEWER_DATA to the viewer's data directory" >&2
     exit 2
 fi
 : "${FLUX_HOST:?set in flux.env}" "${FLUX_PY:?set in flux.env}" "${FLUX_TOOL:?set in flux.env}"

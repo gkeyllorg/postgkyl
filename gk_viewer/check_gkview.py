@@ -22,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gkview as gv  # noqa: E402
 
-SIMS = os.path.join(gv.NSTXU, 'sims_20261022')
+SIMS = os.path.join(gv.BASE, 'sims_20261022')
 sys.path.insert(0, SIMS)
 import movie_density as md  # noqa: E402
 import poster_progress as pp  # noqa: E402
@@ -47,7 +47,7 @@ runs = {
     'sim2_prod':
     gv.open_run(os.path.join(SIMS, 'sim2_dense_rho09/runs/prod_th02q4_coll')),
     'prod':
-    gv.open_run(os.path.join(gv.NSTXU, 'sim203655_20261012/runs/prod')),
+    gv.open_run(os.path.join(gv.BASE, 'sim203655_20261012/runs/prod')),
 }
 
 # 1. layout
@@ -231,7 +231,7 @@ check(
 import glob  # noqa: E402
 import tempfile  # noqa: E402
 
-TOK = os.path.join(os.path.dirname(gv.NSTXU), 'tokamak',
+TOK = os.path.join(os.path.dirname(gv.BASE), 'tokamak',
                    'tok_multib_inp_20261103', 'runs')
 
 
