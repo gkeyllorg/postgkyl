@@ -1,5 +1,7 @@
 #!/bin/bash
-# Serve the NSTX-U run viewer and open it in the browser.
+# Serve the NSTX-U run viewer and open it in the browser. Runs from this directory: the first run makes its Python
+# environment here (.venv, from requirements.lock.txt); its settings (viewer.json: copy viewer.example.json; flux.env)
+# and everything it writes (runs/) are here too, all ignored by git.
 #   ./view.sh [run|edit] [--KEY VALUE ...]
 #   ./view.sh                                    app view (controls in the sidebar, code hidden)
 #   ./view.sh edit                               notebook view (every cell visible and editable)
@@ -15,7 +17,8 @@
 #   OPEN=0 ./view.sh      do not open a browser: print the URL only
 #   PORT=2750 ./view.sh   a fixed port (default: marimo picks a free one)
 #   NSTXU_VIEWER_DATA=DIR   the data directory: viewer.json (the simulations), flux.env, runs/ (default: here)
-#   NSTXU_VIEWER_VENV=DIR   the Python environment with the viewer's packages, requirements.lock.txt (default: ./.venv)
+#   NSTXU_VIEWER_VENV=DIR   the Python environment with the viewer's packages, requirements.lock.txt (default: ./.venv,
+#                           made on the first run with PYTHON, default python3.12 or python3; 3.12 or newer)
 # In a VS Code terminal, $BROWSER is VS Code's opener: the page opens on your own machine through the port VS Code
 # forwards, in the browser named by the VS Code setting workbench.externalBrowser ("chrome" in this workspace's
 # .vscode/settings.json). Elsewhere: forward the port with ssh -L and open the printed URL in Chrome.
@@ -24,7 +27,21 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export NSTXU_VIEWER_DATA=$(cd "${NSTXU_VIEWER_DATA:-$HERE}" && pwd)
 BIN=${NSTXU_VIEWER_VENV:-$HERE/.venv}/bin
-[ -x "$BIN/marimo" ] || { echo "no marimo in $BIN: set NSTXU_VIEWER_VENV (see README.md)" >&2; exit 2; }
+if [ ! -x "$BIN/marimo" ]; then
+    [ -z "${NSTXU_VIEWER_VENV:-}" ] || { echo "no marimo in $BIN: NSTXU_VIEWER_VENV names no viewer venv" >&2; exit 2; }
+    # the first run: the viewer's own environment here, its packages pinned (requirements.lock.txt)
+    PY=${PYTHON:-$(command -v python3.12 || command -v python3 || true)}
+    "${PY:-false}" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2>/dev/null ||
+        { echo "the viewer needs Python 3.12 or newer: set PYTHON (found: ${PY:-none})" >&2; exit 2; }
+    echo "First run: the viewer's Python environment in $HERE/.venv (a few minutes, once)"
+    if ! { "$PY" -m venv "$HERE/.venv" && "$HERE/.venv/bin/pip" install -q -r "$HERE/requirements.lock.txt"; }; then
+        rm -rf "$HERE/.venv"
+        echo "could not make $HERE/.venv (above); nothing is left of it" >&2
+        exit 2
+    fi
+fi
+[ -e "$NSTXU_VIEWER_DATA/viewer.json" ] ||
+    echo "no viewer.json in $NSTXU_VIEWER_DATA: copy viewer.example.json there and name your simulations (--path DIR opens one run without it)" >&2
 MODE=run
 case "${1:-}" in run|edit) MODE=$1; shift ;; esac
 if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then

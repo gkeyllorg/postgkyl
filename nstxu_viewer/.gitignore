@@ -2,4 +2,4 @@
 runs/
 viewer.json
 flux.env
-.venv/
+.venv

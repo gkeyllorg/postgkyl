@@ -8,26 +8,33 @@ cache `runs/cache/`, saved views `runs/states/`, exported figures and movies `ru
 `runs/flux/`, the server's log; the page's stylesheet is `runs/viewer.css` next to the notebook.
 
 ## Setup
-This directory lives on postgkyl's branch `marimo-gui-jjz73`. The viewer does not import postgkyl (it reads the
-`.gkyl` files itself, `gkyl_read.py`); the pgkyl commands it shows are postgkyl 2's.
+This directory lives on postgkyl's branch `marimo-gui-jjz73`, and the viewer runs from it. The viewer does not
+import postgkyl (it reads the `.gkyl` files itself, `gkyl_read.py`); the pgkyl commands it shows are postgkyl 2's.
 ```sh
-python3.12 -m venv .venv && .venv/bin/pip install -r requirements.lock.txt   # or: NSTXU_VIEWER_VENV=<a venv with these>
+cp viewer.example.json viewer.json     # then name your simulations in it (and flux.env from flux.env.example)
+./view.sh                              # the first run makes .venv from requirements.lock.txt (Python 3.12+; ~30 s)
 ```
-**The data directory** (`NSTXU_VIEWER_DATA`; default: this directory) holds what the viewer reads and writes:
-- `viewer.json` (start from `viewer.example.json`): paths relative to `base`, itself relative to the data directory.
+`.venv` can also be a link to an existing venv with these packages, or `NSTXU_VIEWER_VENV` names one.
+**The data directory** (`NSTXU_VIEWER_DATA`; default: this directory, where git ignores `viewer.json`, `flux.env`,
+`runs/` and `.venv`) holds what the viewer reads and writes:
+- `viewer.json` (start from `viewer.example.json`): paths relative to `base`, itself relative to the data directory
+  (or absolute).
   - `base`: what the simulation directories (and the cache's file names) are relative to;
   - `sims`: `[label, simulation directory, default run, one-line description]` each; a simulation's runs are the run
     directories (a topology file, or a single-block run's files, and a frame) in its `runs/`, else in it;
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
   - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
-  - `remote` (optional): `{"host": <ssh host name>, "base": <the path there of base>}`, the machine that holds the
-    runs, for a mirror here (Run it anywhere, below).
+  - `remote` (optional): `{"host": <ssh host name>, "base": <the path there of base>, "data": <the viewer's data
+    directory there>}`, the machine that holds the runs, for a mirror here (Run it anywhere, below).
 - `flux.env` (from `flux.env.example`): Fetch from Flux's login and paths (`fetch_flux.sh`).
 - `runs/`: everything the viewer writes.
 
-A data directory can carry its own `view.sh` that sets both variables and runs this one, so that `./view.sh` there
-opens the viewer on it.
+Another data directory (`NSTXU_VIEWER_DATA=DIR ./view.sh`) keeps its own settings and outputs; a `view.sh` there can
+set it and run this one. On Perlmutter (post-generals-2) this directory is the data directory since 2026-11-14:
+`viewer.json` with `base` = `research/nstxu`, `flux.env`, `runs/` (the caches and the 203655 Flux copy, copied from
+`research/nstxu/viewer_20261102/runs`), `.venv` a link to `tools/marimo/.venv`; that research directory's `view.sh`
+forwards here.
 
 ```sh
 ./view.sh                                                 # app view, opened in the browser
@@ -61,16 +68,18 @@ h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.tx
 
 ## Run it anywhere: a mirror (2026-11-13)
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
-holds them is down. Set up there: a checkout of this branch, the venv (Setup), and a data directory whose
-`viewer.json` is the same one plus `"remote"` naming that machine (its ssh name here, and the path there of `base`).
+holds them is down. Set up there: a checkout of this branch (Setup), and its `viewer.json`: the remote's `sims`, a
+`base` for the mirror here (any empty directory), and `"remote"` naming that machine: its ssh name here, the path
+there of `base`, and the viewer's data directory there (`"data"`; on Perlmutter: its `nstxu_viewer/` checkout).
 Then
 ```sh
 ./view.sh --sync      # log in to the remote once, bring the runs up to date, start the viewer
 ```
 `sync.py` (also by hand: `python sync.py [--sim LABEL] [--run RUN]... [--dry-run]`) copies each simulation's default
 run, or the runs named, to the same place under the base here: the run's files but distribution-function and source
-frames and restart files (Sim 2's production run: 6,914 files, 0.14 GB of its 2.5 GB), its summary cache, the geqdsk
-it read and its shot's Thomson files (runs/flux and `thomson_fallback`). The run's files name the remote's paths; the
+frames and restart files (Sim 2's production run: 6,914 files, 0.14 GB of its 2.5 GB), the geqdsk it read and its
+shot's `thomson_fallback` file; and from the data directory there to the one here, its summary cache (`runs/cache`)
+and its shot's Flux copy (`runs/flux`). The run's files name the remote's paths; the
 viewer looks for those under the base here first (`gkview.here`). Symlinks on the remote arrive as what they point
 to. The first mirror of all three default runs: 193,489 files, 816 MB. After that rsync copies only what changed. The
 sidebar's **sync from <host>** button, next to reload frames, copies the open run again and re-reads its frames: it
@@ -405,6 +414,14 @@ Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
 ## Checks (2026-11-14: all pass, the browser part too: `check_viewer.py --browser` 52, `check_gkview.py` 64)
+Run from this directory with no environment set (its own `viewer.json`, `.venv`):
+```sh
+.venv/bin/python check_viewer.py [--browser <chrome>]
+<a postgkyl venv>/bin/python check_gkview.py
+```
+2026-11-14, later: the code reformatted to the repo's style (YAPF: 2-space indent, 80 columns; ruff's pyflakes
+rules: 4 unused imports / an f-string without placeholders removed) with the repo's pre-commit hooks, all passing;
+both suites then run from here as above, all pass.
 2026-11-14: the browser part runs again (Chrome for Testing's headless shell 157; any Chrome / Chromium binary will
 do). New: the open tab stays when an option re-runs the tabs (Balance & power, dark mode off and on: its charts
 drawn anew each time, the tab still open, the conservation chart's log axis there). The notebook as committed in

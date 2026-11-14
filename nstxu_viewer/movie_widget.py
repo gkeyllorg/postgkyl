@@ -24,14 +24,16 @@ import pgkyl_cmd as pc
 import texlabel as tl
 import viewer_plots as vp
 
-NAN = 255   # colour index of a cell with no value (a temperature where n <= 0, 0/0 in a relative change)
+NAN = 255  # colour index of a cell with no value (a temperature where n <= 0, 0/0 in a relative change)
 # flux surfaces offered for the space-time panel: (label, region of the strip, position across it: 0 = its inner edge)
-RINGS = [('SOL, next to the separatrix', 'sol', 0.0), ('SOL, middle', 'sol', 0.5), ('SOL, outermost', 'sol', 1.0),
-         ('core / PF, next to the separatrix', 'in', 1.0), ('core / PF, innermost', 'in', 0.0)]
+RINGS = [('SOL, next to the separatrix', 'sol', 0.0),
+         ('SOL, middle', 'sol', 0.5), ('SOL, outermost', 'sol', 1.0),
+         ('core / PF, next to the separatrix', 'in', 1.0),
+         ('core / PF, innermost', 'in', 0.0)]
 
 
 def _b64(a):
-    return base64.b64encode(np.ascontiguousarray(a).tobytes()).decode('ascii')
+  return base64.b64encode(np.ascontiguousarray(a).tobytes()).decode('ascii')
 
 
 # The pgkyl box (pgkyl_cmd.py): under a chart or the movie, the commands for what was clicked, each with a Copy
@@ -88,145 +90,235 @@ function cmdBox(parent) {
 
 
 def _hexes(cmap, n=255):
-    return ['#%02x%02x%02x' % tuple(int(round(255 * c)) for c in cmap(i / (n - 1))[:3]) for i in range(n)]
+  return [
+      '#%02x%02x%02x' %
+      tuple(int(round(255 * c)) for c in cmap(i / (n - 1))[:3])
+      for i in range(n)
+  ]
 
 
 def movie_look(pal):
-    """Colours and font of the page for one look (light / dark): inks, accent, both colour tables."""
-    div = LinearSegmentedColormap.from_list(f'div_{pal.name}', pal.div)
-    return dict(surf=pal.surf, ink=pal.ink, ink2=pal.ink2, muted=pal.muted, grid=pal.grid, axis=pal.axis,
-                accent=pal.accent or vp.tone('hlink'), elc=pal.elc, ion=pal.ion,
-                font=vp.css_font(vp.theme_fonts(pal.theme)[0]),
-                lut_seq=_hexes(colormaps[vp.SEQ]), lut_div=_hexes(div), nan=pal.surf)
+  """Colours and font of the page for one look (light / dark): inks, accent, both colour tables."""
+  div = LinearSegmentedColormap.from_list(f'div_{pal.name}', pal.div)
+  return dict(surf=pal.surf,
+              ink=pal.ink,
+              ink2=pal.ink2,
+              muted=pal.muted,
+              grid=pal.grid,
+              axis=pal.axis,
+              accent=pal.accent or vp.tone('hlink'),
+              elc=pal.elc,
+              ion=pal.ion,
+              font=vp.css_font(vp.theme_fonts(pal.theme)[0]),
+              lut_seq=_hexes(colormaps[vp.SEQ]),
+              lut_div=_hexes(div),
+              nan=pal.surf)
 
 
-def movie_data(run, summ, qty, mode='value', log=False, x_mode='distance', frames=None, blocks=None):
-    """Everything the page needs for one quantity and mode (sent once; JSON with base64 arrays). frames: the frame
+def movie_data(run,
+               summ,
+               qty,
+               mode='value',
+               log=False,
+               x_mode='distance',
+               frames=None,
+               blocks=None):
+  """Everything the page needs for one quantity and mode (sent once; JSON with base64 arrays). frames: the frame
     numbers to play (default: all); changes stay relative to the run's first / the previous written frame. blocks:
     draw only these (None: all): the colour scale, the poloidal view and the strips are theirs."""
-    label, sym, unit, scale, kind = gv.quantities(run)[qty]
-    sym, u = tl.plain(f'${sym}$'), tl.plain(f' (${unit}$)') if unit else ''   # the canvas draws plain text
-    allf = [int(k) for k in summ['frames']]
-    have = set(allf)
-    frames = allf if frames is None else [int(k) for k in frames if int(k) in have]
-    if not frames:
-        raise ValueError('no frame to play')
-    rows = np.array([allf.index(k) for k in frames])
-    V = vp.mode_values(summ[f'fld|{qty}'].astype(np.float64), rows, mode, kind, scale)
-    shown = vp.shown_blocks(run, blocks)
-    sel = None if len(shown) == run.nb else set(shown)
-    keep = gv.region_cells(run, shown)   # the drawn cells
-    # one colour scale over the frames played (a per-frame scale would make colours jump between frames), and over
-    # the drawn cells
-    sc = vp.fixed_scale(run, V[:, keep] if sel else V, qty, mode, log, step_first=(mode == 'step' and rows[0] == 0))
-    norm, ticks, fmt, cblabel, cmap, rel = sc['norm'], sc['ticks'], sc['fmt'], sc['label'], sc['cmap'], sc['rel']
-    with np.errstate(invalid='ignore'):
-        tt = np.ma.filled(norm(np.ma.masked_invalid(V)), np.nan)
-    idx = np.where(np.isfinite(tt), np.clip(np.round(tt * 254), 0, 254), NAN).astype(np.uint8)
-    extend = sc['extend']
+  label, sym, unit, scale, kind = gv.quantities(run)[qty]
+  sym, u = tl.plain(f'${sym}$'), tl.plain(
+      f' (${unit}$)') if unit else ''  # the canvas draws plain text
+  allf = [int(k) for k in summ['frames']]
+  have = set(allf)
+  frames = allf if frames is None else [
+      int(k) for k in frames if int(k) in have
+  ]
+  if not frames:
+    raise ValueError('no frame to play')
+  rows = np.array([allf.index(k) for k in frames])
+  V = vp.mode_values(summ[f'fld|{qty}'].astype(np.float64), rows, mode, kind,
+                     scale)
+  shown = vp.shown_blocks(run, blocks)
+  sel = None if len(shown) == run.nb else set(shown)
+  keep = gv.region_cells(run, shown)  # the drawn cells
+  # one colour scale over the frames played (a per-frame scale would make colours jump between frames), and over
+  # the drawn cells
+  sc = vp.fixed_scale(run,
+                      V[:, keep] if sel else V,
+                      qty,
+                      mode,
+                      log,
+                      step_first=(mode == 'step' and rows[0] == 0))
+  norm, ticks, fmt, cblabel, cmap, rel = sc['norm'], sc['ticks'], sc['fmt'], sc[
+      'label'], sc['cmap'], sc['rel']
+  with np.errstate(invalid='ignore'):
+    tt = np.ma.filled(norm(np.ma.masked_invalid(V)), np.nan)
+  idx = np.where(np.isfinite(tt), np.clip(np.round(tt * 254), 0, 254),
+                 NAN).astype(np.uint8)
+  extend = sc['extend']
 
-    # geometry: every cell's four corners (cell_offsets order), lines, views
-    off = gv.cell_offsets(run)
-    quads = np.concatenate([np.stack([nd[:-1, :-1], nd[1:, :-1], nd[1:, 1:], nd[:-1, 1:]], axis=2).reshape(-1, 8)
-                            for nd in (run.nodes[b] for b in range(run.nb))]).astype(np.float32)
-    rnd = lambda a: [round(float(x), 5) for x in np.asarray(a).ravel()]  # noqa: E731
-    lines = []
-    for b in shown:
-        nd = run.nodes[b]
-        lines.append(dict(kind='outline', pts=rnd(np.concatenate([nd[0, :], nd[:, -1], nd[-1, ::-1], nd[::-1, 0]]))))
-    for b in shown:
-        if run.layout.region[b] == 'sol' and run.layout.under.get(b) is not None:   # its inner edge: the separatrix
-            lines.append(dict(kind='sep', pts=rnd(run.nodes[b][0, :])))
-    w = gv.wall(run)
-    if w is not None:
-        lines.append(dict(kind='wall', pts=rnd(w)))
+  # geometry: every cell's four corners (cell_offsets order), lines, views
+  off = gv.cell_offsets(run)
+  quads = np.concatenate([
+      np.stack([nd[:-1, :-1], nd[1:, :-1], nd[1:, 1:], nd[:-1, 1:]],
+               axis=2).reshape(-1, 8)
+      for nd in (run.nodes[b] for b in range(run.nb))
+  ]).astype(np.float32)
+  rnd = lambda a: [round(float(x), 5)
+                   for x in np.asarray(a).ravel()]  # noqa: E731
+  lines = []
+  for b in shown:
+    nd = run.nodes[b]
+    lines.append(
+        dict(kind='outline',
+             pts=rnd(
+                 np.concatenate(
+                     [nd[0, :], nd[:, -1], nd[-1, ::-1], nd[::-1, 0]]))))
+  for b in shown:
+    if run.layout.region[b] == 'sol' and run.layout.under.get(
+        b) is not None:  # its inner edge: the separatrix
+      lines.append(dict(kind='sep', pts=rnd(run.nodes[b][0, :])))
+  w = gv.wall(run)
+  if w is not None:
+    lines.append(dict(kind='wall', pts=rnd(w)))
 
-    # strips: one rectangle per cell (x in cells, y in 0..8: core/PF 0-4, SOL 4-8), and the space-time rings
-    strips, rings = [], [dict(label=lab, strips=[]) for lab, _, _ in RINGS]
-    for st in gv.select_strips(run.layout, sel):
-        rects, cells = [], []
-        cols = [np.full(st.width, -1, np.int32) for _ in RINGS]
-        for b, x0, band in st.items:
-            nr, nt = run.nodes[b].shape[0] - 1, run.nodes[b].shape[1] - 1
-            y0, h = gv.BANDS[band]
-            for i in range(nr):
-                for j in range(nt):
-                    rects += [x0 + j, y0 + h * i / nr, h / nr, 1.0 if nr <= 8 else 0.0]
-                    cells.append(off[b] + i * nt + j)
-            for r, (_, rreg, frac) in enumerate(RINGS):
-                # a ring's band: SOL rings on the SOL band (and on a one-band strip), core/PF rings on the band under it
-                if (band in ('sol', 'all')) == (rreg == 'sol'):
-                    row = int(round(frac * (nr - 1)))
-                    cols[r][x0:x0 + nt] = off[b] + row * nt + np.arange(nt)
-                    rings[r].setdefault('rows', {})[f'{len(strips)}:{x0}'] = [y0 + h * row / nr, h / nr]
-        strips.append(dict(title=st.title, width=st.width, mirror_x=st.mirror_x, segments=st.segments,
-                           ylabels=[[lab, y] for lab, y in st.ylabels], sep=st.sep,
-                           rects=_b64(np.array(rects, np.float32)), cells=_b64(np.array(cells, np.int32))))
-        for r in range(len(RINGS)):
-            rings[r]['strips'].append(cols[r].tolist())
+  # strips: one rectangle per cell (x in cells, y in 0..8: core/PF 0-4, SOL 4-8), and the space-time rings
+  strips, rings = [], [dict(label=lab, strips=[]) for lab, _, _ in RINGS]
+  for st in gv.select_strips(run.layout, sel):
+    rects, cells = [], []
+    cols = [np.full(st.width, -1, np.int32) for _ in RINGS]
+    for b, x0, band in st.items:
+      nr, nt = run.nodes[b].shape[0] - 1, run.nodes[b].shape[1] - 1
+      y0, h = gv.BANDS[band]
+      for i in range(nr):
+        for j in range(nt):
+          rects += [x0 + j, y0 + h * i / nr, h / nr, 1.0 if nr <= 8 else 0.0]
+          cells.append(off[b] + i * nt + j)
+      for r, (_, rreg, frac) in enumerate(RINGS):
+        # a ring's band: SOL rings on the SOL band (and on a one-band strip), core/PF rings on the band under it
+        if (band in ('sol', 'all')) == (rreg == 'sol'):
+          row = int(round(frac * (nr - 1)))
+          cols[r][x0:x0 + nt] = off[b] + row * nt + np.arange(nt)
+          rings[r].setdefault(
+              'rows', {})[f'{len(strips)}:{x0}'] = [y0 + h * row / nr, h / nr]
+    strips.append(
+        dict(title=st.title,
+             width=st.width,
+             mirror_x=st.mirror_x,
+             segments=st.segments,
+             ylabels=[[lab, y] for lab, y in st.ylabels],
+             sep=st.sep,
+             rects=_b64(np.array(rects, np.float32)),
+             cells=_b64(np.array(cells, np.int32))))
+    for r in range(len(RINGS)):
+      rings[r]['strips'].append(cols[r].tolist())
 
-    # midplane profiles of the same quantity and mode, from the cache
-    fr0 = gv.frame(run, allf[0])
-    sides = []
-    for side in [s for s in ('outboard', 'inboard') if s in run.layout.stacks and gv.stack_rows(run, s, sel).any()]:
-        R, _, rsep = gv.midplane_profile(run, fr0, side, qty)
-        x, xsep, xlab = vp.side_coordinate(R, rsep, side, x_mode)
-        P = vp.mode_values(summ[f'mid|{side}|{qty}'].astype(np.float64), rows, mode, kind, scale) * (100 if rel else 1)
-        o = np.argsort(x)
-        o = o[gv.stack_rows(run, side, sel)[o]]   # the chosen blocks' rows
-        pg = pc.midplane(run, side, qty, '{frame}', sel)
-        sides.append(dict(name=f'{side} midplane', x=rnd(x[o]), sep=float(xsep), xlabel=tl.plain(xlab),
-                          v=_b64(P[:, o].astype(np.float32)),
-                          pg=pg if mode == 'value' else '# the chart shows the change; this, the values\n' + pg))
-    pv = np.concatenate([np.frombuffer(base64.b64decode(s['v']), np.float32) for s in sides]) if sides else np.zeros(1)
-    pv = pv[np.isfinite(pv)]
-    plo, phi = (float(pv.min()), float(pv.max())) if len(pv) else (0.0, 1.0)
-    pad = 0.06 * (phi - plo or abs(phi) or 1.0)
-    ylab = (f'{sym} change (%)' if rel else (f'{sym}' + (' change' if mode != 'value' else '') + u))
+  # midplane profiles of the same quantity and mode, from the cache
+  fr0 = gv.frame(run, allf[0])
+  sides = []
+  for side in [
+      s for s in ('outboard', 'inboard')
+      if s in run.layout.stacks and gv.stack_rows(run, s, sel).any()
+  ]:
+    R, _, rsep = gv.midplane_profile(run, fr0, side, qty)
+    x, xsep, xlab = vp.side_coordinate(R, rsep, side, x_mode)
+    P = vp.mode_values(summ[f'mid|{side}|{qty}'].astype(np.float64), rows, mode,
+                       kind, scale) * (100 if rel else 1)
+    o = np.argsort(x)
+    o = o[gv.stack_rows(run, side, sel)[o]]  # the chosen blocks' rows
+    pg = pc.midplane(run, side, qty, '{frame}', sel)
+    sides.append(
+        dict(name=f'{side} midplane',
+             x=rnd(x[o]),
+             sep=float(xsep),
+             xlabel=tl.plain(xlab),
+             v=_b64(P[:, o].astype(np.float32)),
+             pg=pg if mode == 'value' else
+             '# the chart shows the change; this, the values\n' + pg))
+  pv = np.concatenate(
+      [np.frombuffer(base64.b64decode(s['v']), np.float32)
+       for s in sides]) if sides else np.zeros(1)
+  pv = pv[np.isfinite(pv)]
+  plo, phi = (float(pv.min()), float(pv.max())) if len(pv) else (0.0, 1.0)
+  pad = 0.06 * (phi - plo or abs(phi) or 1.0)
+  ylab = (f'{sym} change (%)' if rel else
+          (f'{sym}' + (' change' if mode != 'value' else '') + u))
 
-    # cells with n <= 0 (any species), per frame: x marks
-    bad = np.zeros((len(rows), summ[f'fld|{qty}'].shape[1]), bool)
-    for s in run.species:
-        bad |= summ[f'fld|n_{s}'][rows] <= 0
-    if sel:
-        drawn = np.zeros(bad.shape[1], bool)
-        drawn[keep] = True
-        bad &= drawn
-    ts, tu = vp.time_unit(float(summ['t'][-1]))
-    species = next((s for s in run.species if qty.endswith(f'_{s}')), 'ion' if qty == 'mach' else None)
-    # pgkyl commands (pgkyl_cmd) for a click on a cell: the page fills in the block, the file's indices, the frame
-    # and the frame a change is taken from ({ref}: the run's first frame, or the previous written one)
-    pg = dict(blocks=[[int(off[b]), int(run.nodes[b].shape[0] - 1), int(run.nodes[b].shape[1] - 1)] for b in range(run.nb)],
-              flip=bool(run.flip), ref=None if mode == 'value' else
-              [allf[0] if mode == 'change' else allf[max(r - 1, 0)] for r in rows.tolist()],
-              cell=pc.cell_value(run, '{b}', '{i}', '{j}', qty, '{frame}'),
-              map=pc.block_map(run, '{b}', qty, '{frame}', mode, None if mode == 'value' else '{ref}'),
-              hist=pc.cell_history(run, '{b}', '{i}', '{j}', qty))
-    return dict(
-        frames=frames, tnum=[round(float(t) * ts, 6) for t in summ['t'][rows]], tunit=tu, ncell=int(V.shape[1]),
-        idx=_b64(idx), cmap=cmap, cbar=dict(label=tl.plain(cblabel), ticks=[[float(norm(t)), fmt(t)] for t in ticks],
-                                            extend=extend),
-        quads=_b64(quads), lines=lines, boxes={k: list(v) for k, v in vp.zoom_boxes(run, sel).items()},
-        rz=_b64(keep.astype(np.int32)), rz_note='' if sel is None else f' (blocks {vp.block_list(shown)})',
-        st_caption=('cell along the strip: target → X point → … → target' if run.layout.targets
-                    else 'cell along the strip (θ)'),
-        strips=strips, rings=rings, bad=[np.nonzero(r)[0].tolist() for r in bad],
-        prof=dict(sides=sides, ylim=[plo - pad, phi + pad], ylabel=ylab, first=mode == 'value',
-                  zero=mode != 'value' or kind != 'pos'),
-        species=species, title=f'{label}' + ('' if mode == 'value' else f', change since {vp.SINCE[mode]}'), pg=pg)
+  # cells with n <= 0 (any species), per frame: x marks
+  bad = np.zeros((len(rows), summ[f'fld|{qty}'].shape[1]), bool)
+  for s in run.species:
+    bad |= summ[f'fld|n_{s}'][rows] <= 0
+  if sel:
+    drawn = np.zeros(bad.shape[1], bool)
+    drawn[keep] = True
+    bad &= drawn
+  ts, tu = vp.time_unit(float(summ['t'][-1]))
+  species = next((s for s in run.species if qty.endswith(f'_{s}')),
+                 'ion' if qty == 'mach' else None)
+  # pgkyl commands (pgkyl_cmd) for a click on a cell: the page fills in the block, the file's indices, the frame
+  # and the frame a change is taken from ({ref}: the run's first frame, or the previous written one)
+  pg = dict(blocks=[[
+      int(off[b]),
+      int(run.nodes[b].shape[0] - 1),
+      int(run.nodes[b].shape[1] - 1)
+  ] for b in range(run.nb)],
+            flip=bool(run.flip),
+            ref=None if mode == 'value' else [
+                allf[0] if mode == 'change' else allf[max(r - 1, 0)]
+                for r in rows.tolist()
+            ],
+            cell=pc.cell_value(run, '{b}', '{i}', '{j}', qty, '{frame}'),
+            map=pc.block_map(run, '{b}', qty, '{frame}', mode,
+                             None if mode == 'value' else '{ref}'),
+            hist=pc.cell_history(run, '{b}', '{i}', '{j}', qty))
+  return dict(
+      frames=frames,
+      tnum=[round(float(t) * ts, 6) for t in summ['t'][rows]],
+      tunit=tu,
+      ncell=int(V.shape[1]),
+      idx=_b64(idx),
+      cmap=cmap,
+      cbar=dict(label=tl.plain(cblabel),
+                ticks=[[float(norm(t)), fmt(t)] for t in ticks],
+                extend=extend),
+      quads=_b64(quads),
+      lines=lines,
+      boxes={
+          k: list(v)
+          for k, v in vp.zoom_boxes(run, sel).items()
+      },
+      rz=_b64(keep.astype(np.int32)),
+      rz_note='' if sel is None else f' (blocks {vp.block_list(shown)})',
+      st_caption=('cell along the strip: target → X point → … → target'
+                  if run.layout.targets else 'cell along the strip (θ)'),
+      strips=strips,
+      rings=rings,
+      bad=[np.nonzero(r)[0].tolist() for r in bad],
+      prof=dict(sides=sides,
+                ylim=[plo - pad, phi + pad],
+                ylabel=ylab,
+                first=mode == 'value',
+                zero=mode != 'value' or kind != 'pos'),
+      species=species,
+      title=f'{label}' +
+      ('' if mode == 'value' else f', change since {vp.SINCE[mode]}'),
+      pg=pg)
 
 
 class Movie(anywidget.AnyWidget):
-    """The page-side player: data (movie_data), look (movie_look), zoom (a key of data['boxes']), frame (the frame
+  """The page-side player: data (movie_data), look (movie_look), zoom (a key of data['boxes']), frame (the frame
     number shown; the page sets it on pause / scrub / step, the notebook sets it from its slider), probe (the cell a
     click picked; a click on the space-time strip also moves to that time)."""
-    data = traitlets.Dict().tag(sync=True)
-    look = traitlets.Dict().tag(sync=True)
-    zoom = traitlets.Unicode('whole domain').tag(sync=True)
-    frame = traitlets.Int(0).tag(sync=True)
-    probe = traitlets.Int(-1).tag(sync=True)   # the probed cell (cell_offsets order), set by a click on the page
+  data = traitlets.Dict().tag(sync=True)
+  look = traitlets.Dict().tag(sync=True)
+  zoom = traitlets.Unicode('whole domain').tag(sync=True)
+  frame = traitlets.Int(0).tag(sync=True)
+  probe = traitlets.Int(-1).tag(
+      sync=True
+  )  # the probed cell (cell_offsets order), set by a click on the page
 
-    _css = CMD_CSS + """
+  _css = CMD_CSS + """
 .nstxu-movie { font-family: var(--nm-font); color: var(--nm-ink); background: var(--nm-surf); padding: 10px 12px 12px;
   border-radius: 8px; outline: none; box-sizing: border-box; width: 100%; }
 .nstxu-movie .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
@@ -244,7 +336,7 @@ class Movie(anywidget.AnyWidget):
 .nstxu-movie .hint { color: var(--nm-ink2); font-size: 12px; margin-top: 6px; }
 """
 
-    _esm = CMD_JS + r"""
+  _esm = CMD_JS + r"""
 const ICON = {
   play: '<svg viewBox="0 0 16 16" width="15" height="15"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 16 16" width="15" height="15"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" fill="currentColor"/></svg>',
@@ -669,10 +761,10 @@ export default { render };
 
 
 class PlotlyLoader(anywidget.AnyWidget):
-    """Puts plotly.js (the copy plotly.py ships, the version its figures are written for) into the page once, for
+  """Puts plotly.js (the copy plotly.py ships, the version its figures are written for) into the page once, for
     the LivePlots: marimo bundles its own plotly but does not expose it. Hidden; ~5 MB, sent once per page load."""
-    src = traitlets.Unicode('').tag(sync=True)
-    _esm = r"""
+  src = traitlets.Unicode('').tag(sync=True)
+  _esm = r"""
 function render({ model, el }) {
   el.style.display = 'none';
   if (window.Plotly || window.__nstxuPlotlyLoading) return;
@@ -687,12 +779,12 @@ export default { render };
 
 
 class FontLoader(anywidget.AnyWidget):
-    """The tracked stand-in fonts (fonts/, viewer_plots.FONT_FILES; upright faces) for the page: registered with
+  """The tracked stand-in fonts (fonts/, viewer_plots.FONT_FILES; upright faces) for the page: registered with
     FontFace, so the page and its charts draw a theme's fonts where the real ones are not installed, and kept as
     @font-face rules (window.__nstxuFontCSS) for the charts' slide downloads, which draw in an image that sees no font
     of the page. Hidden; ~1.6 MB, sent once per page load."""
-    faces = traitlets.List().tag(sync=True)
-    _esm = r"""
+  faces = traitlets.List().tag(sync=True)
+  _esm = r"""
 async function render({ model, el }) {
   el.style.display = 'none';
   if (window.__nstxuFontCSS !== undefined) return;
@@ -715,21 +807,23 @@ export default { render };
 
 
 def font_loader():
-    """A FontLoader with the upright faces of every tracked font (family and weight from the files themselves)."""
-    from matplotlib.ft2font import FT2Font
-    faces = []
-    for p in vp.FONT_FILES:
-        ft = FT2Font(p)
-        if 'Italic' in ft.style_name:
-            continue
-        faces.append(dict(family=ft.family_name, weight=700 if 'Bold' in ft.style_name else 400,
-                          mime='font/otf' if p.endswith('.otf') else 'font/ttf',
-                          b64=base64.b64encode(open(p, 'rb').read()).decode()))
-    return FontLoader(faces=faces)
+  """A FontLoader with the upright faces of every tracked font (family and weight from the files themselves)."""
+  from matplotlib.ft2font import FT2Font
+  faces = []
+  for p in vp.FONT_FILES:
+    ft = FT2Font(p)
+    if 'Italic' in ft.style_name:
+      continue
+    faces.append(
+        dict(family=ft.family_name,
+             weight=700 if 'Bold' in ft.style_name else 400,
+             mime='font/otf' if p.endswith('.otf') else 'font/ttf',
+             b64=base64.b64encode(open(p, 'rb').read()).decode()))
+  return FontLoader(faces=faces)
 
 
 class LivePlot(anywidget.AnyWidget):
-    """A plotly figure that follows the movie in the page: on each 'nstxu:frame' event (the movie draws a frame) its
+  """A plotly figure that follows the movie in the page: on each 'nstxu:frame' event (the movie draws a frame) its
     tagged traces take that frame's y and its tagged shapes that frame's position (viewer_plots.live_spec), without
     the kernel. While the movie plays it rewrites plotly's own SVG (the line paths, markers and shape lines, through
     plotly's axis maps: ~1 ms a frame); when playback stops it hands plotly the shown frame (Plotly.restyle /
@@ -738,14 +832,14 @@ class LivePlot(anywidget.AnyWidget):
     slides: viewer_plots.slide_spec for 'full' and 'half': two buttons in the chart's toolbar download it laid out for
     a slide, as a PNG (300 dpi) of the frame it shows, its fonts embedded (window.__nstxuSlides[name](size): the same
     image as a data URL; (size, true): the slide figure)."""
-    fig = traitlets.Dict().tag(sync=True)
-    slides = traitlets.Dict().tag(sync=True)
-    name = traitlets.Unicode('chart').tag(sync=True)
-    live = traitlets.Dict().tag(sync=True)
-    frame = traitlets.Int(-1).tag(sync=True)
-    _css = CMD_CSS + """.nstxu-live { width: 100%; }
+  fig = traitlets.Dict().tag(sync=True)
+  slides = traitlets.Dict().tag(sync=True)
+  name = traitlets.Unicode('chart').tag(sync=True)
+  live = traitlets.Dict().tag(sync=True)
+  frame = traitlets.Int(-1).tag(sync=True)
+  _css = CMD_CSS + """.nstxu-live { width: 100%; }
 .nstxu-live .nstxu-live-note { min-height: 1.3em; font-size: 12px; opacity: 0.75; padding-left: 60px; }"""
-    _esm = CMD_JS + r"""
+  _esm = CMD_JS + r"""
 function plotlyReady() {
   return new Promise((ok, fail) => {
     if (window.Plotly) return ok(window.Plotly);
@@ -1007,12 +1101,19 @@ export default { render };
 
 
 def live_plot(fig, summ, frame, frames=None, pal=None, name='chart'):
-    """A LivePlot of a plotly figure built by viewer_plots: its tagged parts follow the movie in the page (the y
+  """A LivePlot of a plotly figure built by viewer_plots: its tagged parts follow the movie in the page (the y
     axes they move on fixed to their span over frames, the movie's: viewer_plots.live_spec, on a copy of fig), and it
     downloads for a slide (pal: its look; name: the files' stem)."""
-    import json
-    import plotly.graph_objects as go
-    fig = go.Figure(fig)
-    live = vp.live_spec(fig, summ, frames, shown=frame)
-    slides = {} if pal is None else {size: vp.slide_spec(fig, size, pal, name) for size in vp.SLIDE_SIZES}
-    return LivePlot(fig=json.loads(fig.to_json()), live=live, frame=int(frame), slides=slides, name=name)
+  import json
+  import plotly.graph_objects as go
+  fig = go.Figure(fig)
+  live = vp.live_spec(fig, summ, frames, shown=frame)
+  slides = {} if pal is None else {
+      size: vp.slide_spec(fig, size, pal, name)
+      for size in vp.SLIDE_SIZES
+  }
+  return LivePlot(fig=json.loads(fig.to_json()),
+                  live=live,
+                  frame=int(frame),
+                  slides=slides,
+                  name=name)
