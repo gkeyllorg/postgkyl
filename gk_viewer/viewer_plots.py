@@ -703,11 +703,20 @@ def device_background():
                   os.stat(path).st_mtime_ns, BACKGROUND_PX), extent, opacity
 
 
-def zoom_boxes(run, blocks=None):
-  """name -> (R0, R1, Z0, Z1) views of the poloidal plane, from the layout ('whole domain': the chosen blocks)."""
+def z_signs(run, mirror=False):
+  """The signs of Z the poloidal plane draws a run's cells with: (1, -1) for a half domain shown whole (mirror: its
+  mirror image across the reflecting midplane Z = 0 too, the data being up-down symmetric), else (1,)."""
+  return (1, -1) if mirror and run.layout.half else (1, )
+
+
+def zoom_boxes(run, blocks=None, mirror=False):
+  """name -> (R0, R1, Z0, Z1) views of the poloidal plane, from the layout ('whole domain': the chosen blocks;
+  mirror: a half domain shown whole, z_signs, with its other divertor's view too)."""
   nd = run.nodes
-  allp = np.concatenate(
-      [nd[b].reshape(-1, 2) for b in shown_blocks(run, blocks)])
+  allp = np.concatenate([
+      nd[b].reshape(-1, 2) * [1, sz] for b in shown_blocks(run, blocks)
+      for sz in z_signs(run, mirror)
+  ])
 
   def box(pts, pad=0.08, square=False):
     r0, z0 = pts.min(0)
@@ -733,6 +742,12 @@ def zoom_boxes(run, blocks=None):
     if div:
       out[f'{ud} divertor'] = box(
           np.concatenate([nd[b].reshape(-1, 2) for b in div]))
+  if len(z_signs(run, mirror)
+         ) == 2:  # the mirror image's divertor: the drawn one's, upside down
+    for ud, other in (('lower', 'upper'), ('upper', 'lower')):
+      if f'{ud} divertor' in out and f'{other} divertor' not in out:
+        r0, r1, z0, z1 = out[f'{ud} divertor']
+        out[f'{other} divertor'] = (r0, r1, -z1, -z0)
   for side, st in run.layout.stacks.items():
     R = np.concatenate([gv.mid_edges(nd[b], st.j) for b in gv.stack_blocks(st)])
     h = 0.6 * np.ptp(R)
@@ -758,13 +773,15 @@ def map_figure(run,
                blocks=None,
                vals=None,
                slide=None,
-               background=None):
+               background=None,
+               mirror=False):
   """Poloidal plane (true R-Z, wall, separatrix) + every cell unrolled; x = cells with n <= 0 (any species).
     scale: a fixed_scale() dict (one colour scale over a movie's frames), else colour_norm's. blocks: draw only these
     (None: all; the colour scale and the 'whole domain' view are theirs). vals: block -> values to draw instead of the
     quantity (with scale; no n <= 0 marks), e.g. the diffusivity. slide: laid out for a slide (SLIDE_SIZES): 'full',
     the whole figure; 'half', the poloidal plane alone (the strips need the width); None: the page's.
-    background: device_background(), drawn behind the cells on the poloidal plane (None: none)."""
+    background: device_background(), drawn behind the cells on the poloidal plane (None: none). mirror: a half
+    domain drawn whole on the poloidal plane, its mirror image across Z = 0 too (z_signs; the strips stay one half)."""
   shown = shown_blocks(run, blocks)
   sel = None if len(shown) == run.nb else set(shown)
   if vals is None:
@@ -865,8 +882,8 @@ def map_figure(run,
                 zorder=0,
                 interpolation='antialiased')
     kw = dict(cmap=cmap, norm=norm, shading='flat')
-    for b in shown:
-      nd = run.nodes[b]
+    for b, sz in [(b, sz) for sz in z_signs(run, mirror) for b in shown]:
+      nd = run.nodes[b] * [1, sz]
       m = ax.pcolormesh(nd[..., 0],
                         nd[..., 1],
                         np.ma.masked_invalid(vals[b]),
@@ -889,8 +906,8 @@ def map_figure(run,
     if w is not None:
       ax.plot(w[:, 0], w[:, 1], color=pal.ink2, lw=lw(1.0))
     pts = np.array([
-        gv.cell_centres(run.nodes[b])[i, j] for b in shown
-        for i, j in np.argwhere(bad[b])
+        gv.cell_centres(run.nodes[b])[i, j] * [1, sz] for b in shown
+        for i, j in np.argwhere(bad[b]) for sz in z_signs(run, mirror)
     ])
     if len(pts):
       ax.scatter(pts[:, 0],
@@ -901,7 +918,7 @@ def map_figure(run,
                  color=pal.ink,
                  zorder=5,
                  path_effects=halo)
-    boxes = zoom_boxes(run, sel)
+    boxes = zoom_boxes(run, sel, mirror)
     r0, r1, z0, z1 = boxes.get(zoom, boxes['whole domain'])
     ax.set_xlim(r0, r1)
     ax.set_ylim(z0, z1)
@@ -2996,9 +3013,10 @@ def diffusivity_map(run,
                     pal=LOOKS['dark'],
                     blocks=None,
                     species=None,
-                    background=None):
+                    background=None,
+                    mirror=False):
   """The diffusivity of every cell (its cell average) on the poloidal plane and the unrolled strips (map_figure;
-  background: its)."""
+  background, mirror: its)."""
   s = species or next(iter(Dinfo['species']))
   cells = Dinfo['species'][s]['cells']
   V = np.concatenate([cells[b].ravel() for b in shown_blocks(run, blocks)])
@@ -3018,7 +3036,8 @@ def diffusivity_map(run,
                     scale=sc,
                     blocks=blocks,
                     vals=cells,
-                    background=background)
+                    background=background,
+                    mirror=mirror)
 
 
 PROBE_ROWS = [('n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'), ('T', '$T$ (eV)'),
@@ -3195,10 +3214,11 @@ def render_movie(run,
                  title='',
                  blocks=None,
                  slide=None,
-                 background=None):
+                 background=None,
+                 mirror=False):
   """An MP4 of the map over the given frame numbers, one colour scale for all of them, the time and frame on each.
     H.264 from imageio-ffmpeg's ffmpeg (the system ffmpeg has no H.264 encoder). progress(iterable, total) wraps the
-    loop. slide, background: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
+    loop. slide, background, mirror: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
   import imageio_ffmpeg
   allf = [int(k) for k in summ['frames']]
   rows = [allf.index(k) for k in frames]
@@ -3237,7 +3257,8 @@ def render_movie(run,
           blocks=blocks,
           title=f'{title}   t = {summ["t"][row] * ts:.4g} {tu}   (frame {k})',
           slide=slide,
-          background=background)
+          background=background,
+          mirror=mirror)
       if slide:
         fig.set_dpi(165)  # 1980 px across a full-width slide
       fig.canvas.draw()

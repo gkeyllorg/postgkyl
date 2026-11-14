@@ -413,7 +413,16 @@ def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
 
 
 @app.cell
-def _(boot, gv, mo, prefs, run, vp, vs):
+def _(
+    boot,
+    gv,
+    mirror_on,
+    mo,
+    prefs,
+    run,
+    vp,
+    vs,
+):
   # every choice starts from prefs (the launch view, then the last choice) and writes itself back there
   def _first(key, options, default):
     v = prefs.get(key)
@@ -456,7 +465,7 @@ def _(boot, gv, mo, prefs, run, vp, vs):
   log_pick = mo.ui.switch(value=vs.as_bool(prefs.get('log', False)),
                           label='log scale (positive values)',
                           on_change=lambda v: prefs.update(log=v))
-  _views = list(vp.zoom_boxes(run))
+  _views = list(vp.zoom_boxes(run, mirror=mirror_on))
   zoom_pick = mo.ui.dropdown(_views,
                              value=_first('zoom', _views, 'whole domain'),
                              label='poloidal view',
@@ -484,7 +493,42 @@ def _(mo, prefs, vp, vs):
                          label='include device background',
                          on_change=lambda v: prefs.update(background=v)
                          ) if background is not None else None
-  return background, bg_note, bg_pick
+  _op = vs.as_float(prefs.get('opacity'),
+                    background[2] if background is not None else 1.0)
+  bg_opacity = mo.ui.slider(0.05,
+                            1.0,
+                            step=0.05,
+                            value=min(max(round(_op / 0.05) * 0.05, 0.05), 1.0),
+                            label='background opacity',
+                            show_value=True,
+                            on_change=lambda v: prefs.update(opacity=v)
+                            ) if background is not None else None
+  return background, bg_note, bg_opacity, bg_pick
+
+
+@app.cell
+def _(background, bg_opacity, bg_pick):
+  # what the poloidal views draw behind the cells: the picture at the slider's opacity, or nothing (switched off)
+  bg_shown = ((background[0], background[1], float(bg_opacity.value))
+              if bg_pick is not None and bg_pick.value else None)
+  return (bg_shown, )
+
+
+@app.cell
+def _(mo, prefs, run, vs):
+  # a half domain (a reflecting midplane) can be shown whole on the poloidal plane, its mirror image across Z = 0
+  # drawn too (the data are up-down symmetric); the strips stay one half
+  mirror_pick = mo.ui.switch(
+      value=vs.as_bool(prefs.get('mirror', False)),
+      label='show the full domain (mirror the half domain)',
+      on_change=lambda v: prefs.update(mirror=v)) if run.layout.half else None
+  return (mirror_pick, )
+
+
+@app.cell
+def _(mirror_pick):
+  mirror_on = bool(mirror_pick is not None and mirror_pick.value)
+  return (mirror_on, )
 
 
 @app.cell
@@ -603,6 +647,7 @@ def _(frames, frames_text, gv, mo):
 @app.cell
 def _(
     bg_note,
+    bg_opacity,
     bg_pick,
     blocks_pick,
     cmp_err,
@@ -612,6 +657,7 @@ def _(
     frames_msg,
     frames_text,
     log_pick,
+    mirror_pick,
     mo,
     mode_pick,
     probe_text,
@@ -635,7 +681,10 @@ def _(
              'pauses)</small>'), frames_text, frames_msg or mo.md(''),
           probe_text,
           mo.md('---'), qty_pick, mode_pick, log_pick, zoom_pick,
-          bg_pick if bg_pick is not None else mo.md(''), bg_note, blocks_pick,
+          mirror_pick if mirror_pick is not None else mo.md(''),
+          bg_pick if bg_pick is not None else mo.md(''),
+          bg_opacity if bg_opacity is not None else mo.md(''), bg_note,
+          blocks_pick,
           mo.md('---'), cmp_pick,
           mo.callout(mo.md(f'Not drawn: {cmp_err}'), kind='warn')
           if cmp_err else mo.md(''),
@@ -779,10 +828,9 @@ def _(blocks, cmp, dt_hist, fr, frames, gv, k, mo, np, run, sim_pick, t_now,
 
 @app.cell
 def _(
-    background,
-    bg_pick,
     blocks,
     log_pick,
+    mirror_on,
     mm,
     mo,
     mode_pick,
@@ -797,23 +845,28 @@ def _(
 ):
   # the movie: every frame it plays sent to the page once, animated there (movie_widget.py)
   movie = mo.ui.anywidget(
-      mm.Movie(
-          data=mm.movie_data(run,
-                             summ,
-                             qty_pick.value,
-                             mode_pick.value,
-                             log_pick.value,
-                             x_pick.value,
-                             movie_frames,
-                             blocks=blocks),
-          look=mm.movie_look(pal),
-          zoom=zoom_pick.value,
-          background=mm.background_ref(
-              background if bg_pick is not None and bg_pick.value else None),
-          frame=now['k'],
-          probe=now['probe']))
+      mm.Movie(data=mm.movie_data(run,
+                                  summ,
+                                  qty_pick.value,
+                                  mode_pick.value,
+                                  log_pick.value,
+                                  x_pick.value,
+                                  movie_frames,
+                                  blocks=blocks,
+                                  mirror=mirror_on),
+               look=mm.movie_look(pal),
+               zoom=zoom_pick.value,
+               frame=now['k'],
+               probe=now['probe']))
   movie
   return (movie, )
+
+
+@app.cell
+def _(bg_shown, mm, movie):
+  # the device picture behind the movie, set on the widget: the switch and the opacity slider redraw it, no rebuild
+  movie.widget.background = mm.background_ref(bg_shown)
+  return
 
 
 @app.cell
@@ -878,6 +931,7 @@ def _(mo, prefs):
 
 @app.cell
 def _(
+    bg_opacity,
     bg_pick,
     blocks,
     cmp_pick,
@@ -887,6 +941,7 @@ def _(
     get_tab,
     k,
     log_pick,
+    mirror_pick,
     mo,
     mode_pick,
     os,
@@ -915,6 +970,8 @@ def _(
       theme=theme_pick.value,
       dark=bool(dark_pick.value),
       background=bool(bg_pick.value) if bg_pick is not None else None,
+      opacity=float(bg_opacity.value) if bg_opacity is not None else None,
+      mirror=bool(mirror_pick.value) if mirror_pick is not None else None,
       tab=get_tab(),
       frames=frames_text.value.strip(),
       probe=','.join(map(str,
@@ -936,13 +993,13 @@ def _(
 
 @app.cell
 def _(
-    background,
-    bg_pick,
+    bg_shown,
     blocks,
     fr,
     fr0,
     fr_prev,
     log_pick,
+    mirror_on,
     mode_pick,
     pal,
     qty_pick,
@@ -971,8 +1028,8 @@ def _(
                          title=title,
                          blocks=blocks,
                          slide=slide,
-                         background=background
-                         if bg_pick is not None and bg_pick.value else None)
+                         background=bg_shown,
+                         mirror=mirror_on)
 
   return (static_figure, )
 
@@ -1085,13 +1142,13 @@ def _(base_name, export_size, fig_fmt, fig_name, mo, os, out_path, save_fig_btn,
 
 @app.cell
 def _(
-    background,
     base_name,
-    bg_pick,
+    bg_shown,
     blocks,
     export_size,
     log_pick,
     make_movie_btn,
+    mirror_on,
     mo,
     mode_pick,
     movie_fps,
@@ -1134,8 +1191,8 @@ def _(
           fps=int(movie_fps.value),
           blocks=blocks,
           slide=_slide,
-          background=background
-          if bg_pick is not None and bg_pick.value else None,
+          background=bg_shown,
+          mirror=mirror_on,
           title=f'{run.title} · {run.sim} · {run.name} · {_label}',
           progress=lambda it, n: mo.status.progress_bar(
               it, total=n, title='Rendering the movie', remove_on_exit=True))
@@ -1164,8 +1221,7 @@ def _(
 
 @app.cell
 def _(
-    background,
-    bg_pick,
+    bg_shown,
     blocks,
     cmp,
     dt_hist,
@@ -1190,6 +1246,7 @@ def _(
     k,
     live_summ,
     make_movie_btn,
+    mirror_on,
     mm,
     mo,
     mode_pick,
@@ -1585,8 +1642,8 @@ def _(
                                   pal=pal,
                                   blocks=blocks,
                                   species=_s,
-                                  background=background if bg_pick is not None
-                                  and bg_pick.value else None)
+                                  background=bg_shown,
+                                  mirror=mirror_on)
         _items.append(
             _clickable(
                 _fig,

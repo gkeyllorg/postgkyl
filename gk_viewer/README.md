@@ -57,7 +57,8 @@ OPEN=0 ./view.sh                                          # print the URL only
 Keys (`viewer_state.KEYS`): `shot`, `sim`, `run`, `frame` (negative: from the last), `qty`, `mode`
 (value / change / step), `log`, `zoom`, `x`, `dark`, `tab`, `frames` (the movie's frames, `pgkyl load --frame`
 syntax), `probe` (block,i,j), `blocks` (the blocks drawn: `1-3,10`), `cmp` (a run drawn over this one: `<simulation>/<run>` or a
-directory), `path` (a run directory to open). A view opens from the defaults, then a saved view, then the command line, then the
+directory), `path` (a run directory to open), `background`, `opacity` (the device picture), `mirror` (a half domain
+shown whole). A view opens from the defaults, then a saved view, then the command line, then the
 page's address, each overriding the one before; the page writes the current view into its address, so a reload or
 a bookmark comes back to it (the address carries the access token too: do not share it while the server runs). A
 value that no longer fits (a run removed, a frame past the last) falls back to the default with a note at the top.
@@ -78,17 +79,31 @@ h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.tx
 PNG or JPEG) behind the poloidal plane: in the movie and in every map figure (the Static figure tab, figure and
 movie exports, the diffusivity maps), under the cells, the wall and the separatrix, clipped to the view. The sidebar's
 **include device background** turns it on and off (launch key `--background true`; off by default; the switch is
-there only when a picture is named). `extent` places it: the R of its left and right edges and the Z of its bottom
+there only when a picture is named) and **background opacity** sets how strongly it shows, 0.05 to 1 (launch key
+`--opacity 0.6`; it starts at `viewer.json`'s `opacity`): the movie redraws at once, without being made again. `extent` places it: the R of its left and right edges and the Z of its bottom
 and top, in metres, so that its vessel lies on the run's wall (the geqdsk's limiter, drawn over it). The picture is
 read once, at most 2000 px on its longest side (`viewer_plots.BACKGROUND_PX`), and sent to the page once
 (`movie_widget.BackgroundLoader`). A picture that is not freely licensed belongs in the data directory, not in this
-repo. NSTX-U: PPPL's "Hi-res NSTX-U cross-section image (for illustration purposes only)", in the NSTX-U presentation
-templates on PPPL's Google Drive (a PPPL login).
+repo. NSTX-U: PPPL's section drawing `NSTX-SECTION-PLAN-VIEW-NO-PLASMA_020624.pdf`, in the "NSTX-U Drawings" folder
+of the NSTX-U site's Presentations page (shared by link), rendered, cropped to R >= 0 and fitted to the limiter
+(research/nstxu/viewer_20261102 on Perlmutter: the picture and how it was made).
 
-Checked (`check_viewer.py` part_background): a picture red inside Sim 2's wall and blue outside it, sampled 5 px
+## A half domain shown whole (2026-11-14)
+A run on a half domain (a reflecting midplane: `layout.half`) can be shown whole on the poloidal plane: the
+sidebar's **show the full domain (mirror the half domain)** (launch key `--mirror true`; off by default; there only for
+a half domain) draws each cell again at its mirror image across Z = 0 with the same value, since the data are
+up-down symmetric (`viewer_plots.z_signs`). Block outlines, the separatrix and the n <= 0 marks are mirrored too; the
+wall is the whole vessel already. The whole-domain view then spans both halves, and the other half's divertor is
+offered as a view of its own. A click on a mirrored cell probes its original. The unrolled strips, the profiles and
+the time traces stay one half: the mirror image holds nothing new.
+
+Checked (`check_viewer.py` part_poloidal): a picture red inside Sim 2's wall and blue outside it, sampled 5 px
 either side of every wall segment: under the map (whole domain, lower divertor; a 3 cm shift of the picture fails
-it) and, with `--browser`, under the movie (served on a data directory naming the picture, `--background true`),
-where switching it off leaves no trace of it.
+it) and, with `--browser`, under the movie (served on a data directory naming the picture, `--background true`);
+eight arrow-key steps of the slider take it to 0.6 and the movie, not made again, shows the picture's blue blended
+with the surface at 0.6 outside the wall; switched off it leaves no trace. The half domain shown whole: each cell's
+colour at its mirror image, judged on cell insides only (both pixels inside one colour, in the drawn box), on the map
+(whole domain and both midplane views: 167 of 167; without the switch 0 of 153) and on the page.
 
 ## Run it anywhere: a mirror (2026-11-13)
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
@@ -123,8 +138,9 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   movie frames (a frame range for the movie and the exported movie: `:`, `::2`, `-50:`, `0:60`), probe cell
   (block,i,j, or a click on the movie), quantity, value / change since the first frame / change since the previous
   frame (the last shows fronts moving), log scale, poloidal view (whole domain, lower/upper divertor,
-  outboard/inboard midplane), **include device background** (when `viewer.json` names a `device_image`: the
-  device's picture behind the poloidal plane, in the movie and every map figure), **blocks drawn** (none chosen:
+  outboard/inboard midplane), **show the full domain** (a half domain: its mirror image too), **include device
+  background** and **background opacity** (when `viewer.json` names a `device_image`: the device's picture behind
+  the poloidal plane, in the movie and every map figure), **blocks drawn** (none chosen:
   every block; see below), **draw another run over it**
   (the overlay, see below), profile x axis (distance from the separatrix or R), **theme** (NSTX-U, PPPL or DIII-D;
   see Look) and **dark mode** (on by default; off = the theme's white look, page and figures together, no reload).

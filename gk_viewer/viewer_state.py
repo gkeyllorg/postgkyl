@@ -28,6 +28,11 @@ KEYS = {
     'background':
     ('the device\'s picture behind the poloidal plane (viewer.json "device_image")',
      'true'),
+    'opacity': ("that picture's opacity, 0.05 to 1 (blank: viewer.json's)",
+                '0.6'),
+    'mirror':
+    ('a half domain shown whole on the poloidal plane (its mirror image across Z = 0 too)',
+     'true'),
     'x': ('profile x axis: distance | R', 'distance'),
     'theme':
     ("the look: NSTX-U (the DPP 2025 poster) | PPPL (the lab's slide template)",
@@ -48,6 +53,14 @@ KEYS = {
      'runs/my_single_block_run'),
 }
 TRUE = {'1', 'true', 'yes', 'on'}
+
+
+def as_float(v, default):
+  """v as a number, else default (blank, missing or not a number)."""
+  try:
+    return float(v)
+  except (TypeError, ValueError):
+    return default
 
 
 def as_bool(v):
@@ -102,6 +115,8 @@ DEFAULTS = {
     'log': False,
     'zoom': 'whole domain',
     'background': False,
+    'opacity': '',
+    'mirror': False,
     'x': 'distance',
     'theme': 'NSTX-U',
     'dark': True,

@@ -28,8 +28,10 @@
    files equal a fresh build; the page gets it; matplotlib finds the tracked files before a system copy; no missing
    glyph in text_px or in any theme's notebook. sync: sync.py mirrors Sim 2's run into a stand-in laptop tree (a
    stand-in ssh) and the viewer opens the mirror with its own geqdsk, Thomson file and cache.
-7. (2026-11-14) device background: a picture red inside Sim 2's wall and blue outside it lies under the map
-   and (--browser) under the movie where its extent says; switched off, the page draws none of it.
+7. (2026-11-14) the poloidal plane's extras, on Sim 2: a device picture red inside its wall and blue outside lies
+   under the map and (--browser) under the movie where its extent says; the opacity slider redraws it at its value
+   without remaking the movie; the half domain shown whole puts every cell's colour at its mirror image (map and
+   page); switched off, the picture leaves no trace.
 Exit status: the number of failures.
 """
 import argparse
@@ -880,17 +882,15 @@ def _wall_picture(w, path):
   return [float(r0), float(r1), float(z0), float(z1)]
 
 
-def _side_errors(img, wall, clip, off):
-  """Sample img (rows from the top) off pixels either side of each wall segment at a quarter, half and three
-  quarters of its length (wall in pixels, x
-  right and y down; clip: the drawn box x0, y0, x1, y1): a point outside the wall polygon must be blue, one inside
-  must not be (the picture, or the cells over it). Points nearer the wall than off - 1 px (a corner, the wall line)
-  and outside clip are skipped. Returns (points sampled, the wrong ones)."""
+def _side_points(wall, clip, off):
+  """Points off pixels either side of each wall segment at a quarter, half and three quarters of its length (wall
+  in pixels, x right and y down; clip: the drawn box x0, y0, x1, y1), with whether each is inside the wall polygon.
+  Points nearer the wall than off - 1 px (a corner, the wall line) and outside clip are left out."""
   from matplotlib.path import Path
   wall = np.asarray(wall, float)
   poly, a, b = Path(wall), wall[:-1], wall[1:]
   seg = b - a
-  n, wrong = 0, []
+  out = []
   for p0, d in zip(a, seg):
     length = np.hypot(*d)
     if length < 3 * off:
@@ -905,63 +905,147 @@ def _side_errors(img, wall, clip, off):
           np.maximum(np.einsum('ij,ij->i', seg, seg), 1e-12), 0, 1)
       if np.min(np.hypot(*(a + t[:, None] * seg - p).T)) < off - 1:
         continue
-      r, g, bl = img[int(round(p[1])), int(round(p[0]))][:3]
-      blue = bl > 180 and r < 80 and g < 80
-      n += 1
-      if blue == poly.contains_point(p):
-        wrong.append(
-            (round(p[0]), round(p[1]),
-             'inside' if poly.contains_point(p) else 'outside', (r, g, bl)))
-  return n, wrong
+      out.append((p, poly.contains_point(p)))
+  return out
 
 
-async def _drive_background(url, dbg, wall):
-  """The movie's poloidal plane with the picture (launched --background true), then with the switch off: each as
-  (the canvas as RGBA pixels, the wall in canvas pixels, the drawn box in canvas pixels, the device pixel ratio)."""
+def _side_errors(img, wall, clip, off):
+  """Sample img (rows from the top) at _side_points: a point outside the wall polygon must be blue, one inside must
+  not be (the picture, or the cells over it). Returns (points sampled, the wrong ones)."""
+  wrong, pts = [], _side_points(wall, clip, off)
+  for p, inside in pts:
+    r, g, bl = img[int(round(p[1])), int(round(p[0]))][:3]
+    if (bl > 180 and r < 80 and g < 80) == inside:
+      wrong.append((round(p[0]), round(p[1]), 'inside' if inside else 'outside',
+                    (r, g, bl)))
+  return len(pts), wrong
+
+
+def _blue(px):
+  """Pixels of the test picture's blue (outside the wall), drawn at full opacity."""
+  return (px[..., 2] > 180) & (px[..., 0] < 80) & (px[..., 1] < 80)
+
+
+def _pair_colours(img, pairs, clip):
+  """Of pairs of pixels ((x, y), (x', y')) that both lie inside one colour (each one's 3 x 3 neighbourhood: a
+  cell's inside, not its edge or a line, nor a pixel's rounding onto one; a thin cell gives none) inside clip (the
+  drawn box x0, y0, x1, y1, 2 px in), how many have the same colour at both (each channel within 6), and how many
+  there were."""
+  n = same = 0
+  for (x0, y0), (x1, y1) in pairs:
+    p0, p1 = (int(round(x0)), int(round(y0))), (int(round(x1)), int(round(y1)))
+    if not all(clip[0] + 2 <= q[0] <= clip[2] - 2 and clip[1] +
+               2 <= q[1] <= clip[3] - 2 for q in (p0, p1)):
+      continue
+    if any(
+        np.ptp(img[q[1] - 1:q[1] + 2,
+                   q[0] - 1:q[0] + 2, :3].astype(int).reshape(-1, 3),
+               axis=0).max() > 6 for q in (p0, p1)):
+      continue
+    n += 1
+    same += int(
+        np.abs(img[p0[1], p0[0], :3].astype(int) -
+               img[p1[1], p1[0], :3].astype(int)).max() <= 6)
+  return same, n
+
+
+async def _drive_poloidal(url, dbg, wall, centres):
+  """The movie's poloidal plane, step by step (launched --background true --opacity 1 on Sim 2, a half domain):
+  {'on': the picture at full opacity, 'slider': after the opacity slider's arrow keys, 'mirror': the half domain shown
+  whole, 'off': the picture switched off}, each (canvas RGBA, the wall in canvas px, the drawn box in canvas px, the
+  device pixel ratio, cell-centre pairs (Z, -Z) in canvas px, the surface colour, the slider's value, the
+  render number of the movie shown, movie_widget's)."""
   from PIL import Image
+  latest = "__deep('.gkv-movie').reduce((a, e) => (+e.dataset.render || 0) > (+(a && a.dataset.render) || 0) ? e : a, null)"  # the movie the page shows now (marimo may render a new one into the same element)
   grab = (
-      "(() => { const el = __deep('.gkv-movie')[0], cv = el.querySelector('canvas.rz'), b = el.__rz.box(), "
-      f"w = {json.dumps(np.asarray(wall).tolist())}; const p0 = el.__rz.px(b[0], b[3]), p1 = el.__rz.px(b[1], b[2]); "
+      "(() => { const el = " + latest + ", cv = el.querySelector('canvas.rz'), "
+      f"b = el.__rz.box(), w = {json.dumps(np.asarray(wall).tolist())}, "
+      f"c = {json.dumps(np.asarray(centres).round(5).tolist())}; "
+      "const p0 = el.__rz.px(b[0], b[3]), p1 = el.__rz.px(b[1], b[2]), x = cv.getContext('2d'), "
+      "s = x.getImageData(1, 1, 1, 1).data, sl = __deep('[role=slider]').find(e => { let n = e; for (let i = 0; "
+      "i < 6 && n; i++) { n = n.parentElement || (n.getRootNode() && n.getRootNode().host); if (n && "
+      "(n.textContent || '').includes('background opacity')) return true; } return false; }); "
       "return { png: cv.toDataURL('image/png'), wall: w.map(q => el.__rz.px(q[0], q[1])), "
-      "clip: [p0[0], p0[1], p1[0], p1[1]], dpr: window.devicePixelRatio || 1 }; })()"
+      "clip: [p0[0], p0[1], p1[0], p1[1]], dpr: window.devicePixelRatio || 1, "
+      "pairs: c.map(q => [el.__rz.px(q[0], q[1]), el.__rz.px(q[0], -q[1])]), surf: [s[0], s[1], s[2]], "
+      "slider: sl ? +sl.getAttribute('aria-valuenow') : null, render: +el.dataset.render }; })()"
   )
-  fresh = "__deep('.gkv-movie').some(e => !e.__old && +(e.dataset.draws || 0) > 0)"
-  shots = []
+  out = {}
+
+  async def shot(name):
+    try:
+      g = await c.strict(grab)
+    except RuntimeError as e:
+      raise RuntimeError(f'step {name!r}: {e}') from None
+    out[name] = (np.asarray(
+        Image.open(io.BytesIO(base64.b64decode(g['png'].split(
+            ',', 1)[1]))).convert('RGBA')), g['wall'], g['clip'], g['dpr'],
+                 g['pairs'], g['surf'], g['slider'], g['render'])
+
+  async def rebuilt(
+      switch):  # a switch that remakes the movie: wait for the new one, drawn
+    before = await c.strict(f"+(({latest}) || {{}}).dataset.render || 0")
+    try:
+      await c.strict(f"__switch({json.dumps(switch)}).click()")
+    except RuntimeError as e:
+      raise RuntimeError(f'the switch {switch!r}: {e}') from None
+    if not await c.until(
+        f"(e => e && +e.dataset.render > {before} && +(e.dataset.draws || 0) > 0)({latest})",
+        120):
+      raise RuntimeError(f'the switch {switch!r}: no new movie in 120 s')
+    await asyncio.sleep(2)
+
   async with opened(url, dbg) as c:
     await asyncio.sleep(3)
     await c.js(DEEP)
-    await c.until(fresh, 180)
+    await c.until(f"(e => e && +(e.dataset.draws || 0) > 0)({latest})", 180)
     await c.until(
         "Object.values(window.__gkvBackground || {}).some(i => i.complete && i.naturalWidth)",
         60)
     await asyncio.sleep(2)  # the movie redraws when the picture arrives
-    for k in range(2):
-      g = await c.js(grab)
-      shots.append((np.asarray(
-          Image.open(io.BytesIO(base64.b64decode(g['png'].split(
-              ',', 1)[1]))).convert('RGBA')), g['wall'], g['clip'], g['dpr']))
-      if k == 0:  # the switch off: the movie made again, without the picture
-        await c.js("__deep('.gkv-movie').forEach(e => { e.__old = true; })")
-        await c.js("__switch('include device background').click()")
-        await c.until(fresh, 120)
-        await asyncio.sleep(2)
-  return shots
+    await shot('on')
+    # the opacity slider: eight steps down with the keyboard (Radix: the focused thumb takes the arrow keys)
+    await c.strict(
+        "__deep('[role=slider]').find(e => { let n = e; for (let i = 0; i < 6 && n; i++) { n = n.parentElement "
+        "|| (n.getRootNode() && n.getRootNode().host); if (n && (n.textContent || '').includes('background "
+        "opacity')) return true; } return false; }).focus()")
+    for _ in range(8):
+      for kind in ('keyDown', 'keyUp'):
+        await c.call('Input.dispatchKeyEvent',
+                     type=kind,
+                     key='ArrowLeft',
+                     code='ArrowLeft',
+                     windowsVirtualKeyCode=37)
+      await asyncio.sleep(0.15)
+    await asyncio.sleep(3)
+    await shot('slider')
+    await rebuilt('show the full domain')
+    await shot('mirror')
+    # the picture off: the same movie redraws without it (a property of the widget, not a new movie)
+    await c.strict("__switch('include device background').click()")
+    await asyncio.sleep(4)
+    await shot('off')
+  return out
 
 
-def part_background(chrome=None):
-  """The device picture sits on the R-Z axes where its extent says: a picture red inside Sim 2's wall and blue
-  outside it (viewer.json "device_image"), drawn behind the map (matplotlib: the whole domain and the lower divertor)
-  and, with chrome, behind the page's movie: a few pixels either side of every wall segment, outside is blue and
-  inside is not; with the switch off the page draws no picture."""
+def part_poloidal(chrome=None):
+  """The poloidal plane's extras on Sim 2 (a half domain), with a test picture red inside its wall and blue outside
+  (viewer.json "device_image"): the picture lies where its extent says, under the map (matplotlib: the whole domain
+  and the lower divertor) and, with chrome, under the page's movie (a few pixels either side of every wall segment,
+  outside is blue and inside is not); the opacity slider redraws the movie's picture at its value without remaking
+  the movie; the half domain shown whole puts each cell's colour at its mirror image (the map and the page; not
+  without the switch); switched off, the picture leaves no trace."""
   import matplotlib.pyplot as plt
   import gkview as gv
   import viewer_plots as vp
   lab, simdir, run_name, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
   run = gv.open_run(os.path.join(gv.runs_root(simdir), run_name), lab)
   w = gv.wall(run)
+  cen = np.concatenate(
+      [gv.cell_centres(run.nodes[b]).reshape(-1, 2) for b in range(run.nb)])
   with tempfile.TemporaryDirectory() as tmp:
     pic = os.path.join(tmp, 'wall.png')
-    image = {'file': pic, 'extent': _wall_picture(w, pic)}
+    image = {'file': pic, 'extent': _wall_picture(w, pic), 'opacity': 1.0}
     keep = gv.CONFIG.get('device_image')
     gv.CONFIG['device_image'] = image
     try:
@@ -971,29 +1055,46 @@ def part_background(chrome=None):
           device_image=keep)
     fs = run.frames()
     fr, fr0 = gv.frame(run, fs[-1]), gv.frame(run, fs[0])
-    got = {}
-    for zoom in ('whole domain', 'lower divertor'):
+    got, pairs = {}, {}
+    for zoom, mirror in (('whole domain', False), ('lower divertor', False),
+                         ('whole domain', True), ('outboard midplane', True),
+                         ('inboard midplane', True)):
       fig = vp.map_figure(run,
                           fr,
                           fr0,
                           'T_elc',
                           'value',
                           zoom=zoom,
-                          background=bg)
+                          background=bg,
+                          mirror=mirror)
+      fig.set_dpi(150)
       fig.canvas.draw()
       img = np.asarray(fig.canvas.buffer_rgba())
       ax = next(a for a in fig.axes if a.get_xlabel().startswith('R'))
       h = img.shape[0]
-      px = ax.transData.transform(w)
+      to_px = lambda pts: np.c_[ax.transData.transform(pts)[:, 0], h - ax.
+                                transData.transform(pts)[:, 1]]  # noqa: E731
       bb = ax.bbox
-      got[zoom] = _side_errors(img, np.c_[px[:, 0], h - px[:, 1]],
-                               (bb.x0, h - bb.y1, bb.x1, h - bb.y0), 5)
+      if mirror:
+        pairs[zoom] = _pair_colours(img, zip(to_px(cen), to_px(cen * [1, -1])),
+                                    (bb.x0, h - bb.y1, bb.x1, h - bb.y0))
+      else:
+        got[zoom] = _side_errors(img, to_px(w),
+                                 (bb.x0, h - bb.y1, bb.x1, h - bb.y0), 5)
       plt.close(fig)
     check(
         all(n >= 10 and not bad for n, bad in got.values()),
         'device background, matplotlib: the picture under the map is where its extent puts it (outside the wall '
         f'blue, inside not, 5 px either side of each wall segment): '
         f'{ {z: (n, bad[:3]) for z, (n, bad) in got.items()} }')
+    same, n = (sum(v[k] for v in pairs.values()) for k in (0, 1))
+    check(
+        n >= 50 and same == n
+        and 'upper divertor' in vp.zoom_boxes(run, mirror=True)
+        and 'upper divertor' not in vp.zoom_boxes(run),
+        f"half domain shown whole, matplotlib: every cell's colour also at its mirror image ({same} of {n} cell "
+        f"insides; by view {pairs}); "
+        "the mirror image's divertor offered as a view")
     if chrome is None:
       return
     data = os.path.join(tmp, 'data')
@@ -1003,23 +1104,54 @@ def part_background(chrome=None):
     os.symlink(gv.RUNS,
                os.path.join(data,
                             'runs'))  # the caches: the movie opens at once
-    with served(chrome, ['--sim', 'Sim 2', '--background', 'true'],
-                env={'GK_VIEWER_DATA': data}) as (url, dbg):
+    args = [
+        '--sim', 'Sim 2', '--background', 'true', '--opacity', '1', '--mirror',
+        'false'
+    ]
+    with served(chrome, args, env={'GK_VIEWER_DATA': data}) as (url, dbg):
       check(
           url is not None,
-          'device background: view.sh serves the page on a data directory with a picture'
+          'poloidal extras: view.sh serves the page on a data directory with a picture'
       )
       if url is None:
         return
-      on, off = asyncio.run(_drive_background(url, dbg, w))
-    n_on, bad_on = _side_errors(on[0], on[1], on[2], 6 * on[3])
-    blue_off = int(((off[0][..., 2] > 180) & (off[0][..., 0] < 80) &
-                    (off[0][..., 1] < 80)).sum())
-    check(
-        n_on >= 10 and not bad_on and blue_off == 0,
-        f'device background, the page: the movie draws the picture where its extent puts it ({n_on} points, '
-        f'wrong {bad_on[:3]}), and none with the switch off ({blue_off} blue pixels)'
-    )
+      st = asyncio.run(_drive_poloidal(url, dbg, w, cen))
+  img, wall_px, clip, dpr, pr, surf, _, _ = st['on']
+  n_on, bad_on = _side_errors(img, wall_px, clip, 6 * dpr)
+  check(
+      n_on >= 10 and not bad_on,
+      f'device background, the page: the movie draws the picture where its extent puts it ({n_on} points, '
+      f'wrong {bad_on[:3]})')
+  img2, wall2, clip2, dpr2, _, surf2, val, render2 = st['slider']
+  same_movie = render2 == st['on'][7]
+  # outside the wall (no cells there), the picture's blue over the surface at the slider's opacity
+  want = None if val is None else np.array(
+      [0, 0, 255]) * val + np.array(surf2) * (1 - val)
+  seen = [
+      img2[int(round(p[1])), int(round(p[0])), :3].astype(int)
+      for p, inside in _side_points(wall2, clip2, 6 * dpr2) if not inside
+  ]
+  off_blend = [
+      c.tolist() for c in seen if want is None or np.abs(c - want).max() > 12
+  ]
+  check(
+      val is not None and abs(val - 0.6) < 1e-6 and same_movie
+      and len(seen) >= 5 and not off_blend,
+      f'the opacity slider: eight arrow-key steps take it to {val}, the movie redraws the picture at that opacity '
+      f'(outside the wall {len(seen) - len(off_blend)} of {len(seen)} pixels the blend '
+      f'{None if want is None else want.round().tolist()}; others {off_blend[:4]}), the movie itself not remade '
+      f'({same_movie})')
+  same_off, n_off = _pair_colours(st['on'][0], st['on'][4], st['on'][2])
+  same_m, n_m = _pair_colours(st['mirror'][0], st['mirror'][4], st['mirror'][2])
+  check(
+      n_m >= 15 and same_m == n_m and (n_off == 0 or same_off < 0.2 * n_off),
+      f"half domain shown whole, the page: every sampled cell's colour also at its mirror image ({same_m} of "
+      f"{n_m}); without the switch the view holds no mirror image ({n_off} pairs in the drawn box, {same_off} alike)"
+  )
+  check(
+      int(_blue(st['off'][0]).sum()) == 0 and st['off'][7] == st['mirror'][7],
+      f'device background switched off: no trace of the picture ({int(_blue(st["off"][0]).sum())} blue pixels), '
+      f'the movie not made again (render {st["mirror"][7]} -> {st["off"][7]})')
 
 
 # ---------------------------------------------------------------------------------------------------- browser
@@ -1127,6 +1259,19 @@ class CDP:
                         expression=expr,
                         returnByValue=True,
                         awaitPromise=True)
+    return r.get('result', {}).get('value')
+
+  async def strict(self, expr):
+    """js, but an exception in the page raises here (js gives None: the waits use that)."""
+    r = await self.call('Runtime.evaluate',
+                        expression=expr,
+                        returnByValue=True,
+                        awaitPromise=True)
+    if r.get('exceptionDetails'):
+      d = r['exceptionDetails']
+      raise RuntimeError(
+          f"in the page: {d.get('exception', {}).get('description') or d.get('text')}"
+      )
     return r.get('result', {}).get('value')
 
   async def until(self, expr, timeout=60):
@@ -1621,7 +1766,7 @@ if __name__ == '__main__':
   part_themes()
   part_fonts()
   part_sync()
-  part_background(a.browser)
+  part_poloidal(a.browser)
   if a.browser:
     part_browser(a.browser, a.shots)
     part_liveplot(a.browser)

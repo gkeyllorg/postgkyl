@@ -124,10 +124,12 @@ def movie_data(run,
                log=False,
                x_mode='distance',
                frames=None,
-               blocks=None):
+               blocks=None,
+               mirror=False):
   """Everything the page needs for one quantity and mode (sent once; JSON with base64 arrays). frames: the frame
     numbers to play (default: all); changes stay relative to the run's first / the previous written frame. blocks:
-    draw only these (None: all): the colour scale, the poloidal view and the strips are theirs."""
+    draw only these (None: all): the colour scale, the poloidal view and the strips are theirs. mirror: a half domain
+    shown whole on the poloidal plane (viewer_plots.z_signs: the page draws each cell's mirror image too)."""
   label, sym, unit, scale, kind = gv.quantities(run)[qty]
   sym, u = tl.plain(f'${sym}$'), tl.plain(
       f' (${unit}$)') if unit else ''  # the canvas draws plain text
@@ -288,8 +290,9 @@ def movie_data(run,
       lines=lines,
       boxes={
           k: list(v)
-          for k, v in vp.zoom_boxes(run, sel).items()
+          for k, v in vp.zoom_boxes(run, sel, mirror).items()
       },
+      mirror=len(vp.z_signs(run, mirror)) == 2,
       rz=_b64(keep.astype(np.int32)),
       rz_note='' if sel is None else f' (blocks {vp.block_list(shown)})',
       st_caption=('cell along the strip: target → X point → … → target'
@@ -360,6 +363,8 @@ function ticks(lo, hi, n) { const step = niceStep((hi - lo) || 1, Math.max(1, n)
   return out; }
 
 function render({ model, el }) {
+  // for the checks: this render's number in the page (marimo may render a new movie into the same element)
+  el.dataset.render = window.__gkvMovies = (window.__gkvMovies || 0) + 1;
   const D = model.get('data');
   const n = D.frames.length, nc = D.ncell, idx = bytes(D.idx), quads = f32(D.quads);
   // the drawn cells (the chosen blocks'; every cell without a choice)
@@ -461,9 +466,23 @@ function render({ model, el }) {
       p.closePath(); paths.push(p);
       cen[2 * c] = X((q[0] + q[2] + q[4] + q[6]) / 4); cen[2 * c + 1] = Y((q[1] + q[3] + q[5] + q[7]) / 4);
     }
-    const lines = D.lines.map(l => { const p = new Path2D(); for (let i = 0; i < l.pts.length; i += 2)
-      (i ? p.lineTo(X(l.pts[i]), Y(l.pts[i + 1])) : p.moveTo(X(l.pts[i]), Y(l.pts[i + 1]))); return { kind: l.kind, p }; });
-    geo.rz = { b, X, Y, paths, cen, lines, ml, mt, mb, pw, ph, s, ox, oy, view: model.get('zoom') };
+    const line = (l, sz) => { const p = new Path2D(); for (let i = 0; i < l.pts.length; i += 2)
+      (i ? p.lineTo(X(l.pts[i]), Y(sz * l.pts[i + 1])) : p.moveTo(X(l.pts[i]), Y(sz * l.pts[i + 1])));
+      return { kind: l.kind, p }; };
+    const lines = D.lines.map(l => line(l, 1));
+    // a half domain shown whole (D.mirror): each cell, block outline and separatrix again, mirrored across Z = 0 (the
+    // wall is the whole vessel already); a mirrored cell is drawn, marked and probed as its original
+    const mpaths = [], mcen = new Float32Array(D.mirror ? 2 * nc : 0);
+    if (D.mirror) {
+      for (let c = 0; c < nc; c++) {
+        const q = quads.subarray(8 * c, 8 * c + 8), p = new Path2D();
+        p.moveTo(X(q[0]), Y(-q[1])); p.lineTo(X(q[2]), Y(-q[3])); p.lineTo(X(q[4]), Y(-q[5])); p.lineTo(X(q[6]), Y(-q[7]));
+        p.closePath(); mpaths.push(p);
+        mcen[2 * c] = cen[2 * c]; mcen[2 * c + 1] = Y(-(q[1] + q[3] + q[5] + q[7]) / 4);
+      }
+      for (const l of D.lines) if (l.kind !== 'wall') lines.push(line(l, -1));
+    }
+    geo.rz = { b, X, Y, paths, cen, mpaths, mcen, lines, ml, mt, mb, pw, ph, s, ox, oy, view: model.get('zoom') };
   }
 
   // space-time: one offscreen image per strip (x = cell along the strip, y = frame, time upward)
@@ -515,17 +534,18 @@ function render({ model, el }) {
       x.globalAlpha = bd.opacity ?? 1;
       x.drawImage(bim, g.X(e[0]), g.Y(e[3]), (e[1] - e[0]) * g.s, (e[3] - e[2]) * g.s); x.restore();
     }
-    for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); }
+    for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); if (D.mirror) x.fill(g.mpaths[c]); }
     for (const l of g.lines) {
       x.setLineDash(l.kind === 'sep' ? [4, 2] : []); x.globalAlpha = l.kind === 'outline' ? 0.6 : 1;
       x.lineWidth = l.kind === 'outline' ? 0.4 : l.kind === 'sep' ? 0.9 : 1.1;
       x.strokeStyle = l.kind === 'outline' ? L.muted : l.kind === 'sep' ? L.ink : L.ink2; x.stroke(l.p);
     }
     x.setLineDash([]); x.globalAlpha = 1;
-    for (const c of D.bad[i0]) cross(x, g.cen[2 * c], g.cen[2 * c + 1]);
+    for (const c of D.bad[i0]) { cross(x, g.cen[2 * c], g.cen[2 * c + 1]);
+      if (D.mirror) cross(x, g.mcen[2 * c], g.mcen[2 * c + 1]); }
     const pr = model.get('probe');
-    if (pr >= 0 && pr < nc && drawn[pr]) { x.lineWidth = 2.5; x.strokeStyle = L.surf; x.stroke(g.paths[pr]);
-      x.lineWidth = 1.5; x.strokeStyle = L.accent; x.stroke(g.paths[pr]); }
+    if (pr >= 0 && pr < nc && drawn[pr]) for (const p of D.mirror ? [g.paths[pr], g.mpaths[pr]] : [g.paths[pr]]) {
+      x.lineWidth = 2.5; x.strokeStyle = L.surf; x.stroke(p); x.lineWidth = 1.5; x.strokeStyle = L.accent; x.stroke(p); }
     // fitted to the canvas (a narrow column, a zoomed view and a block choice ran past its edge)
     const view = g.view === 'whole domain' ? '' : g.view, note = D.rz_note || '';
     const tt = fitText(x, ['poloidal plane' + (view ? ': ' + view : '') + note, (view || 'poloidal plane') + note,
@@ -706,7 +726,8 @@ function render({ model, el }) {
     draw(); }
   const dpr = () => window.devicePixelRatio || 1;
   cv.rz.onclick = e => { const g = geo.rz, x = e.offsetX * dpr(), y = e.offsetY * dpr();
-    for (const c of rzc) if (ctx.rz.isPointInPath(g.paths[c], x, y)) { setProbe(c); showCell(c); return; }
+    for (const c of rzc) if (ctx.rz.isPointInPath(g.paths[c], x, y) || (D.mirror && ctx.rz.isPointInPath(g.mpaths[c], x, y))) {
+      setProbe(c); showCell(c); return; }
     setProbe(-1, false); cmd.hide(); };   // the background: no probe
   cv.strips.onclick = e => {
     for (const [k, s] of strips.entries()) {
@@ -813,10 +834,11 @@ def background_loader(bg):
 
 
 def background_ref(bg):
-  """The Movie's background for picture bg (viewer_plots.device_background; None: {})."""
+  """The Movie's background for picture bg ((pixels, extent, opacity): viewer_plots.device_background's, its opacity
+  the page's slider; None: {})."""
   if bg is None:
     return {}
-  return dict(key=_background_key(bg), extent=list(bg[1]), opacity=bg[2])
+  return dict(key=_background_key(bg), extent=list(bg[1]), opacity=float(bg[2]))
 
 
 class PlotlyLoader(anywidget.AnyWidget):
