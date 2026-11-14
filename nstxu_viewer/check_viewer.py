@@ -253,7 +253,10 @@ def _charts(run, summ, cmp=None):
            'probe': vp.probe_figure(run, summ, gv.cell_offsets(run)[1] + 2, t, cmp=cmp)}
     B = gv.balance(run)
     if B is not None:
-        out['balance'] = vp.balance_figure(run, B, t, cmp=cmp, B_cmp=gv.balance(cmp.run) if cmp else None)[0]
+        Bc = gv.balance(cmp.run) if cmp else None
+        out['conservation'] = vp.conservation_figure(run, B, summ['t'], t, cmp=cmp, B_cmp=Bc,
+                                                     t_frames_cmp=cmp.summ['t'] if cmp else None)[0]
+        out['balance'] = vp.balance_figure(run, B, t, cmp=cmp, B_cmp=Bc)[0]
     D = gv.diffusivity(run)
     if D['kind']:
         out['diffusivity'] = vp.diffusivity_figure(run, D, cmp=cmp, D_cmp=gv.diffusivity(cmp.run) if cmp else None)
@@ -788,9 +791,14 @@ async def drive(url, dbg, shots):
         probe = await c.until("new URLSearchParams(location.search).get('probe')", 20)
         check(bool(probe), f'a click on the movie probes a cell (block,i,j = {probe})')
         # the same cell again lets it go; so does Esc; then probe it once more (the reload check below wants one)
-        async def click():
+        boxes = []
+
+        async def click():   # where the strips are now: a re-run may have moved or re-made the movie
+            b = await c.js(f"(r => [r.left, r.top])({W}.querySelector('canvas.strips').getBoundingClientRect())")
+            boxes.append([round(v) for v in b])
             for kind in ('mousePressed', 'mouseReleased'):
-                await c.call('Input.dispatchMouseEvent', type=kind, x=x, y=y, button='left', clickCount=1)
+                await c.call('Input.dispatchMouseEvent', type=kind, x=b[0] + 82 + 2, y=b[1] + 42 + 3, button='left',
+                             clickCount=1)
         none = "!new URLSearchParams(location.search).get('probe')"
         await click()
         again = await c.until(none, 20)
@@ -801,7 +809,31 @@ async def drive(url, dbg, shots):
         await click()
         back = await c.until("new URLSearchParams(location.search).get('probe')", 20)
         check(bool(again) and bool(esc) and back == probe,
-              'the probed cell lets go on a second click and on Esc, and comes back on a third click')
+              f'the probed cell lets go on a second click and on Esc, and comes back on a third click (second click: '
+              f'{bool(again)}, Esc: {bool(esc)}, third click: {back} for {probe}; the strips at {box[:2]}, then {boxes})')
+        # an option changed re-runs the tabs' cell (the look: dark mode off, then on): the open tab stays. It used to
+        # fall back to the first: the tabs element had no name, marimo dropped it, and a click never reached the
+        # notebook. The tab: Balance & power, whose live charts each re-run draws anew (proof that one happened); the
+        # conservation chart among them (its log y axis)
+        BAR = "__deep('[role=tablist]').filter(b => b.textContent.includes('Midplane profiles'))"
+        OPEN = (f"(t => t ? t.textContent.trim() : null)({BAR}.flatMap(b => [...b.querySelectorAll('[role=tab]')])"
+                ".find(t => t.getAttribute('aria-selected') === 'true' || t.dataset.state === 'active'))")
+        FRESH = ("(p => p.length >= 2 && p.every(d => !d.__old && d.querySelector('svg.main-svg')))"
+                 "(__deep('.nstxu-live .js-plotly-plot'))")
+        await c.press("__tab('Balance & power')")
+        await c.until(f"{OPEN} === 'Balance & power' && {FRESH}", 120)
+        kept = []
+        for _ in range(2):
+            await c.js(MARK_OLD)
+            await c.js("__switch('dark mode').click()")
+            redrawn = await c.until(FRESH, 120)
+            await asyncio.sleep(1)
+            kept.append((bool(redrawn), await c.js(OPEN)))
+        axes = await c.js("__deep('.nstxu-live .js-plotly-plot').map(d => (d.layout && d.layout.yaxis || {}).type || '')")
+        check(kept == [(True, 'Balance & power')] * 2 and 'tab=Balance' in await c.js('location.search')
+              and 'log' in (axes or []),
+              f'an option changed (dark mode off, then on) redraws the tab\'s charts and the open tab stays: {kept}; '
+              f'its charts\' y axes {axes} (the conservation chart: log)')
         # Save figure from the Save & export tab writes its file
         import gkview as gv
         before = set(glob.glob(os.path.join(gv.RUNS, 'exports', '*.png')))

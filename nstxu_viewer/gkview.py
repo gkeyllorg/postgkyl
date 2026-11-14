@@ -1064,6 +1064,36 @@ def balance(run):
     return out
 
 
+def imbalance(src, out, dot):
+    """How far a budget is from closing at each time: (src - out - dot) over the largest of |src|, |out|, |dot|. 0
+    where what the sources put in, less what the boundaries take out, is what the content gains; +-1 where a whole
+    term is unaccounted for. nan where the diagnostics hold nothing yet (out and dot both exactly 0: the first
+    sample, before a step) or every term is 0."""
+    big = np.maximum(np.maximum(np.abs(src), np.abs(out)), np.abs(dot))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(((out == 0) & (dot == 0)) | (big == 0), np.nan, (src - out - dot) / big)
+
+
+def conservation(B, t_frames):
+    """Each budget of balance(run) over each interval between the run's output frames (t_frames): what the sources put
+    in, what the boundaries took out and what the content gained over it, and their imbalance(). Over an interval,
+    not at each sample: in some runs the rate of change swings sample to sample (the 2025 re-run at 5.68 ms: +3e5,
+    -8e5, +3e5 W/rad between neighbours) while what it integrates to does not. {'species': {s: (t_mid, r)},
+    'energy': (t_mid, r)}; (empty, empty) where fewer than two frames fall inside the diagnostics' span."""
+    def per_interval(t, d):
+        first = np.argmax((d['out'] != 0) | (d['dot'] != 0))   # the samples before a step hold nothing yet
+        t = t[first:]
+        edges = np.unique(np.clip(np.asarray(t_frames, float), t[0], t[-1]))
+        if len(edges) < 2:
+            return np.zeros(0), np.zeros(0)
+        cum = {k: np.concatenate([[0.0], np.cumsum(0.5 * (d[k][first + 1:] + d[k][first:-1]) * np.diff(t))])
+               for k in ('src', 'out', 'dot')}
+        over = {k: np.diff(np.interp(edges, t, c)) for k, c in cum.items()}
+        return 0.5 * (edges[1:] + edges[:-1]), imbalance(over['src'], over['out'], over['dot'])
+    return dict(species={s: per_interval(d['t'], d) for s, d in B['species'].items()},
+                energy=per_interval(B['t'], B['E']))
+
+
 # ------------------------------------------------------------------------------------------------------ diffusivity
 def _ser_p1_2d():
     """The 2D p = 1 serendipity basis on [-1, 1]^2 (orthonormal: 1/2, sqrt(3) x/2, sqrt(3) y/2, 3 x y/2): the

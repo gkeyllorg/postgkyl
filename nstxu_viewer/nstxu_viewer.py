@@ -623,7 +623,11 @@ def _(frames, gv, mo, run):
 def _(mo, prefs):
     TABS = ['Midplane profiles', 'Targets', 'Time traces', 'Probe', 'Balance & power', 'Diffusivity', 'Options',
             'Cells', 'Static figure', 'Save & export', 'Run']
-    get_tab, set_tab = mo.state(prefs['tab'] if prefs.get('tab') in TABS else TABS[0])
+    # the open tab: prefs['tab'] (a plain value, re-runs nothing) for the tabs when their cell re-runs, so a changed
+    # option keeps the tab; get_tab for the page's address, which follows a click (set_tab). The tabs' cell must not
+    # read get_tab: marimo re-runs every reader of a state set from a click, that cell included
+    prefs['tab'] = prefs['tab'] if prefs.get('tab') in TABS else TABS[0]
+    get_tab, set_tab = mo.state(prefs['tab'])
     return TABS, get_tab, set_tab
 
 
@@ -839,7 +843,6 @@ def _(
     fr,
     fr0,
     get_probe,
-    get_tab,
     glob,
     gv,
     integ,
@@ -854,6 +857,7 @@ def _(
     movie_name,
     os,
     pal,
+    prefs,
     qty_pick,
     run,
     save_fig_btn,
@@ -975,22 +979,33 @@ def _(
             return mo.callout(mo.md('This run wrote no integrated diagnostics (no fdot_integrated_moms).'),
                               kind='neutral')
         _Bb = gv.balance(cmp.run) if cmp is not None else None
-        _fig, _notes = vp.balance_figure(run, _B, t_now, pal=pal, cmp=cmp, B_cmp=_Bb)
+        _cfig, _cnotes = vp.conservation_figure(run, _B, summ['t'], t_now, pal=pal, cmp=cmp, B_cmp=_Bb,
+                                                t_frames_cmp=cmp.summ['t'] if cmp is not None else None)
+        _fig = vp.balance_figure(run, _B, t_now, pal=pal, cmp=cmp, B_cmp=_Bb)[0]
         _i = len(_B['t']) - 1
         _tg = ', '.join(f"{name} {v['power'][_i] * 2 * vp.np.pi / 1e6:.3g} MW"
                         for name, v in _B['targets'].items())
         _share = sum(v['power'][_i] for v in _B['targets'].values()) / _B['E']['out'][_i] * 100
         return mo.vstack([
+            mo.md('#### Conservation: the particle and energy budgets over each interval between frames'),
+            _live(_cfig, 'conservation'),
+            mo.md(f"Imbalance (sources − boundary losses − content gained, of the largest), typical (median, signed) "
+                  f"and largest over the run: {'; '.join(_cnotes)}."),
+            mo.md('#### The budgets\' terms, and the power to each target'),
             _live(_fig, 'balance'),
             mo.md(f"At {_B['t'][_i] * vp.time_unit(_B['t'][-1])[0]:.4g} {vp.time_unit(_B['t'][-1])[1]}: source "
                   f"{_B['E']['src'][_i] * gv.full_device(run) / 1e6:.3g} MW (whole device); targets: {_tg} "
-                  f"({_share:.0f} % of all boundary energy losses; the rest leaves through the radial walls). "
-                  f"Residuals (source − losses − rate of change, of the source): {', '.join(_notes)}."),
+                  f"({_share:.0f} % of all boundary energy losses; the rest leaves through the radial walls)."),
             mo.callout(mo.md(
-                '**Reading the energy residual.** The particle balance closes (Sim 1: 0.01 %), so the boundary '
-                'fluxes carry every transport channel. The energy balance does not: +9 % of the source in Sim 1\'s '
-                'steady state, and more, either sign, during transients; with and without collisions alike in the '
-                '60 µs Sim 1 pair. Not understood yet; do not read it as a physical loss. Definitions: source energy '
+                '**Reading the conservation chart.** Each point is one interval between output frames: what the '
+                'sources put in, less what the boundaries took out, less what the content gained, as a share of the '
+                'largest of the three (log axis). A budget that closes sits orders of magnitude down (the 2025 '
+                're-run\'s particles: 5e-9 %); spikes mark events (Sim 2\'s heat burst at 85 µs). Particles close '
+                'in every healthy run. Energy closes in the 2025 re-run\'s prod (−0.04 % typical, at most 6 %), not '
+                'in Sim 1\'s production (+9 %), Sim 2\'s (−41 %) or the 2025 coll_c runs (−21 %). Ruled out on '
+                '2026-11-13: the faces between blocks (they cancel to 0.04 % of the source in Sim 1, 2 % in Sim 2) '
+                'and the field-energy term (≤ 1e3 W/rad against residuals of 1e4–1e5: either sign gives the same). '
+                'Not understood yet; do not read it as a physical loss. Definitions: source energy '
                 '= Σ m M2 / 2 of the source (this driver integrates the source\'s M0M1M2 moments; postgkyl\'s '
                 'energy_balance would take that M2 for the Hamiltonian, which is off by the mass for this driver); '
                 'losses and rate of change = the Hamiltonian moments of the boundary fluxes and of ∂f/∂t, minus the '
@@ -1165,13 +1180,20 @@ def _(
              'Static figure': _static,
              'Save & export': _export,
              'Run': _run}
+    def _open(name):
+        prefs['tab'] = name
+        set_tab(name)
+
+    # bound to a name: marimo keeps UI elements by weak reference, and an unnamed one is gone when the cell ends, its
+    # clicks never reaching _open (the page then fell back to the first tab whenever this cell re-ran)
+    tabs_ui = mo.ui.tabs({name: (_safe(_tabs[name]) if callable(_tabs[name]) else _tabs[name]) for name in TABS},
+                         value=prefs['tab'], lazy=True, on_change=_open)
     mo.vstack([
         mo.md('<small>Click a curve in any chart, a cell or a profile in the movie, or a map figure: the equivalent '
               'pgkyl command (postgkyl\'s command line, the files this viewer read), ready to paste.</small>'),
-        mo.ui.tabs({name: (_safe(_tabs[name]) if callable(_tabs[name]) else _tabs[name]) for name in TABS},
-                   value=get_tab(), lazy=True, on_change=set_tab),
+        tabs_ui,
     ], gap=0.3)
-    return
+    return (tabs_ui,)
 
 
 if __name__ == "__main__":

@@ -115,8 +115,11 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
     core / SOL / PF.
   - *Probe*: every quantity at the probed cell over time (both species), with its region's volume mean dotted; q_perp
     dashed on the q_par panel.
-  - *Balance & power*: particles (each species) and energy, whole device: source, boundary losses, rate of change,
-    residual; the power through each target's plate. See Definitions for the energy residual.
+  - *Balance & power*: first, **conservation**: each budget's imbalance over each interval between output frames
+    (what the sources put in, less what the boundaries took out, less what the content gained, as a share of the
+    largest of the three; log axis), each species' particles and the energy, over the whole run, with the typical
+    and largest values written under it. Then the budgets' terms (source, boundary losses, rate of change,
+    residual) and the power through each target's plate. See Definitions.
   - *Diffusivity*: the anomalous diffusivity D the run used, at the outboard and inboard midplane node by node
     (core, then SOL; log axis when it spans more than ×20) and in every cell on the poloidal plane and the strips,
     with where it comes from (below).
@@ -220,7 +223,21 @@ face (interior faces cancel pairwise), ∂f/∂t's M0; energy = Σ_s m_s M2 / 2 
 the source's M0M1M2 moments, not its Hamiltonian; the source's q φ term cancels for a quasineutral source, measured
 1e-11 W), the Hamiltonian of every boundary flux, ∂f/∂t's Hamiltonian minus the field-energy rate (as
 `postgkyl.diagnostics.gk.energy_balance`; that diagnostic would take the source's M2 for its Hamiltonian, off by the
-mass for this driver). Target power = the Hamiltonian boundary flux through the plate face of the leg and PF blocks,
+mass for this driver).
+
+Conservation (`gkview.conservation`): the three terms integrated over each interval between output frames
+(cumulative trapezoids at the diagnostics' samples, read at the frame times), and `imbalance` = (in − out −
+gained) / the largest of the three. Over an interval, not per sample: in some runs ∂f/∂t's moment swings sample to
+sample (the 2025 re-run at 5.68 ms: +3e5, −8e5, +3e5 W/rad between neighbours, ±100 % per sample) while its
+integral does not. The first sample (before any step: no flux, no rate yet) is left out. Measured 2026-11-13 (typical
+= median over the intervals, signed): particles close in every healthy run (the 2025 re-run's prod 5.5e-9 %, Sim 1's
+±0.002 %; Sim 2 1e-5 %, up to 57 % in its heat burst at 85 µs); energy closes in the 2025 re-run's prod (−0.04 %,
+at most 6 %), not in Sim 1's production (+9.1 %, steady), Sim 2's (−41 %) or the 2025 coll_c runs (−21 %). Ruled
+out as the cause: the faces between blocks (they cancel to 0.04 % of the source in Sim 1, 2 % in Sim 2: the outer
+faces alone give the same residuals) and the field-energy term (≤ 1e3 W/rad against residuals of 1e4–1e5: without
+it, or with the other sign, the same). Open.
+
+Target power = the Hamiltonian boundary flux through the plate face of the leg and PF blocks,
 both species. The diagnostics are per radian of toroidal angle: × 2π for one target's ring, × 2π × 2 for a half
 domain's whole device (Sim 2: its source rate × 4π = its set particle rate, 1.8658e21 /s, to 0.03 %). At the last
 frames: Sim 1 (7.12 ms) source 3.34 MW, outer targets 0.79 / 0.61 MW, inner 0.12 / 0.085 MW, 53 % of the boundary
@@ -387,7 +404,13 @@ flux-login2). Not yet run: a real fetch from Flux.
 Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame n_e = 0.90-1.08 on 6 of 7 channels
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
-## Checks (2026-11-13: headless all pass; the browser part not run)
+## Checks (2026-11-14: all pass, the browser part too: `check_viewer.py --browser` 52, `check_gkview.py` 64)
+2026-11-14: the browser part runs again (Chrome for Testing's headless shell 157; any Chrome / Chromium binary will
+do). New: the open tab stays when an option re-runs the tabs (Balance & power, dark mode off and on: its charts
+drawn anew each time, the tab still open, the conservation chart's log axis there). The notebook as committed in
+1e19a567 fails it: the page falls back to Midplane profiles. The probe's third click now reads the strips' place just
+before it clicks (it had failed 4 runs in 6, the strips never having moved: a click too soon after Esc's re-run). The
+conservation chart is in the label and pgkyl audits (27 charts, 460 curves).
 2026-11-13: `check_viewer.py` adds fonts (Viewer Symbols complete and reproducible, the page gets it, matplotlib
 takes the tracked fonts before a system copy, no missing glyph in any theme's notebook) and sync (above).
 `check_gkview.py` all pass after the geqdsk / cache path helpers moved (`geqdsk_named`, `here`, `cache_path`).

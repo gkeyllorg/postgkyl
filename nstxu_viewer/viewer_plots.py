@@ -1710,6 +1710,44 @@ def compare_legend(pal):
 
 
 # ------------------------------------------------------------------------------------------- balance and probe
+def conservation_figure(run, B, t_frames, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None, t_frames_cmp=None):
+    """Whether the run conserves particles and energy, over the whole run: each budget's imbalance over each interval
+    between output frames (gkview.conservation: what the sources put in, less what the boundaries took out, less what
+    the content gained, over the largest of the three), in % on a log axis, so a budget that closes (time-stepping
+    and round-off) and one that does not read apart at a glance. Each species' particles in its colour, the energy in
+    ink; an overlay's thin and faint. Returns (figure, notes: per budget, the median and the largest imbalance over
+    the run, and when the largest was)."""
+    ts, tu = time_unit(B['t'][-1])
+    fig = go.Figure()
+    notes = []
+
+    def series(C, run_):
+        return ([(f'{gv.species_tag(s)[0]} particles', t, r, species_colour(pal, s), pc.balance(run_))
+                 for s, (t, r) in C['species'].items()] +
+                [('energy', *C['energy'], pal.ink, pc.balance(run_, True))])
+
+    for name, t, r, col, cmd in series(gv.conservation(B, t_frames), run):
+        a = np.abs(r) * 100
+        x, y = t * ts, np.maximum(a, np.finfo(float).eps)   # an exact 0 at the axis floor, not off it
+        fig.add_trace(go.Scatter(x=x, y=y, mode='lines', line=dict(color=col, width=2.5 if name == 'energy' else 2),
+                                 name=name, meta=dict(pgkyl=cmd),
+                                 hovertemplate=f'{name}: %{{y:.3g}} % of the largest term<extra></extra>'))
+        if np.isfinite(a).any():
+            i = int(np.nanargmax(a))
+            notes.append(f'{name} {np.nanmedian(r) * 100:+.2g} % (largest {a[i]:.2g} %, the interval around '
+                         f'{t[i] * ts:.3g} {tu})')
+    if B_cmp is not None:
+        for name, t, r, col, cmd in series(gv.conservation(B_cmp, t_frames_cmp), cmp.run):
+            x, y = envelope(*in_span(t, B['t'], np.maximum(np.abs(r) * 100, np.finfo(float).eps)))
+            fig.add_trace(go.Scatter(x=x * ts, y=y, mode='lines', line=dict(color=col, width=1.2), opacity=0.5,
+                                     name=f'{cmp.label}, {name}', meta=dict(pgkyl=cmd),
+                                     hovertemplate=f'{cmp.label}, {name}: %{{y:.3g}} %<extra></extra>'))
+    fig.update_yaxes(type='log', exponentformat='power', title_text='imbalance (% of the largest term)')
+    fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'))
+    _cursor(fig, t_now, ts, [(None, None)], pal)
+    return _layout(fig, 340, pal, gap=8, hovermode='x unified'), notes
+
+
 def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
     """Particle balance (each species) and energy balance, whole device; the power through each target's plate.
     Terms: source (dashed gray), boundary losses (crimson), rate of change (gold, dash-dot), residual (ink, dotted):
