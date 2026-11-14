@@ -17,6 +17,7 @@ Validated with the data-viz validator on each look's surface (white; #1B262B):
   crimson/gold at CVD 7.9 (the 6-8 band), so the region lines also carry direct end labels.
 """
 import colorsys
+import functools
 import itertools
 import os
 import re
@@ -674,6 +675,34 @@ def wall_within(w, z0, z1):
   return np.array(pts).reshape(-1, 2)
 
 
+# the device picture behind the poloidal plane (gkview.device_image) is drawn at most this many pixels on its longest
+# side: sharp on a slide (12 in at 300 dpi = 3600 px wide for the whole figure, the poloidal plane under half of it)
+BACKGROUND_PX = 2000
+
+
+@functools.lru_cache(maxsize=2)
+def _picture(path, stamp, max_px):
+  """RGBA pixels of the picture at path, at most max_px on its longest side (stamp: its mtime, so a new file
+  is read again)."""
+  from PIL import Image
+  with Image.open(path) as im:
+    im = im.convert('RGBA')
+    im.thumbnail((max_px, max_px), Image.LANCZOS)
+    return np.asarray(im)
+
+
+def device_background():
+  """(RGBA pixels, extent [R_left, R_right, Z_bottom, Z_top], opacity) of viewer.json's device picture
+  (gkview.device_image), for map_figure's background; None when there is none. Raises ValueError (gkview) or
+  OSError (an unreadable picture)."""
+  d = gv.device_image()
+  if d is None:
+    return None
+  path, extent, opacity = d
+  return _picture(path,
+                  os.stat(path).st_mtime_ns, BACKGROUND_PX), extent, opacity
+
+
 def zoom_boxes(run, blocks=None):
   """name -> (R0, R1, Z0, Z1) views of the poloidal plane, from the layout ('whole domain': the chosen blocks)."""
   nd = run.nodes
@@ -728,12 +757,14 @@ def map_figure(run,
                scale=None,
                blocks=None,
                vals=None,
-               slide=None):
+               slide=None,
+               background=None):
   """Poloidal plane (true R-Z, wall, separatrix) + every cell unrolled; x = cells with n <= 0 (any species).
     scale: a fixed_scale() dict (one colour scale over a movie's frames), else colour_norm's. blocks: draw only these
     (None: all; the colour scale and the 'whole domain' view are theirs). vals: block -> values to draw instead of the
     quantity (with scale; no n <= 0 marks), e.g. the diffusivity. slide: laid out for a slide (SLIDE_SIZES): 'full',
-    the whole figure; 'half', the poloidal plane alone (the strips need the width); None: the page's."""
+    the whole figure; 'half', the poloidal plane alone (the strips need the width); None: the page's.
+    background: device_background(), drawn behind the cells on the poloidal plane (None: none)."""
   shown = shown_blocks(run, blocks)
   sel = None if len(shown) == run.nb else set(shown)
   if vals is None:
@@ -825,6 +856,14 @@ def map_figure(run,
                             top=(0.92 if nstrip >= 2 else 0.86) - title_band,
                             bottom=0.08 if nstrip >= 2 else 0.12)
     ax = fig.add_subplot(gs[:, 0])
+    if background is not None:  # under everything (pcolormesh 1, lines 2); the zoom box below sets the limits
+      img, (b_r0, b_r1, b_z0, b_z1), opacity = background
+      ax.imshow(img,
+                extent=(b_r0, b_r1, b_z0, b_z1),
+                origin='upper',
+                alpha=opacity,
+                zorder=0,
+                interpolation='antialiased')
     kw = dict(cmap=cmap, norm=norm, shading='flat')
     for b in shown:
       nd = run.nodes[b]
@@ -2956,8 +2995,10 @@ def diffusivity_map(run,
                     zoom='whole domain',
                     pal=LOOKS['dark'],
                     blocks=None,
-                    species=None):
-  """The diffusivity of every cell (its cell average) on the poloidal plane and the unrolled strips (map_figure)."""
+                    species=None,
+                    background=None):
+  """The diffusivity of every cell (its cell average) on the poloidal plane and the unrolled strips (map_figure;
+  background: its)."""
   s = species or next(iter(Dinfo['species']))
   cells = Dinfo['species'][s]['cells']
   V = np.concatenate([cells[b].ravel() for b in shown_blocks(run, blocks)])
@@ -2976,7 +3017,8 @@ def diffusivity_map(run,
                     pal=pal,
                     scale=sc,
                     blocks=blocks,
-                    vals=cells)
+                    vals=cells,
+                    background=background)
 
 
 PROBE_ROWS = [('n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'), ('T', '$T$ (eV)'),
@@ -3152,10 +3194,11 @@ def render_movie(run,
                  progress=None,
                  title='',
                  blocks=None,
-                 slide=None):
+                 slide=None,
+                 background=None):
   """An MP4 of the map over the given frame numbers, one colour scale for all of them, the time and frame on each.
     H.264 from imageio-ffmpeg's ffmpeg (the system ffmpeg has no H.264 encoder). progress(iterable, total) wraps the
-    loop. slide: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
+    loop. slide, background: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
   import imageio_ffmpeg
   allf = [int(k) for k in summ['frames']]
   rows = [allf.index(k) for k in frames]
@@ -3193,7 +3236,8 @@ def render_movie(run,
           scale=scale,
           blocks=blocks,
           title=f'{title}   t = {summ["t"][row] * ts:.4g} {tu}   (frame {k})',
-          slide=slide)
+          slide=slide,
+          background=background)
       if slide:
         fig.set_dpi(165)  # 1980 px across a full-width slide
       fig.canvas.draw()

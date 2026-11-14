@@ -25,6 +25,9 @@ KEYS = {
     'log': ('log colour scale for positive values', 'true'),
     'zoom': ("the poloidal view ('whole domain', 'lower divertor', ...)",
              "'lower divertor'"),
+    'background':
+    ('the device\'s picture behind the poloidal plane (viewer.json "device_image")',
+     'true'),
     'x': ('profile x axis: distance | R', 'distance'),
     'theme':
     ("the look: NSTX-U (the DPP 2025 poster) | PPPL (the lab's slide template)",
@@ -98,6 +101,7 @@ DEFAULTS = {
     'mode': 'change',
     'log': False,
     'zoom': 'whole domain',
+    'background': False,
     'x': 'distance',
     'theme': 'NSTX-U',
     'dark': True,

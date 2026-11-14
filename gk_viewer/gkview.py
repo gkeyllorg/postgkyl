@@ -61,6 +61,35 @@ SIMS = [tuple(s) for s in CONFIG.get('sims', [])]
 # The device the runs simulate, named in a run's title before its shot (viewer.json "device"; blank: none).
 DEVICE = CONFIG.get('device', '')
 
+
+def device_image():
+  """viewer.json's "device_image": a picture of the device's poloidal cross-section to draw behind the poloidal
+  plane, {"file": <path, relative to base>, "extent": [R_left, R_right, Z_bottom, Z_top] (m: where the picture's
+  edges lie, so that it sits on the R-Z axes), "opacity": <0 to 1, default 1>}. Returns (path, extent, opacity), or
+  None when viewer.json names none; raises ValueError when it names one that cannot be used."""
+  d = CONFIG.get('device_image')
+  if not d:
+    return None
+  if not isinstance(d, dict) or not d.get('file'):
+    raise ValueError('viewer.json "device_image" needs a "file"')
+  path = os.path.normpath(os.path.join(BASE, d['file']))
+  if not os.path.isfile(path):
+    raise ValueError(f'viewer.json "device_image": no file {path}')
+  e = d.get('extent')
+  if not (isinstance(e, list) and len(e) == 4
+          and all(isinstance(v, (int, float))
+                  for v in e) and e[1] > e[0] and e[3] > e[2]):
+    raise ValueError(
+        'viewer.json "device_image": "extent" must be [R_left, R_right, Z_bottom, Z_top] (m), '
+        f'R_right > R_left and Z_top > Z_bottom; it is {e!r}')
+  opacity = float(d.get('opacity', 1.0))
+  if not 0 < opacity <= 1:
+    raise ValueError(
+        f'viewer.json "device_image": "opacity" must be in (0, 1]; it is {opacity}'
+    )
+  return path, tuple(float(v) for v in e), opacity
+
+
 PHYSICAL = 5  # gkyl_oriented_edge (core/zero/gkyl_block_topo.h)
 LOWER_POS, LOWER_NEG, UPPER_POS, UPPER_NEG = 1, 2, 3, 4
 MOMS = ('M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3par', 'M3perp')

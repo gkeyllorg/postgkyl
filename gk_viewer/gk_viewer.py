@@ -472,6 +472,30 @@ def _(boot, gv, mo, prefs, run, vp, vs):
 
 
 @app.cell
+def _(mo, prefs, vp, vs):
+  # the device's picture behind the poloidal plane (viewer.json "device_image", viewer_plots.device_background): a
+  # switch in the sidebar when there is one, a note when viewer.json names one that cannot be used
+  background, bg_note = None, mo.md('')
+  try:
+    background = vp.device_background()
+  except (OSError, ValueError) as _e:
+    bg_note = mo.callout(mo.md(f'No device background: {_e}'), kind='warn')
+  bg_pick = mo.ui.switch(value=vs.as_bool(prefs.get('background', False)),
+                         label='include device background',
+                         on_change=lambda v: prefs.update(background=v)
+                         ) if background is not None else None
+  return background, bg_note, bg_pick
+
+
+@app.cell
+def _(background, mm, mo):
+  # the picture put into the page once (hidden), for the movie (movie_widget.BackgroundLoader)
+  mo.ui.anywidget(
+      mm.background_loader(background)) if background is not None else mo.md('')
+  return
+
+
+@app.cell
 def _(boot, frames, gv, mo, prefs, run):
   # the shown frame and the probed cell, shared by the sidebar and the movie: the launch values on the launch run,
   # else the last frame and no probe. now: the frame and probe the notebook shows and the ones the push cell last
@@ -578,6 +602,8 @@ def _(frames, frames_text, gv, mo):
 
 @app.cell
 def _(
+    bg_note,
+    bg_pick,
     blocks_pick,
     cmp_err,
     cmp_pick,
@@ -608,7 +634,8 @@ def _(
           md('<small>Play: the movie\'s play button (it runs in the browser; the notebook follows when it '
              'pauses)</small>'), frames_text, frames_msg or mo.md(''),
           probe_text,
-          mo.md('---'), qty_pick, mode_pick, log_pick, zoom_pick, blocks_pick,
+          mo.md('---'), qty_pick, mode_pick, log_pick, zoom_pick,
+          bg_pick if bg_pick is not None else mo.md(''), bg_note, blocks_pick,
           mo.md('---'), cmp_pick,
           mo.callout(mo.md(f'Not drawn: {cmp_err}'), kind='warn')
           if cmp_err else mo.md(''),
@@ -751,22 +778,40 @@ def _(blocks, cmp, dt_hist, fr, frames, gv, k, mo, np, run, sim_pick, t_now,
 
 
 @app.cell
-def _(blocks, log_pick, mm, mo, mode_pick, movie_frames, now, pal, qty_pick,
-      run, summ, x_pick, zoom_pick):
+def _(
+    background,
+    bg_pick,
+    blocks,
+    log_pick,
+    mm,
+    mo,
+    mode_pick,
+    movie_frames,
+    now,
+    pal,
+    qty_pick,
+    run,
+    summ,
+    x_pick,
+    zoom_pick,
+):
   # the movie: every frame it plays sent to the page once, animated there (movie_widget.py)
   movie = mo.ui.anywidget(
-      mm.Movie(data=mm.movie_data(run,
-                                  summ,
-                                  qty_pick.value,
-                                  mode_pick.value,
-                                  log_pick.value,
-                                  x_pick.value,
-                                  movie_frames,
-                                  blocks=blocks),
-               look=mm.movie_look(pal),
-               zoom=zoom_pick.value,
-               frame=now['k'],
-               probe=now['probe']))
+      mm.Movie(
+          data=mm.movie_data(run,
+                             summ,
+                             qty_pick.value,
+                             mode_pick.value,
+                             log_pick.value,
+                             x_pick.value,
+                             movie_frames,
+                             blocks=blocks),
+          look=mm.movie_look(pal),
+          zoom=zoom_pick.value,
+          background=mm.background_ref(
+              background if bg_pick is not None and bg_pick.value else None),
+          frame=now['k'],
+          probe=now['probe']))
   movie
   return (movie, )
 
@@ -833,6 +878,7 @@ def _(mo, prefs):
 
 @app.cell
 def _(
+    bg_pick,
     blocks,
     cmp_pick,
     dark_pick,
@@ -868,6 +914,7 @@ def _(
       x=x_pick.value,
       theme=theme_pick.value,
       dark=bool(dark_pick.value),
+      background=bool(bg_pick.value) if bg_pick is not None else None,
       tab=get_tab(),
       frames=frames_text.value.strip(),
       probe=','.join(map(str,
@@ -888,8 +935,23 @@ def _(
 
 
 @app.cell
-def _(blocks, fr, fr0, fr_prev, log_pick, mode_pick, pal, qty_pick, run,
-      scale_pick, summ, vp, zoom_pick):
+def _(
+    background,
+    bg_pick,
+    blocks,
+    fr,
+    fr0,
+    fr_prev,
+    log_pick,
+    mode_pick,
+    pal,
+    qty_pick,
+    run,
+    scale_pick,
+    summ,
+    vp,
+    zoom_pick,
+):
 
   def static_figure(title='', slide=None):
     """The map of the shown frame as a matplotlib figure (the Static figure tab, the figure export; slide: laid
@@ -908,7 +970,9 @@ def _(blocks, fr, fr0, fr_prev, log_pick, mode_pick, pal, qty_pick, run,
                          fr_prev=fr_prev,
                          title=title,
                          blocks=blocks,
-                         slide=slide)
+                         slide=slide,
+                         background=background
+                         if bg_pick is not None and bg_pick.value else None)
 
   return (static_figure, )
 
@@ -1021,7 +1085,9 @@ def _(base_name, export_size, fig_fmt, fig_name, mo, os, out_path, save_fig_btn,
 
 @app.cell
 def _(
+    background,
     base_name,
+    bg_pick,
     blocks,
     export_size,
     log_pick,
@@ -1068,6 +1134,8 @@ def _(
           fps=int(movie_fps.value),
           blocks=blocks,
           slide=_slide,
+          background=background
+          if bg_pick is not None and bg_pick.value else None,
           title=f'{run.title} · {run.sim} · {run.name} · {_label}',
           progress=lambda it, n: mo.status.progress_bar(
               it, total=n, title='Rendering the movie', remove_on_exit=True))
@@ -1096,29 +1164,31 @@ def _(
 
 @app.cell
 def _(
+    background,
+    bg_pick,
     blocks,
     cmp,
-    live_summ,
-    ro,
-    zoom_pick,
     dt_hist,
     export_size,
     fenergy,
     fetch_btn,
     fetch_log,
-    flux_cm,
-    subprocess,
     fig_download,
     fig_fmt,
     fig_msg,
     fig_name,
+    flux_cm,
     fr,
     fr0,
+    frames,
     get_probe,
     glob,
     gv,
+    HERE,
+    html,
     integ,
     k,
+    live_summ,
     make_movie_btn,
     mm,
     mo,
@@ -1129,8 +1199,10 @@ def _(
     movie_name,
     os,
     pal,
+    pc,
     prefs,
     qty_pick,
+    ro,
     run,
     save_fig_btn,
     save_view_btn,
@@ -1138,6 +1210,7 @@ def _(
     set_tab,
     state_name,
     static_figure,
+    subprocess,
     summ,
     t_now,
     TABS,
@@ -1150,10 +1223,7 @@ def _(
     view_msg,
     vp,
     x_pick,
-    HERE,
-    frames,
-    html,
-    pc,
+    zoom_pick,
 ):
 
   def _safe(build):
@@ -1514,7 +1584,9 @@ def _(
                                   zoom_pick.value,
                                   pal=pal,
                                   blocks=blocks,
-                                  species=_s)
+                                  species=_s,
+                                  background=background if bg_pick is not None
+                                  and bg_pick.value else None)
         _items.append(
             _clickable(
                 _fig,

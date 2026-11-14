@@ -28,6 +28,10 @@ cp viewer.example.json viewer.json     # then name your simulations in it (and f
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
   - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
+  - `device_image` (optional): a picture of the device's poloidal cross-section, drawn behind the poloidal plane when
+    the sidebar's **include device background** is on: `{"file": <relative to base>, "extent": [R_left, R_right,
+    Z_bottom, Z_top], "opacity": 0.0-1.0}`; extent = where the picture's edges lie in metres (Device background,
+    below);
   - `remote` (optional): `{"host": <ssh host name>, "base": <the path there of base>, "data": <the viewer's data
     directory there>}`, the machine that holds the runs, for a mirror here (Run it anywhere, below).
 - `flux.env` (from `flux.env.example`): Fetch from Flux's login and paths (`fetch_flux.sh`).
@@ -69,6 +73,23 @@ prints the URL. The access token stays on: anyone on a shared login node can rea
 stops the server. Python: the venv of Setup (marimo 0.25.2, plotly 7.1.0, anywidget 0.11.0, imageio-ffmpeg 0.6.0,
 h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.txt`).
 
+## Device background (2026-11-14)
+`viewer.json`'s `device_image` puts a picture of the device's poloidal cross-section (a CAD drawing, a photo, any
+PNG or JPEG) behind the poloidal plane: in the movie and in every map figure (the Static figure tab, figure and
+movie exports, the diffusivity maps), under the cells, the wall and the separatrix, clipped to the view. The sidebar's
+**include device background** turns it on and off (launch key `--background true`; off by default; the switch is
+there only when a picture is named). `extent` places it: the R of its left and right edges and the Z of its bottom
+and top, in metres, so that its vessel lies on the run's wall (the geqdsk's limiter, drawn over it). The picture is
+read once, at most 2000 px on its longest side (`viewer_plots.BACKGROUND_PX`), and sent to the page once
+(`movie_widget.BackgroundLoader`). A picture that is not freely licensed belongs in the data directory, not in this
+repo. NSTX-U: PPPL's "Hi-res NSTX-U cross-section image (for illustration purposes only)", in the NSTX-U presentation
+templates on PPPL's Google Drive (a PPPL login).
+
+Checked (`check_viewer.py` part_background): a picture red inside Sim 2's wall and blue outside it, sampled 5 px
+either side of every wall segment: under the map (whole domain, lower divertor; a 3 cm shift of the picture fails
+it) and, with `--browser`, under the movie (served on a data directory naming the picture, `--background true`),
+where switching it off leaves no trace of it.
+
 ## Run it anywhere: a mirror (2026-11-13)
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
 holds them is down. Set up there: a checkout of this branch (Setup), and its `viewer.json`: the remote's `sims`, a
@@ -102,7 +123,9 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   movie frames (a frame range for the movie and the exported movie: `:`, `::2`, `-50:`, `0:60`), probe cell
   (block,i,j, or a click on the movie), quantity, value / change since the first frame / change since the previous
   frame (the last shows fronts moving), log scale, poloidal view (whole domain, lower/upper divertor,
-  outboard/inboard midplane), **blocks drawn** (none chosen: every block; see below), **draw another run over it**
+  outboard/inboard midplane), **include device background** (when `viewer.json` names a `device_image`: the
+  device's picture behind the poloidal plane, in the movie and every map figure), **blocks drawn** (none chosen:
+  every block; see below), **draw another run over it**
   (the overlay, see below), profile x axis (distance from the separatrix or R), **theme** (NSTX-U, PPPL or DIII-D;
   see Look) and **dark mode** (on by default; off = the theme's white look, page and figures together, no reload).
 - **Header:** run, domain, cell count, frame span, key options; the full path of the simulation output (and the

@@ -28,11 +28,15 @@
    files equal a fresh build; the page gets it; matplotlib finds the tracked files before a system copy; no missing
    glyph in text_px or in any theme's notebook. sync: sync.py mirrors Sim 2's run into a stand-in laptop tree (a
    stand-in ssh) and the viewer opens the mirror with its own geqdsk, Thomson file and cache.
+7. (2026-11-14) device background: a picture red inside Sim 2's wall and blue outside it lies under the map
+   and (--browser) under the movie where its extent says; switched off, the page draws none of it.
 Exit status: the number of failures.
 """
 import argparse
 import asyncio
 import base64
+import contextlib
+import io
 import glob
 import importlib.util
 import json
@@ -859,6 +863,165 @@ def part_sync():
       'sync: a remote whose base is this machine\'s own base: nothing to sync')
 
 
+# --------------------------------------------------------------------------------------- device background (11-14)
+def _wall_picture(w, path):
+  """A picture of the wall polygon w (R, Z), red inside and blue outside, written to path; returns its extent (the
+  wall with a margin), [R_left, R_right, Z_bottom, Z_top]."""
+  from PIL import Image, ImageDraw
+  r0, r1, z0, z1 = w[:, 0].min() - 0.2, w[:, 0].max() + 0.3, w[:, 1].min(
+  ) - 0.2, w[:, 1].max() + 0.2
+  h = 1600
+  wd = int(round(h * (r1 - r0) / (z1 - z0)))
+  im = Image.new('RGB', (wd, h), (0, 0, 255))
+  ImageDraw.Draw(im).polygon([((r - r0) / (r1 - r0) * wd,
+                               (z1 - z) / (z1 - z0) * h) for r, z in w],
+                             fill=(255, 0, 0))
+  im.save(path)
+  return [float(r0), float(r1), float(z0), float(z1)]
+
+
+def _side_errors(img, wall, clip, off):
+  """Sample img (rows from the top) off pixels either side of each wall segment at a quarter, half and three
+  quarters of its length (wall in pixels, x
+  right and y down; clip: the drawn box x0, y0, x1, y1): a point outside the wall polygon must be blue, one inside
+  must not be (the picture, or the cells over it). Points nearer the wall than off - 1 px (a corner, the wall line)
+  and outside clip are skipped. Returns (points sampled, the wrong ones)."""
+  from matplotlib.path import Path
+  wall = np.asarray(wall, float)
+  poly, a, b = Path(wall), wall[:-1], wall[1:]
+  seg = b - a
+  n, wrong = 0, []
+  for p0, d in zip(a, seg):
+    length = np.hypot(*d)
+    if length < 3 * off:
+      continue
+    for f, sgn in [(f, sgn) for f in (0.25, 0.5, 0.75) for sgn in (1, -1)]:
+      p = p0 + f * d + sgn * off * np.array([-d[1], d[0]]) / length
+      if not (clip[0] + off <= p[0] <= clip[2] - off
+              and clip[1] + off <= p[1] <= clip[3] - off):
+        continue
+      t = np.clip(
+          np.einsum('ij,ij->i', p - a, seg) /
+          np.maximum(np.einsum('ij,ij->i', seg, seg), 1e-12), 0, 1)
+      if np.min(np.hypot(*(a + t[:, None] * seg - p).T)) < off - 1:
+        continue
+      r, g, bl = img[int(round(p[1])), int(round(p[0]))][:3]
+      blue = bl > 180 and r < 80 and g < 80
+      n += 1
+      if blue == poly.contains_point(p):
+        wrong.append(
+            (round(p[0]), round(p[1]),
+             'inside' if poly.contains_point(p) else 'outside', (r, g, bl)))
+  return n, wrong
+
+
+async def _drive_background(url, dbg, wall):
+  """The movie's poloidal plane with the picture (launched --background true), then with the switch off: each as
+  (the canvas as RGBA pixels, the wall in canvas pixels, the drawn box in canvas pixels, the device pixel ratio)."""
+  from PIL import Image
+  grab = (
+      "(() => { const el = __deep('.gkv-movie')[0], cv = el.querySelector('canvas.rz'), b = el.__rz.box(), "
+      f"w = {json.dumps(np.asarray(wall).tolist())}; const p0 = el.__rz.px(b[0], b[3]), p1 = el.__rz.px(b[1], b[2]); "
+      "return { png: cv.toDataURL('image/png'), wall: w.map(q => el.__rz.px(q[0], q[1])), "
+      "clip: [p0[0], p0[1], p1[0], p1[1]], dpr: window.devicePixelRatio || 1 }; })()"
+  )
+  fresh = "__deep('.gkv-movie').some(e => !e.__old && +(e.dataset.draws || 0) > 0)"
+  shots = []
+  async with opened(url, dbg) as c:
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    await c.until(fresh, 180)
+    await c.until(
+        "Object.values(window.__gkvBackground || {}).some(i => i.complete && i.naturalWidth)",
+        60)
+    await asyncio.sleep(2)  # the movie redraws when the picture arrives
+    for k in range(2):
+      g = await c.js(grab)
+      shots.append((np.asarray(
+          Image.open(io.BytesIO(base64.b64decode(g['png'].split(
+              ',', 1)[1]))).convert('RGBA')), g['wall'], g['clip'], g['dpr']))
+      if k == 0:  # the switch off: the movie made again, without the picture
+        await c.js("__deep('.gkv-movie').forEach(e => { e.__old = true; })")
+        await c.js("__switch('include device background').click()")
+        await c.until(fresh, 120)
+        await asyncio.sleep(2)
+  return shots
+
+
+def part_background(chrome=None):
+  """The device picture sits on the R-Z axes where its extent says: a picture red inside Sim 2's wall and blue
+  outside it (viewer.json "device_image"), drawn behind the map (matplotlib: the whole domain and the lower divertor)
+  and, with chrome, behind the page's movie: a few pixels either side of every wall segment, outside is blue and
+  inside is not; with the switch off the page draws no picture."""
+  import matplotlib.pyplot as plt
+  import gkview as gv
+  import viewer_plots as vp
+  lab, simdir, run_name, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+  run = gv.open_run(os.path.join(gv.runs_root(simdir), run_name), lab)
+  w = gv.wall(run)
+  with tempfile.TemporaryDirectory() as tmp:
+    pic = os.path.join(tmp, 'wall.png')
+    image = {'file': pic, 'extent': _wall_picture(w, pic)}
+    keep = gv.CONFIG.get('device_image')
+    gv.CONFIG['device_image'] = image
+    try:
+      bg = vp.device_background()
+    finally:
+      gv.CONFIG.pop('device_image') if keep is None else gv.CONFIG.update(
+          device_image=keep)
+    fs = run.frames()
+    fr, fr0 = gv.frame(run, fs[-1]), gv.frame(run, fs[0])
+    got = {}
+    for zoom in ('whole domain', 'lower divertor'):
+      fig = vp.map_figure(run,
+                          fr,
+                          fr0,
+                          'T_elc',
+                          'value',
+                          zoom=zoom,
+                          background=bg)
+      fig.canvas.draw()
+      img = np.asarray(fig.canvas.buffer_rgba())
+      ax = next(a for a in fig.axes if a.get_xlabel().startswith('R'))
+      h = img.shape[0]
+      px = ax.transData.transform(w)
+      bb = ax.bbox
+      got[zoom] = _side_errors(img, np.c_[px[:, 0], h - px[:, 1]],
+                               (bb.x0, h - bb.y1, bb.x1, h - bb.y0), 5)
+      plt.close(fig)
+    check(
+        all(n >= 10 and not bad for n, bad in got.values()),
+        'device background, matplotlib: the picture under the map is where its extent puts it (outside the wall '
+        f'blue, inside not, 5 px either side of each wall segment): '
+        f'{ {z: (n, bad[:3]) for z, (n, bad) in got.items()} }')
+    if chrome is None:
+      return
+    data = os.path.join(tmp, 'data')
+    os.makedirs(data)
+    json.dump(dict(gv.CONFIG, base=gv.BASE, device_image=image),
+              open(os.path.join(data, 'viewer.json'), 'w'))
+    os.symlink(gv.RUNS,
+               os.path.join(data,
+                            'runs'))  # the caches: the movie opens at once
+    with served(chrome, ['--sim', 'Sim 2', '--background', 'true'],
+                env={'GK_VIEWER_DATA': data}) as (url, dbg):
+      check(
+          url is not None,
+          'device background: view.sh serves the page on a data directory with a picture'
+      )
+      if url is None:
+        return
+      on, off = asyncio.run(_drive_background(url, dbg, w))
+    n_on, bad_on = _side_errors(on[0], on[1], on[2], 6 * on[3])
+    blue_off = int(((off[0][..., 2] > 180) & (off[0][..., 0] < 80) &
+                    (off[0][..., 1] < 80)).sum())
+    check(
+        n_on >= 10 and not bad_on and blue_off == 0,
+        f'device background, the page: the movie draws the picture where its extent puts it ({n_on} points, '
+        f'wrong {bad_on[:3]}), and none with the switch off ({blue_off} blue pixels)'
+    )
+
+
 # ---------------------------------------------------------------------------------------------------- browser
 DEEP = """window.__deep = s => { const o = []; const w = r => { r.querySelectorAll(s).forEach(e => o.push(e));
   r.querySelectorAll('*').forEach(e => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(document); return o; };
@@ -1003,7 +1166,9 @@ class CDP:
       open(path, 'wb').write(base64.b64decode(r['data']))
 
 
-async def drive(url, dbg, shots):
+@contextlib.asynccontextmanager
+async def opened(url, dbg):
+  """The page at url in the Chrome listening on DevTools port dbg (served()): yields a CDP on it, navigated."""
   import websockets
   info = None
   for _ in range(100):
@@ -1018,6 +1183,11 @@ async def drive(url, dbg, shots):
     c = CDP(ws)
     await c.call('Page.enable')
     await c.call('Page.navigate', url=url)
+    yield c
+
+
+async def drive(url, dbg, shots):
+  async with opened(url, dbg) as c:
     await asyncio.sleep(3)
     await c.js(DEEP)
     k = await c.until('window.__frame && __frame() !== null && __frame()', 120)
@@ -1242,17 +1412,23 @@ async def drive(url, dbg, shots):
       await c.shot(os.path.join(shots, 'reloaded.png'))
 
 
-def part_browser(chrome, shots):
+@contextlib.contextmanager
+def served(chrome, args, env=None):
+  """./view.sh args (OPEN=0, a port of its own; env: more variables for it) and a headless Chrome to drive the page:
+  yields (url, the DevTools port), url None when the server printed none in 60 s; both stopped by process group
+  afterwards, whatever happens."""
   port, dbg = str(27300 + os.getpid() % 200), str(9500 + os.getpid() % 400)
   profile = tempfile.mkdtemp(prefix='check_viewer_chrome_')
   log = tempfile.NamedTemporaryFile('w+', suffix='.log', delete=False)
-  srv = subprocess.Popen(
-      ['./view.sh', '--sim', 'Sim 1', '--frame', '20', '--qty', 'T_elc'],
-      cwd=HERE,
-      env=dict(os.environ, OPEN='0', PORT=port),
-      stdout=log,
-      stderr=subprocess.STDOUT,
-      start_new_session=True)
+  srv = subprocess.Popen(['./view.sh'] + args,
+                         cwd=HERE,
+                         env=dict(os.environ,
+                                  OPEN='0',
+                                  PORT=port,
+                                  **(env or {})),
+                         stdout=log,
+                         stderr=subprocess.STDOUT,
+                         start_new_session=True)
   chr_ = None
   try:
     url = None
@@ -1262,18 +1438,16 @@ def part_browser(chrome, shots):
         url = m.group(0).replace('localhost', '127.0.0.1')
         break
       time.sleep(0.1)
-    check(url is not None, 'view.sh serves the page')
-    if url is None:
-      return
-    chr_ = subprocess.Popen([
-        chrome, '--headless=new', '--no-sandbox', '--disable-gpu',
-        f'--remote-debugging-port={dbg}', '--window-size=1680,1400',
-        f'--user-data-dir={profile}', 'about:blank'
-    ],
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True)
-    asyncio.run(drive(url, dbg, shots))
+    if url is not None:
+      chr_ = subprocess.Popen([
+          chrome, '--headless=new', '--no-sandbox', '--disable-gpu',
+          f'--remote-debugging-port={dbg}', '--window-size=1680,1400',
+          f'--user-data-dir={profile}', 'about:blank'
+      ],
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,
+                              start_new_session=True)
+    yield url, dbg
   finally:
     for p in (chr_, srv):
       if p is not None:
@@ -1282,6 +1456,15 @@ def part_browser(chrome, shots):
           p.wait(timeout=20)
         except (ProcessLookupError, subprocess.TimeoutExpired):
           pass
+
+
+def part_browser(chrome, shots):
+  with served(chrome,
+              ['--sim', 'Sim 1', '--frame', '20', '--qty', 'T_elc']) as (url,
+                                                                         dbg):
+    check(url is not None, 'view.sh serves the page')
+    if url is not None:
+      asyncio.run(drive(url, dbg, shots))
 
 
 # ---------------------------------------------------------------------------------------------------- LivePlot alone
@@ -1438,6 +1621,7 @@ if __name__ == '__main__':
   part_themes()
   part_fonts()
   part_sync()
+  part_background(a.browser)
   if a.browser:
     part_browser(a.browser, a.shots)
     part_liveplot(a.browser)

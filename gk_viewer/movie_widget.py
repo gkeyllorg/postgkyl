@@ -12,6 +12,8 @@ The data: the per-frame cache (gkview.summary, 'fld|<qty>' = every cell's cell a
 midplane profiles). 'Interpolate' blends neighbouring frames for display only (it is labelled on the page).
 """
 import base64
+import hashlib
+import io
 
 import anywidget
 from matplotlib import colormaps
@@ -309,10 +311,12 @@ def movie_data(run,
 class Movie(anywidget.AnyWidget):
   """The page-side player: data (movie_data), look (movie_look), zoom (a key of data['boxes']), frame (the frame
     number shown; the page sets it on pause / scrub / step, the notebook sets it from its slider), probe (the cell a
-    click picked; a click on the space-time strip also moves to that time)."""
+    click picked; a click on the space-time strip also moves to that time), background (background_ref: the device
+    picture BackgroundLoader put into the page and where it goes; {} for none)."""
   data = traitlets.Dict().tag(sync=True)
   look = traitlets.Dict().tag(sync=True)
   zoom = traitlets.Unicode('whole domain').tag(sync=True)
+  background = traitlets.Dict({}).tag(sync=True)
   frame = traitlets.Int(0).tag(sync=True)
   probe = traitlets.Int(-1).tag(
       sync=True
@@ -503,6 +507,14 @@ function render({ model, el }) {
   function drawRZ(i0, i1, a) {
     const x = ctx.rz, g = geo.rz;
     x.fillStyle = L.surf; x.fillRect(0, 0, geo.LW, geo.rzH);
+    // the device picture (BackgroundLoader), on the R-Z axes by its extent, inside the view's box, under the cells
+    const bd = model.get('background') || {}, bim = bd.key && (window.__gkvBackground || {})[bd.key];
+    if (bim && bim.complete && bim.naturalWidth) {
+      const e = bd.extent;
+      x.save(); x.beginPath(); x.rect(g.ox, g.oy, g.s * (g.b[1] - g.b[0]), g.s * (g.b[3] - g.b[2])); x.clip();
+      x.globalAlpha = bd.opacity ?? 1;
+      x.drawImage(bim, g.X(e[0]), g.Y(e[3]), (e[1] - e[0]) * g.s, (e[3] - e[2]) * g.s); x.restore();
+    }
     for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); }
     for (const l of g.lines) {
       x.setLineDash(l.kind === 'sep' ? [4, 2] : []); x.globalAlpha = l.kind === 'outline' ? 0.6 : 1;
@@ -737,6 +749,9 @@ function render({ model, el }) {
   model.on('change:frame', () => { if (playing) return; const j = D.frames.indexOf(model.get('frame'));
     if (j >= 0 && j !== Math.floor(pos + 1e-9)) { pos = j; draw(); } });
   model.on('change:zoom', () => { buildRZ(); draw(); });
+  model.on('change:background', () => { if (!playing) draw(); });
+  const onBackground = () => { if (!playing) draw(); };   // the picture arrived (BackgroundLoader)
+  window.addEventListener('gkv:background', onBackground);
   model.on('change:probe', () => { if (!playing) draw(); if (model.get('probe') < 0) cmd.hide(); });
   model.on('change:look', () => { applyLook(); buildST(); draw(); });
   hint.textContent = 'Space: play / pause · arrows: step · click a cell: its time traces (the Probe tab) and its pgkyl ' +
@@ -746,6 +761,8 @@ function render({ model, el }) {
 
   let draws = 0; const _draw = draw;   // data-draws: frames drawn so far (the playback test reads it)
   draw = () => { _draw(); el.dataset.draws = ++draws; };
+  // for the checks: the canvas pixel of a point (R, Z) on the poloidal plane, and the view's box [R0, R1, Z0, Z1]
+  el.__rz = { px: (R, Z) => [geo.rz.X(R) * dpr(), geo.rz.Y(Z) * dpr()], box: () => geo.rz.b };
   applyLook(); layout(); draw();
   // re-lay out on a width change, on the next animation frame (not inside the observer's callback)
   let width = el.clientWidth, pending = 0;
@@ -754,10 +771,52 @@ function render({ model, el }) {
     pending = requestAnimationFrame(() => { pending = 0; width = el.clientWidth; layout(); draw(); });
   });
   ro.observe(el);
-  return () => { ro.disconnect(); cancelAnimationFrame(raf); cancelAnimationFrame(pending); playing = false; };
+  return () => { ro.disconnect(); cancelAnimationFrame(raf); cancelAnimationFrame(pending); playing = false;
+                 window.removeEventListener('gkv:background', onBackground); };
 }
 export default { render };
 """
+
+
+class BackgroundLoader(anywidget.AnyWidget):
+  """The device picture behind the poloidal plane (viewer_plots.device_background) for the page: sent once per
+    page load and kept as window.__gkvBackground[key], an image the movie draws (Movie.background names its key and
+    where it goes). Hidden."""
+  key = traitlets.Unicode('').tag(sync=True)
+  src = traitlets.Unicode('').tag(sync=True)
+  _esm = r"""
+function render({ model, el }) {
+  el.style.display = 'none';
+  const key = model.get('key'), all = window.__gkvBackground = window.__gkvBackground || {};
+  if (!key || all[key]) return;
+  const im = new Image();
+  im.onload = () => window.dispatchEvent(new Event('gkv:background'));
+  im.src = model.get('src'); all[key] = im;
+}
+export default { render };
+"""
+
+
+def _background_key(bg):
+  """A name for the picture's pixels (the same picture: the same name, loaded once)."""
+  return hashlib.sha1(np.ascontiguousarray(bg[0]).tobytes()).hexdigest()[:16]
+
+
+def background_loader(bg):
+  """A BackgroundLoader with viewer_plots.device_background()'s picture bg, as a PNG."""
+  from PIL import Image
+  buf = io.BytesIO()
+  Image.fromarray(bg[0]).save(buf, 'PNG', optimize=True)
+  return BackgroundLoader(key=_background_key(bg),
+                          src='data:image/png;base64,' +
+                          base64.b64encode(buf.getvalue()).decode())
+
+
+def background_ref(bg):
+  """The Movie's background for picture bg (viewer_plots.device_background; None: {})."""
+  if bg is None:
+    return {}
+  return dict(key=_background_key(bg), extent=list(bg[1]), opacity=bg[2])
 
 
 class PlotlyLoader(anywidget.AnyWidget):
