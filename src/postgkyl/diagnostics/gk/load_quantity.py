@@ -12,6 +12,8 @@ from typing import Annotated, Literal, TYPE_CHECKING
 
 from postgkyl.cli_spec import ChoiceProvider, KeyValue
 from .registry import gk_quant_registry
+from .vector_projection import vector_direction, load_vector_geometry
+from postgkyl.operations.vector_projection import BASIS_REPRESENTATION, REPRESENTATIONS
 
 if TYPE_CHECKING:
   from postgkyl.gdatastate.gdatastate import GDataState
@@ -22,8 +24,21 @@ def available_quantities() -> list[str]:
   return gk_quant_registry.list()
 
 
+def quantity_catalog() -> list[tuple[str, str]]:
+  """Return sorted quantity names and descriptions, including defaults."""
+  rows = []
+  for name in available_quantities():
+    quantity = gk_quant_registry.get(name)
+    description = quantity.description
+    if quantity.component_basis:
+      description += f" (default: {quantity.component_basis})"
+    rows.append((name, description))
+  return rows
+
+
 def load_quantity(
-    quantity: Annotated[str, ChoiceProvider(available_quantities)],
+    quantity: Annotated[str,
+                        ChoiceProvider(available_quantities, metavar="TEXT")],
     species: str | None,
     name: str,
     frame: str | None = None,
@@ -31,7 +46,8 @@ def load_quantity(
     path: str = "./",
     tag: str = "default",
     label: str | None = None,
-    direction: int | None = None,
+    direction: str | None = None,
+    rep: Literal["covar", "contra", "cyl", "cart", "norm"] | None = None,
     mass: float | None = None,
     charge: float | None = None,
     gamma_e: float | None = None,
@@ -44,17 +60,20 @@ def load_quantity(
     nu_frac: float | None = None,
     conv: float | None = None,
     fluct: Literal["none", "y", "yz"] | None = None,
-    read_options: Annotated[dict[str, str] | None,
-                            KeyValue()] = None,
+    options: Annotated[dict[str, str] | None, KeyValue()] = None,
 ) -> list:
   """Load and compute a pre-named gyrokinetic quantity.
+
+  Derived vector names have no representation suffix: use ``B_tot``, for
+  example, and select components with ``rep`` and ``direction``. The catalog
+  lists each quantity once and states its default representation.
 
   Modal source files retain their DG representation through the calculation:
   products, inverses, square roots, and derivatives use native DG operations.
   Call ``interpolate()`` on the returned datasets when point samples are needed.
 
   Args:
-    quantity: Registered quantity name (see :func:`available_quantities`).
+    quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
     species: Species name, or a comma-separated list of them; ``None`` for
       species-independent quantities.
     name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -64,9 +83,14 @@ def load_quantity(
     tag: Tag for the output dataset(s); suffixed with the species when more
       than one species is requested.
     label: Label override; defaults to the quantity's registered label.
-    direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
-      component of a vector, or the direction of a gradient length, flux, or
-      diffusivity. Required by those quantities, which assume no direction.
+    direction: Numeric component index 0,1,2 (Python also accepts integers).
+      For covar/contra these are computational components; for cyl the order
+      is R,phi,Z; for cart it is X,Y,Z; norm selects increasing-coordinate
+      unit normals. In 2x the full indices remain 0=radial, 1=binormal,
+      2=parallel.
+    rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
+      uses the quantity's native representation, shown by ``quantity_catalog()``.
+      Only for vector quantities.
     mass: Species mass used by quantities that require it.
     charge: Species charge used by quantities that require it.
     gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -89,8 +113,9 @@ def load_quantity(
       removed from the energy flux to form the heat flux (default 3/2).
     fluct: For cross-field fluxes, keep only the turbulent part: the
       correlation of the fluctuations about the Jacobian-weighted ``y`` or
-      ``(y, z)`` average; ``none`` (default) keeps the total flux.
-    read_options: Additional provider options as repeated key/value entries.
+      ``(y, z)`` average in 3x. In 2x, both ``y`` and ``yz`` average along
+      stored dimension 1 (z). ``none`` (default) keeps the total flux.
+    options: Additional provider options as repeated key/value entries.
 
   Returns:
     A list of computed ``GDataState`` datasets.
@@ -99,12 +124,12 @@ def load_quantity(
     ValueError: if ``quantity`` is not registered, or it is an
       ``is_multi_species`` quantity requested without a species list.
   """
-  extra = dict(read_options or {})
-  for key, value in (("dir", direction), ("mass", mass), ("charge", charge),
-                     ("gamma_e", gamma_e), ("gamma_i", gamma_i),
-                     ("ti_over_te", ti_over_te), ("te_ref", te_ref),
-                     ("bmag_ref", bmag_ref), ("den_ref", den_ref), ("temp_ref",
-                                                                    temp_ref),
+  extra = dict(options or {})
+  for key, value in (("dir", direction), ("rep", rep), ("mass", mass),
+                     ("charge", charge), ("gamma_e", gamma_e),
+                     ("gamma_i", gamma_i), ("ti_over_te", ti_over_te),
+                     ("te_ref", te_ref), ("bmag_ref", bmag_ref),
+                     ("den_ref", den_ref), ("temp_ref", temp_ref),
                      ("nu_frac", nu_frac), ("conv", conv), ("fluct", fluct)):
     if value is not None:
       # One value of a per-species option applies to every species.
@@ -117,6 +142,23 @@ def load_quantity(
                      f"{', '.join(valid)}.")
 
   gkquant = gk_quant_registry.get(quantity)
+  requested_rep = extra.get("rep")
+  if requested_rep is not None:
+    if requested_rep not in REPRESENTATIONS:
+      raise ValueError("Choose rep from " + ", ".join(REPRESENTATIONS))
+    if not gkquant.is_vector:
+      raise ValueError(
+          f"Quantity {quantity!r} is not a vector; rep is unsupported.")
+  if gkquant.is_vector and not (gkquant.packed_vector and extra.get("dir")
+                                is None and requested_rep is None):
+    direction = vector_direction(extra.get("dir"))
+    extra["dir"] = direction
+    extra["rep"] = requested_rep or BASIS_REPRESENTATION[
+        gkquant.component_basis]
+    extra["vector_geometry"] = load_vector_geometry(path, name, direction,
+                                                    gkquant.component_basis,
+                                                    extra["rep"])
+
   path = path.rstrip("/") + "/"
   species_list = [s.strip() for s in species.split(",")] if species else [None]
 
@@ -160,7 +202,11 @@ def load_quantity(
     for fr in frames:
       out = gkquant.fetch(path, name, sp, fr, src_combo_idx, **species_extra)
 
-      default_label = gkquant.get_label(species=sp, direction=extra.get("dir"))
+      default_label = gkquant.get_label(
+          species=sp,
+          direction=extra.get("dir"),
+          units=out.ctx.get("projection_units"),
+          rep=out.ctx.get("vector_representation"))
       if label is not None:
         out_label = label + (f" {sp}" if len(species_list) > 1 else "")
       else:

@@ -34,8 +34,7 @@ def load(
     z4: str | None = None,
     z5: str | None = None,
     component: str | None = None,
-    read_options: Annotated[dict[str, str] | None,
-                            KeyValue()] = None,
+    options: Annotated[dict[str, str] | None, KeyValue()] = None,
 ) -> GData | GDataGroup:
   """Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
@@ -90,10 +89,10 @@ def load(
     z4: Partial-load selector for coordinate direction 4.
     z5: Partial-load selector for coordinate direction 5.
     component: Partial-load component selector.
-    read_options: Reader-specific options as repeated key/value entries.
+    options: Reader-specific options as repeated key/value entries.
   """
   file_name = str(file_name)
-  read_kwargs = dict(read_options or {})
+  read_kwargs = dict(options or {})
   axes = (z0, z1, z2, z3, z4, z5)
   if any(value is not None for value in axes):
     read_kwargs["axes"] = axes

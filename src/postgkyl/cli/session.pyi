@@ -724,6 +724,38 @@ class PostgkylSession:
             ``data``'s, or ``dims`` is empty, repeated, or out of range.
         """
 
+  def frequency(self,
+                *,
+                spectrum: bool = False,
+                dir: int | None = None,
+                tag: str | None = None,
+                fft: bool = False,
+                guess: str | None = None,
+                min_n: int | None = None,
+                time_norm: str | float | None = None,
+                time_window: tuple[float, float] | None = None,
+                space_norm: str | float | None = None,
+                interpolated: bool = False,
+                inplace: bool = False,
+                label: str | None = None) -> PostgkylSession:
+    r"""Print dominant angular frequencies and return curves or spectra.
+
+        Args:
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Measure frequency versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
+          fft: Use a temporal FFT peak for plain time traces.
+          guess: Initial sinusoid parameters ``amplitude,omega,phase,offset``.
+          min_n: Minimum length of an automatic leading fit window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
+          inplace: Mutate a plain fitted trace instead of creating one.
+          label: Optional label for the returned dataset.
+        """
+
   def gk_energy_balance(self,
                         name: str,
                         species: list[str] | tuple[str, ...],
@@ -854,15 +886,13 @@ class PostgkylSession:
 
   def gk_load_quantity(
       self,
-      quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag',
-                        'E_field_contra', 'E_field_cov', 'E_field_mag',
+      quantity: Literal['B_tot', 'B_tot_mag', 'E_field', 'E_field_mag',
                         'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3',
                         'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta',
-                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
-                        'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag',
-                        'debye_length', 'diamag_vel', 'distf', 'field',
-                        'flux_energy', 'flux_energy_ExB', 'flux_energy_dB',
-                        'flux_particle', 'flux_particle_ExB',
+                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp',
+                        'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf',
+                        'field', 'flux_energy', 'flux_energy_ExB',
+                        'flux_energy_dB', 'flux_particle', 'flux_particle_ExB',
                         'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag',
                         'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo',
                         'geo_int_jacobgeo_inv', 'geo_int_jacobtot',
@@ -880,7 +910,8 @@ class PostgkylSession:
       path: str = './',
       tag: str = 'default',
       label: str | None = None,
-      direction: int | None = None,
+      direction: str | None = None,
+      rep: Literal['covar', 'contra', 'cyl', 'cart', 'norm'] | None = None,
       mass: float | None = None,
       charge: float | None = None,
       gamma_e: float | None = None,
@@ -893,15 +924,19 @@ class PostgkylSession:
       nu_frac: float | None = None,
       conv: float | None = None,
       fluct: Literal['none', 'y', 'yz'] | None = None,
-      read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+      options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Load and compute a pre-named gyrokinetic quantity.
+
+        Derived vector names have no representation suffix: use ``B_tot``, for
+        example, and select components with ``rep`` and ``direction``. The catalog
+        lists each quantity once and states its default representation.
 
         Modal source files retain their DG representation through the calculation:
         products, inverses, square roots, and derivatives use native DG operations.
         Call ``interpolate()`` on the returned datasets when point samples are needed.
 
         Args:
-          quantity: Registered quantity name (see :func:`available_quantities`).
+          quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
           species: Species name, or a comma-separated list of them; ``None`` for
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -911,9 +946,14 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
-            component of a vector, or the direction of a gradient length, flux, or
-            diffusivity. Required by those quantities, which assume no direction.
+          direction: Numeric component index 0,1,2 (Python also accepts integers).
+            For covar/contra these are computational components; for cyl the order
+            is R,phi,Z; for cart it is X,Y,Z; norm selects increasing-coordinate
+            unit normals. In 2x the full indices remain 0=radial, 1=binormal,
+            2=parallel.
+          rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
+            uses the quantity's native representation, shown by ``quantity_catalog()``.
+            Only for vector quantities.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -936,8 +976,9 @@ class PostgkylSession:
             removed from the energy flux to form the heat flux (default 3/2).
           fluct: For cross-field fluxes, keep only the turbulent part: the
             correlation of the fluctuations about the Jacobian-weighted ``y`` or
-            ``(y, z)`` average; ``none`` (default) keeps the total flux.
-          read_options: Additional provider options as repeated key/value entries.
+            ``(y, z)`` average in 3x. In 2x, both ``y`` and ``yz`` average along
+            stored dimension 1 (z). ``none`` (default) keeps the total flux.
+          options: Additional provider options as repeated key/value entries.
 
         Returns:
           A list of computed ``GDataState`` datasets.
@@ -1149,19 +1190,31 @@ class PostgkylSession:
 
   def growth(self,
              *,
+             spectrum: bool = False,
+             dir: int | None = None,
+             tag: str | None = None,
              guess: str | None = None,
              min_n: int | None = None,
+             time_norm: str | float | None = None,
+             time_window: tuple[float, float] | None = None,
+             space_norm: str | float | None = None,
+             interpolated: bool = False,
              inplace: bool = False,
-             tag: str | None = None,
              label: str | None = None) -> PostgkylSession:
-    r"""Fit exponential growth on the best leading data window.
+    r"""Print growth rates and return fitted curves, or a spatial rate spectrum.
 
         Args:
-          data: One-dimensional point-value dataset to fit.
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Compute growth rate versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
           guess: Initial ``amplitude,rate`` parameter guess.
           min_n: Minimum number of points in the fitted leading window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
           inplace: Mutate and return ``data`` instead of creating a dataset.
-          tag: Optional tag for the fitted curve.
           label: Optional label for the fitted curve.
 
         Returns:
@@ -1275,7 +1328,7 @@ class PostgkylSession:
            z4: str | None = None,
            z5: str | None = None,
            component: str | None = None,
-           read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+           options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -1329,7 +1382,7 @@ class PostgkylSession:
           z4: Partial-load selector for coordinate direction 4.
           z5: Partial-load selector for coordinate direction 5.
           component: Partial-load component selector.
-          read_options: Reader-specific options as repeated key/value entries.
+          options: Reader-specific options as repeated key/value entries.
         """
 
   def local_poly(self,
@@ -1445,6 +1498,34 @@ class PostgkylSession:
             dimensionality; if the mapping has no ``basis_type``/``poly_order``
             metadata (and none was given at load time); or if its component
             count does not match the expected ``m * num_basis``.
+        """
+
+  def map_interp(self,
+                 *,
+                 axes: str | float,
+                 dest: str,
+                 source: str | None = None,
+                 psi_file: str | None = None,
+                 inplace: bool = False,
+                 tag: str | None = None,
+                 label: str | None = None,
+                 optional: Mapping[str, str] | None = None) -> PostgkylSession:
+    r"""Map one or multiple coordinates of an interpolated dataset.
+
+        See ``--avail_maps`` for a list of currently available maps.
+
+        Args:
+          data: Interpolated dataset.
+          axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
+          dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+          source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
+          psi_file: Optional path to Gkeyll's psi field.
+          optional: Normalization inputs as metadata names or numeric values. At the
+            CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
+            ``-o rho_s=rho_s0 -o Cy=0.2``; ``-o rho_s=1.1`` uses a literal value.
+          inplace: Mutate and return ``data`` when true.
+          tag: Optional tag for the result.
+          label: Optional display label for the result.
         """
 
   def map_to_torus_3d(self,

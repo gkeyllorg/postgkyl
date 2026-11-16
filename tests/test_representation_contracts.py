@@ -15,6 +15,21 @@ needs_gkeyll = pytest.mark.skipif(
     not gpython.available(), reason="no compiled Gkeyll (libg0core.so) found")
 
 
+def _hybrid_highest_field():
+  """Select the analytic fixture for the producer's 1x2v hybrid basis."""
+  count = gpython.basis.num_basis("hybrid", 3, 1, cdim=1, vdim=2)
+  if count == 16:
+    source = pg.load(GEN / "hybrid_1x2v_highest.gkyl")
+    expected = lambda x, v1, v2: 1.5 * np.sqrt(5 / 8) * x * v1 * (3 * v2**2 - 1)
+  elif count == 18:
+    source = pg.load(GEN / "hybrid_tensor_1x2v_highest.gkyl")
+    expected = lambda x, v1, v2: 5 * np.sqrt(3 / 8) / 4 * x * (
+        3 * v1**2 - 1) * (3 * v2**2 - 1)
+  else:
+    raise AssertionError(f"unexpected 1x2v hybrid basis size {count}")
+  return source, expected
+
+
 def test_numpy_modal_point_consumers_reject_coefficients():
   """Partial loading changes storage, never the mathematical meaning."""
   data = pg.load(GEN / "representation_affine_1d.gkyl", z0="0:1")
@@ -102,8 +117,8 @@ def test_dg_boundary_rejects_incomplete_fields(verb, ncomp):
 @needs_gkeyll
 @pytest.mark.parametrize("form", ["modal", "nodal", "quad"])
 def test_vlasov_hybrid_highest_mode_preserved(form):
-  """Coefficient 15 is a product of P1(x), P1(v1), and P2(v2)."""
-  source = pg.load(GEN / "hybrid_1x2v_highest.gkyl")
+  """The producer's highest 1x2v hybrid mode retains its exact polynomial."""
+  source, analytic = _hybrid_highest_field()
   assert (source.ctx["num_cdim"], source.ctx["num_vdim"]) == (1, 2)
   represented = source.represent(to=form)
   if form == "quad":
@@ -111,12 +126,11 @@ def test_vlasov_hybrid_highest_mode_preserved(form):
   result = represented.interpolate(num_interp=3)
   axes = [(axis[:-1] + axis[1:]) / 2 for axis in result.grid]
   x, v1, v2 = np.meshgrid(*axes, indexing="ij")
-  expected = 1.5 * np.sqrt(5 / 8) * x * v1 * (3 * v2**2 - 1)
+  expected = analytic(x, v1, v2)
   np.testing.assert_allclose(result.values[..., 0],
                              expected,
                              rtol=3e-14,
                              atol=3e-14)
-  assert abs(expected[-1, -1, -1]) > 0.17
 
 
 @needs_gkeyll
@@ -124,8 +138,8 @@ def test_hybrid_cache_identity_includes_configuration_velocity_split():
   basis = gpython.basis
   a = basis.get_basis("hybrid", 3, 1, cdim=1, vdim=2)
   b = basis.get_basis("hybrid", 3, 1, cdim=2, vdim=1)
-  assert a.num_basis == 16 and b.num_basis == 12 and a is not b
-  for c, v, count in [(1, 2, 16), (2, 1, 12)]:
+  assert a.num_basis in (16, 18) and b.num_basis == 12 and a is not b
+  for c, v, count in [(1, 2, a.num_basis), (2, 1, 12)]:
     matrix = basis.interpolation_matrix("hybrid", 3, 1, 3, cdim=c, vdim=v)
     assert matrix.shape == (27, count)
     assert matrix is basis.interpolation_matrix("hybrid",
@@ -143,7 +157,8 @@ def test_ambiguous_hybrid_split_requires_explicit_metadata():
       "poly_order": 1,
       "value_form": "modal"
   })
-  data.push([np.array([-1., 1.])] * 3, np.zeros((1, 1, 1, 48)))
+  # 144 contains complete blocks for both 12 and either 16 or 18 modes.
+  data.push([np.array([-1., 1.])] * 3, np.zeros((1, 1, 1, 144)))
   with pytest.raises(ValueError, match="ambiguous"):
     data.interpolate()
 
@@ -173,14 +188,15 @@ def test_clone_isolates_nested_metadata_native_values_and_grids():
 @needs_gkeyll
 @pytest.mark.parametrize("form", ["modal", "nodal", "quad"])
 def test_hybrid_linear_and_pointwise_arithmetic_use_actual_split(form):
-  source = pg.load(GEN / "hybrid_1x2v_highest.gkyl").represent(to=form)
+  original, analytic = _hybrid_highest_field()
+  source = original.represent(to=form)
   transformed = source + source + 2.
   if form == "quad":
     transformed = transformed.represent(to="modal")
   result = transformed.interpolate(num_interp=3)
   axes = [(axis[:-1] + axis[1:]) / 2 for axis in result.grid]
   x, v1, v2 = np.meshgrid(*axes, indexing="ij")
-  exact = 3 * np.sqrt(5 / 8) * x * v1 * (3 * v2**2 - 1) + 2
+  exact = 2 * analytic(x, v1, v2) + 2
   np.testing.assert_allclose(result.values[..., 0],
                              exact,
                              rtol=4e-14,
