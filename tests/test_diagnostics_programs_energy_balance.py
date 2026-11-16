@@ -64,11 +64,20 @@ class _StubFiles:
   def _dispatch(self, file_name):
     return self._registry[file_name]
 
-  def add(self, file_name: str, time_edges: np.ndarray,
-          values: np.ndarray) -> None:
+  def add(self,
+          file_name: str,
+          time_edges: np.ndarray,
+          values: np.ndarray,
+          ctx: dict | None = None) -> None:
     open(file_name, "w").close()
     self._registry[file_name] = _FakeGData([np.asarray(time_edges)],
-                                           np.asarray(values))
+                                           np.asarray(values), ctx)
+
+  def add_balance(self, file_name: str, time: np.ndarray,
+                  columns: dict[str, np.ndarray]) -> None:
+    """Stage a Gkeyll balance file: columns named by ``Columns`` metadata."""
+    self.add(file_name, time, np.stack(list(columns.values()), axis=-1),
+             {"Columns": ", ".join(columns)})
 
 
 @pytest.fixture
@@ -95,12 +104,14 @@ def _build_sim(stub,
   for sp in species:
     fdot_vals = np.zeros((n, 3))
     fdot_vals[:, 2] = np.linspace(1.0, 2.0, n)
-    stub.add(f"{path}{name}-{sp}_fdot_integrated_moms.gkyl", time, fdot_vals)
+    stub.add(f"{path}{name}-{sp}_fdot_integrated_HamiltonianMoments.gkyl", time,
+             fdot_vals)
 
     if with_src:
       src_vals = np.zeros((n, 3))
       src_vals[:, 2] = 0.1
-      stub.add(f"{path}{name}-{sp}_source_integrated_moms.gkyl", time, src_vals)
+      stub.add(f"{path}{name}-{sp}_source_integrated_HamiltonianMoments.gkyl",
+               time, src_vals)
     if with_bflux:
       bflux_vals = np.zeros((n, 3))
       bflux_vals[:, 2] = 0.05
@@ -174,11 +185,17 @@ class TestGkEnergyBalanceSynthetic:
       assert traces.src is not None
       assert traces.bflux_tot is not None
       assert traces.mom_err is not None
-      assert traces.time.shape[0] == 5
-      # src[0] is zeroed before computing the residual.
-      assert traces.mom_err.shape == (5, )
+      # Rates are only defined after the first step: t=0 is skipped.
+      assert traces.time.shape[0] == 4
+      assert traces.mom_err.shape == (4, )
     finally:
       plt.close(fig)
+
+  def test_only_t0_raises(self, stub, tmp_path):
+    """No step was taken: no rate is defined."""
+    path = _build_sim(stub, tmp_path, with_src=False, with_bflux=False, n=1)
+    with pytest.raises(ValueError, match="No time step"):
+      eb.energy_balance("sim", ["ion"], path=path)
 
   def test_missing_source_and_bflux(self, stub, tmp_path):
     path = _build_sim(stub, tmp_path, with_src=False, with_bflux=False)
@@ -218,7 +235,7 @@ class TestGkEnergyBalanceSynthetic:
     stub.add(f"{path}sim-field_energy.gkyl", time, field_vals)
     f_vals = np.zeros((n, 3))
     f_vals[:, 2] = 10.0
-    stub.add(f"{path}sim-ion_integrated_moms.gkyl", time, f_vals)
+    stub.add(f"{path}sim-ion_integrated_HamiltonianMoments.gkyl", time, f_vals)
     # dt.gkyl records the timestep *between* frames, so it naturally has one
     # fewer entry than the per-frame traces -- matching src_bak, which slices
     # every per-frame trace with [1:] but never slices dt itself.
@@ -247,7 +264,7 @@ class TestGkEnergyBalanceSynthetic:
     stub.add(f"{path}sim-apar_energy.gkyl", time, np.full((n, 1), 1.0))
     f_vals = np.zeros((n, 3))
     f_vals[:, 2] = 10.0
-    stub.add(f"{path}sim-ion_integrated_moms.gkyl", time, f_vals)
+    stub.add(f"{path}sim-ion_integrated_HamiltonianMoments.gkyl", time, f_vals)
     dt_time = np.linspace(0.0, 1.0, n - 1)
     stub.add(f"{path}sim-dt.gkyl", dt_time, np.full((n - 1, 1), 0.2))
 
@@ -284,7 +301,7 @@ class TestGkEnergyBalanceSynthetic:
     stub.add(f"{path}sim-field_energy.gkyl", time, np.full((n, 1), 3.0))
     f_vals = np.zeros((n, 3))
     f_vals[:, 2] = 10.0
-    stub.add(f"{path}sim-ion_integrated_moms.gkyl", time, f_vals)
+    stub.add(f"{path}sim-ion_integrated_HamiltonianMoments.gkyl", time, f_vals)
     dt_time = np.linspace(0.0, 1.0, n - 1)
     stub.add(f"{path}sim-dt.gkyl", dt_time, np.full((n - 1, 1), 0.2))
 
@@ -309,7 +326,8 @@ class TestGkEnergyBalanceSynthetic:
     n = 5
     time = np.linspace(0.0, 1.0, n)
     stub.add(f"{path}sim-field_energy_dot.gkyl", time, np.zeros((n, 1)))
-    with pytest.raises(FileNotFoundError, match="fdot_integrated_moms"):
+    with pytest.raises(FileNotFoundError,
+                       match="fdot_integrated_HamiltonianMoments"):
       eb.energy_balance("sim", ["ion"], path=path)
 
   def test_bflux_override_and_absy_logy(self, stub, tmp_path):
@@ -334,16 +352,271 @@ class TestGkEnergyBalanceSynthetic:
       plt.close(fig)
 
 
+class TestGkEnergyBalanceMomentFileNames:
+  """Gkeyll's ``<species>_<kind>integrated_<moment>.gkyl`` naming."""
+
+  def test_bgk_source_adds_to_source(self, stub, tmp_path):
+    path = _build_sim(stub, tmp_path)
+    time = np.linspace(0.0, 1.0, 5)
+    bgk_vals = np.zeros((5, 3))
+    bgk_vals[:, 2] = 0.02
+    stub.add(f"{path}sim-ion_source_bgk_integrated_HamiltonianMoments.gkyl",
+             time, bgk_vals)
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      np.testing.assert_allclose(traces.src, 0.12)
+    finally:
+      plt.close(fig)
+
+  def test_source_of_one_species_is_kept(self, stub, tmp_path):
+    """The source of the first species survives the second having none."""
+    path = _build_sim(stub, tmp_path, species=("ion", "elc"), with_src=False)
+    time = np.linspace(0.0, 1.0, 5)
+    bgk_vals = np.zeros((5, 3))
+    bgk_vals[:, 2] = 0.02
+    stub.add(f"{path}sim-ion_source_bgk_integrated_HamiltonianMoments.gkyl",
+             time, bgk_vals)
+
+    fig, traces = eb.energy_balance("sim", ["ion", "elc"], path=path)
+    try:
+      np.testing.assert_allclose(traces.src, 0.02)
+    finally:
+      plt.close(fig)
+
+  def test_reads_older_integrated_moms_names(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    fdot_vals = np.zeros((5, 3))
+    fdot_vals[:, 2] = 1.0 + time
+    stub.add(f"{path}sim-ion_fdot_integrated_moms.gkyl", time, fdot_vals)
+    stub.add(f"{path}sim-ion_source_integrated_moms.gkyl", time,
+             np.full((5, 3), 0.1))
+    stub.add(f"{path}sim-field_energy_dot.gkyl", time, np.zeros((5, 1)))
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      np.testing.assert_array_equal(traces.fdot, 1.0 + time[1:])
+      np.testing.assert_allclose(traces.src, 0.1)
+    finally:
+      plt.close(fig)
+
+
+def _energy_balance_columns(time: np.ndarray,
+                            bg: float = 0.05) -> dict[str, np.ndarray]:
+  """Balance-file columns in a non-Gkeyll order (lookup must be by name):
+  ``mom_dot=2+t``, ``src=0.3``, ``bflux=0.1``, ``field_dot=0.4``,
+  ``bg_dot=bg``, energy 18 and dt 0.25; every rate is zero at t=0."""
+  mom_dot = 2.0 + time
+  src = np.full_like(time, 0.3)
+  bflux = np.full_like(time, 0.1)
+  field_dot = np.full_like(time, 0.4)
+  bg_dot = np.full_like(time, bg)
+  mom_err = src - bflux - (mom_dot - field_dot + bg_dot)
+  columns = {
+      "bg_dot": bg_dot,
+      "field_dot": field_dot,
+      "mom_dot": mom_dot,
+      "src_mom": src,
+      "bflux_tot_mom": bflux,
+      "mom_err_norm": mom_err * 0.25 / 18.0,
+      "mom_err": mom_err,
+  }
+  for values in columns.values():
+    values[0] = 0.0
+  return columns
+
+
+def _legend_texts(fig) -> list[str]:
+  return [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
+
+
+class TestGkEnergyBalanceFromBalanceFiles:
+  """Fallback to Gkeyll's ``<name>-balance_energy.gkyl``."""
+
+  def test_reads_columns_by_name(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _energy_balance_columns(time)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", ["ion", "elc"], path=path)
+    try:
+      # Rates are only defined after the first step: t=0 is skipped.
+      np.testing.assert_array_equal(traces.time, time[1:])
+      for trace, column in ((traces.fdot, "mom_dot"), (traces.src, "src_mom"),
+                            (traces.bflux_tot,
+                             "bflux_tot_mom"), (traces.field_dot, "field_dot"),
+                            (traces.bg_dot, "bg_dot"), (traces.mom_err,
+                                                        "mom_err")):
+        np.testing.assert_array_equal(trace, columns[column][1:])
+      assert traces.apar_dot is None
+      assert traces.mom_err_norm is None
+      assert any(r"\rho_{bg}" in text for text in _legend_texts(fig))
+    finally:
+      plt.close(fig)
+
+  def test_relative_error(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _energy_balance_columns(time)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", ["ion"],
+                                    path=path,
+                                    relative_error=True)
+    try:
+      np.testing.assert_array_equal(traces.time, time[1:])
+      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
+      np.testing.assert_array_equal(traces.mom_err_norm,
+                                    columns["mom_err_norm"][1:])
+      assert traces.mom_err is None
+    finally:
+      plt.close(fig)
+
+  def test_zero_terms_are_absent(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _energy_balance_columns(time, bg=0.0)
+    columns["src_mom"][:] = 0.0
+    columns["bflux_tot_mom"][:] = 0.0
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      assert traces.src is None
+      assert traces.bflux_tot is None
+      assert traces.bg_dot is None
+      # Field, fdot and residual curves only.
+      assert len(_legend_texts(fig)) == 3
+    finally:
+      plt.close(fig)
+
+  def test_moment_files_take_precedence(self, stub, tmp_path):
+    path = _build_sim(stub, tmp_path)
+    time = np.linspace(0.0, 1.0, 5)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time,
+                     _energy_balance_columns(time))
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      np.testing.assert_array_equal(traces.fdot, np.linspace(1.0, 2.0, 5)[1:])
+      assert traces.bg_dot is None
+    finally:
+      plt.close(fig)
+
+  def test_missing_field_energy_dot_falls_back(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    stub.add(f"{path}sim-ion_fdot_integrated_HamiltonianMoments.gkyl", time,
+             np.ones((5, 3)))
+    columns = _energy_balance_columns(time)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
+    finally:
+      plt.close(fig)
+
+  def test_path_override_selects_moment_files(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    stub.add(f"{path}sim-field_energy_dot.gkyl", time, np.zeros((5, 1)))
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time,
+                     _energy_balance_columns(time))
+    with pytest.raises(FileNotFoundError, match="custom_fdot"):
+      eb.energy_balance("sim", ["ion"], path=path, fdot_file="custom_fdot.gkyl")
+
+  def test_multiblock_sums_blocks(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    block0 = _energy_balance_columns(time)
+    block1 = {key: 3.0 * values for key, values in block0.items()}
+    stub.add_balance(f"{path}sim_b0-balance_energy.gkyl", time, block0)
+    stub.add_balance(f"{path}sim_b1-balance_energy.gkyl", time, block1)
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path, multib="-1")
+    try:
+      np.testing.assert_allclose(traces.fdot,
+                                 4.0 * block0["mom_dot"][1:],
+                                 rtol=0,
+                                 atol=1e-14)
+      np.testing.assert_allclose(traces.mom_err,
+                                 4.0 * block0["mom_err"][1:],
+                                 rtol=0,
+                                 atol=1e-14)
+    finally:
+      plt.close(fig)
+
+  def test_multiblock_relative_error_raises(self, stub, tmp_path):
+    """Each block normalizes by its own energy: the sum is not defined."""
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    for block in (0, 1):
+      stub.add_balance(f"{path}sim_b{block}-balance_energy.gkyl", time,
+                       _energy_balance_columns(time))
+    with pytest.raises(ValueError, match="several blocks"):
+      eb.energy_balance("sim", ["ion"],
+                        path=path,
+                        multib="-1",
+                        relative_error=True)
+
+  def test_no_species_reads_balance_file(self, stub, tmp_path):
+    """Without species the moment files cannot be read, even if present."""
+    path = _build_sim(stub, tmp_path)
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _energy_balance_columns(time)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", path=path)
+    try:
+      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
+      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+    finally:
+      plt.close(fig)
+
+  def test_no_species_without_balance_file_raises(self, stub, tmp_path):
+    path = _build_sim(stub, tmp_path)
+    with pytest.raises(FileNotFoundError, match="sim-balance_energy"):
+      eb.energy_balance("sim", path=path)
+
+  def test_no_species_rejects_path_overrides(self, stub, tmp_path):
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time,
+                     _energy_balance_columns(time))
+    with pytest.raises(ValueError, match="need the species"):
+      eb.energy_balance("sim", path=path, fdot_file="custom_fdot.gkyl")
+
+
+class TestReadBalanceFiles:
+
+  def test_single_sample_keeps_time_axis(self, stub, tmp_path):
+    """A run stopped before its first step has one (t=0) row, which
+    ``read_gfile`` squeezes to 0-D time and 1-D values."""
+    name = str(tmp_path / "one-balance_particle.gkyl")
+    stub.add(name, np.array([0.0]), np.zeros((1, 2)),
+             {"Columns": "mom_err, mom_err_norm"})
+    time, columns = gk_utils.read_balance_files([name])
+    np.testing.assert_array_equal(time, [0.0])
+    np.testing.assert_array_equal(columns["mom_err"], [0.0])
+
+  def test_missing_columns_metadata_raises(self, stub, tmp_path):
+    name = str(tmp_path / "bare-balance_particle.gkyl")
+    stub.add(name, np.linspace(0.0, 1.0, 3), np.zeros((3, 2)))
+    with pytest.raises(ValueError, match="Columns"):
+      gk_utils.read_balance_files([name])
+
+
 class TestGkEnergyBalanceRealFixtures:
   """Real end-to-end run against generated dynvector files."""
 
   def test_real_fixture_energy_balance(self):
     path = os.path.join(DATA, "generated", "gk_programs")
-    time = np.linspace(0.0, 1.0, 5)
+    time = np.linspace(0.0, 1.0, 5)[1:]  # t=0 is skipped.
     fdot = 2.0 + time
-    source = np.full(5, 0.3)
-    bflux = np.full(5, 0.1)
-    field_dot = np.full(5, 0.4)
+    mom_err = 0.3 - 0.1 - (fdot - 0.4)
     for relative in (False, True):
       fig, traces = eb.energy_balance(
           "sim", ["ion"],
@@ -352,26 +625,48 @@ class TestGkEnergyBalanceRealFixtures:
           field_dot_file="sim-field_energy_dot.gkyl")
       try:
         np.testing.assert_array_equal(traces.time, time)
-        np.testing.assert_allclose(traces.fdot,
-                                   fdot[1:] if relative else fdot,
-                                   rtol=0,
-                                   atol=1e-14)
-        np.testing.assert_allclose(traces.field_dot,
-                                   field_dot[1:] if relative else field_dot,
-                                   rtol=0,
-                                   atol=1e-14)
+        np.testing.assert_allclose(traces.fdot, fdot, rtol=0, atol=1e-14)
+        np.testing.assert_allclose(traces.field_dot, 0.4, rtol=0, atol=1e-14)
         if relative:
-          expected = (source[1:] - bflux[1:] -
-                      (fdot[1:] - field_dot[1:])) * 0.25 / 18.0
           np.testing.assert_allclose(traces.mom_err_norm,
-                                     expected,
+                                     mom_err * 0.25 / 18.0,
                                      rtol=0,
                                      atol=1e-14)
           assert traces.mom_err is None
         else:
           np.testing.assert_allclose(traces.mom_err,
-                                     np.r_[0.0, source[1:]] - bflux -
-                                     (fdot - field_dot),
+                                     mom_err,
+                                     rtol=0,
+                                     atol=1e-14)
+      finally:
+        plt.close(fig)
+
+  def test_real_fixture_balance_file(self):
+    """Gkeyll's balance file without the moment files (``bal`` fixture)."""
+    path = os.path.join(DATA, "generated", "gk_programs")
+    time = np.linspace(0.0, 1.0, 5)[1:]  # t=0 is skipped.
+    fdot = 2.0 + time
+    mom_err = 0.3 - 0.1 - (fdot - 0.4 + 0.05)
+    for relative in (False, True):
+      fig, traces = eb.energy_balance("bal", ["ion"],
+                                      path=path,
+                                      relative_error=relative)
+      try:
+        np.testing.assert_array_equal(traces.time, time)
+        for actual, expected in ((traces.fdot, fdot), (traces.src, 0.3),
+                                 (traces.bflux_tot, 0.1), (traces.field_dot,
+                                                           0.4), (traces.bg_dot,
+                                                                  0.05)):
+          np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
+        if relative:
+          np.testing.assert_allclose(traces.mom_err_norm,
+                                     mom_err * 0.25 / 18.0,
+                                     rtol=0,
+                                     atol=1e-14)
+          assert traces.mom_err is None
+        else:
+          np.testing.assert_allclose(traces.mom_err,
+                                     mom_err,
                                      rtol=0,
                                      atol=1e-14)
       finally:

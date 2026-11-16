@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 from click.testing import CliRunner
 import numpy as np
@@ -151,6 +153,16 @@ def test_load_distf_frame_is_text_and_cli_accepts_all_frames(
   ])
   assert result.exit_code == 0, result.output
   assert calls == [0, 2]
+
+
+@pytest.mark.parametrize("command",
+                         ["gk_energy_balance", "gk_particle_balance"])
+def test_balance_without_species_reads_species_sum(command):
+  path = Path(__file__).parent / "test_data" / "generated" / "gk_programs"
+  result = CliRunner().invoke(cli,
+                              [command, "--name", "bal", "--path",
+                               str(path)])
+  assert result.exit_code == 0, result.output
 
 
 def test_bparrotate_is_compiled_directly_from_the_script_callable():

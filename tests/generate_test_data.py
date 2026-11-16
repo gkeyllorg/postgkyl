@@ -887,10 +887,10 @@ def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
   moments = np.zeros_like(fdot)
   moments[:, (0, 2)] = (10.0, 20.0)
   histories = {
-      "ion_fdot_integrated_moms": (time, fdot),
-      "ion_source_integrated_moms": (time, source),
+      "ion_fdot_integrated_HamiltonianMoments": (time, fdot),
+      "ion_source_integrated_HamiltonianMoments": (time, source),
       "ion_bflux_xlower_integrated_HamiltonianMoments": (time, bflux),
-      "ion_integrated_moms": (time, moments),
+      "ion_integrated_HamiltonianMoments": (time, moments),
       "field_energy_dot": (time, np.full((5, 1), 0.4)),
       "field_energy": (time, np.full((5, 1), 2.0)),
       "dt": (time[1:], np.full((4, 1), 0.25)),
@@ -906,6 +906,56 @@ def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
                              "M0 fdot=1+t, M2 fdot=2+t; source=(0.1,0.3); "
                              "bflux=(0.05,0.1); moments=(10,20); "
                              "field_dot=0.4, field=2, dt=0.25.",
+                             "generation_method":
+                             "Direct time samples of the stated formulas."
+                         })
+
+  # Balance files Gkeyll writes, without the moment files above. Columns are
+  # in Gkeyll's order; rates are zero at t=0, before the first step.
+  def balance(columns: dict[str, np.ndarray]) -> np.ndarray:
+    values = np.stack(list(columns.values()), axis=-1)
+    values[0] = 0.0
+    return values
+
+  energy_err = 0.3 - 0.1 - ((2.0 + time) - 0.4 + 0.05)
+  particle_err = 0.1 - 0.05 - (1.0 + time)
+  particle = {
+      "mom_err": particle_err,
+      "mom_err_norm": particle_err * 0.25 / 10.0,
+      "mom_dot": 1.0 + time,
+      "src_mom": np.full(5, 0.1),
+      "bflux_tot_mom": np.full(5, 0.05),
+  }
+  balances = {
+      "balance_energy": {
+          "mom_err": energy_err,
+          "mom_err_norm": energy_err * 0.25 / 18.0,
+          "mom_dot": 2.0 + time,
+          "src_mom": np.full(5, 0.3),
+          "bflux_tot_mom": np.full(5, 0.1),
+          "field_dot": np.full(5, 0.4),
+          "bg_dot": np.full(5, 0.05),
+      },
+      "ion_balance_particle": particle,
+      # A single species: the sum over species is the ion balance.
+      "balance_particle": particle,
+  }
+  for quantity, columns in balances.items():
+    write_gkyl_dynvector(path / f"bal-{quantity}.gkyl",
+                         time,
+                         balance(columns),
+                         metadata={
+                             "Columns":
+                             ", ".join(columns),
+                             "description":
+                             "Analytic GK balance-file history.",
+                             "analytic_function":
+                             "Energy: mom_dot=2+t, src=0.3, bflux=0.1, "
+                             "field_dot=0.4, bg_dot=0.05, energy=18; "
+                             "particle: mom_dot=1+t, src=0.1, bflux=0.05, "
+                             "number=10; dt=0.25, mom_err=src-bflux-(mom_dot"
+                             "-field_dot+bg_dot), mom_err_norm=mom_err*dt/"
+                             "(energy or number).",
                              "generation_method":
                              "Direct time samples of the stated formulas."
                          })
