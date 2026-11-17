@@ -6,13 +6,14 @@ energy rate of change, integrated Hamiltonian moments of ``df/dt``, of the
 source(s), and of the boundary particle fluxes), sums them over species and
 (for multiblock runs) blocks, and plots the energy-balance residual::
 
-    E_err = S - bflux - (df/dt - dfield/dt [- dapar/dt])
+    E_err = S + S_BGK - bflux - (df/dt - dfield/dt [- dapar/dt])
 
-Without those files, it falls back to the energy balance Gkeyll writes when
-the app requests it (``<name>-balance_energy.gkyl``), whose residual also
-contains the background-charge term of adiabatic species::
+with ``S`` the source and ``S_BGK`` the BGK source. Without those files, it
+falls back to the energy balance Gkeyll writes when the app requests it
+(``<name>-balance_energy.gkyl``), whose residual also contains the
+background-charge term of adiabatic species::
 
-    E_err = S - bflux - (df/dt - dfield/dt + dbg/dt)
+    E_err = S + S_BGK - bflux - (df/dt - dfield/dt + dbg/dt)
 
 Typer options become explicit keyword-only parameters; the old CLI's dataset
 stack (``ctx.obj.data``) and ``verb_print`` echo are dropped -- the computed
@@ -50,7 +51,7 @@ class EnergyBalanceTraces:
       defined.
     fdot: Rate of change of the Hamiltonian moment of the distribution
       function, summed over species and blocks.
-    src: Rate of change from sources, or ``None`` if no source file was
+    src: Rate of change from the sources, or ``None`` if no source file was
       found for any species/block (balance file: if it is zero throughout).
     bflux_tot: Rate of change from boundary particle fluxes, or ``None`` if
       none were found (balance file: if it is zero throughout).
@@ -63,6 +64,9 @@ class EnergyBalanceTraces:
     bg_dot: Rate of change of the background-charge energy ``int rho_bg phi``
       of adiabatic species, or ``None``. Only Gkeyll's balance file has it,
       and it is ``None`` there if it is zero throughout.
+    src_bgk: Rate of change from the BGK sources, or ``None`` if none was
+      found (balance file: if it is zero throughout, or the file predates
+      the ``src_bgk_mom`` column and includes it in ``src``).
   """
 
   time: np.ndarray
@@ -74,6 +78,7 @@ class EnergyBalanceTraces:
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
   bg_dot: np.ndarray | None = None
+  src_bgk: np.ndarray | None = None
 
 
 def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
@@ -145,8 +150,8 @@ def _moment_file_traces(
   probe = fdot_file or _moment_file(file_prefix + species[0] + "_fdot_")
   blocks = utils.get_block_indices(multib, probe)
 
-  field_dot = apar_dot = fdot = src = bflux_tot = None
-  has_apar_dot = has_src = has_bflux = False
+  field_dot = apar_dot = fdot = src = src_bgk = bflux_tot = None
+  has_apar_dot = has_src = has_src_bgk = has_bflux = False
   time_fdot = None
 
   for block_idx in blocks:
@@ -165,7 +170,7 @@ def _moment_file_traces(
     if has_apar_dot:
       apar_dot_pb = np.atleast_1d(v)
 
-    fdot_pb = src_pb = bflux_tot_pb = None
+    fdot_pb = src_pb = src_bgk_pb = bflux_tot_pb = None
     for sp in species:
       fdot_name = _resolve(path, fdot_file,
                            _moment_file(block_prefix + sp + "_fdot_"),
@@ -175,15 +180,17 @@ def _moment_file_traces(
       if not found:
         raise FileNotFoundError(f"Required file not found: {fdot_name}")
 
-      src_sp = 0.0 * fdot_sp
-      for src_name in (_resolve(path, source_file,
-                                _moment_file(block_prefix + sp + "_source_"),
-                                block_idx, sp),
-                       _moment_file(block_prefix + sp + "_source_bgk_")):
-        found_s, _, v = utils.read_moment_if_present(src_name, _ENERGY_MOMENT)
-        if found_s:
-          has_src = True
-          src_sp = src_sp + v
+      src_name = _resolve(path, source_file,
+                          _moment_file(block_prefix + sp + "_source_"),
+                          block_idx, sp)
+      found_s, _, v = utils.read_moment_if_present(src_name, _ENERGY_MOMENT)
+      has_src = has_src or found_s
+      src_sp = v if found_s else 0.0 * fdot_sp
+
+      found_s, _, v = utils.read_moment_if_present(
+          _moment_file(block_prefix + sp + "_source_bgk_"), _ENERGY_MOMENT)
+      has_src_bgk = has_src_bgk or found_s
+      src_bgk_sp = v if found_s else 0.0 * fdot_sp
 
       bflux_terms = []
       for d in _DIRS:
@@ -201,6 +208,7 @@ def _moment_file_traces(
 
       fdot_pb = _accumulate(fdot_pb, fdot_sp)
       src_pb = _accumulate(src_pb, src_sp)
+      src_bgk_pb = _accumulate(src_bgk_pb, src_bgk_sp)
       bflux_tot_pb = _accumulate(bflux_tot_pb, bflux_sp)
 
     field_dot = _accumulate(field_dot, field_dot_pb)
@@ -208,17 +216,19 @@ def _moment_file_traces(
       apar_dot = _accumulate(apar_dot, apar_dot_pb)
     fdot = _accumulate(fdot, fdot_pb)
     src = _accumulate(src, src_pb)
+    src_bgk = _accumulate(src_bgk, src_bgk_pb)
     bflux_tot = _accumulate(bflux_tot, bflux_tot_pb)
 
   # Rates are only defined once a step has been taken: skip t=0.
   time = time_fdot[1:]
-  fdot, src, bflux_tot = fdot[1:], src[1:], bflux_tot[1:]
+  fdot, src, src_bgk = fdot[1:], src[1:], src_bgk[1:]
+  bflux_tot = bflux_tot[1:]
   field_dot = field_dot[1:]
   if has_apar_dot:
     apar_dot = apar_dot[1:]
 
   if not relative_error:
-    mom_err = energy_balance_error(fdot, src, bflux_tot, field_dot,
+    mom_err = energy_balance_error(fdot, src + src_bgk, bflux_tot, field_dot,
                                    apar_dot if has_apar_dot else None)
     mom_err_norm = None
   else:
@@ -252,7 +262,7 @@ def _moment_file_traces(
         apar = _accumulate(apar, apar_pb)
       distf = _accumulate(distf, distf_pb)
 
-    mom_err = energy_balance_error(fdot, src, bflux_tot, field_dot,
+    mom_err = energy_balance_error(fdot, src + src_bgk, bflux_tot, field_dot,
                                    apar_dot if has_apar else None)
     denom = (distf - field - apar) if has_apar else (distf - field)
     mom_err_norm = mom_err * dt / denom[1:]
@@ -265,7 +275,8 @@ def _moment_file_traces(
                              field_dot=field_dot,
                              apar_dot=apar_dot if has_apar_dot else None,
                              mom_err=mom_err,
-                             mom_err_norm=mom_err_norm)
+                             mom_err_norm=mom_err_norm,
+                             src_bgk=src_bgk if has_src_bgk else None)
 
 
 def _balance_file_traces(file_names: list[str],
@@ -278,9 +289,12 @@ def _balance_file_traces(file_names: list[str],
         "each block's balance file normalizes by that block's energy.")
   # Rates are only defined once a step has been taken: skip t=0.
   col = {key: values[1:] for key, values in col.items()}
-  src, bflux_tot, bg_dot = (v if np.any(v) else None
-                            for v in (col["src_mom"], col["bflux_tot_mom"],
-                                      col["bg_dot"]))
+  # Older balance files have no src_bgk_mom: their src_mom includes it.
+  src, src_bgk, bflux_tot, bg_dot = (v if v is not None and np.any(v) else None
+                                     for v in (col["src_mom"],
+                                               col.get("src_bgk_mom"),
+                                               col["bflux_tot_mom"],
+                                               col["bg_dot"]))
   return EnergyBalanceTraces(
       time=time[1:],
       fdot=col["mom_dot"],
@@ -290,7 +304,8 @@ def _balance_file_traces(file_names: list[str],
       apar_dot=None,
       mom_err=None if relative_error else col["mom_err"],
       mom_err_norm=col["mom_err_norm"] if relative_error else None,
-      bg_dot=bg_dot)
+      bg_dot=bg_dot,
+      src_bgk=src_bgk)
 
 
 def _plot(traces: EnergyBalanceTraces, relative_error: bool, logy: bool,
@@ -312,6 +327,15 @@ def _plot(traces: EnergyBalanceTraces, relative_error: bool, logy: bool,
       h, = ax.plot(time, absy_func(traces.src), linestyle=_LINE_STYLES[2])
       legend_handles.append(h)
       legend_strings.append(r"$\mathcal{S}$")
+    if traces.src_bgk is not None:
+      h, = ax.plot(time,
+                   absy_func(traces.src_bgk),
+                   linestyle=_LINE_STYLES[2],
+                   marker="o",
+                   markevery=8,
+                   fillstyle="none")
+      legend_handles.append(h)
+      legend_strings.append(r"$\mathcal{S}_{\mathrm{BGK}}$")
     if traces.bflux_tot is not None:
       h, = ax.plot(time,
                    absy_func(-traces.bflux_tot),
@@ -349,7 +373,8 @@ def _plot(traces: EnergyBalanceTraces, relative_error: bool, logy: bool,
     legend_strings.append(r"$-\dot{f}$")
     h, = ax.plot(time, absy_func(traces.mom_err), linestyle=_LINE_STYLES[3])
     legend_handles.append(h)
-    legend_strings.append(r"$E_{\dot{\mathcal{E}}}=$" + "".join(legend_strings))
+    legend_strings.append(r"$E_{\dot{\mathcal{E}}}=$" +
+                          utils.sum_label(legend_strings))
 
     ax.legend(legend_handles,
               legend_strings,
@@ -422,7 +447,9 @@ def energy_balance(
   the energy balance. That file already sums over every species (``species``
   is not used) and adds the background-charge term ``bg_dot`` of adiabatic
   species to the residual. Its relative error is only available for a
-  single block. Without ``species``, only that file is read.
+  single block. Older balance files have no ``src_bgk_mom`` column: their
+  ``src_mom`` includes the BGK source. Without ``species``, only that file
+  is read.
 
   The rates are only defined once a step has been taken, so t=0 is skipped.
 

@@ -355,7 +355,9 @@ class TestGkEnergyBalanceSynthetic:
 class TestGkEnergyBalanceMomentFileNames:
   """Gkeyll's ``<species>_<kind>integrated_<moment>.gkyl`` naming."""
 
-  def test_bgk_source_adds_to_source(self, stub, tmp_path):
+  def test_bgk_source_is_its_own_term(self, stub, tmp_path):
+    """S=0.1 and S_BGK=0.02 stay separate; the residual has both:
+    0.1 + 0.02 - 0.05 - ((1+t) - 0.2)."""
     path = _build_sim(stub, tmp_path)
     time = np.linspace(0.0, 1.0, 5)
     bgk_vals = np.zeros((5, 3))
@@ -365,12 +367,20 @@ class TestGkEnergyBalanceMomentFileNames:
 
     fig, traces = eb.energy_balance("sim", ["ion"], path=path)
     try:
-      np.testing.assert_allclose(traces.src, 0.12)
+      np.testing.assert_allclose(traces.src, 0.1, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces.mom_err,
+                                 0.27 - (1.0 + time[1:]),
+                                 rtol=0,
+                                 atol=1e-14)
+      # The residual's formula adds the BGK source.
+      assert r"$+\mathcal{S}_{\mathrm{BGK}}$" in _legend_texts(fig)[-1]
     finally:
       plt.close(fig)
 
-  def test_source_of_one_species_is_kept(self, stub, tmp_path):
-    """The source of the first species survives the second having none."""
+  def test_bgk_source_of_one_species_is_kept(self, stub, tmp_path):
+    """The BGK source of the first species survives the second having none,
+    and no source is not a zero source."""
     path = _build_sim(stub, tmp_path, species=("ion", "elc"), with_src=False)
     time = np.linspace(0.0, 1.0, 5)
     bgk_vals = np.zeros((5, 3))
@@ -380,7 +390,8 @@ class TestGkEnergyBalanceMomentFileNames:
 
     fig, traces = eb.energy_balance("sim", ["ion", "elc"], path=path)
     try:
-      np.testing.assert_allclose(traces.src, 0.02)
+      assert traces.src is None
+      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
     finally:
       plt.close(fig)
 
@@ -452,7 +463,41 @@ class TestGkEnergyBalanceFromBalanceFiles:
         np.testing.assert_array_equal(trace, columns[column][1:])
       assert traces.apar_dot is None
       assert traces.mom_err_norm is None
+      # An older file: no src_bgk_mom column.
+      assert traces.src_bgk is None
       assert any(r"\rho_{bg}" in text for text in _legend_texts(fig))
+    finally:
+      plt.close(fig)
+
+  def test_reads_bgk_source_column(self, stub, tmp_path):
+    """``src_bgk_mom=0.04`` is its own term and enters the residual's
+    formula; a zero column is absent."""
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _energy_balance_columns(time)
+    src_bgk = np.full_like(time, 0.04)
+    src_bgk[0] = 0.0
+    columns["src_bgk_mom"] = src_bgk
+    columns["mom_err"] = columns["mom_err"] + src_bgk
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
+      np.testing.assert_array_equal(traces.src_bgk, src_bgk[1:])
+      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+      legend = _legend_texts(fig)
+      assert r"$\mathcal{S}_{\mathrm{BGK}}$" in legend
+      assert legend[-1].startswith(r"$E_{\dot{\mathcal{E}}}=$$\mathcal{S}$"
+                                   r"$+\mathcal{S}_{\mathrm{BGK}}$$-")
+    finally:
+      plt.close(fig)
+
+    columns["src_bgk_mom"] = np.zeros_like(time)
+    stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
+    fig, traces = eb.energy_balance("sim", ["ion"], path=path)
+    try:
+      assert traces.src_bgk is None
     finally:
       plt.close(fig)
 
@@ -646,7 +691,7 @@ class TestGkEnergyBalanceRealFixtures:
     path = os.path.join(DATA, "generated", "gk_programs")
     time = np.linspace(0.0, 1.0, 5)[1:]  # t=0 is skipped.
     fdot = 2.0 + time
-    mom_err = 0.3 - 0.1 - (fdot - 0.4 + 0.05)
+    mom_err = 0.3 + 0.04 - 0.1 - (fdot - 0.4 + 0.05)
     for relative in (False, True):
       fig, traces = eb.energy_balance("bal", ["ion"],
                                       path=path,
@@ -654,9 +699,10 @@ class TestGkEnergyBalanceRealFixtures:
       try:
         np.testing.assert_array_equal(traces.time, time)
         for actual, expected in ((traces.fdot, fdot), (traces.src, 0.3),
-                                 (traces.bflux_tot, 0.1), (traces.field_dot,
-                                                           0.4), (traces.bg_dot,
-                                                                  0.05)):
+                                 (traces.src_bgk,
+                                  0.04), (traces.bflux_tot,
+                                          0.1), (traces.field_dot,
+                                                 0.4), (traces.bg_dot, 0.05)):
           np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
         if relative:
           np.testing.assert_allclose(traces.mom_err_norm,

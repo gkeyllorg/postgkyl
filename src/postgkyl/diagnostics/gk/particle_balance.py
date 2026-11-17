@@ -4,7 +4,9 @@ Ported from ``src_bak/postgkyl/apps/gk_particle_balance.py``. Same shape as
 :mod:`postgkyl.diagnostics.gk.energy_balance`, but for a single
 species and the M0 (density) moment, with no field/apar-energy terms::
 
-    N_err = S - bflux - df/dt
+    N_err = S + S_BGK - bflux - df/dt
+
+with ``S`` the source and ``S_BGK`` the BGK source.
 
 Without the moment files, it falls back to the particle balance Gkeyll writes
 when the species requests it (``<name>-<species>_balance_particle.gkyl``).
@@ -42,13 +44,16 @@ class ParticleBalanceTraces:
     time: Time stamps of the ``fdot`` trace after t=0, where the rates are
       defined.
     fdot: Rate of change of the M0 moment, summed over blocks.
-    src: Rate of change from sources, or ``None`` if none was found
+    src: Rate of change from the source, or ``None`` if none was found
       (balance file: if it is zero throughout).
     bflux_tot: Rate of change from boundary particle fluxes, or ``None``
       (balance file: if it is zero throughout).
     mom_err: The particle-balance residual (``None`` when ``relative_error``).
     mom_err_norm: The *relative* residual (only set when
       ``relative_error=True``).
+    src_bgk: Rate of change from the BGK source, or ``None`` if none was
+      found (balance file: if it is zero throughout, or the file predates
+      the ``src_bgk_mom`` column and includes it in ``src``).
   """
 
   time: np.ndarray
@@ -57,6 +62,7 @@ class ParticleBalanceTraces:
   bflux_tot: np.ndarray | None
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
+  src_bgk: np.ndarray | None = None
 
 
 def _accumulate(target: np.ndarray | None, addend) -> np.ndarray:
@@ -107,8 +113,8 @@ def _moment_file_traces(
   probe = fdot_file or _moment_file(file_prefix + species + "_fdot_")
   blocks = utils.get_block_indices(multib, probe)
 
-  fdot = src = bflux_tot = None
-  has_src = has_bflux = False
+  fdot = src = src_bgk = bflux_tot = None
+  has_src = has_src_bgk = has_bflux = False
   time_fdot = None
 
   for block_idx in blocks:
@@ -122,15 +128,17 @@ def _moment_file_traces(
     if not found:
       raise FileNotFoundError(f"Required file not found: {fdot_name}")
 
-    src_pb = 0.0 * fdot_pb
-    for src_name in (_resolve(path, source_file,
-                              _moment_file(block_prefix + species + "_source_"),
-                              block_idx),
-                     _moment_file(block_prefix + species + "_source_bgk_")):
-      found_s, _, v = utils.read_moment_if_present(src_name, _DENSITY_MOMENT)
-      if found_s:
-        has_src = True
-        src_pb = src_pb + v
+    src_name = _resolve(path, source_file,
+                        _moment_file(block_prefix + species + "_source_"),
+                        block_idx)
+    found_s, _, v = utils.read_moment_if_present(src_name, _DENSITY_MOMENT)
+    has_src = has_src or found_s
+    src_pb = v if found_s else 0.0 * fdot_pb
+
+    found_s, _, v = utils.read_moment_if_present(
+        _moment_file(block_prefix + species + "_source_bgk_"), _DENSITY_MOMENT)
+    has_src_bgk = has_src_bgk or found_s
+    src_bgk_pb = v if found_s else 0.0 * fdot_pb
 
     bflux_terms = []
     for d in _DIRS:
@@ -147,12 +155,14 @@ def _moment_file_traces(
 
     fdot = _accumulate(fdot, fdot_pb)
     src = _accumulate(src, src_pb)
+    src_bgk = _accumulate(src_bgk, src_bgk_pb)
     bflux_tot = _accumulate(bflux_tot, bflux_pb)
 
   # Rates are only defined once a step has been taken: skip t=0.
   time = time_fdot[1:]
-  fdot, src, bflux_tot = fdot[1:], src[1:], bflux_tot[1:]
-  mom_err = particle_balance_error(fdot, src, bflux_tot)
+  fdot, src, src_bgk = fdot[1:], src[1:], src_bgk[1:]
+  bflux_tot = bflux_tot[1:]
+  mom_err = particle_balance_error(fdot, src + src_bgk, bflux_tot)
   mom_err_norm = None
   if relative_error:
     dt_name = _resolve(path, dt_file,
@@ -175,7 +185,8 @@ def _moment_file_traces(
                                src=src if has_src else None,
                                bflux_tot=bflux_tot if has_bflux else None,
                                mom_err=mom_err,
-                               mom_err_norm=mom_err_norm)
+                               mom_err_norm=mom_err_norm,
+                               src_bgk=src_bgk if has_src_bgk else None)
 
 
 def _balance_file_traces(file_names: list[str],
@@ -189,15 +200,18 @@ def _balance_file_traces(file_names: list[str],
         "particle number.")
   # Rates are only defined once a step has been taken: skip t=0.
   col = {key: values[1:] for key, values in col.items()}
-  src, bflux_tot = (v if np.any(v) else None
-                    for v in (col["src_mom"], col["bflux_tot_mom"]))
+  # Older balance files have no src_bgk_mom: their src_mom includes it.
+  src, src_bgk, bflux_tot = (v if v is not None and np.any(v) else None
+                             for v in (col["src_mom"], col.get("src_bgk_mom"),
+                                       col["bflux_tot_mom"]))
   return ParticleBalanceTraces(
       time=time[1:],
       fdot=col["mom_dot"],
       src=src,
       bflux_tot=bflux_tot,
       mom_err=None if relative_error else col["mom_err"],
-      mom_err_norm=col["mom_err_norm"] if relative_error else None)
+      mom_err_norm=col["mom_err_norm"] if relative_error else None,
+      src_bgk=src_bgk)
 
 
 def _plot(traces: ParticleBalanceTraces, relative_error: bool, logy: bool,
@@ -219,6 +233,15 @@ def _plot(traces: ParticleBalanceTraces, relative_error: bool, logy: bool,
       h, = ax.plot(time, absy_func(traces.src), linestyle=_LINE_STYLES[2])
       legend_handles.append(h)
       legend_strings.append(r"$\mathcal{S}$")
+    if traces.src_bgk is not None:
+      h, = ax.plot(time,
+                   absy_func(traces.src_bgk),
+                   linestyle=_LINE_STYLES[2],
+                   marker="o",
+                   markevery=8,
+                   fillstyle="none")
+      legend_handles.append(h)
+      legend_strings.append(r"$\mathcal{S}_{\mathrm{BGK}}$")
     if traces.bflux_tot is not None:
       h, = ax.plot(time,
                    absy_func(-traces.bflux_tot),
@@ -232,7 +255,8 @@ def _plot(traces: ParticleBalanceTraces, relative_error: bool, logy: bool,
     legend_strings.append(r"$-\dot{f}$")
     h, = ax.plot(time, absy_func(traces.mom_err), linestyle=_LINE_STYLES[3])
     legend_handles.append(h)
-    legend_strings.append(r"$E_{\dot{\mathcal{N}}}=$" + "".join(legend_strings))
+    legend_strings.append(r"$E_{\dot{\mathcal{N}}}=$" +
+                          utils.sum_label(legend_strings))
 
     ax.legend(legend_handles,
               legend_strings,
@@ -296,7 +320,8 @@ def particle_balance(
   If no path override is given and the ``fdot_`` file is missing, the terms
   are instead read from ``<name>-<species>_balance_particle.gkyl``, which
   Gkeyll writes when the species requests the particle balance. Its relative
-  error is only available for a single block.
+  error is only available for a single block. Older balance files have no
+  ``src_bgk_mom`` column: their ``src_mom`` includes the BGK source.
 
   Without ``species``, the balance summed over species is read from
   ``<name>-balance_particle.gkyl``, which Gkeyll writes when the app

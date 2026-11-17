@@ -206,6 +206,17 @@ def read_interpolated_gfile(
   return grid_out, np.squeeze(values), interpolated
 
 
+def sum_label(terms: list[str]) -> str:
+  """Mathtext label of the sum of terms given by their own labels.
+
+  The labels are concatenated, with a ``+`` before every term but the first
+  whose label does not start with a minus sign, e.g. ``["$a$", "$b$",
+  "$-c$"]`` gives ``"$a$$+b$$-c$"`` (rendered ``a+b-c``).
+  """
+  return "".join(t if i == 0 or t.startswith("$-") else "$+" + t[1:]
+                 for i, t in enumerate(terms))
+
+
 def set_tick_font_size(ax, size: float) -> None:
   """Set an axes' tick-label and offset-text font size to ``size``."""
   ax.tick_params(axis="both", labelsize=size)

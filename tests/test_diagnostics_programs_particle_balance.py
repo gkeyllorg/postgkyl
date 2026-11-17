@@ -285,7 +285,9 @@ class TestGkParticleBalanceMomentFileNames:
       finally:
         plt.close(fig)
 
-  def test_bgk_source_adds_to_source(self, stub, tmp_path):
+  def test_bgk_source_is_its_own_term(self, stub, tmp_path):
+    """S=0.1 and S_BGK=0.02 stay separate; the residual has both:
+    0.1 + 0.02 - 0.05 - (1+t)."""
     path = _build_sim(stub, tmp_path)
     time = np.linspace(0.0, 1.0, 5)
     bgk_vals = np.zeros((5, 3))
@@ -294,7 +296,26 @@ class TestGkParticleBalanceMomentFileNames:
 
     fig, traces = pb.particle_balance("sim", "ion", path=path)
     try:
-      np.testing.assert_allclose(traces.src, 0.12)
+      np.testing.assert_allclose(traces.src, 0.1, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces.mom_err,
+                                 0.07 - (1.0 + time[1:]),
+                                 rtol=0,
+                                 atol=1e-14)
+    finally:
+      plt.close(fig)
+
+  def test_bgk_source_without_source(self, stub, tmp_path):
+    path = _build_sim(stub, tmp_path, with_src=False)
+    time = np.linspace(0.0, 1.0, 5)
+    bgk_vals = np.zeros((5, 3))
+    bgk_vals[:, 0] = 0.02
+    stub.add(f"{path}sim-ion_source_bgk_integrated_M0M1M2.gkyl", time, bgk_vals)
+
+    fig, traces = pb.particle_balance("sim", "ion", path=path)
+    try:
+      assert traces.src is None
+      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
     finally:
       plt.close(fig)
 
@@ -352,6 +373,8 @@ class TestGkParticleBalanceFromBalanceFiles:
         np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
         np.testing.assert_array_equal(traces.bflux_tot,
                                       columns["bflux_tot_mom"][1:])
+        # An older file: no src_bgk_mom column.
+        assert traces.src_bgk is None
         if relative:
           np.testing.assert_array_equal(traces.mom_err_norm,
                                         columns["mom_err_norm"][1:])
@@ -361,6 +384,33 @@ class TestGkParticleBalanceFromBalanceFiles:
           assert traces.mom_err_norm is None
       finally:
         plt.close(fig)
+
+  def test_reads_bgk_source_column(self, stub, tmp_path):
+    """``src_bgk_mom=0.02`` is its own term; a zero column is absent."""
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    columns = _particle_balance_columns(time)
+    src_bgk = np.full_like(time, 0.02)
+    src_bgk[0] = 0.0
+    columns["src_bgk_mom"] = src_bgk
+    columns["mom_err"] = columns["mom_err"] + src_bgk
+    stub.add_balance(f"{path}sim-ion_balance_particle.gkyl", time, columns)
+
+    fig, traces = pb.particle_balance("sim", "ion", path=path)
+    try:
+      np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
+      np.testing.assert_array_equal(traces.src_bgk, src_bgk[1:])
+      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+    finally:
+      plt.close(fig)
+
+    columns["src_bgk_mom"] = np.zeros_like(time)
+    stub.add_balance(f"{path}sim-ion_balance_particle.gkyl", time, columns)
+    fig, traces = pb.particle_balance("sim", "ion", path=path)
+    try:
+      assert traces.src_bgk is None
+    finally:
+      plt.close(fig)
 
   def test_species_sum_is_not_a_species_balance(self, stub, tmp_path):
     """``<name>-balance_particle.gkyl`` sums over species: no fallback."""
@@ -491,7 +541,7 @@ class TestGkParticleBalanceRealFixtures:
     path = os.path.join(DATA, "generated", "gk_programs")
     time = np.linspace(0.0, 1.0, 5)[1:]  # t=0 is skipped.
     fdot = 1.0 + time
-    mom_err = 0.1 - 0.05 - fdot
+    mom_err = 0.1 + 0.02 - 0.05 - fdot
     for relative in (False, True):
       fig, traces = pb.particle_balance("bal",
                                         species,
@@ -500,7 +550,8 @@ class TestGkParticleBalanceRealFixtures:
       try:
         np.testing.assert_array_equal(traces.time, time)
         for actual, expected in ((traces.fdot, fdot), (traces.src, 0.1),
-                                 (traces.bflux_tot, 0.05)):
+                                 (traces.src_bgk, 0.02), (traces.bflux_tot,
+                                                          0.05)):
           np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
         if relative:
           np.testing.assert_allclose(traces.mom_err_norm,

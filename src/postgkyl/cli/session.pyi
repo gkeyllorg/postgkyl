@@ -800,7 +800,9 @@ class PostgkylSession:
         the energy balance. That file already sums over every species (``species``
         is not used) and adds the background-charge term ``bg_dot`` of adiabatic
         species to the residual. Its relative error is only available for a
-        single block. Without ``species``, only that file is read.
+        single block. Older balance files have no ``src_bgk_mom`` column: their
+        ``src_mom`` includes the BGK source. Without ``species``, only that file
+        is read.
 
         The rates are only defined once a step has been taken, so t=0 is skipped.
 
@@ -1147,7 +1149,8 @@ class PostgkylSession:
         If no path override is given and the ``fdot_`` file is missing, the terms
         are instead read from ``<name>-<species>_balance_particle.gkyl``, which
         Gkeyll writes when the species requests the particle balance. Its relative
-        error is only available for a single block.
+        error is only available for a single block. Older balance files have no
+        ``src_bgk_mom`` column: their ``src_mom`` includes the BGK source.
 
         Without ``species``, the balance summed over species is read from
         ``<name>-balance_particle.gkyl``, which Gkeyll writes when the app

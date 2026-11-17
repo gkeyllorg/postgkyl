@@ -936,13 +936,14 @@ def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
     values[0] = 0.0
     return values
 
-  energy_err = 0.3 - 0.1 - ((2.0 + time) - 0.4 + 0.05)
-  particle_err = 0.1 - 0.05 - (1.0 + time)
+  energy_err = 0.3 + 0.04 - 0.1 - ((2.0 + time) - 0.4 + 0.05)
+  particle_err = 0.1 + 0.02 - 0.05 - (1.0 + time)
   particle = {
       "mom_err": particle_err,
       "mom_err_norm": particle_err * 0.25 / 10.0,
       "mom_dot": 1.0 + time,
       "src_mom": np.full(5, 0.1),
+      "src_bgk_mom": np.full(5, 0.02),
       "bflux_tot_mom": np.full(5, 0.05),
   }
   balances = {
@@ -951,6 +952,7 @@ def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
           "mom_err_norm": energy_err * 0.25 / 18.0,
           "mom_dot": 2.0 + time,
           "src_mom": np.full(5, 0.3),
+          "src_bgk_mom": np.full(5, 0.04),
           "bflux_tot_mom": np.full(5, 0.1),
           "field_dot": np.full(5, 0.4),
           "bg_dot": np.full(5, 0.05),
@@ -969,12 +971,13 @@ def _generate_balance_and_nodes_fixtures(out_dir: Path) -> None:
                              "description":
                              "Analytic GK balance-file history.",
                              "analytic_function":
-                             "Energy: mom_dot=2+t, src=0.3, bflux=0.1, "
-                             "field_dot=0.4, bg_dot=0.05, energy=18; "
-                             "particle: mom_dot=1+t, src=0.1, bflux=0.05, "
-                             "number=10; dt=0.25, mom_err=src-bflux-(mom_dot"
-                             "-field_dot+bg_dot), mom_err_norm=mom_err*dt/"
-                             "(energy or number).",
+                             "Energy: mom_dot=2+t, src=0.3, src_bgk=0.04, "
+                             "bflux=0.1, field_dot=0.4, bg_dot=0.05, "
+                             "energy=18; particle: mom_dot=1+t, src=0.1, "
+                             "src_bgk=0.02, bflux=0.05, number=10; dt=0.25, "
+                             "mom_err=src+src_bgk-bflux-(mom_dot-field_dot+"
+                             "bg_dot), mom_err_norm=mom_err*dt/(energy or "
+                             "number).",
                              "generation_method":
                              "Direct time samples of the stated formulas."
                          })
