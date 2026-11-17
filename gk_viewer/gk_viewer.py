@@ -495,10 +495,10 @@ def _(mo, prefs, vp, vs):
                          ) if background is not None else None
   _op = vs.as_float(prefs.get('opacity'),
                     background[2] if background is not None else 1.0)
-  bg_opacity = mo.ui.slider(0.05,
-                            1.0,
-                            step=0.05,
-                            value=min(max(round(_op / 0.05) * 0.05, 0.05), 1.0),
+  # steps at two decimals: a step of 0.05 added up showed 0.6000000000000001, too wide for the sidebar
+  _steps = [round(0.05 * i, 2) for i in range(1, 21)]
+  bg_opacity = mo.ui.slider(steps=_steps,
+                            value=min(_steps, key=lambda v: abs(v - _op)),
                             label='background opacity',
                             show_value=True,
                             on_change=lambda v: prefs.update(opacity=v)
@@ -1530,11 +1530,20 @@ def _(
     _items.append(
         mo.md(f'#### What this run set at launch ({len(_set_rows)} options)'))
     _items.append(
-        mo.ui.table(_set_rows,
-                    selection=None,
-                    page_size=max(len(_set_rows), 1),
-                    show_column_summaries=False,
-                    wrapped_columns=['meaning']) if _set_rows else mo.
+        mo.ui.table(
+            _set_rows,
+            selection=None,
+            page_size=max(len(_set_rows), 1),
+            show_column_summaries=False,
+            # widths that fit the panel, the text wrapping in them: sized to their content, the last two
+            # columns ran off its edge (1335 px in a 1055 px panel)
+            wrapped_columns=['section', 'value', 'default', 'meaning', 'note'],
+            column_widths=dict(section=140,
+                               option=130,
+                               value=170,
+                               default=120,
+                               meaning=320,
+                               note=100)) if _set_rows else mo.
         md('_No options recorded (no options_used.txt or command file)._'))
     _paths = [
         dict(option=k, path=v, exists='yes' if os.path.exists(v) else 'no')
@@ -1550,11 +1559,16 @@ def _(
               f'{len(_side) - _nd} the same'))
       _items.append(mo.md(vp.compare_legend(pal)))
       _items.append(
-          mo.ui.table(_side,
-                      selection=None,
-                      page_size=max(len(_side), 1),
-                      show_column_summaries=False,
-                      style_cell=vp.compare_style(pal)) if _side else mo.
+          mo.ui.table(
+              _side,
+              selection=None,
+              page_size=max(len(_side), 1),
+              show_column_summaries=False,
+              wrapped_columns=['this_run', 'overlay', 'set_by'],
+              column_widths=dict(
+                  compare=80, option=150, this_run=280, overlay=280, set_by=160
+              ),
+              style_cell=vp.compare_style(pal)) if _side else mo.
           md('_Neither run records an option._'))
     _jobs = ro.jobs(run)
     _acc = {}

@@ -2566,14 +2566,17 @@ def timetraces_figure(run,
         for e in ends:
           e[0] -= over
       for yl, te, name, _, _ in ends:
-        fig.add_annotation(x=te,
-                           y=yl,
-                           text=f' {name}',
-                           showarrow=False,
-                           xanchor='left',
-                           font=dict(color=pal.ink2, size=11),
-                           row=3,
-                           col=c)
+        fig.add_annotation(
+            x=te,
+            y=yl,
+            text=f' {name}',
+            showarrow=False,
+            xanchor='left',
+            bgcolor=pal.
+            surf,  # a gridline behind it (the zero line) stops at its edge
+            font=dict(color=pal.ink2, size=11),
+            row=3,
+            col=c)
       # the time axis runs on past the last frame far enough that the longest label ends inside its column,
       # at the narrowest page the viewer is laid out for (END_LABEL_COLUMN px of plot per column)
       w = max(text_px(f' {e[2]}', 11,

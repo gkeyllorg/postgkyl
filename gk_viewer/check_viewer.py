@@ -32,6 +32,9 @@
    under the map and (--browser) under the movie where its extent says; the opacity slider redraws it at its value
    without remaking the movie; the half domain shown whole puts every cell's colour at its mirror image (map and
    page); switched off, the picture leaves no trace.
+8. (2026-11-14, --browser) the page's layout: the movie's poloidal plane stays in its plot area (every simulation
+   in its views, mirrored too, with the device picture, light and dark: nothing but text in the canvas's margins);
+   the Options tab's tables fit their panel.
 Exit status: the number of failures.
 """
 import argparse
@@ -953,7 +956,7 @@ async def _drive_poloidal(url, dbg, wall, centres):
   """The movie's poloidal plane, step by step (launched --background true --opacity 1 on Sim 2, a half domain):
   {'on': the picture at full opacity, 'slider': after the opacity slider's arrow keys, 'mirror': the half domain shown
   whole, 'off': the picture switched off}, each (canvas RGBA, the wall in canvas px, the drawn box in canvas px, the
-  device pixel ratio, cell-centre pairs (Z, -Z) in canvas px, the surface colour, the slider's value, the
+  device pixel ratio, cell-centre pairs (Z, -Z) in canvas px, the surface colour, the slider's shown value, the
   render number of the movie shown, movie_widget's)."""
   from PIL import Image
   latest = "__deep('.gkv-movie').reduce((a, e) => (+e.dataset.render || 0) > (+(a && a.dataset.render) || 0) ? e : a, null)"  # the movie the page shows now (marimo may render a new one into the same element)
@@ -965,11 +968,15 @@ async def _drive_poloidal(url, dbg, wall, centres):
       "s = x.getImageData(1, 1, 1, 1).data, sl = __deep('[role=slider]').find(e => { let n = e; for (let i = 0; "
       "i < 6 && n; i++) { n = n.parentElement || (n.getRootNode() && n.getRootNode().host); if (n && "
       "(n.textContent || '').includes('background opacity')) return true; } return false; }); "
+      # the value the slider shows beside it (marimo's show_value): its aria-valuenow is an index into steps=
+      "let v = null; for (let n = sl, i = 0; n && v === null && i < 6; i++) { "
+      "n = n.parentElement || (n.getRootNode() && n.getRootNode().host); "
+      "const d = n && n.querySelector && n.querySelector('div.text-muted-foreground'); "
+      "if (d && /^\\d*\\.?\\d+$/.test(d.textContent.trim())) v = +d.textContent.trim(); } "
       "return { png: cv.toDataURL('image/png'), wall: w.map(q => el.__rz.px(q[0], q[1])), "
       "clip: [p0[0], p0[1], p1[0], p1[1]], dpr: window.devicePixelRatio || 1, "
       "pairs: c.map(q => [el.__rz.px(q[0], q[1]), el.__rz.px(q[0], -q[1])]), surf: [s[0], s[1], s[2]], "
-      "slider: sl ? +sl.getAttribute('aria-valuenow') : null, render: +el.dataset.render }; })()"
-  )
+      "slider: v, render: +el.dataset.render }; })()")
   out = {}
 
   async def shot(name):
@@ -1152,6 +1159,142 @@ def part_poloidal(chrome=None):
       int(_blue(st['off'][0]).sum()) == 0 and st['off'][7] == st['mirror'][7],
       f'device background switched off: no trace of the picture ({int(_blue(st["off"][0]).sum())} blue pixels), '
       f'the movie not made again (render {st["mirror"][7]} -> {st["off"][7]})')
+
+
+# --------------------------------------------------------------------------------------- the movie's margins (11-14)
+def _margin_foreign(img, area, surf, texts):
+  """Pixels of img outside the plot area (x0, y0, x1, y1; 1 px slack) that are neither the surface nor text: off the
+  colour line from surf to each text colour (antialiased glyphs lie on it) by more than 40. What the poloidal plane
+  drew past its area."""
+  h, w = img.shape[:2]
+  x0, y0, x1, y1 = (int(round(v)) for v in area)
+  mask = np.ones((h, w), bool)
+  mask[max(y0 - 1, 0):y1 + 2, max(x0 - 1, 0):x1 + 2] = False
+  px = img[mask][:, :3].astype(float)
+  surf = np.asarray(surf, float)
+  d = np.full(len(px), np.inf)
+  for t in texts:
+    v = np.asarray(t, float) - surf
+    u = np.clip((px - surf) @ v / max(v @ v, 1e-9), 0, 1)
+    d = np.minimum(d, np.linalg.norm(px - (surf + u[:, None] * v), axis=1))
+  return int((d > 40).sum())
+
+
+async def _drive_canvas(url, dbg, states, shots):
+  """For each state (view keys), the page opened on it: (state, the poloidal canvas RGBA, its plot area in canvas
+  px, the surface colour, the text colours, the view's title on the canvas); a screenshot of each in shots."""
+  from urllib.parse import urlencode
+  from PIL import Image
+  latest = (
+      "__deep('.gkv-movie').reduce((a, e) => (+e.dataset.render || 0) > (+(a && a.dataset.render) || 0) "
+      "? e : a, null)")
+  rgb = (
+      "(c => { const k = document.createElement('canvas').getContext('2d'); k.fillStyle = c; k.fillRect(0, 0, 1, 1); "
+      "return [...k.getImageData(0, 0, 1, 1).data].slice(0, 3); })")
+  grab = (
+      "(() => { const el = " + latest +
+      ", cv = el.querySelector('canvas.rz'), st = el.style, c = " + rgb + "; "
+      "return { png: cv.toDataURL('image/png'), area: el.__rz.area(), surf: c(st.getPropertyValue('--nm-surf')), "
+      "texts: [c(st.getPropertyValue('--nm-ink')), c(st.getPropertyValue('--nm-ink2'))] }; })()"
+  )
+  out = []
+  async with opened(url, dbg) as c:
+    for k, state in enumerate(states):
+      await c.call('Page.navigate', url=url + '&' + urlencode(state))
+      await asyncio.sleep(3)
+      await c.js(DEEP)
+      await c.until(f"(e => e && +(e.dataset.draws || 0) > 0)({latest})", 180)
+      if vs_bool(state.get('background')):
+        await c.until(
+            "Object.values(window.__gkvBackground || {}).some(i => i.complete && i.naturalWidth)",
+            60)
+      await asyncio.sleep(2.5)
+      g = await c.strict(grab)
+      out.append((state,
+                  np.asarray(
+                      Image.open(
+                          io.BytesIO(base64.b64decode(g['png'].split(
+                              ',', 1)[1]))).convert('RGBA')), g['area'],
+                  g['surf'], g['texts']))
+      if shots:
+        await c.shot(os.path.join(shots, f'canvas_{k:02d}.png'))
+  return out
+
+
+def vs_bool(v):
+  return str(v).lower() in ('1', 'true', 'yes', 'on')
+
+
+def canvas_states(full=False):
+  """Views of the movie's poloidal plane to open: each simulation in its views (full: every one; else the whole
+  domain and a divertor), a half domain mirrored too, with the device picture where viewer.json names one; and the
+  light theme."""
+  import gkview as gv
+  import viewer_plots as vp
+  pic = 'true' if gv.CONFIG.get('device_image') else 'false'
+  out = []
+  for lab, d, dflt, _ in gv.SIMS:
+    run = gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+    for mirror in ((False, True) if run.layout.half else (False, )):
+      views = list(vp.zoom_boxes(run, mirror=mirror))
+      views = views if full else [
+          v for v in views if v == 'whole domain' or v.endswith('divertor')
+      ][:2]
+      out += [
+          dict(sim=lab,
+               zoom=v,
+               mirror=str(mirror).lower(),
+               background=pic,
+               opacity='0.6') for v in views
+      ]
+  half = next((st for st in out
+               if st['mirror'] == 'false' and st['zoom'] == 'lower divertor'),
+              out[0])
+  out.append(dict(half, dark='false'))
+  return out
+
+
+async def _drive_tables(url, dbg):
+  """The Options tab of Sim 2 with the 2025 re-run over it (both its tables): [(content width, visible width)] of
+  each table on the page."""
+  from urllib.parse import urlencode
+  async with opened(url, dbg) as c:
+    await c.call(
+        'Page.navigate',
+        url=url + '&' +
+        urlencode(dict(sim='Sim 2', cmp='2025 re-run/prod', tab='Options')))
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    await c.until("__deep('table').length >= 2", 180)
+    await asyncio.sleep(3)
+    return await c.strict(
+        "__deep('table').map(t => [Math.round(t.scrollWidth), "
+        "Math.round((t.parentElement || t).clientWidth)])")
+
+
+def part_layout(chrome, shots=None, full=False):
+  """The page's layout (2026-11-14): the movie's poloidal plane stays in its plot area (in every state of
+  canvas_states, nothing but text in the canvas's margins: a zoomed view's cells and wall covered the title and the
+  axes); the Options tab's tables fit their panel (their last columns ran off its edge)."""
+  states = canvas_states(full)
+  with served(chrome, []) as (url, dbg):
+    check(url is not None, "the page's layout: view.sh serves the page")
+    if url is None:
+      return
+    got = asyncio.run(_drive_canvas(url, dbg, states, shots))
+    tables = asyncio.run(_drive_tables(url, dbg))
+  check(
+      len(tables) >= 2 and all(w <= v + 1 for w, v in tables),
+      f'the Options tab with an overlay: each table fits its panel ((content, visible) px: {tables})'
+  )
+  bad = [(st, n) for st, img, area, surf, texts in got
+         if (n := _margin_foreign(img, area, surf, texts))]
+  check(
+      len(got) == len(states) and not bad,
+      f"the movie's margins: nothing of the poloidal plane past its plot area in {len(got)} views "
+      f"(simulations x views, mirrored, the device picture, light and dark); stray pixels: "
+      f"{[(st['sim'], st['zoom'], st['mirror'], st.get('dark', 'true'), n) for st, n in bad][:6]}"
+  )
 
 
 # ---------------------------------------------------------------------------------------------------- browser
@@ -1769,6 +1912,7 @@ if __name__ == '__main__':
   part_poloidal(a.browser)
   if a.browser:
     part_browser(a.browser, a.shots)
+    part_layout(a.browser, a.shots)
     part_liveplot(a.browser)
   print(f'\n{len(fails)} failed' if fails else '\nall passed')
   sys.exit(len(fails))

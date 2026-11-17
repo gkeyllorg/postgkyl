@@ -464,6 +464,18 @@ Run from this directory with no environment set (its own `viewer.json`, `.venv`)
 2026-11-14, later: the code reformatted to the repo's style (YAPF: 2-space indent, 80 columns; ruff's pyflakes
 rules: 4 unused imports / an f-string without placeholders removed) with the repo's pre-commit hooks, all passing;
 both suites then run from here as above, all pass.
+2026-11-14, last: the movie's poloidal plane is drawn inside its plot area only. In a zoomed view the cells and the
+wall ran on past it, over the title and the axes, and the device picture stopped at the view's box instead of
+filling the area; the ticks now span the whole area, the area never shows R < 0 (the box sits at R = 0 instead of
+centred when the area is wider) and a click in a margin probes nothing. `part_layout` opens every simulation in every
+view (half domains mirrored too, with the device picture, light and dark) and finds nothing but text in the canvas's
+margins (the drawing without the clip fails it: 13,036 and 14,466 stray pixels in two lower-divertor views). The
+same audit, screenshots of every tab: the opacity slider showed 0.6000000000000001, too wide for the sidebar (which
+grew a scrollbar): its steps are now two-decimal numbers; the Options tab's tables ran 1335 px wide in a 1055 px panel,
+their last columns cut off: fixed column widths, the text wrapping in them (`part_layout` measures every table's
+content against its panel); a chart's end labels had the zero line running through them: they have the chart's
+surface behind them now.
+
 2026-11-14: the browser part runs again (Chrome for Testing's headless shell 157; any Chrome / Chromium binary will
 do). New: the open tab stays when an option re-runs the tabs (Balance & power, dark mode off and on: its charts
 drawn anew each time, the tab still open, the conservation chart's log axis there). The notebook as committed in

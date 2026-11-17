@@ -457,7 +457,9 @@ function render({ model, el }) {
     const b = D.boxes[model.get('zoom')] || D.boxes['whole domain'];
     const ml = 42, mr = 8, mt = 24, mb = 34, pw = geo.LW - ml - mr, ph = geo.rzH - mt - mb;
     const s = Math.min(pw / (b[1] - b[0]), ph / (b[3] - b[2]));
-    const ox = ml + (pw - s * (b[1] - b[0])) / 2, oy = mt + (ph - s * (b[3] - b[2])) / 2;
+    // the view's box centred in the plot area, but never so far right that the area shows R < 0 (nothing is there)
+    const ox = Math.min(ml + (pw - s * (b[1] - b[0])) / 2, Math.max(ml, ml + b[0] * s)),
+          oy = mt + (ph - s * (b[3] - b[2])) / 2;
     const X = R => ox + (R - b[0]) * s, Y = Z => oy + (b[3] - Z) * s;
     const paths = [], cen = new Float32Array(2 * nc);
     for (let c = 0; c < nc; c++) {
@@ -482,7 +484,9 @@ function render({ model, el }) {
       }
       for (const l of D.lines) if (l.kind !== 'wall') lines.push(line(l, -1));
     }
-    geo.rz = { b, X, Y, paths, cen, mpaths, mcen, lines, ml, mt, mb, pw, ph, s, ox, oy, view: model.get('zoom') };
+    // the plot area shows more than the view's box where their shapes differ: the R and Z it spans
+    const vis = [b[0] + (ml - ox) / s, b[0] + (ml + pw - ox) / s, b[3] - (mt + ph - oy) / s, b[3] - (mt - oy) / s];
+    geo.rz = { b, vis, X, Y, paths, cen, mpaths, mcen, lines, ml, mt, mb, pw, ph, s, ox, oy, view: model.get('zoom') };
   }
 
   // space-time: one offscreen image per strip (x = cell along the strip, y = frame, time upward)
@@ -526,13 +530,16 @@ function render({ model, el }) {
   function drawRZ(i0, i1, a) {
     const x = ctx.rz, g = geo.rz;
     x.fillStyle = L.surf; x.fillRect(0, 0, geo.LW, geo.rzH);
-    // the device picture (BackgroundLoader), on the R-Z axes by its extent, inside the view's box, under the cells
+    // the plane inside its plot area, whole: a zoomed view's cells and wall run on past it (they covered the title
+    // and the axes) and the picture fills it (it stopped at the view's box)
+    x.save(); x.beginPath(); x.rect(g.ml, g.mt, g.pw, g.ph); x.clip();
+    // the device picture (BackgroundLoader), on the R-Z axes by its extent, under the cells
     const bd = model.get('background') || {}, bim = bd.key && (window.__gkvBackground || {})[bd.key];
     if (bim && bim.complete && bim.naturalWidth) {
       const e = bd.extent;
-      x.save(); x.beginPath(); x.rect(g.ox, g.oy, g.s * (g.b[1] - g.b[0]), g.s * (g.b[3] - g.b[2])); x.clip();
       x.globalAlpha = bd.opacity ?? 1;
-      x.drawImage(bim, g.X(e[0]), g.Y(e[3]), (e[1] - e[0]) * g.s, (e[3] - e[2]) * g.s); x.restore();
+      x.drawImage(bim, g.X(e[0]), g.Y(e[3]), (e[1] - e[0]) * g.s, (e[3] - e[2]) * g.s);
+      x.globalAlpha = 1;
     }
     for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); if (D.mirror) x.fill(g.mpaths[c]); }
     for (const l of g.lines) {
@@ -546,19 +553,20 @@ function render({ model, el }) {
     const pr = model.get('probe');
     if (pr >= 0 && pr < nc && drawn[pr]) for (const p of D.mirror ? [g.paths[pr], g.mpaths[pr]] : [g.paths[pr]]) {
       x.lineWidth = 2.5; x.strokeStyle = L.surf; x.stroke(p); x.lineWidth = 1.5; x.strokeStyle = L.accent; x.stroke(p); }
+    x.restore();
     // fitted to the canvas (a narrow column, a zoomed view and a block choice ran past its edge)
     const view = g.view === 'whole domain' ? '' : g.view, note = D.rz_note || '';
     const tt = fitText(x, ['poloidal plane' + (view ? ': ' + view : '') + note, (view || 'poloidal plane') + note,
                            view ? 'poloidal plane: ' + view : 'poloidal plane', view || 'poloidal plane'],
                        geo.LW - g.ml - 4, 13);
     text(x, tt, g.ml, 16, { size: 13, color: L.ink });
-    // axes: a few round R and Z values
-    const b = g.b, sr = niceStep(b[1] - b[0], 4), sz = niceStep(b[3] - b[2], 6);
-    for (let R = Math.ceil(b[0] / sr) * sr; R <= b[1] + 1e-9; R += sr)
+    // axes: a few round R and Z values over the whole plot area (the step from the view's box)
+    const b = g.b, v = g.vis, sr = niceStep(b[1] - b[0], 4), sz = niceStep(b[3] - b[2], 6);
+    for (let R = Math.ceil(v[0] / sr) * sr; R <= v[1] + 1e-9; R += sr)
       text(x, fmt(+R.toFixed(6)), g.X(R), geo.rzH - g.mb + 16, { align: 'center' });
-    for (let Z = Math.ceil(b[2] / sz) * sz; Z <= b[3] + 1e-9; Z += sz)
+    for (let Z = Math.ceil(v[2] / sz) * sz; Z <= v[3] + 1e-9; Z += sz)
       text(x, fmt(+Z.toFixed(6)), g.ml - 6, g.Y(Z), { align: 'right', base: 'middle' });
-    text(x, 'R (m)', g.ox + g.s * (b[1] - b[0]) / 2, geo.rzH - 6, { align: 'center' });
+    text(x, 'R (m)', g.ml + g.pw / 2, geo.rzH - 6, { align: 'center' });
     x.save(); x.translate(11, g.mt + g.ph / 2); x.rotate(-Math.PI / 2); text(x, 'Z (m)', 0, 0, { align: 'center' }); x.restore();
   }
 
@@ -726,6 +734,8 @@ function render({ model, el }) {
     draw(); }
   const dpr = () => window.devicePixelRatio || 1;
   cv.rz.onclick = e => { const g = geo.rz, x = e.offsetX * dpr(), y = e.offsetY * dpr();
+    const inArea = e.offsetX >= g.ml && e.offsetX <= g.ml + g.pw && e.offsetY >= g.mt && e.offsetY <= g.mt + g.ph;
+    if (!inArea) { setProbe(-1, false); cmd.hide(); return; }   // a margin: what is drawn there is cut off
     for (const c of rzc) if (ctx.rz.isPointInPath(g.paths[c], x, y) || (D.mirror && ctx.rz.isPointInPath(g.mpaths[c], x, y))) {
       setProbe(c); showCell(c); return; }
     setProbe(-1, false); cmd.hide(); };   // the background: no probe
@@ -783,7 +793,8 @@ function render({ model, el }) {
   let draws = 0; const _draw = draw;   // data-draws: frames drawn so far (the playback test reads it)
   draw = () => { _draw(); el.dataset.draws = ++draws; };
   // for the checks: the canvas pixel of a point (R, Z) on the poloidal plane, and the view's box [R0, R1, Z0, Z1]
-  el.__rz = { px: (R, Z) => [geo.rz.X(R) * dpr(), geo.rz.Y(Z) * dpr()], box: () => geo.rz.b };
+  el.__rz = { px: (R, Z) => [geo.rz.X(R) * dpr(), geo.rz.Y(Z) * dpr()], box: () => geo.rz.b,
+              area: () => [geo.rz.ml, geo.rz.mt, geo.rz.ml + geo.rz.pw, geo.rz.mt + geo.rz.ph].map(v => v * dpr()) };
   applyLook(); layout(); draw();
   // re-lay out on a width change, on the next animation frame (not inside the observer's callback)
   let width = el.clientWidth, pending = 0;
