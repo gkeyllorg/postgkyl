@@ -734,10 +734,26 @@ def separatrix_rows(run, blocks=None):
       lay.region[b] == 'sol' and lay.under.get(b) is not None) or b in lay.lcfs]
 
 
+def machine_points(run, wall=None):
+  """The machine's poloidal cross-section as R-Z points: the whole wall (wall, gkview.wall(run): not cut to the
+  grid's height) and the corners of the device picture (gkview.device_image: where its edges lie). None when the run
+  has neither. A picture viewer.json names but cannot use frames nothing here: map_figure reports it."""
+  pts = [] if wall is None else [np.asarray(wall, float).reshape(-1, 2)]
+  try:
+    pic = gv.device_image(run.device)
+  except ValueError:
+    pic = None
+  if pic is not None:
+    r0, r1, z0, z1 = pic[1]
+    pts.append(np.array([[r0, z0], [r1, z1]], float))
+  return np.concatenate(pts) if pts else None
+
+
 def zoom_boxes(run, blocks=None, mirror=False):
   """name -> (R0, R1, Z0, Z1) views of the poloidal plane, from the layout ('whole domain': the chosen blocks;
-  mirror: a half domain shown whole, z_signs, with its other divertor's view too). A run with no block (the empty
-  run): {'whole domain': None}, nothing to frame."""
+  mirror: a half domain shown whole, z_signs, with its other divertor's view too; 'whole machine': the whole domain
+  with all of the machine around it, machine_points, when that frames more than the domain). A run with no block
+  (the empty run): {'whole domain': None}, nothing to frame."""
   nd = run.nodes
   if not run.nb:
     return {'whole domain': None}
@@ -757,11 +773,20 @@ def zoom_boxes(run, blocks=None, mirror=False):
     return (r0 - pad * dr, r1 + pad * dr, z0 - pad * dz, z1 + pad * dz)
 
   whole = allp
-  w = gv.wall(run) if len(shown_blocks(run, blocks)) == run.nb else None
+  wall = gv.wall(run)
+  w = wall if len(shown_blocks(run, blocks)) == run.nb else None
   if w is not None:  # the vessel too, as far as it runs within the grid's height (a half domain's other half not)
     whole = np.concatenate(
         [allp, wall_within(w, allp[:, 1].min(), allp[:, 1].max())])
   out = {'whole domain': box(whole, 0.03)}
+  machine = machine_points(run, wall)
+  if machine is not None:
+    m = box(np.concatenate([whole, machine]), 0.03)
+    m = (
+        max(m[0], 0.0), *m[1:]
+    )  # a picture's edge on the axis (NSTX-U's at R = 0): no margin at R < 0
+    if not np.allclose(m, out['whole domain']):
+      out['whole machine'] = m
   for ud in ('lower', 'upper'):
     div = [
         b for t in run.layout.targets if t.updown == ud for b in (t.leg, t.pf)
@@ -1202,8 +1227,9 @@ def subplots(**kw):
   return fig
 
 
-def legend_key(fig, name, line=None, marker=None, row=1, col=1):
-  """A legend entry that only says what a line or marker style means (no data)."""
+def legend_key(fig, name, line=None, marker=None, row=1, col=1, curve=None):
+  """A legend entry that only says what a line or marker style means (no data). curve: the tag (curve_tag) of the
+  curves drawn in that style, whose switches it follows (None: a reference line's, always there)."""
   fig.add_trace(go.Scatter(x=[None],
                            y=[None],
                            mode='lines' if marker is None else 'markers',
@@ -1212,7 +1238,8 @@ def legend_key(fig, name, line=None, marker=None, row=1, col=1):
                            name=name,
                            legendgroup='key',
                            showlegend=True,
-                           hoverinfo='skip'),
+                           hoverinfo='skip',
+                           meta=dict(curve=curve) if curve else None),
                 row=row,
                 col=col)
 
@@ -1259,6 +1286,109 @@ def _layout(fig, height, pal, t=60, b=50, l=60, r=20, gap=LEGEND_GAP, **kw):
         tr.x) and tr.showlegend is not False:
       tr.update(x=[None], y=[None])
   return fig
+
+
+# ------------------------------------------------------------------------------------- the curves shown (11-17)
+@dataclass(frozen=True)
+class Curves:
+  """Which curves the line charts draw, each on a switch of the sidebar's (view keys of the same names): the
+  electrons' and the ions' (a species by the sign of its charge, curve_tag), the simulated ones (the run's and the
+  overlay's) and the experiment's (the measured and analysis profiles: Thomson, CHERS, TRANSP). The maps (the
+  poloidal plane, the midplane over time, the diffusivity's) show one quantity each and keep it."""
+  electrons: bool = True
+  ions: bool = True
+  simulation: bool = True
+  experiment: bool = True
+
+
+CURVE_SWITCHES = tuple(Curves.__dataclass_fields__)
+CURVE_LABEL = 'curve|'  # the name of an annotation that labels curves: this, then their tag joined by '|'
+
+
+def curve_tag(run, s=None, measured=False):
+  """The switches (Curves' fields) a curve answers to, every one of which must be on for it to be drawn: experiment
+  for a measured or analysis profile, else simulation; and its species' switch when it is one species' (s): electrons
+  for a negative charge in the run's files, ions for a positive one. No species switch for a neutral species (charge
+  0), a field (phi), a sum over the species (q_par, the energy) or a species whose charge is unknown (the empty
+  run's): only the first switch hides those."""
+  q = run.charge.get(s, np.nan) if s is not None else np.nan
+  return ('experiment' if measured else 'simulation', ) + (
+      ('electrons', ) if q < 0 else ('ions', ) if q > 0 else ())
+
+
+def curve_label(tag):
+  """The name of an annotation that labels curves of this tag: it goes with them (shown_curves)."""
+  return CURVE_LABEL + '|'.join(tag)
+
+
+def _tag(item):
+  """A trace's tag (meta['curve']: curve_tag) or a label's (its name: curve_label); None: drawn whatever the
+  switches (a legend key of a reference line, a chart of the shot such as its timeline)."""
+  if isinstance(item, go.layout.Annotation):
+    name = item.name or ''
+    return tuple(name[len(CURVE_LABEL):].split('|')) if name.startswith(
+        CURVE_LABEL) else None
+  m = item.meta if isinstance(item.meta, dict) else {}
+  return tuple(m['curve']) if m.get('curve') else None
+
+
+def _drawn(tag, curves):
+  return tag is None or all(getattr(curves, k) for k in tag)
+
+
+def _off(tags, curves):
+  """'<switch> and <switch> switched off': the switches the tags name that are off ('' when none is)."""
+  named = {k for t in tags if t for k in t}
+  off = [k for k in CURVE_SWITCHES if k in named and not getattr(curves, k)]
+  return ' and '.join(off) + ' switched off' if off else ''
+
+
+def hidden_note(fig, curves):
+  """What hides a chart's curves: its switches that are off ('electrons and ions switched off'; '' when none)."""
+  return _off([_tag(tr) for tr in fig.data], curves)
+
+
+def shown_curves(fig, curves):
+  """The chart with the curves the switches show (a Curves): a trace tagged meta['curve'] (curve_tag) is drawn when
+  every switch its tag names is on, as is a label named curve_label(tag); the rest always. A copy, fig itself when
+  every curve is shown. A legend group whose entry goes has it on its first trace left (named as it was); a panel
+  whose every curve goes says which switches emptied it, in its middle. None: no curve is left (only legend keys),
+  the chart has nothing to draw (hidden_note says why)."""
+  tags = [_tag(tr) for tr in fig.data]
+  keep = [_drawn(t, curves) for t in tags]
+  if all(keep):
+    return fig
+  curve = [tr.legendgroup != 'key'
+           for tr in fig.data]  # a curve, not a legend key
+  if not any(k and c for k, c in zip(keep, curve)):
+    return None
+  out = go.Figure(fig)
+  data = list(out.data)
+  for g in {tr.legendgroup for tr in data} - {None, '', 'key'}:
+    group = [(tr, k) for tr, k in zip(data, keep) if tr.legendgroup == g]
+    gone = next((tr for tr, k in group if not k and tr.showlegend is not False),
+                None)
+    left = [tr for tr, k in group if k]
+    if gone is not None and left and all(tr.showlegend is False for tr in left):
+      left[0].update(showlegend=True, name=gone.name)
+  panels = {}  # (x, y) -> the tags of its curves kept, of those gone
+  for tr, t, k, c in zip(data, tags, keep, curve):
+    if c:
+      panels.setdefault((tr.xaxis or 'x', tr.yaxis or 'y'),
+                        ([], []))[0 if k else 1].append(t)
+  out.data = [tr for tr, k in zip(data, keep) if k]
+  out.layout.annotations = [
+      a for a in out.layout.annotations if _drawn(_tag(a), curves)
+  ]
+  for (x, y), (kept, gone) in panels.items():
+    if gone and not kept:
+      out.add_annotation(text=_off(gone, curves),
+                         x=0.5,
+                         y=0.5,
+                         xref=f'{x} domain',
+                         yref=f'{y} domain',
+                         showarrow=False)
+  return out
 
 
 SCREEN_WIDTH = 1000  # px: the width of a chart on the page its layout was made for (a laptop's, the sidebar open)
@@ -1675,9 +1805,10 @@ def panel_figure(fig, x):
   dom_x = lay[xn].domain if lay[xn].domain is not None else (0, 1)
   dom_y = lay[yn].domain if lay[yn].domain is not None else (0, 1)
   for a in lay.annotations:
-    if a.xref == x:
+    xr, yr = ref(a.xref, 'x'), ref(a.yref, 'y')
+    if xr and yr:  # in the panel's coordinates (its data, or its domain: the note of a panel left with no curve)
       d = a.to_plotly_json()
-      d.update(xref='x', yref='y')
+      d.update(xref=xr, yref=yr)
       f.add_annotation(d)
     elif a.xref == 'paper' and a.yref == 'paper' and dom_x[0] - 1e-6 <= a.x <= dom_x[1] + 1e-6 and \
             abs(a.y - dom_y[1]) < 0.02:   # its subplot title: the chart's title
@@ -1793,12 +1924,20 @@ MODEL_LINE = dict(width=5)
 MODEL_OPACITY = 0.45
 
 
-def measured_trace(p, side, rsep, x_mode, span, scale, pal, legend=None):
+def measured_trace(p,
+                   side,
+                   rsep,
+                   x_mode,
+                   span,
+                   scale,
+                   pal,
+                   legend=None,
+                   curve=None):
   """A thomson.Profile in the profile figure's x coordinate (its distance from the separatrix put on the run's
     separatrix rsep, m) in its species' colour, its values times scale; None when none of it lies in the run's span
     (the run's x values: Thomson does not reach the inboard SOL, TRANSP stops at its boundary). Bars: the spread over
     the window's samples, or the error where a channel has one sample (none for TRANSP). legend: its legend entry's
-    name (None: no entry)."""
+    name (None: no entry). curve: its tag (curve_tag, measured)."""
   sign = 1.0 if side == 'outboard' else -1.0
   x, _, _ = side_coordinate(rsep + sign * p.d, rsep, side, x_mode)
   inside = (x >= np.min(span)) & (x <= np.max(span))
@@ -1821,7 +1960,7 @@ def measured_trace(p, side, rsep, x_mode, span, scale, pal, legend=None):
                 name=legend or tl.html(p.label),
                 legendgroup=p.source.lower(),
                 showlegend=legend is not None,
-                meta=dict(pgkyl=pc.NONE[p.source.lower()]),
+                meta=dict(pgkyl=pc.NONE[p.source.lower()], curve=curve),
                 hovertemplate=f'{what}: %{{y:.4g}} %{{customdata[1]}}, at R '
                 '%{customdata[0]:.3f} m<extra></extra>')
   symbol = MEASURED_MARKER[p.source]
@@ -2087,6 +2226,7 @@ def profiles_figure(run,
         'none of the chosen blocks is on a midplane stack (the core and SOL blocks at Z = 0)'
     )
   seen = set()
+  predicted = None  # the tag of a profile TRANSP predicts (dotted), when one is drawn
   fig = subplots(rows=len(rows),
                  cols=len(sides),
                  shared_xaxes='columns',
@@ -2122,7 +2262,8 @@ def profiles_figure(run,
             name=name,
             legendgroup=name,
             showlegend=False,
-            meta=dict(pgkyl=pc.midplane(run, side, key, k0, blocks)),
+            meta=dict(pgkyl=pc.midplane(run, side, key, k0, blocks),
+                      curve=curve_tag(run, s)),
             hovertemplate=
             f'{name}, first frame: %{{y:.4g}} {unit}<extra></extra>'),
                       row=r,
@@ -2138,7 +2279,8 @@ def profiles_figure(run,
             meta=dict(live=f'mid|{side}|{key}',
                       scale=scale,
                       keep=None if len(keep) == len(x) else keep.tolist(),
-                      pgkyl=pc.midplane(run, side, key, '{frame}', blocks)),
+                      pgkyl=pc.midplane(run, side, key, '{frame}', blocks),
+                      curve=curve_tag(run, s)),
             hovertemplate=f'{name}: %{{y:.4g}} {unit}<extra></extra>'),
                       row=r,
                       col=c)
@@ -2158,7 +2300,8 @@ def profiles_figure(run,
               showlegend='cmp' not in seen,
               meta=dict(live=f'cmp|mid|{side}|{key}',
                         scale=qb[key][3],
-                        pgkyl=pc.midplane(cmp.run, side, key, '{cmp_frame}')),
+                        pgkyl=pc.midplane(cmp.run, side, key, '{cmp_frame}'),
+                        curve=curve_tag(cmp.run, s)),
               hovertemplate=
               f'{cmp.label}, {name}: %{{y:.4g}} {unit}<extra></extra>'),
                         row=r,
@@ -2168,12 +2311,23 @@ def profiles_figure(run,
         th, t0, t1 = measured
         if meas is None:
           meas = thomson.profiles(th, side, t0, t1, run.eq_ms / 1e3, rsep)
-        for p in [p for p in meas if p.key in {k for k, _ in keys}]:
+        for p in [p for p in meas if p.key in dict(keys)]:
+          tag = curve_tag(run, dict(keys)[p.key], measured=True)
           tr = measured_trace(
-              p, side, rsep, x_mode, x, scale, pal, None if p.source in seen
-              else tl.html(f'{p.label}, {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms'))
+              p,
+              side,
+              rsep,
+              x_mode,
+              x,
+              scale,
+              pal,
+              None if p.source in seen else
+              tl.html(f'{p.label}, {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms'),
+              curve=tag)
           if tr is not None:
-            seen.update({p.source} | ({'predicted'} if p.predicted else set()))
+            seen.add(p.source)
+            if p.predicted:
+              predicted = tag
             fig.add_trace(tr, row=r, col=c)
       if np.isfinite(xsep):  # R of the empty run's separatrix: none
         fig.add_vline(x=xsep,
@@ -2187,14 +2341,16 @@ def profiles_figure(run,
   # solid: the shown frame (the species' own entries); the overlay has its entry (long dashes)
   legend_key(fig,
              'first frame',
-             line=dict(color=pal.ink2, width=1.5, dash='dot'))
+             line=dict(color=pal.ink2, width=1.5, dash='dot'),
+             curve=curve_tag(run))
   legend_key(fig,
              'separatrix',
              line=dict(color=pal.muted, width=1, dash='dash'))
-  if 'predicted' in seen:
+  if predicted is not None:
     legend_key(fig,
                'TRANSP, predicted by its model',
-               line=dict(MODEL_LINE, color=pal.ink2, dash='dot'))
+               line=dict(MODEL_LINE, color=pal.ink2, dash='dot'),
+               curve=predicted)
   return _layout(fig, 190 * len(rows) + 120, pal, hovermode='x unified')
 
 
@@ -2355,7 +2511,8 @@ def targets_figure(run,
         legendgroup=tg.name,
         meta=dict(live=f'q|{tg.name}',
                   scale=1e-6,
-                  pgkyl=pc.plate(run, tg, '{frame}')),
+                  pgkyl=pc.plate(run, tg, '{frame}'),
+                  curve=curve_tag(run)),
         hovertemplate=
         f'{tg.name}: %{{y:.4g}} MW/m² at %{{x:.3g}} mm<extra></extra>'),
                   row=1,
@@ -2383,7 +2540,8 @@ def targets_figure(run,
           legendgroup=tg.name,
           showlegend=False,
           meta=dict(pgkyl=f'# {why}\n' + pc.plate(run, tg, '{point_frame}'),
-                    pgkyl_frames=fl_frames),
+                    pgkyl_frames=fl_frames,
+                    curve=curve_tag(run)),
           hovertemplate=f'{tg.name}: {fmt}<extra></extra>'),
                     row=1,
                     col=c)
@@ -2404,7 +2562,8 @@ def targets_figure(run,
         showlegend=not shown_cmp,
         meta=dict(live=f'cmp|q|{tg.name}',
                   scale=1e-6,
-                  pgkyl=pc.plate(cmp.run, tb, '{cmp_frame}')),
+                  pgkyl=pc.plate(cmp.run, tb, '{cmp_frame}'),
+                  curve=curve_tag(cmp.run)),
         hovertemplate=
         f'{cmp.label}, {tg.name}: %{{y:.4g}} MW/m² at %{{x:.3g}} mm<extra></extra>'
     ),
@@ -2433,7 +2592,8 @@ def targets_figure(run,
           legendgroup='cmp',
           showlegend=False,
           meta=dict(pgkyl=pc.plate(cmp.run, tb, '{point_frame}'),
-                    pgkyl_frames=[int(f) for f in kf]),
+                    pgkyl_frames=[int(f) for f in kf],
+                    curve=curve_tag(cmp.run)),
           hovertemplate=f'{cmp.label}, {tg.name}: {fmt}<extra></extra>'),
                     row=1,
                     col=c)
@@ -2477,7 +2637,8 @@ def targets_figure(run,
   # each target's entry shows its hue (side) and dash (upper / lower); the overlay has its own entry
   legend_key(fig,
              tl.html(r'$\lambda_\mathrm{q}$ (vertical lines)'),
-             line=dict(color=pal.ink2, width=1.4, dash='dot'))
+             line=dict(color=pal.ink2, width=1.4, dash='dot'),
+             curve=curve_tag(run))
   return _layout(fig, 450, pal, hovermode='x unified')
 
 
@@ -2517,7 +2678,7 @@ def timetraces_figure(run,
                            name='time step',
                            showlegend=False,
                            hovertemplate='dt = %{y:.4g} s<extra></extra>',
-                           meta=dict(pgkyl=pc.dt(run))),
+                           meta=dict(pgkyl=pc.dt(run), curve=curve_tag(run))),
                 row=1,
                 col=1)
   fig.update_yaxes(type='log',
@@ -2537,7 +2698,7 @@ def timetraces_figure(run,
         name=name,
         legendgroup=s,
         hovertemplate=f'{name}: %{{y:.0f}} cells<extra></extra>',
-        meta=dict(pgkyl=pc.NONE['neg'])),
+        meta=dict(pgkyl=pc.NONE['neg'], curve=curve_tag(run, s))),
                   row=1,
                   col=2)
     if s in integ:
@@ -2551,7 +2712,7 @@ def timetraces_figure(run,
           name=name,
           legendgroup=s,
           showlegend=False,
-          meta=dict(pgkyl=pc.particles(run, s)),
+          meta=dict(pgkyl=pc.particles(run, s), curve=curve_tag(run, s)),
           hovertemplate=f'{name}: %{{y:.4f}}<extra></extra>'),
                     row=2,
                     col=1)
@@ -2564,7 +2725,8 @@ def timetraces_figure(run,
                              name='field energy',
                              showlegend=False,
                              hovertemplate='%{y:.4g}<extra></extra>',
-                             meta=dict(pgkyl=pc.field_energy(run))),
+                             meta=dict(pgkyl=pc.field_energy(run),
+                                       curve=curve_tag(run))),
                   row=2,
                   col=2)
     top = np.nanmax(y)
@@ -2589,7 +2751,7 @@ def timetraces_figure(run,
         mode='lines',
         line=cmp_line(dict(color=pal.ink2, width=1.5)),
         hovertemplate=f'{cmp.label}: dt = %{{y:.4g}} s<extra></extra>',
-        meta=dict(pgkyl=pc.dt(cmp.run)),
+        meta=dict(pgkyl=pc.dt(cmp.run), curve=curve_tag(cmp.run)),
         **kw),
                   row=1,
                   col=1)
@@ -2602,7 +2764,7 @@ def timetraces_figure(run,
           mode='lines',
           line=cmp_line(dict(color=col, width=2)),
           hovertemplate=f'{cmp.label}, {s}: %{{y:.0f}} cells<extra></extra>',
-          meta=dict(pgkyl=pc.NONE['neg']),
+          meta=dict(pgkyl=pc.NONE['neg'], curve=curve_tag(cmp.run, s)),
           **kw),
                     row=1,
                     col=2)
@@ -2615,7 +2777,8 @@ def timetraces_figure(run,
             mode='lines',
             line=cmp_line(dict(color=col, width=2)),
             hovertemplate=f'{cmp.label}, {s}: %{{y:.4f}}<extra></extra>',
-            meta=dict(pgkyl=pc.particles(cmp.run, s)),
+            meta=dict(pgkyl=pc.particles(cmp.run, s),
+                      curve=curve_tag(cmp.run, s)),
             **kw),
                       row=2,
                       col=1)
@@ -2627,7 +2790,7 @@ def timetraces_figure(run,
           mode='lines',
           line=cmp_line(dict(color=pal.ink2, width=1.5)),
           hovertemplate=f'{cmp.label}: %{{y:.4g}}<extra></extra>',
-          meta=dict(pgkyl=pc.field_energy(cmp.run)),
+          meta=dict(pgkyl=pc.field_energy(cmp.run), curve=curve_tag(cmp.run)),
           **kw),
                     row=2,
                     col=2)
@@ -2638,7 +2801,8 @@ def timetraces_figure(run,
                              name=cmp.label,
                              legendgroup='cmp',
                              showlegend=True,
-                             hoverinfo='skip'),
+                             hoverinfo='skip',
+                             meta=dict(curve=curve_tag(cmp.run))),
                   row=1,
                   col=2)
   tag = gv.species_tag('elc')[1] if 'elc' in run.species else gv.species_tag(
@@ -2669,7 +2833,7 @@ def timetraces_figure(run,
             name=name,
             legendgroup='r' + reg,
             showlegend=(c == 1),
-            meta=dict(pgkyl=pc.NONE['region']),
+            meta=dict(pgkyl=pc.NONE['region'], curve=curve_tag(run, s0)),
             hovertemplate=f'{name}: %{{y:+.1f}} %<extra></extra>'),
                       row=3,
                       col=c)
@@ -2692,7 +2856,7 @@ def timetraces_figure(run,
               name=cmp.label,
               legendgroup='cmp',
               showlegend=False,
-              meta=dict(pgkyl=pc.NONE['region']),
+              meta=dict(pgkyl=pc.NONE['region'], curve=curve_tag(cmp.run, s0)),
               hovertemplate=
               f'{cmp.label}, {REGION_NAME[reg]}: %{{y:+.1f}} %<extra></extra>'),
                         row=3,
@@ -2715,6 +2879,7 @@ def timetraces_figure(run,
             x=te,
             y=yl,
             text=f' {name}',
+            name=curve_label(curve_tag(run, s0)),  # it goes with its curve
             showarrow=False,
             xanchor='left',
             bgcolor=pal.
@@ -2864,10 +3029,12 @@ def conservation_figure(run,
 
   def series(C, run_):
     return ([(f'{gv.species_tag(s)[0]} particles', t, r, species_colour(
-        pal, s), pc.balance(run_)) for s, (t, r) in C['species'].items()] +
-            [('energy', *C['energy'], pal.ink, pc.balance(run_, True))])
+        pal, s), pc.balance(run_), curve_tag(run_, s))
+             for s, (t, r) in C['species'].items()] +
+            [('energy', *C['energy'], pal.ink, pc.balance(
+                run_, True), curve_tag(run_))])
 
-  for name, t, r, col, cmd in series(gv.conservation(B, t_frames), run):
+  for name, t, r, col, cmd, tag in series(gv.conservation(B, t_frames), run):
     a = np.abs(r) * 100
     x, y = t * ts, np.maximum(
         a,
@@ -2878,7 +3045,7 @@ def conservation_figure(run,
                    mode='lines',
                    line=dict(color=col, width=2.5 if name == 'energy' else 2),
                    name=name,
-                   meta=dict(pgkyl=cmd),
+                   meta=dict(pgkyl=cmd, curve=tag),
                    hovertemplate=
                    f'{name}: %{{y:.3g}} % of the largest term<extra></extra>'))
     if np.isfinite(a).any():
@@ -2887,8 +3054,8 @@ def conservation_figure(run,
           f'{name} {np.nanmedian(r) * 100:+.2g} % (largest {a[i]:.2g} %, the interval around '
           f'{t[i] * ts:.3g} {tu})')
   if B_cmp is not None:
-    for name, t, r, col, cmd in series(gv.conservation(B_cmp, t_frames_cmp),
-                                       cmp.run):
+    for name, t, r, col, cmd, tag in series(
+        gv.conservation(B_cmp, t_frames_cmp), cmp.run):
       x, y = envelope(
           *in_span(t, B['t'], np.maximum(np.abs(r) * 100,
                                          np.finfo(float).eps)))
@@ -2900,7 +3067,7 @@ def conservation_figure(run,
               line=dict(color=col, width=1.2),
               opacity=0.5,
               name=f'{cmp.label}, {name}',
-              meta=dict(pgkyl=cmd),
+              meta=dict(pgkyl=cmd, curve=tag),
               hovertemplate=f'{cmp.label}, {name}: %{{y:.3g}} %<extra></extra>')
       )
   fig.update_yaxes(type='log',
@@ -2949,7 +3116,18 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
 
   cmp_seen = []
 
-  def four(r, c, t, src, out, dot, scale, unit, show, faint=None, cmd=''):
+  def four(r,
+           c,
+           t,
+           src,
+           out,
+           dot,
+           scale,
+           unit,
+           show,
+           faint=None,
+           cmd='',
+           tag=None):
     res = src - out - dot
     if faint is None:
       fit(r, c, [y * scale for y in (src, out, dot, res)])
@@ -2967,7 +3145,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
             name=name,
             legendgroup=name,
             showlegend=show,
-            meta=dict(pgkyl=cmd),
+            meta=dict(pgkyl=cmd, curve=tag),
             hovertemplate=f'{name}: %{{y:.4g}} {unit}<extra></extra>'),
                       row=r,
                       col=c)
@@ -2981,7 +3159,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
             name=faint,
             legendgroup='cmp',
             showlegend=not cmp_seen,
-            meta=dict(pgkyl=cmd),
+            meta=dict(pgkyl=cmd, curve=tag),
             hovertemplate=f'{faint}, {name}: %{{y:.4g}} {unit}<extra></extra>'),
                       row=r,
                       col=c)
@@ -2992,7 +3170,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
   for c, s in enumerate(sp[:2], 1):
     d = B['species'][s]
     notes.append(
-        f"{gv.species_tag(s)[0]}s {four(1, c, d['t'], d['src'], d['out'], d['dot'], fd, '/s', c == 1, cmd=pc.balance(run)):+.2f} %"
+        f"{gv.species_tag(s)[0]}s {four(1, c, d['t'], d['src'], d['out'], d['dot'], fd, '/s', c == 1, cmd=pc.balance(run), tag=curve_tag(run, s)):+.2f} %"
     )
     fig.update_yaxes(title_text='particles / s',
                      exponentformat='power',
@@ -3000,7 +3178,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
                      col=c)
   E = B['E']
   notes.append(
-      f"energy {four(2, 1, B['t'], E['src'], E['out'], E['dot'], fd / 1e6, 'MW', False, cmd=pc.balance(run, True)):+.1f} %"
+      f"energy {four(2, 1, B['t'], E['src'], E['out'], E['dot'], fd / 1e6, 'MW', False, cmd=pc.balance(run, True), tag=curve_tag(run)):+.1f} %"
   )
   if B_cmp is not None:
     fdb = gv.full_device(cmp.run)
@@ -3017,7 +3195,8 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
              '/s',
              False,
              faint=cmp.label,
-             cmd=pc.balance(cmp.run))
+             cmd=pc.balance(cmp.run),
+             tag=curve_tag(cmp.run, s))
     Eb = B_cmp['E']
     four(2,
          1,
@@ -3029,7 +3208,8 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
          'MW',
          False,
          faint=cmp.label,
-         cmd=pc.balance(cmp.run, True))
+         cmd=pc.balance(cmp.run, True),
+         tag=curve_tag(cmp.run))
     for name, v in B_cmp['targets'].items():
       tg = next((t for t in run.layout.targets if t.name == name), None)
       if tg is None:
@@ -3047,8 +3227,9 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
           name=cmp.label,
           legendgroup='cmp',
           showlegend=False,
-          meta=dict(
-              pgkyl=(pc.target_power(cmp.run, tgb) if tgb else None) or ''),
+          meta=dict(pgkyl=(pc.target_power(cmp.run, tgb) if tgb else None)
+                    or '',
+                    curve=curve_tag(cmp.run)),
           hovertemplate=f'{cmp.label}, {name}: %{{y:.4g}} MW<extra></extra>'),
                     row=2,
                     col=2)
@@ -3065,7 +3246,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
         line=dict(color=st['color'], width=2, dash=st['dash']),
         name=name,
         hovertemplate=f'{name}: %{{y:.4g}} MW<extra></extra>',
-        meta=dict(pgkyl=pc.target_power(run, tg) or '')),
+        meta=dict(pgkyl=pc.target_power(run, tg) or '', curve=curve_tag(run))),
                   row=2,
                   col=2)
   fig.update_yaxes(title_text='MW', row=2, col=2)
@@ -3124,7 +3305,7 @@ def diffusivity_figure(run,
           name=name,
           legendgroup=name,
           showlegend=name not in seen,
-          meta=dict(pgkyl=cmd),
+          meta=dict(pgkyl=cmd, curve=curve_tag(r, None if D['same'] else s)),
           hovertemplate=
           f'{name}: D = %{{y:.4g}} m²/s at %{{x:.4g}}<extra></extra>'),
                     row=1,
@@ -3253,7 +3434,8 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
           name=name,
           legendgroup=name,
           showlegend=show,
-          meta=dict(pgkyl=pc.cell_history(run, b, i, j, key)),
+          meta=dict(pgkyl=pc.cell_history(run, b, i, j, key),
+                    curve=curve_tag(run, s)),
           hovertemplate=f'{name}: %{{y:.4g}} {unit}<extra></extra>'),
                     row=r,
                     col=cc)
@@ -3267,7 +3449,7 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
             opacity=0.7,
             name=f'{name}, {REGION_NAME[reg]} mean',
             showlegend=False,
-            meta=dict(pgkyl=pc.NONE['region']),
+            meta=dict(pgkyl=pc.NONE['region'], curve=curve_tag(run, s)),
             hovertemplate=
             f'{REGION_NAME[reg]} volume mean: %{{y:.4g}} {unit}<extra></extra>'
         ),
@@ -3285,7 +3467,8 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
             legendgroup='cmp',
             showlegend='cmp' not in seen,
             meta=dict(pgkyl=pc.cell_history(cmp.run,
-                                            *probe_cell(cmp.run, cb)[:3], key)),
+                                            *probe_cell(cmp.run, cb)[:3], key),
+                      curve=curve_tag(cmp.run, s)),
             hovertemplate=
             f'{cmp.label}, {name}: %{{y:.4g}} {unit}<extra></extra>'),
                       row=r,
@@ -3300,7 +3483,8 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
           line=dict(color=pal.ink2, width=1.6, dash='dash'),
           name=qs['q_perp'][0],
           showlegend=False,
-          meta=dict(pgkyl=pc.cell_history(run, b, i, j, 'q_perp')),
+          meta=dict(pgkyl=pc.cell_history(run, b, i, j, 'q_perp'),
+                    curve=curve_tag(run)),
           hovertemplate=f'q_perp: %{{y:.4g}} {unit}<extra></extra>'),
                     row=r,
                     col=cc)
@@ -3310,11 +3494,13 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
           pal)
   legend_key(fig,
              f'{REGION_NAME[reg]} volume mean',
-             line=dict(color=pal.ink2, width=1.4, dash='dot'))
+             line=dict(color=pal.ink2, width=1.4, dash='dot'),
+             curve=curve_tag(run))
   if 'q_perp' in qs and any(base == 'q_par' for base, _ in rows):
     legend_key(fig,
                tl.html(r'$q_\perp$ part of $q_\parallel$'),
-               line=dict(color=pal.ink2, width=1.6, dash='dash'))
+               line=dict(color=pal.ink2, width=1.6, dash='dash'),
+               curve=curve_tag(run))
   return _layout(fig,
                  250 * ((len(rows) + 1) // 2) + 90,
                  pal,

@@ -44,6 +44,16 @@ KEYS = {
     'outlines':
     ("the block boundaries drawn on the poloidal plane (every block's outline)",
      'false'),
+    'electrons':
+    ("the electrons' curves on the line charts (a species by its charge's sign)",
+     'false'),
+    'ions': ("the ions' curves on the line charts", 'false'),
+    'simulation':
+    ("the simulated curves on the line charts (the run's and the overlay's)",
+     'false'),
+    'experiment':
+    ('the measured and analysis profiles on the line charts (Thomson, CHERS, TRANSP)',
+     'false'),
     'x': ('profile x axis: distance | R', 'distance'),
     'theme':
     ("the look: NSTX-U (the DPP 2025 poster) | PPPL (the lab's slide template)",
@@ -133,6 +143,10 @@ DEFAULTS = {
     'separatrix': True,
     'wall': True,
     'outlines': True,
+    'electrons': True,
+    'ions': True,
+    'simulation': True,
+    'experiment': True,
     'x': 'distance',
     'theme': 'NSTX-U',
     'dark': True,

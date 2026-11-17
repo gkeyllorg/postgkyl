@@ -407,7 +407,7 @@ def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
   # snaps to the Thomson frames of the beam flattop (every frame when the file has no beam power) and opens on
   # thomson.default_window
   reload_btn.value, fetch_log, sync_log  # re-read after a fetch or a sync
-  th, th_note, th_pick, th_show = None, '', None, None
+  th, th_note, th_pick = None, '', None
   try:
     th = thomson.read(run.shot)
   except (OSError, KeyError, ValueError) as _e:
@@ -423,8 +423,7 @@ def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
         show_value=True,
         label='Thomson frames to average (ms in the shot)',
         full_width=True)
-    th_show = mo.ui.switch(value=True, label='measured profiles')
-  return th, th_note, th_pick, th_show
+  return th, th_note, th_pick
 
 
 @app.cell
@@ -579,6 +578,33 @@ def _(grid_pick, outlines_pick, quantity_pick, sep_pick, vp, wall_pick):
 
 
 @app.cell
+def _(mo, prefs, vp, vs):
+  # which curves the line charts draw (viewer_plots.Curves, its defaults; view keys of the same names): one control
+  # of four switches, the electrons' and the ions' curves (a species by its charge's sign), the simulated ones and
+  # the experiment's (measured and analysis profiles); each starts from prefs and writes itself back there
+  curves_pick = mo.ui.dictionary(
+      {
+          _k:
+          mo.ui.switch(value=vs.as_bool(prefs.get(_k, getattr(vp.Curves(),
+                                                              _k))),
+                       label=_k.capitalize())
+          for _k in vp.CURVE_SWITCHES
+      },
+      on_change=prefs.update)
+  return (curves_pick, )
+
+
+@app.cell
+def _(curves_pick, vp):
+  # the curves the line charts draw (viewer_plots.shown_curves)
+  curves_shown = vp.Curves(**{
+      _k: bool(_v)
+      for _k, _v in curves_pick.value.items()
+  })
+  return (curves_shown, )
+
+
+@app.cell
 def _(background, mm, mo):
   # the picture put into the page once (hidden), for the movie (movie_widget.BackgroundLoader)
   mo.ui.anywidget(
@@ -702,6 +728,7 @@ def _(
     blocks_pick,
     cmp_err,
     cmp_pick,
+    curves_pick,
     dark_pick,
     frame_pick,
     frames_msg,
@@ -745,7 +772,12 @@ def _(
           mo.md('---'), cmp_pick,
           mo.callout(mo.md(f'Not drawn: {cmp_err}'), kind='warn')
           if cmp_err else mo.md(''),
-          mo.md('---'), x_pick,
+          mo.md('---'),
+          mo.md('curves on the line charts'), *[
+              mo.hstack([curves_pick.elements[_k] for _k in _row],
+                        widths='equal')
+              for _row in (('electrons', 'ions'), ('simulation', 'experiment'))
+          ], x_pick,
           mo.md('---'), theme_pick, dark_pick
       ],
       footer=mo.
@@ -1033,6 +1065,7 @@ def _(
     bg_pick,
     blocks,
     cmp_pick,
+    curves_pick,
     dark_pick,
     frames_text,
     get_probe,
@@ -1080,6 +1113,10 @@ def _(
       separatrix=bool(sep_pick.value) if sep_pick is not None else None,
       wall=bool(wall_pick.value) if wall_pick is not None else None,
       outlines=bool(outlines_pick.value),
+      **{
+          _k: bool(_v)
+          for _k, _v in curves_pick.value.items()
+      },
       tab=get_tab(),
       frames=frames_text.value.strip(),
       probe=','.join(map(str,
@@ -1338,6 +1375,7 @@ def _(
     bg_shown,
     blocks,
     cmp,
+    curves_shown,
     dt_hist,
     export_size,
     fenergy,
@@ -1389,7 +1427,6 @@ def _(
     th,
     th_note,
     th_pick,
-    th_show,
     traceback,
     view_cmd,
     view_msg,
@@ -1426,10 +1463,17 @@ def _(
 
   def _live(fig, chart):
     # a chart that follows the movie in the page (its profiles, target curves and time cursors), the kernel idle;
-    # its y axes span the movie's frames; its toolbar downloads it for a slide (<run>_<chart>_frame<k>_slide_*.png)
+    # its y axes span the movie's frames; its toolbar downloads it for a slide (<run>_<chart>_frame<k>_slide_*.png).
+    # Its curves: those the sidebar's switches show (viewer_plots.shown_curves), the slides too; none, a note
+    _shown = vp.shown_curves(fig, curves_shown)
+    if _shown is None:
+      return mo.callout(mo.md(
+          f'Nothing to draw here: {vp.hidden_note(fig, curves_shown)} in the sidebar.'
+      ),
+                        kind='neutral')
     _name = f"{run.sim.replace(' ', '').lower()}_{run.name}_{chart}_frame{k}"
     return mo.ui.anywidget(
-        mm.live_plot(fig, live_summ, k, movie_frames, pal, _name))
+        mm.live_plot(_shown, live_summ, k, movie_frames, pal, _name))
 
   def _fetch():
     # the Fetch button where the shot has no Flux copy yet (no data, the workflow's copy without beam power, or a
@@ -1467,12 +1511,11 @@ def _(
 
   def _profiles():
     _measured, _top, _notes = None, _fetch(), []
-    if th is not None:
+    if th is not None:  # the measured profiles: on the sidebar's experiment switch, as every curve of theirs
       _t0, _t1 = (th.frame_time(v / 1e3) for v in th_pick.value)
-      if th_show.value:
-        _measured = (th, _t0, _t1)
+      _measured = (th, _t0, _t1)
       _top += [
-          mo.hstack([th_show, th_pick], align='center', widths=[1, 6]),
+          th_pick,
           _live(vp.thomson_timeline(th, _t0, _t1, run.eq_ms / 1e3, pal=pal),
                 'thomson')
       ]

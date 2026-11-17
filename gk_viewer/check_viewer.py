@@ -49,8 +49,17 @@
     notebook opens on the empty run with every tab built, its charts and movie empty but whole; with --browser the
     three served, every tab opened in the page, screenshots (--shots); the per-simulation and per-device settings of
     viewer.json (part_schema).
---parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, fonts, sync, poloidal,
-lines, grid, blank, browser, layout, liveplot).
+12. (2026-11-17) species: the curves shown, four switches (electrons, ions, simulation, experiment) on every line
+    chart of the three simulations (an overlay and the measured profiles drawn): all on, each chart as drawn without
+    them; each switch alone off takes exactly the curves the chart says are its own (legend names, hover text, panel
+    titles), notes in the panels and in place of the charts it empties; a species by its charge's sign; the notebook
+    keeps the switches in its view and hands the page (and its slide downloads) only the curves shown; with
+    --browser, Ions clicked off in Sim 2's page and the page reloaded.
+13. (2026-11-17) the whole machine view (part_machine): every simulation's poloidal plane offers 'whole machine'
+    where the wall or the device picture reaches out of the whole domain's frame, framing all of both; the map at it
+    shows them whole; the layout audit (--browser) opens it too.
+--parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, fonts, sync, machine,
+poloidal, lines, grid, blank, species, browser, layout, liveplot).
 Exit status: the number of failures.
 """
 import argparse
@@ -84,8 +93,9 @@ def check(ok, what):
 
 
 # --------------------------------------------------------------------------------------------------- headless
-def headless(cli, sims_first=None):
-  """Run the notebook with launch keys `cli`; returns (defs, {tab: 'ok' | 'failed'})."""
+def headless(cli, sims_first=None, texts=None):
+  """Run the notebook with launch keys `cli`; returns (defs, {tab: 'ok' | 'failed'}); texts: a dict to fill with each
+  tab's HTML."""
   import marimo as mo
   from marimo._runtime.params import CLIArgs
   import gkview as gv
@@ -101,6 +111,8 @@ def headless(cli, sims_first=None):
       txt = str(getattr(r, 'text', ''))
       built[name] = 'failed' if ('traceback' in txt
                                  and 'callout' in txt) else 'ok'
+      if texts is not None:
+        texts[name] = txt
       out[name] = r
     return saved[1](out, value=value, **kw)
 
@@ -355,6 +367,18 @@ def _h5_datasets(path, skip=None):
   return out
 
 
+def _without_transp(src, dst, shot):
+  """dst: a copy of the shot file src with no /<shot>/TRANSP group, as Flux's MDSplus dumps are and as a file fetched
+  before TRANSP was (the data directory's own copy may hold TRANSP since a later fetch). Returns dst."""
+  import shutil
+  import h5py
+  shutil.copy(src, dst)
+  with h5py.File(dst, 'r+') as f:
+    if f'{shot}/TRANSP' in f:
+      del f[f'{shot}/TRANSP']
+  return dst
+
+
 def _same(a, b):
   try:
     return np.array_equal(a, b, equal_nan=True)
@@ -434,12 +458,13 @@ def part_measured():
                                                       'dest', 'data'))
     for d in (arch, f'{troot}/16', data, f'{tmp}/bin'):
       os.makedirs(d)
+    # the archive's dumps: the data directory's copies without TRANSP (Flux's MDSplus dumps hold none)
     sources = {
-        203655: os.path.join(thomson.flux_dir(), '203655.h5'),
-        203899: os.path.join(thomson.fallback_dir(), '203899.h5')
+        s: _without_transp(p, f'{arch}/{s}.h5', s)
+        for s, p in ((203655, os.path.join(thomson.flux_dir(), '203655.h5')),
+                     (203899,
+                      os.path.join(thomson.fallback_dir(), '203899.h5')))
     }
-    for s, p in sources.items():
-      os.symlink(p, f'{arch}/{s}.h5')
     t_old = time.time() - 86400
     runs = {  # run: (its CDF, namelist, TR.MSG, age order)
         '203899S18': ('full', None, None, 0),
@@ -767,7 +792,7 @@ def part_measured():
         'fetched 203655 (CHERS ends at 216 ms)':
         (thomson.load(got[203655]), 'CHERS T_i: no sample from', 'CHERS'),
         'the Flux copy fetched before TRANSP':
-        (thomson.read(203655), 'TRANSP: this file has none', 'TRANSP'),
+        (thomson.load(sources[203655]), 'TRANSP: this file has none', 'TRANSP'),
         'no run qualified':
         (thomson.load(empty), 'TRANSP: none for this shot (no run qualifies)',
          'TRANSP'),
@@ -782,14 +807,21 @@ def part_measured():
         all(out.values()),
         f'a source missing or with nothing in the window: the note says so, nothing drawn for it: {out}'
     )
-    # the notebook on the fetched files (Sim 2: TRANSP 203899S18) and on this data directory's own (Sim 1: no TRANSP)
+    # the notebook on the fetched files (Sim 2: TRANSP 203899S18) and on a copy fetched before TRANSP (Sim 1)
     keep = thomson.flux_dir
     thomson.flux_dir = lambda: dest
     try:
       d2, b2 = headless({'sim': 'Sim 2'})
     finally:
       thomson.flux_dir = keep
-    d1, b1 = headless({'sim': 'Sim 1'})
+    before = f'{tmp}/before_transp'
+    os.makedirs(before)
+    _without_transp(sources[203655], f'{before}/203655.h5', 203655)
+    thomson.flux_dir = lambda: before
+    try:
+      d1, b1 = headless({'sim': 'Sim 1'})
+    finally:
+      thomson.flux_dir = keep
     bad = [n for n, v in {**b1, **b2}.items() if v != 'ok']
     check(
         not bad and d2['th'].transp.run == '203899S18'
@@ -926,7 +958,11 @@ def _charts(run, summ, cmp=None):
                            cmp=cmp,
                            blocks={0, 1}),
       'probe':
-      vp.probe_figure(run, summ, gv.cell_offsets(run)[1] + 2, t, cmp=cmp)
+      vp.probe_figure(run,
+                      summ,
+                      gv.cell_offsets(run)[min(1, run.nb - 1)] + 2,
+                      t,
+                      cmp=cmp)  # block 1, or a single block's
   }
   B = gv.balance(run)
   if B is not None:
@@ -945,12 +981,34 @@ def _charts(run, summ, cmp=None):
     out['diffusivity'] = vp.diffusivity_figure(
         run, D, cmp=cmp, D_cmp=gv.diffusivity(cmp.run) if cmp else None)
   try:
-    th = thomson.read(run.shot)
-    t0, t1 = thomson.default_window(th, run.eq_ms / 1e3)
-    out['thomson'] = vp.thomson_timeline(th, t0, t1, run.eq_ms / 1e3)
+    th = thomson.read(
+        run.shot
+    )  # None: no file holds the shot (a device run: shot 0), as the notebook reads it
+    if th is not None:
+      t0, t1 = thomson.default_window(th, run.eq_ms / 1e3)
+      out['thomson'] = vp.thomson_timeline(th, t0, t1, run.eq_ms / 1e3)
   except (OSError, KeyError, ValueError):
     pass
   return out
+
+
+def _overlay(summ, other):
+  """A run drawn over the one of summary summ (a viewer_plots.Cmp, as the notebook makes it): at its frame matched to
+  that run's last."""
+  import gkview as gv
+  import viewer_plots as vp
+  s2 = gv.summary(other)
+  idx = gv.match_frames(summ['t'], s2['t'])
+  j = int(idx[-1])
+  return vp.Cmp(other,
+                s2,
+                other.name,
+                fr=gv.frame(other, int(s2['frames'][j])) if j >= 0 else None,
+                fr0=gv.frame(other, int(s2['frames'][0])),
+                k=int(s2['frames'][j]) if j >= 0 else -1,
+                hist=(gv.dt_history(other), gv.integrated(other),
+                      gv.field_energy(other)),
+                idx=idx)
 
 
 def part_labels():
@@ -1038,22 +1096,9 @@ def part_pgkyl():
       gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
       for lab, d, dflt, _ in gv.SIMS
   ]
-  import viewer_plots as vp
   for n, run in enumerate(runs):
     summ = gv.summary(run)
-    other = runs[(n + 1) % len(runs)]
-    s2 = gv.summary(other)
-    idx = gv.match_frames(summ['t'], s2['t'])
-    j = int(idx[-1])
-    cmp = vp.Cmp(other,
-                 s2,
-                 other.name,
-                 fr=gv.frame(other, int(s2['frames'][j])) if j >= 0 else None,
-                 fr0=gv.frame(other, int(s2['frames'][0])),
-                 k=int(s2['frames'][j]) if j >= 0 else -1,
-                 hist=(gv.dt_history(other), gv.integrated(other),
-                       gv.field_energy(other)),
-                 idx=idx)
+    cmp = _overlay(summ, runs[(n + 1) % len(runs)])
     for name, fig in _charts(run, summ, cmp).items():
       for tr in fig.data:
         if tr.legendgroup == 'key' or tr.x is None or all(
@@ -1396,9 +1441,11 @@ def part_sync():
         p.stdout.strip().splitlines()[-1]) if p.returncode == 0 else None
     check(
         out is not None and out[0].startswith(base) and out[1]
-        and out[1].startswith(base)
-        and out[2] == ['stand-in', gv.BASE, gv.DATA] and out[3]
-        and out[4] == ['ok'],
+        # the Thomson file: the mirror's sim-init copy (under base) or its own Flux copy (data/runs/flux), which
+        # the viewer prefers when the shot has one
+        and out[1].startswith(
+            (base, data)) and out[2] == ['stand-in', gv.BASE, gv.DATA] and
+        out[3] and out[4] == ['ok'],
         f'sync: the viewer opens the mirror, every tab, its geqdsk, Thomson file and cache the mirror\'s own, '
         f'and offers the Sync button: {out or p.stderr.strip()[-300:]}; the sync said {first.stdout!r}'
     )
@@ -1578,6 +1625,83 @@ async def _drive_poloidal(url, dbg, wall, centres):
     await asyncio.sleep(4)
     await shot('off')
   return out
+
+
+def part_machine():
+  """(2026-11-17) The whole machine view of the poloidal plane: on every simulation viewer.json offers (a half domain
+  also shown whole), 'whole machine' follows 'whole domain' and frames the domain, the whole wall and the device
+  picture (its extent); where it is not offered neither reaches out of the whole domain's frame; a run with neither
+  has none; the map drawn at it has the wall and the picture inside its axes."""
+  import matplotlib.pyplot as plt
+  import gkview as gv
+  import viewer_plots as vp
+
+  def inside(inner, outer, tol=1e-9):
+    return (inner[0] >= outer[0] - tol and inner[1] <= outer[1] + tol
+            and inner[2] >= outer[2] - tol and inner[3] <= outer[3] + tol)
+
+  def extents(run):
+    """(name, (R0, R1, Z0, Z1)) of the machine's parts: the whole wall, the picture."""
+    w, pic = gv.wall(run), gv.device_image(run.device)
+    p = [] if w is None else [('wall', (w[:, 0].min(), w[:, 0].max(),
+                                        w[:, 1].min(), w[:, 1].max()))]
+    return p + ([] if pic is None else [('picture', tuple(pic[1]))])
+
+  runs, seen, bad = {}, [], []
+  for lab, d, dflt, _ in gv.SIMS:
+    runs[lab] = run = gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+    for mirror in ((False, True) if run.layout.half else (False, )):
+      b = vp.zoom_boxes(run, mirror=mirror)
+      keys, m = list(b), b.get('whole machine')
+      frame = m if m is not None else b['whole domain']
+      ok = all(inside(e, frame)
+               for _, e in extents(run)) and inside(b['whole domain'], frame)
+      if m is not None:
+        ok &= keys.index('whole machine') == keys.index('whole domain') + 1
+        seen.append(lab + (' mirrored' if mirror else ''))
+      if not ok:
+        bad.append((lab, mirror, keys, m, extents(run)))
+  check(
+      not bad and len(seen) >= 1,
+      f"whole machine: offered after 'whole domain' on {seen}; it (or, where not offered, the whole domain) frames "
+      f"the whole wall and the device picture of every simulation; failures {bad}"
+  )
+
+  run = runs['Sim 2']
+  keep = gv.wall, gv.device_image
+  gv.wall, gv.device_image = (lambda r: None), (lambda dev: None)
+  try:
+    none = vp.zoom_boxes(run, mirror=True)
+  finally:
+    gv.wall, gv.device_image = keep
+  check(
+      'whole machine' not in none and 'whole domain' in none,
+      f'whole machine: not offered for a run with no wall and no picture (Sim 2 with both taken away): {list(none)}'
+  )
+
+  got = {}
+  for lab in [l for l in ('ASDEX Upgrade', 'Sim 2') if l in runs]:
+    run = runs[lab]
+    fs = run.frames()
+    fr, fr0 = gv.frame(run, fs[-1]), gv.frame(run, fs[0])
+    fig = vp.map_figure(run,
+                        fr,
+                        fr0,
+                        'n_elc',
+                        'value',
+                        zoom='whole machine',
+                        background=vp.device_background(run.device),
+                        mirror=run.layout.half)
+    fig.canvas.draw()
+    ax = next(a for a in fig.axes if a.get_xlabel().startswith('R'))
+    lim = (*sorted(ax.get_xlim()), *sorted(ax.get_ylim()))
+    got[lab] = (all(inside(e, lim, 1e-6)
+                    for _, e in extents(run)), tuple(round(v, 3) for v in lim))
+    plt.close(fig)
+  check(
+      len(got) == 2 and all(v[0] for v in got.values()),
+      f'whole machine, matplotlib: the axes hold the whole wall and the picture (ASDEX Upgrade, Sim 2 shown whole): '
+      f'{got}')
 
 
 def part_poloidal(chrome=None):
@@ -2387,8 +2511,8 @@ def vs_bool(v):
 
 def canvas_states(full=False):
   """Views of the movie's poloidal plane to open: each simulation in its views (full: every one; else the whole
-  domain and a divertor), a half domain mirrored too, with the device picture where viewer.json names one; and the
-  light theme."""
+  domain, the whole machine where it has one, and a divertor), a half domain mirrored too, with the device picture
+  where viewer.json names one; and the light theme."""
   import gkview as gv
   import viewer_plots as vp
   out = []
@@ -2398,8 +2522,8 @@ def canvas_states(full=False):
     for mirror in ((False, True) if run.layout.half else (False, )):
       views = list(vp.zoom_boxes(run, mirror=mirror))
       views = views if full else [
-          v for v in views if v == 'whole domain' or v.endswith('divertor')
-      ][:2]
+          v for v in views if v.startswith('whole ') or v.endswith('divertor')
+      ][:3]
       out += [
           dict(sim=lab,
                zoom=v,
@@ -2741,16 +2865,24 @@ def part_schema(tmp):
                            for v in d['extent']), float(d.get('opacity', 1.0)))
   lab, simdir, dflt, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
   sim2 = gv.open_run(os.path.join(gv.runs_root(simdir), dflt), lab)
+  # its entries without settings of their own (the NSTX-U simulations) read as before; those with their own (the
+  # device runs, since 2026-11-17) name their device
+  plain = [e for e in cfg['sims'] if len(e) == 4]
+  own = [e for e in cfg['sims'] if len(e) == 5]
   check(
-      gv.SIMS == [tuple(s) for s in cfg['sims']] and gv.BASE == old_base
-      and gv.DEVICE == cfg.get('device', '') and not gv.CONFIG_PROBLEMS
-      and all(v == gv.SimSettings(gv.DEVICE, None)
-              for v in gv.SIM_SETTINGS.values())
-      and gv.device_image(gv.DEVICE) == old_image and sim2.device == gv.DEVICE
+      len(plain) >= 3 and gv.SIMS == [tuple(e[:4]) for e in cfg['sims']]
+      and gv.BASE == old_base and gv.DEVICE == cfg.get('device', '')
+      and not gv.CONFIG_PROBLEMS
+      and all(gv.SIM_SETTINGS[e[0]] == gv.SimSettings(gv.DEVICE, None)
+              for e in plain)
+      and all(gv.SIM_SETTINGS[e[0]].device == (e[4].get('device') or gv.DEVICE)
+              for e in own) and gv.device_image(gv.DEVICE) == old_image
+      and sim2.device == gv.DEVICE
       and sim2.title == f'{gv.DEVICE} #203899 @ 325 ms'
       and gv.geqdsk_disagreement(sim2) is None,
-      f'this data directory\'s viewer.json (no per-simulation settings) reads as before: the simulations, base, '
-      f'device {gv.DEVICE!r}, its picture, Sim 2\'s title {sim2.title!r}')
+      f'this data directory\'s viewer.json reads as before for its {len(plain)} simulations without settings of '
+      f'their own (the {len(own)} with their own name their device): the simulations, base, device '
+      f'{gv.DEVICE!r}, its picture, Sim 2\'s title {sim2.title!r}')
   geq = gv.geqdsk_path(sim2)
   # a run that names no geqdsk: Sim 2's files but its options and command, under a stem naming no shot
   farm = os.path.join(tmp, 'farm', 'runs', 'run')
@@ -2851,6 +2983,362 @@ def part_schema(tmp):
       '1-point limiter gives way to the device\'s wall, which gives no shot; 2 malformed entries left out with notes: '
       f'{ {k: v for k, v in got.items() if k not in ("test_image", "default_image")} }'
   )
+
+
+# ----------------------------------------------------------------------------------------- the curves shown (11-17)
+MEASURED_GROUPS = {'thomson', 'chers',
+                   'transp'}  # measured_trace's legend groups, one per source
+SAID = {  # a species named in what the page shows of a curve (its words, a subscript, a measured quantity)
+    'electrons': re.compile(r'\belectrons?\b|\belc\b|<sub>e</sub>|\b[nT]_e\b'),
+    'ions': re.compile(r'\bions?\b|<sub>i</sub>|\bT_i\b|\bn_D\b')
+}
+
+
+def _said(fig):
+  """What a chart says each of its traces is, read from what the page shows of it, not from its tag: [(kind,
+  species)]. kind: 'experiment' for a measured source's trace (its legend group: thomson, chers, transp) and TRANSP's
+  legend key, None for a reference line's key (the separatrix), else 'simulation'; species: electrons or ions where
+  exactly one of them is named by the trace's legend name or group, its hover text or (not a legend key) its panel's
+  title and y axis title, else None; TRANSP's key: ions (the profile it marks, T_i)."""
+  import viewer_plots as vp
+  panel, out = {}, []
+  for tr in fig.data:
+    if tr.legendgroup == 'key':
+      name = tr.name or ''
+      out.append((None, None) if 'separatrix' in name else (
+          'experiment', 'ions') if name.startswith('TRANSP') else ('simulation',
+                                                                   None))
+      continue
+    x = tr.xaxis or 'x'
+    if x not in panel:
+      pf = vp.panel_figure(fig, x)[0]
+      panel[
+          x] = f'{pf.layout.title.text or ""} | {pf.layout.yaxis.title.text or ""}'
+    text = ' | '.join(
+        str(v or '')
+        for v in (tr.name, tr.legendgroup, tr.hovertemplate, panel[x]))
+    named = [k for k, rx in SAID.items() if rx.search(text)]
+    out.append(
+        ('experiment' if tr.legendgroup in MEASURED_GROUPS else 'simulation',
+         named[0] if len(named) == 1 else None))
+  return out
+
+
+def _numbered(fig):
+  """A copy of a chart with each trace's uid its index (shown_curves keeps them: what it removed can be read)."""
+  import plotly.graph_objects as go
+  f = go.Figure(fig)
+  for i, tr in enumerate(f.data):
+    tr.uid = str(i)
+  return f
+
+
+def _removed(fig, curves):
+  """The traces of a _numbered chart that the switches take away; None: the chart is left with no curve."""
+  import viewer_plots as vp
+  shown = vp.shown_curves(fig, curves)
+  return None if shown is None else set(range(len(
+      fig.data))) - {int(tr.uid)
+                     for tr in shown.data}
+
+
+def _one_off(f, k):
+  """Switch k alone off on a _numbered chart: (the problems, the traces it should take away, whether it empties the
+  chart). It should take away exactly the traces _said makes its own; leave the rest as they were (a legend entry may
+  move to a trace of its group: name and showlegend aside), each group left with its legend entry; put the note
+  '<k> switched off' in each panel it empties and nowhere else; leave no label (an annotation in a panel's data
+  coordinates) in such a panel; and where it takes every curve, leave none and give hidden_note's words."""
+  from plotly.utils import PlotlyJSONEncoder
+  import viewer_plots as vp
+  curves = vp.Curves(**{k: False})
+  shown = vp.shown_curves(f, curves)
+  gone = {i for i, said in enumerate(_said(f)) if k in said}
+  data = [i for i, tr in enumerate(f.data) if tr.legendgroup != 'key']
+  if all(i in gone for i in data):
+    return ([] if shown is None
+            and vp.hidden_note(f, curves) == f'{k} switched off' else
+            ['not emptied, or a wrong note']), gone, True
+  if shown is None:
+    return ['emptied'], gone, False
+  bad, kept = [], {int(tr.uid): tr for tr in shown.data}
+  if set(kept) != set(range(len(f.data))) - gone:
+    bad.append(
+        f'took {sorted(set(range(len(f.data))) - set(kept))}, its own: {sorted(gone)}'
+    )
+  for i, tr in kept.items():
+    a, b = (json.loads(json.dumps(t.to_plotly_json(), cls=PlotlyJSONEncoder))
+            for t in (tr, f.data[i]))
+    for d in (a, b):
+      d.pop('showlegend', None)
+      d.pop('name', None)
+    if a != b:
+      bad.append(f'trace {i} ({f.data[i].name}) changed')
+  for g in {tr.legendgroup for tr in f.data} - {None, '', 'key'}:
+    had = any(tr.showlegend is not False for tr in f.data
+              if tr.legendgroup == g)
+    left = [tr for tr in shown.data if tr.legendgroup == g]
+    if had and left and all(tr.showlegend is False for tr in left):
+      bad.append(f'legend group {g} lost its entry')
+  where = lambda tr: (tr.xaxis or 'x', tr.yaxis or 'y')  # noqa: E731
+  emptied = {where(tr)
+             for tr in f.data if tr.legendgroup != 'key'
+             } - {where(tr)
+                  for tr in shown.data if tr.legendgroup != 'key'}
+  notes = {
+      (a.xref.split(' ')[0], a.yref.split(' ')[0])
+      for a in shown.layout.annotations
+      if (a.xref or '').endswith(' domain') and a.text == f'{k} switched off'
+  }
+  if notes != emptied:
+    bad.append(f'notes in panels {sorted(notes)}, emptied {sorted(emptied)}')
+  stray = [
+      a.text for a in shown.layout.annotations if (a.xref, a.yref) in emptied
+  ]
+  if stray:
+    bad.append(f'labels left in emptied panels: {stray}')
+  return bad, gone, False
+
+
+KEPT_CHARTS = (
+    'history', 'thomson'
+)  # the midplane over time (a map of one quantity), the shot's timeline
+SWITCH_IS = """window.__switchIs = t => __deep('button[role=switch]').find(s => { let n = s;
+  for (let i = 0; i < 4 && n; i++) { n = n.parentElement || (n.getRootNode() && n.getRootNode().host);
+  if (n && (n.textContent || '').trim() === t) return true; } return false; }); 'ok'"""
+CURVE_LABELS = ['Electrons', 'Ions', 'Simulation', 'Experiment']
+# the Midplane profiles chart drawn (its plotly div), and what it draws: its traces, those tagged ions, the name its
+# slide downloads go by
+PROFILES_CHART = (
+    "__deep('.gkv-live .js-plotly-plot').find(d => d.querySelector('svg.main-svg') && (d.data || []).some(t => "
+    "String((t.meta || {}).live || '').startsWith('mid|')))")
+PROFILES_READ = (
+    "(d => d && { n: d.data.length, ions: d.data.filter(t => ((t.meta || {}).curve || []).includes('ions')).length, "
+    "name: Object.keys(window.__gkvSlides || {}).find(k => k.includes('_midplane_profiles_')) })("
+    + PROFILES_CHART + ")")
+
+
+async def _drive_species(url, dbg, shots):
+  """Sim 2's page: the four switches' states, the profiles chart, Ions clicked off (the chart drawn again, its slide
+  figure, the address), then the page reloaded. Returns those readings."""
+  out = {}
+
+  async def ready():
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    await c.js(SWITCH_IS)
+    await c.until("__deep('[role=tablist]').length > 0", 180)
+    await c.js(
+        "(__deep('[role=tablist]')[0] || document.body).scrollIntoView({block: 'start'})"
+    )
+    return await c.until(PROFILES_READ, 180)
+
+  states = ("[" + ', '.join(
+      f"(s => s ? s.getAttribute('aria-checked') : null)(__switchIs({json.dumps(t)}))"
+      for t in CURVE_LABELS) + "]")
+  async with opened(url, dbg) as c:
+    out['before'] = await ready()
+    out['states'] = await c.js(states)
+    await c.strict("__switchIs('Ions').click()")
+    out['off'] = await c.until(
+        f"(r => r && r.ions === 0 ? r : null)({PROFILES_READ})", 120)
+    out['search'] = await c.js('location.search')
+    if out['off'] and out['off']['name']:
+      out['slide'] = await c.js(
+          f"(f => ({{n: f.data.length, ions: f.data.filter(t => ((t.meta || {{}}).curve || [])"
+          f".includes('ions')).length}}))(window.__gkvSlides[{json.dumps(out['off']['name'])}]('full', true))"
+      )
+    if shots:  # the control, then the profiles chart without the ions
+      for what, el in (('control', "__switchIs('Ions')"), ('profiles',
+                                                           PROFILES_CHART)):
+        await c.js(f"(e => e && e.scrollIntoView({{block: 'center'}}))({el})")
+        await asyncio.sleep(1)
+        await c.shot(os.path.join(shots, f'species_ions_off_{what}.png'))
+    await c.call('Page.reload')
+    out['reloaded'] = await ready()
+    out['states_reloaded'] = await c.js(states)
+  return out
+
+
+def part_species(chrome=None, shots=None):
+  """The curves shown (2026-11-17): the sidebar's four switches (electrons, ions, simulation, experiment) on every
+  line chart of the three NSTX-U simulations, each with another drawn over it and its shot's measured profiles. All on,
+  each chart is the one drawn without the switches (shown_curves gives it back). Each switch alone off takes away
+  exactly the curves the chart says are its own (_said: legend names and groups, hover text, panel titles; not the
+  tags) and their labels, leaves the rest as they were with a legend entry for each group left, puts a note in each
+  panel it empties, and leaves a note in place of a chart it empties (_one_off). A species is told by its charge's
+  sign: the charges swapped, electrons and ions swap; a charge of 0 answers to neither. The notebook, launched with
+  switches off: the view keeps them (the ./view.sh line, a state file), every chart it hands the page and its slide
+  downloads hold only the curves shown, and a tab whose chart is emptied shows the note. With chrome, Sim 2's page:
+  the four switches, on by default; Ions clicked off, the profiles chart drawn again without its ion curves (its
+  slide figure too) and the address saying so; reloaded, still so."""
+  import dataclasses
+  import gkview as gv
+  import movie_widget as mm
+  import thomson
+  import viewer_plots as vp
+  import viewer_state as vs
+  runs = [
+      gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+      for lab, d, dflt, _ in gv.SIMS if lab in ('Sim 1', 'Sim 2', '2025 re-run')
+  ]
+
+  def charts(run, summ, cmp=None):
+    # every line chart of a run (_charts), its profiles with the shot's measured ones over them
+    out = _charts(run, summ, cmp)
+    fs = run.frames()
+    th = thomson.read(run.shot)
+    t0, t1 = thomson.default_window(th, run.eq_ms / 1e3)
+    out['profiles'] = vp.profiles_figure(run,
+                                         gv.frame(run, fs[-1]),
+                                         gv.frame(run, fs[0]),
+                                         '',
+                                         measured=(th, t0, t1),
+                                         cmp=cmp)
+    return out
+
+  same, bad, n, ntr, empty, kept = [], [], 0, 0, set(), []
+  took = dict.fromkeys(vp.CURVE_SWITCHES, 0)
+  for i, run in enumerate(runs):
+    summ = gv.summary(run)
+    cmp = _overlay(summ, runs[(i + 1) % len(runs)])
+    for name, fig in charts(run, summ, cmp).items():
+      if name in KEPT_CHARTS:  # whatever the switches
+        kept += [
+            vp.shown_curves(fig, vp.Curves(**{k: False})) is fig
+            for k in vp.CURVE_SWITCHES
+        ]
+        continue
+      n, ntr = n + 1, ntr + len(fig.data)
+      same.append(vp.shown_curves(fig, vp.Curves()) is fig)
+      f = _numbered(fig)
+      for k in vp.CURVE_SWITCHES:
+        problems, gone, emptied = _one_off(f, k)
+        took[k] += len(gone)
+        bad += [f'{run.sim} {name}, {k} off: {p}' for p in problems]
+        if emptied:
+          empty.add(f'{name} ({k})')
+  check(
+      all(same) and not bad and all(took.values()) and all(kept),
+      f'{n} line charts of 3 simulations with an overlay and the measured profiles ({ntr} traces): all on, each as '
+      f'drawn without the switches; each switch alone off takes exactly the curves the chart says are its own '
+      f'({took}) and their labels, the rest unchanged with their legend entries, a note in each panel it empties, a '
+      f'note in place of the chart it empties ({sorted(empty)}); the midplane over time (a map) and the shot\'s '
+      f'timeline as they are whatever the switches ({sum(kept)} of {len(kept)}){bad[:6] or ""}'
+  )
+  # a species by its charge's sign, not its name: swapped charges swap the switches; a neutral answers to neither
+  run = runs[1]
+  summ = gv.summary(run)
+  e = next(s for s, q in run.charge.items() if q < 0)
+  swapped = dataclasses.replace(run,
+                                charge={
+                                    s: -q
+                                    for s, q in run.charge.items()
+                                })
+  neutral = dataclasses.replace(run, charge=dict(run.charge, **{e: 0.0}))
+  off = {k: vp.Curves(**{k: False}) for k in ('electrons', 'ions')}
+  wrong, nsw = [], 0
+  for (name, a), b, c in zip(
+      charts(run, summ).items(),
+      charts(swapped, summ).values(),
+      charts(neutral, summ).values()):
+    a, b, c = _numbered(a), _numbered(b), _numbered(c)
+    ra = {k: _removed(a, v) for k, v in off.items()}
+    nsw += len(ra['electrons'] or ()) + len(ra['ions'] or ())
+    if (_removed(b, off['electrons']),
+        _removed(b, off['ions'])) != (ra['ions'], ra['electrons']):
+      wrong.append(f'{name}: swapped charges')
+    if (_removed(c, off['electrons']),
+        _removed(c, off['ions'])) != (set(), ra['ions']):
+      wrong.append(f'{name}: {e} neutral')
+  check(
+      not wrong and nsw > 0,
+      f'a species by its charge\'s sign (Sim 2, {nsw} species curves): the charges swapped, the electrons\' switch '
+      f'takes what the ions\' took and back; {e} given a charge of 0, its switch takes nothing, the ions\' the same as '
+      f'before{wrong or ""}')
+  # the notebook: launched with ions and the experiment off (as a reload of an address saying so would be)
+  handed, orig = [], mm.live_plot
+
+  def recorded(fig, *a, **kw):
+    w = orig(fig, *a, **kw)
+    handed.append(w)
+    return w
+
+  mm.live_plot = recorded
+  try:
+    d, built = headless({
+        'sim': 'Sim 2',
+        'cmp': '2025 re-run/prod',
+        'probe': '6,200,7',
+        'ions': 'false',
+        'experiment': 'false'
+    })
+  finally:
+    mm.live_plot = orig
+  want = vp.Curves(ions=False, experiment=False)
+  v = d['view']
+  cmd = vs.command_line(v)
+  with tempfile.TemporaryDirectory() as tmp:
+    back, _ = vs.merge(
+        vs.load_state(vs.save_state(os.path.join(tmp, 's.json'), v)))
+  keys = {k: vs.as_bool(back[k]) for k in vp.CURVE_SWITCHES}
+  tags = lambda w: [((t.get('meta') or {}).get('curve') or [])
+                    for t in w.fig['data']]  # noqa: E731
+  leaks = [
+      w.name for w in handed
+      if any('ions' in t or 'experiment' in t for t in tags(w))
+  ]
+  slides = [
+      w.name for w in handed
+      if w.slides['full']['indices'] != list(range(len(w.fig['data'])))
+  ]
+  check(
+      d['curves_shown'] == want and keys == dataclasses.asdict(want)
+      and '--ions false --experiment false' in cmd and '--electrons' not in cmd
+      and '--simulation' not in cmd and not leaks and not slides
+      and len(handed) >= 8 and all(x == 'ok' for x in built.values()),
+      f'the notebook launched with ions and the experiment off: switches {d["curves_shown"]}, the view keeps them '
+      f'({cmd[cmd.find("--ions"):][:40]}...; a state file: {keys}); the {len(handed)} charts it hands the page, and '
+      f'their slide downloads, hold only the curves shown (leaks {leaks}, slides {slides}); every tab builds'
+  )
+  texts = {}
+  d, built = headless(
+      {
+          'sim': 'Sim 2',
+          'probe': '6,200,7',
+          'simulation': 'false'
+      }, texts=texts)
+  note = 'Nothing to draw here: simulation switched off in the sidebar.'
+  count = {t: texts[t].count(note) for t in texts if note in texts[t]}
+  check(
+      count == {
+          'Targets': 1,
+          'Time traces': 1,
+          'Probe': 1,
+          'Balance & power': 2,
+          'Diffusivity': 1
+      } and all(x == 'ok' for x in built.values()),
+      f'the simulation switched off (Sim 2): each tab\'s simulated chart is the note "{note}" ({count}); the '
+      'midplane profiles keep the measured ones')
+  if chrome is None:
+    return
+  with served(chrome, ['--sim', 'Sim 2']) as (url, dbg):
+    check(url is not None, 'curves shown: view.sh serves the page')
+    if url is None:
+      return
+    r = asyncio.run(_drive_species(url, dbg, shots))
+  b, o, a = r.get('before'), r.get('off'), r.get('reloaded')
+  check(
+      r.get('states') == ['true'] * 4 and b and b['ions'] > 0 and o
+      and o['n'] == b['n'] - b['ions'] and 'ions=false' in r.get('search', '')
+      and r.get('slide') == {
+          'n': o['n'],
+          'ions': 0
+      } and r.get('states_reloaded') == ['true', 'false', 'true', 'true'] and a
+      and a['ions'] == 0 and a['n'] == o['n'],
+      f'the page (Sim 2): the switches {CURVE_LABELS} on by default ({r.get("states")}); Ions clicked off, the '
+      f'profiles chart drawn again without its {b and b["ions"]} ion curves ({b and b["n"]} -> {o and o["n"]} '
+      f'traces; its slide figure {r.get("slide")}), the address saying so; reloaded, still off '
+      f'({r.get("states_reloaded")}, {a and a["n"]} traces)')
 
 
 # ---------------------------------------------------------------------------------------------------- browser
@@ -3474,10 +3962,12 @@ if __name__ == '__main__':
       'themes': part_themes,
       'fonts': part_fonts,
       'sync': part_sync,
+      'machine': part_machine,
       'poloidal': lambda: part_poloidal(a.browser),
       'lines': lambda: part_lines(a.browser, a.shots),
       'grid': lambda: part_grid(a.browser, a.shots),
       'blank': lambda: part_blank(a.browser, a.shots),
+      'species': lambda: part_species(a.browser, a.shots),
       'browser': lambda: a.browser and part_browser(a.browser, a.shots),
       'layout': lambda: a.browser and part_layout(a.browser, a.shots),
       'liveplot': lambda: a.browser and part_liveplot(a.browser),

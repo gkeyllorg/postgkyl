@@ -71,7 +71,8 @@ Keys (`viewer_state.KEYS`): `shot`, `sim`, `run`, `frame` (negative: from the la
 (value / change / step), `log`, `zoom`, `x`, `dark`, `tab`, `frames` (the movie's frames, `pgkyl load --frame`
 syntax), `probe` (block,i,j), `blocks` (the blocks drawn: `1-3,10`), `cmp` (a run drawn over this one: `<simulation>/<run>` or a
 directory), `path` (a run directory to open), `background`, `opacity` (the device picture), `mirror` (a half domain
-shown whole), `quantity`, `grid`, `separatrix`, `wall`, `outlines` (what the poloidal plane draws). A view opens from
+shown whole), `quantity`, `grid`, `separatrix`, `wall`, `outlines` (what the poloidal plane draws), `electrons`, `ions`,
+`simulation`, `experiment` (the curves on the line charts). A view opens from
 the defaults, then a saved view, then the command line, then the page's address, each overriding the one before; the
 page writes the current view into its address, so a reload or a bookmark comes back to it (the address carries the
 access token too: do not share it while the server runs). A
@@ -117,6 +118,16 @@ read once, at most 2000 px on its longest side (`viewer_plots.BACKGROUND_PX`), a
 repo. NSTX-U: PPPL's section drawing `NSTX-SECTION-PLAN-VIEW-NO-PLASMA_020624.pdf`, in the "NSTX-U Drawings" folder
 of the NSTX-U site's Presentations page (shared by link), rendered, cropped to R >= 0 and fitted to the limiter
 (research/nstxu/viewer_20261102 on Perlmutter: the picture and how it was made).
+
+## The whole machine (2026-11-17)
+The poloidal view **whole machine** (launch key `--zoom 'whole machine'`) frames the whole device: the domain, the whole
+wall (the geqdsk's limiter, which 'whole domain' cuts at the grid's height) and the device picture's `extent`, never
+R < 0 (`viewer_plots.machine_points`, `zoom_boxes`). It follows 'whole domain' in the list wherever it shows more than
+that view: every simulation here (NSTX-U: the section drawing whole, Z +-2.9 m; ASDEX Upgrade, TCV and STEP: their
+pictures and walls; DIII-D: its wall). The movie, the map figures and the exports take it like every view. Checked
+(`check_viewer.py` part_machine): on every simulation (a half domain shown whole too) the view frames the whole wall
+and picture, and where it is not offered the whole domain already does; with neither it is not offered; the map's
+axes hold them (ASDEX Upgrade, Sim 2 shown whole). The layout audit (`--browser`) opens it on every simulation.
 
 ## A half domain shown whole (2026-11-14)
 A run on a half domain (a reflecting midplane: `layout.half`) can be shown whole on the poloidal plane: the
@@ -197,6 +208,46 @@ states: the same pixel tests, the movie never made again. Run alone with `--brow
 tried fail it: the map's grid drawn along the chords (ASDEX: 40 of 48 chord points drawn); the movie filling its
 cells whatever the quantity's switch (TCV and DIII-D: 0 of the cell insides changed).
 
+## The curves shown (2026-11-17)
+The sidebar's **curves on the line charts** is one control of four switches, all on by default: **Electrons**,
+**Ions**, **Simulation** and **Experiment** (launch keys `--electrons false`, `--ions false`, `--simulation false`,
+`--experiment false`; the view keeps them: a saved view, the `./view.sh` line, the page's address). A curve is drawn
+when every switch it answers to is on (`viewer_plots.Curves`; each trace's tag, `curve_tag`; `shown_curves`):
+- **Simulation**: every simulated curve, the shown run's and the overlay's. **Experiment**: every measured or analysis
+  profile, Thomson n_e and T_e, CHERS T_i, TRANSP n_D and T_i (its predicted part dotted).
+- **Electrons** / **Ions**: the curves of one species, told by the sign of its charge in the run's files (the overlay's
+  species by the overlay's), never by its name: each species' midplane profiles, cells with n ≤ 0 and particle
+  content, the time traces' region changes (the electrons' n and T), its probe history and region mean, its particle
+  budget and conservation, its diffusivity (where the species' D differ). A measured profile is its species': Thomson's
+  the electrons', CHERS's and TRANSP's the ions'. The ion Mach number is the ions'.
+- **Neither species switch**, Simulation alone: a neutral species (charge 0, neither electrons nor ions; no run here
+  has one), a field (φ, the field energy) and a sum over the species (q_par, λq and the peak heat
+  flux at the targets, q_perp, the energy budget, the target power, a D shared by every species), and the time step.
+
+Every line chart follows them, on the page and in its downloads (the toolbar's slide buttons and plotly's own: the
+page's curves): Midplane profiles, Targets, Time traces, Probe, both charts of Balance & power, Diffusivity, the
+overlay's curves in each. A label goes with its curves (the time traces' region names); a legend entry whose curve
+goes moves to the next curve of its group. A panel left with no curve says which switches emptied it ('ions switched
+off'); a chart left with none is a note in its place ('Nothing to draw here: simulation switched off in the
+sidebar.'). Unchanged: the maps, each showing one chosen quantity (the movie's poloidal plane, strips and midplane
+profiles; the midplane over time; the diffusivity map; the Static figure and Save figure), the shot's timeline (beam
+power and Thomson line density, where the averaging window is chosen), and the notes under the charts.
+
+Checked (`check_viewer.py` part_species): the 21 line charts of the three NSTX-U simulations, each with another drawn
+over it and its shot's measured profiles (492 traces): all on, each is the chart drawn without the switches; each
+switch alone off takes exactly the curves the chart itself says are its own, read from what the page shows of them
+(legend names and groups, hover text, panel titles; not the tags): electrons 170, ions 158, simulation 464,
+experiment 22; the rest unchanged, each legend group left with its entry, the region names gone with the electrons'
+curves, a note in each panel it empties and in place of each chart it empties (Simulation: targets, time traces,
+probe, both budgets, diffusivity); the midplane over time and the shot's timeline the same whatever the switches.
+Sim 2's charges swapped, the two species switches swap (71 curves); its electrons given a charge of 0, their switch
+takes nothing. The notebook launched with Ions and Experiment off keeps them in its view (the `./view.sh` line, a
+state file) and hands the page 9 charts holding neither, their slide downloads too; launched with Simulation off, the
+six simulated charts of Sim 2's tabs are the note. With `--browser`, Sim 2's page: the four switches on; Ions clicked
+off, the profiles chart drawn again with 22 of its 44 traces (none an ion's; its slide figure the same), the address
+saying `ions=false`; reloaded, still off. By hand (2026-11-17): the 60 charts of the three simulations (with and
+without an overlay, both x axes) built by this code equal those of a4005d95, before the switches, but for the tags.
+
 ## Other devices' runs (2026-11-16)
 The four regression runs of `research/tokamak/regr_devices_20261116` (ASDEX Upgrade, STEP, TCV, DIII-D) open with
 every tab. What changed, each derived from the run's own files:
@@ -257,14 +308,16 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   and at least one frame; the production run by default), frame (slider + number box; it moves the movie too),
   movie frames (a frame range for the movie and the exported movie: `:`, `::2`, `-50:`, `0:60`), probe cell
   (block,i,j, or a click on the movie), quantity, value / change since the first frame / change since the previous
-  frame (the last shows fronts moving), log scale, poloidal view (whole domain, lower/upper divertor,
+  frame (the last shows fronts moving), log scale, poloidal view (whole domain, whole machine, lower/upper divertor,
   outboard/inboard midplane), **show the full domain** (a half domain: its mirror image too), **include device
   background** and **background opacity** (when `viewer.json` names a picture of the shown run's device: behind
   the poloidal plane, in the movie and every map figure), **show the plotted quantity**, **show the grid (every
   cell edge)**, **show the separatrix**, **show the wall (limiter)** and **show the block boundaries** (what the
   poloidal plane draws; above), **blocks drawn** (none chosen:
   every block; see below), **draw another run over it**
-  (the overlay, see below), profile x axis (distance from the separatrix or R), **theme** (NSTX-U, PPPL or DIII-D;
+  (the overlay, see below), **curves on the line charts** (four switches, Electrons, Ions, Simulation and
+  Experiment, all on by default; The curves shown, below), profile x axis (distance from the separatrix or R),
+  **theme** (NSTX-U, PPPL or DIII-D;
   see Look) and **dark mode** (on by default; off = the theme's white look, page and figures together, no reload).
 - **Header:** run, domain, cell count, frame span, key options; the full path of the simulation output (and the
   overlay's) with its file names; tiles for t, time step, λq and peak heat flux at each target, cells with n ≤ 0.
@@ -327,7 +380,7 @@ Simulations offered: `viewer.json`'s `sims` (`gkview.SIMS`). Shot and equilibriu
 |---|---|
 | `gk_viewer.py` | the marimo notebook (UI only) |
 | `gkview.py` | data layer: run discovery (multiblock and single-block), readers (fields, dynvectors), block layout from the topology file (any layout, psi either way), derived quantities, profiles, target heat flux, per-frame cache, frame ranges, cell volumes and region means, particle / energy balance and target power, the diffusivity, the overlay's frame matching |
-| `viewer_plots.py` | figures: map (matplotlib), profiles / targets / traces / probe / balance (plotly); the shared colour scale; figure and movie export; the poster theme's two looks; the page CSS |
+| `viewer_plots.py` | figures: map (matplotlib), profiles / targets / traces / probe / balance (plotly); the curves shown (each species, simulated, measured); the shared colour scale; figure and movie export; the poster theme's two looks; the page CSS |
 | `movie_widget.py` | the browser-side movie (anywidget: the payload from the cache, and the canvas player in JavaScript), and LivePlot: the tab charts that follow it |
 | `pgkyl_cmd.py` | the pgkyl command equivalent to each curve, cell and map the page draws (click it) |
 | `viewer_state.py` | where the viewer opens: the view keys, state files, the `./view.sh` line, the blocks syntax |
@@ -531,7 +584,8 @@ compares with, above a strip of the shot's beam power and Thomson line density w
   line, ion colour);
 - temperature row: Thomson T_e (open circles, electron colour), CHERS T_i (open diamonds, ion colour) and TRANSP's
   T_i (wide pale line, ion colour; dotted where TRANSP predicts it, see below).
-One switch (**measured profiles**) hides them all; a range slider picks the Thomson frames (it snaps to Thomson
+The sidebar's **Experiment** switch hides them all, and **Electrons** / **Ions** each its species' (The curves shown;
+until 2026-11-17 a switch of this tab's own, **measured profiles**); a range slider picks the Thomson frames (it snaps to Thomson
 frames in the beam flattop). The note under the chart says, per source, what was averaged (how many samples), how it
 is placed, and why a source is missing or empty.
 
@@ -634,12 +688,32 @@ RMAJM, and runs that each step of the rule passes over: predictive, no CDF, no N
 Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame n_e = 0.90-1.08 on 6 of 7 channels
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
-## Checks (2026-11-16: all pass, the browser part too: `check_viewer.py --browser` 98, `check_gkview.py` 64)
+## Checks (2026-11-17: all pass, the browser part too: `check_viewer.py --browser` 112, `check_gkview.py` 64)
 Run from this directory with no environment set (its own `viewer.json`, `.venv`):
 ```sh
 .venv/bin/python check_viewer.py [--browser <chrome>] [--parts blank,poloidal]   # --parts: some parts only
 <a postgkyl venv>/bin/python check_gkview.py
 ```
+2026-11-17, on this data directory as it now is (the five device runs in `viewer.json`, the Flux copies of 203655
+and 203899 fetched that morning, 203655's with TRANSP run 203655A04): 106 of 112 in one full `--browser` run while a
+450-shot grid sweep held five cores of the same login node; the other six pass on their parts' reruns. Four of those
+were the load (the two blank starts in the browser, the opacity slider, the plotly fallback's pace: the same parts
+pass again unchanged). Four checks assumed the data directory of 11-16 and now read what they mean: the chart
+helper skips the Thomson timeline of a run with no shot file and probes block 0 of a one-block run (`part_labels`);
+the stand-in Flux archive and the "fetched before TRANSP" cases use copies without the TRANSP group, as Flux's dumps
+are (`part_measured`); the mirror may open its own Flux copy (`part_sync`); `viewer.json`'s simulations without
+settings of their own read as before, those with their own name their device (`part_schema`).
+
+2026-11-17, the curves shown (The curves shown, above): the new `part_species` (`--parts species`), 6 of 6 with
+`--browser`, on this directory's data and on the three simulations' alone; both suites in full, formatted by the
+repo's hooks: `check_viewer.py --browser` 104 of 104 (the 98 before and part_species), `check_gkview.py` 64 of 64.
+The full `check_viewer.py` ran on a data directory whose `viewer.json` offers the three NSTX-U simulations only (as
+the suite asks; `base` and the cache the same) with the 2026-11-09 Flux copy of 203655 (no TRANSP). On this
+directory's own data two things fail that fail the same with the code of a4005d95: `viewer.json` now offers the five
+device runs too, and `part_labels` stops on the first of them (`_charts` asks `thomson.default_window` about a shot of
+0, which has no Thomson file: `thomson.read` gives None); and `runs/flux/203655.h5`, fetched again on 2026-11-17 with
+TRANSP, is no longer the copy without TRANSP that `part_measured` takes as its stand-in archive and as "the Flux copy
+fetched before TRANSP" (3 of its checks).
 2026-11-16, all four changes together (measured profiles, a blank start, the lines and the grid, other devices' runs)
 and the 11-14 layout fixes, formatted by the repo's hooks: both suites in full, all pass (`check_viewer.py
 --browser` 98, `check_gkview.py` 64). Fixed on the way: two checks (the opacity slider's value is now read where it
