@@ -77,8 +77,11 @@ def test_fluent_operations_are_static_aliases_to_documented_functions():
     method = getattr(instance, name)
     assert GData.__dict__[name] is function
     assert inspect.getdoc(method) == inspect.getdoc(function)
+    parameters = tuple(inspect.signature(function).parameters.values())
+    expected = (parameters if parameters[0].kind
+                is inspect.Parameter.VAR_POSITIONAL else parameters[1:])
     assert tuple(inspect.signature(method).parameters) == tuple(
-        inspect.signature(function).parameters)[1:]
+        parameter.name for parameter in expected)
 
 
 def test_shared_functional_and_fluent_spellings_are_one_object():

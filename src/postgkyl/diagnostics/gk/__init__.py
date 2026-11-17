@@ -14,12 +14,12 @@ mapping are owned by I/O and operations, respectively.
 from __future__ import annotations
 
 from .distf import load_distf, resolve_frames
-from .load_quantity import available_quantities, load_quantity
+from .load_quantity import available_quantities, load_quantity, quantity_catalog
 from .quantities import (
     fetch_beta_from_bmag_press,
-    fetch_diamag_vel,
-    fetch_ExB_vel,
-    fetch_gradB_vel,
+    fetch_diamag_vel_contra,
+    fetch_ExB_vel_contra,
+    fetch_gradB_vel_contra,
     fetch_M1_from_H,
     fetch_press_from_BiMax,
     fetch_press_from_Max,
@@ -44,18 +44,30 @@ from typing import Annotated
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    InfoOption,
     KeyValue,
     ResultPolicy,
     Section,
     command,
+    hidden,
 )
+
+hidden("Python quantity catalog; CLI uses it through avail_quant")(
+    quantity_catalog)
 
 _LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD)
 _REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS,
                            Execution.LOAD,
                            result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_distf)
-command(_LOAD_SPEC)(load_quantity)
+command(
+    CommandSpec(
+        Section.DIAGNOSTICS,
+        Execution.LOAD,
+        info_options=(InfoOption(
+            "avail_quant", quantity_catalog,
+            "List available quantities and their descriptions, then exit."),
+                      )))(load_quantity)
 energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                           KeyValue()]
 particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
@@ -69,12 +81,13 @@ __all__ = [
     "load_distf",
     "resolve_frames",
     "available_quantities",
+    "quantity_catalog",
     "load_quantity",
     "gk_quant_registry",
     "fetch_beta_from_bmag_press",
-    "fetch_diamag_vel",
-    "fetch_ExB_vel",
-    "fetch_gradB_vel",
+    "fetch_diamag_vel_contra",
+    "fetch_ExB_vel_contra",
+    "fetch_gradB_vel_contra",
     "fetch_M1_from_H",
     "fetch_press_from_BiMax",
     "fetch_press_from_Max",

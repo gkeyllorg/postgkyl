@@ -745,6 +745,11 @@ def plot(
 
       coordinate_labels = default_axis_labels(ref_axes,
                                               grid_indices=grid_indices)
+      if not grid_indices:
+        coordinate_labels = [
+            ref.ctx.get("coordinate_labels", {}).get(axis, name)
+            for axis, name in zip(ref_axes, coordinate_labels)
+        ]
       if transpose and ref_num_dims == 2:
         # The data axes are swapped before drawing, so the default label base
         # names swap too; the shift/scale annotations below keep their

@@ -111,8 +111,10 @@ class GData(GDataState):
   extract_input = operations.extract_input
   fit = operations.fit
   growth = operations.growth
+  frequency = operations.frequency
   differentiate = operations.differentiate
   map = operations.map
+  map_interp = operations.map_interp
   represent = operations.represent
   apply = operations.apply
   save = io.save
