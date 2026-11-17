@@ -138,9 +138,9 @@ def movie_data(run,
   frames = allf if frames is None else [
       int(k) for k in frames if int(k) in have
   ]
-  if not frames:
+  if not frames and allf:  # (a run with no frame, the empty run, plays none)
     raise ValueError('no frame to play')
-  rows = np.array([allf.index(k) for k in frames])
+  rows = np.array([allf.index(k) for k in frames], int)
   V = vp.mode_values(summ[f'fld|{qty}'].astype(np.float64), rows, mode, kind,
                      scale)
   shown = vp.shown_blocks(run, blocks)
@@ -164,25 +164,33 @@ def movie_data(run,
 
   # geometry: every cell's four corners (cell_offsets order), lines, views
   off = gv.cell_offsets(run)
-  quads = np.concatenate([
+  quads = np.concatenate([np.zeros((0, 8))] + [
       np.stack([nd[:-1, :-1], nd[1:, :-1], nd[1:, 1:], nd[:-1, 1:]],
                axis=2).reshape(-1, 8)
       for nd in (run.nodes[b] for b in range(run.nb))
   ]).astype(np.float32)
   rnd = lambda a: [round(float(x), 5)
                    for x in np.asarray(a).ravel()]  # noqa: E731
-  lines = []
+  # cells as the regions their curved edges bound, where the run gives the curves (gkview.cell_polygons; else the
+  # quadrilaterals): every cell's points, cell_offsets order; lines along cell edges, as curves (gkview.cell_edges):
+  # the grid (every node row and column), the outlines, the separatrix
+  edges = gv.cell_edges(run)
+  poly = np.concatenate([
+      p.reshape(-1, 2 * p.shape[2])
+      for p in (gv.cell_polygons(run, b) for b in range(run.nb))
+  ]).astype(np.float32) if edges[
+      'curved'] and run.nb else None  # no block (the empty run): the quadrilaterals
+  lines = [
+      dict(kind='grid', pts=rnd(p)) for b in shown
+      for p in (*edges['rows'][b], *edges['cols'][b])
+  ]
   for b in shown:
-    nd = run.nodes[b]
+    r, c = edges['rows'][b], edges['cols'][b]
     lines.append(
         dict(kind='outline',
-             pts=rnd(
-                 np.concatenate(
-                     [nd[0, :], nd[:, -1], nd[-1, ::-1], nd[::-1, 0]]))))
-  for b in shown:
-    if run.layout.region[b] == 'sol' and run.layout.under.get(
-        b) is not None:  # its inner edge: the separatrix
-      lines.append(dict(kind='sep', pts=rnd(run.nodes[b][0, :])))
+             pts=rnd(np.concatenate([r[0], c[-1], r[-1][::-1], c[0][::-1]]))))
+  for b, row in vp.separatrix_rows(run, blocks):  # its inner edge, or its LCFS
+    lines.append(dict(kind='sep', pts=rnd(edges['rows'][b][row])))
   w = gv.wall(run)
   if w is not None:
     lines.append(dict(kind='wall', pts=rnd(w)))
@@ -199,13 +207,20 @@ def movie_data(run,
         for j in range(nt):
           rects += [x0 + j, y0 + h * i / nr, h / nr, 1.0 if nr <= 8 else 0.0]
           cells.append(off[b] + i * nt + j)
+      m = run.layout.lcfs.get(b)
       for r, (_, rreg, frac) in enumerate(RINGS):
-        # a ring's band: SOL rings on the SOL band (and on a one-band strip), core/PF rings on the band under it
-        if (band in ('sol', 'all')) == (rreg == 'sol'):
+        # a ring's band: SOL rings on the SOL band (and on a one-band strip), core/PF rings on the band under it; a
+        # block holding closed and open field lines: SOL rings on its rows from its LCFS on, the others under it
+        if m is not None:
+          lo, hi = (m, nr - 1) if rreg == 'sol' else (0, m - 1)
+          row = lo + int(round(frac * (hi - lo)))
+        elif (band in ('sol', 'all')) == (rreg == 'sol'):
           row = int(round(frac * (nr - 1)))
-          cols[r][x0:x0 + nt] = off[b] + row * nt + np.arange(nt)
-          rings[r].setdefault(
-              'rows', {})[f'{len(strips)}:{x0}'] = [y0 + h * row / nr, h / nr]
+        else:
+          continue
+        cols[r][x0:x0 + nt] = off[b] + row * nt + np.arange(nt)
+        rings[r].setdefault(
+            'rows', {})[f'{len(strips)}:{x0}'] = [y0 + h * row / nr, h / nr]
     strips.append(
         dict(title=st.title,
              width=st.width,
@@ -219,13 +234,9 @@ def movie_data(run,
       rings[r]['strips'].append(cols[r].tolist())
 
   # midplane profiles of the same quantity and mode, from the cache
-  fr0 = gv.frame(run, allf[0])
   sides = []
-  for side in [
-      s for s in ('outboard', 'inboard')
-      if s in run.layout.stacks and gv.stack_rows(run, s, sel).any()
-  ]:
-    R, _, rsep = gv.midplane_profile(run, fr0, side, qty)
+  for side in vp.midplane_sides(run, sel):
+    R, rsep = gv.midplane_radii(run, side)
     x, xsep, xlab = vp.side_coordinate(R, rsep, side, x_mode)
     P = vp.mode_values(summ[f'mid|{side}|{qty}'].astype(np.float64), rows, mode,
                        kind, scale) * (100 if rel else 1)
@@ -235,7 +246,7 @@ def movie_data(run,
     sides.append(
         dict(name=f'{side} midplane',
              x=rnd(x[o]),
-             sep=float(xsep),
+             sep=float(xsep) if np.isfinite(xsep) else None,
              xlabel=tl.plain(xlab),
              v=_b64(P[:, o].astype(np.float32)),
              pg=pg if mode == 'value' else
@@ -257,7 +268,7 @@ def movie_data(run,
     drawn = np.zeros(bad.shape[1], bool)
     drawn[keep] = True
     bad &= drawn
-  ts, tu = vp.time_unit(float(summ['t'][-1]))
+  ts, tu = vp.time_unit(summ['t'])
   species = next((s for s in run.species if qty.endswith(f'_{s}')),
                  'ion' if qty == 'mach' else None)
   # pgkyl commands (pgkyl_cmd) for a click on a cell: the page fills in the block, the file's indices, the frame
@@ -267,7 +278,7 @@ def movie_data(run,
       int(run.nodes[b].shape[0] - 1),
       int(run.nodes[b].shape[1] - 1)
   ] for b in range(run.nb)],
-            flip=bool(run.flip),
+            flip=[run.reversed(b) for b in range(run.nb)],
             ref=None if mode == 'value' else [
                 allf[0] if mode == 'change' else allf[max(r - 1, 0)]
                 for r in rows.tolist()
@@ -288,15 +299,21 @@ def movie_data(run,
                 extend=extend),
       quads=_b64(quads),
       lines=lines,
+      grid_note=edges['note'],
+      poly=_b64(poly) if poly is not None else '',
+      poly_n=poly.shape[1] // 2 if poly is not None else 4,
       boxes={
-          k: list(v)
+          k: None if v is None else list(v)
           for k, v in vp.zoom_boxes(run, sel, mirror).items()
       },
       mirror=len(vp.z_signs(run, mirror)) == 2,
       rz=_b64(keep.astype(np.int32)),
       rz_note='' if sel is None else f' (blocks {vp.block_list(shown)})',
-      st_caption=('cell along the strip: target → X point → … → target'
-                  if run.layout.targets else 'cell along the strip (θ)'),
+      st_caption=(
+          'cell along the strip (θ): its SOL rows end on the sheath at both ends'
+          if run.layout.lcfs else
+          'cell along the strip: target → X point → … → target'
+          if run.layout.targets else 'cell along the strip (θ)'),
       strips=strips,
       rings=rings,
       bad=[np.nonzero(r)[0].tolist() for r in bad],
@@ -311,16 +328,29 @@ def movie_data(run,
       pg=pg)
 
 
+def layer_kinds(layers):
+  """The Movie's layers for the switches layers (viewer_plots.Layers): what the poloidal plane draws, 'quantity'
+    (the cells) and the kinds of movie_data's lines."""
+  return [
+      k for k, on in (('quantity', layers.quantity), ('grid', layers.grid),
+                      ('outline', layers.outlines), ('sep', layers.separatrix),
+                      ('wall', layers.wall)) if on
+  ]
+
+
 class Movie(anywidget.AnyWidget):
   """The page-side player: data (movie_data), look (movie_look), zoom (a key of data['boxes']), frame (the frame
     number shown; the page sets it on pause / scrub / step, the notebook sets it from its slider), probe (the cell a
     click picked; a click on the space-time strip also moves to that time), background (background_ref: the device
-    picture BackgroundLoader put into the page and where it goes; {} for none)."""
+    picture BackgroundLoader put into the page and where it goes; {} for none), layers (layer_kinds: what the poloidal
+    plane draws: 'quantity', the cells, and the kinds of data['lines'])."""
   data = traitlets.Dict().tag(sync=True)
   look = traitlets.Dict().tag(sync=True)
   zoom = traitlets.Unicode('whole domain').tag(sync=True)
   background = traitlets.Dict({}).tag(sync=True)
-  frame = traitlets.Int(0).tag(sync=True)
+  layers = traitlets.List(layer_kinds(vp.Layers())).tag(sync=True)
+  # the frame shown; None: no frame (the empty run)
+  frame = traitlets.Int(0, allow_none=True).tag(sync=True)
   probe = traitlets.Int(-1).tag(
       sync=True
   )  # the probed cell (cell_offsets order), set by a click on the page
@@ -403,7 +433,7 @@ function render({ model, el }) {
     const P = D.pg.blocks; let b = 0;
     for (let k = 0; k < P.length; k++) if (P[k][0] <= c) b = k;
     const [o, nr, nt] = P[b], iv = Math.floor((c - o) / nt);
-    return { b, i: D.pg.flip ? nr - 1 - iv : iv, j: (c - o) % nt };
+    return { b, i: D.pg.flip[b] ? nr - 1 - iv : iv, j: (c - o) % nt };
   }
   function showCell(c) {
     if (!D.pg || c < 0 || model.get('probe') !== c) { cmd.hide(); return; }
@@ -456,33 +486,41 @@ function render({ model, el }) {
   function buildRZ() {
     const b = D.boxes[model.get('zoom')] || D.boxes['whole domain'];
     const ml = 42, mr = 8, mt = 24, mb = 34, pw = geo.LW - ml - mr, ph = geo.rzH - mt - mb;
+    if (!b) {   // nothing to frame (the empty run): the plot area with its titles, no cell, no axis values
+      geo.rz = { b, paths: [], mpaths: [], lines: [], ml, mt, mb, pw, ph, view: model.get('zoom') }; return; }
     const s = Math.min(pw / (b[1] - b[0]), ph / (b[3] - b[2]));
     // the view's box centred in the plot area, but never so far right that the area shows R < 0 (nothing is there)
     const ox = Math.min(ml + (pw - s * (b[1] - b[0])) / 2, Math.max(ml, ml + b[0] * s)),
           oy = mt + (ph - s * (b[3] - b[2])) / 2;
     const X = R => ox + (R - b[0]) * s, Y = Z => oy + (b[3] - Z) * s;
+    // each cell the region its edges bound: curves (D.poly, D.poly_n points a cell), else its quadrilateral
+    const V = D.poly_n || 4, cp = D.poly ? f32(D.poly) : quads;
+    const outline = (c, sz) => { const q = cp.subarray(2 * V * c, 2 * V * (c + 1)), p = new Path2D();
+      p.moveTo(X(q[0]), Y(sz * q[1])); for (let v = 1; v < V; v++) p.lineTo(X(q[2 * v]), Y(sz * q[2 * v + 1]));
+      p.closePath(); return p; };
     const paths = [], cen = new Float32Array(2 * nc);
     for (let c = 0; c < nc; c++) {
-      const q = quads.subarray(8 * c, 8 * c + 8), p = new Path2D();
-      p.moveTo(X(q[0]), Y(q[1])); p.lineTo(X(q[2]), Y(q[3])); p.lineTo(X(q[4]), Y(q[5])); p.lineTo(X(q[6]), Y(q[7]));
-      p.closePath(); paths.push(p);
+      const q = quads.subarray(8 * c, 8 * c + 8);
+      paths.push(outline(c, 1));
       cen[2 * c] = X((q[0] + q[2] + q[4] + q[6]) / 4); cen[2 * c + 1] = Y((q[1] + q[3] + q[5] + q[7]) / 4);
     }
-    const line = (l, sz) => { const p = new Path2D(); for (let i = 0; i < l.pts.length; i += 2)
+    const trace = (p, l, sz) => { for (let i = 0; i < l.pts.length; i += 2)
       (i ? p.lineTo(X(l.pts[i]), Y(sz * l.pts[i + 1])) : p.moveTo(X(l.pts[i]), Y(sz * l.pts[i + 1])));
-      return { kind: l.kind, p }; };
-    const lines = D.lines.map(l => line(l, 1));
+      return p; };
+    const line = (l, sz) => ({ kind: l.kind, p: trace(new Path2D(), l, sz) });
+    // the grid (every cell edge) in one path, stroked once, under the other lines
+    const grid = { kind: 'grid', p: new Path2D() }, lines = [grid];
+    for (const l of D.lines) if (l.kind === 'grid') trace(grid.p, l, 1); else lines.push(line(l, 1));
     // a half domain shown whole (D.mirror): each cell, block outline and separatrix again, mirrored across Z = 0 (the
     // wall is the whole vessel already); a mirrored cell is drawn, marked and probed as its original
     const mpaths = [], mcen = new Float32Array(D.mirror ? 2 * nc : 0);
     if (D.mirror) {
       for (let c = 0; c < nc; c++) {
-        const q = quads.subarray(8 * c, 8 * c + 8), p = new Path2D();
-        p.moveTo(X(q[0]), Y(-q[1])); p.lineTo(X(q[2]), Y(-q[3])); p.lineTo(X(q[4]), Y(-q[5])); p.lineTo(X(q[6]), Y(-q[7]));
-        p.closePath(); mpaths.push(p);
+        const q = quads.subarray(8 * c, 8 * c + 8);
+        mpaths.push(outline(c, -1));
         mcen[2 * c] = cen[2 * c]; mcen[2 * c + 1] = Y(-(q[1] + q[3] + q[5] + q[7]) / 4);
       }
-      for (const l of D.lines) if (l.kind !== 'wall') lines.push(line(l, -1));
+      for (const l of D.lines) if (l.kind === 'grid') trace(grid.p, l, -1); else if (l.kind !== 'wall') lines.push(line(l, -1));
     }
     // the plot area shows more than the view's box where their shapes differ: the R and Z it spans
     const vis = [b[0] + (ml - ox) / s, b[0] + (ml + pw - ox) / s, b[3] - (mt + ph - oy) / s, b[3] - (mt - oy) / s];
@@ -535,21 +573,28 @@ function render({ model, el }) {
     x.save(); x.beginPath(); x.rect(g.ml, g.mt, g.pw, g.ph); x.clip();
     // the device picture (BackgroundLoader), on the R-Z axes by its extent, under the cells
     const bd = model.get('background') || {}, bim = bd.key && (window.__gkvBackground || {})[bd.key];
-    if (bim && bim.complete && bim.naturalWidth) {
+    if (bim && bim.complete && bim.naturalWidth && g.b) {
       const e = bd.extent;
       x.globalAlpha = bd.opacity ?? 1;
       x.drawImage(bim, g.X(e[0]), g.Y(e[3]), (e[1] - e[0]) * g.s, (e[3] - e[2]) * g.s);
       x.globalAlpha = 1;
     }
-    for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); if (D.mirror) x.fill(g.mpaths[c]); }
+    const on = model.get('layers') || [];   // what the sidebar's switches leave drawn (mirrored too)
+    const cells = on.includes('quantity');
+    if (cells) for (const c of rzc) { x.fillStyle = lut[ci(c, i0, i1, a)]; x.fill(g.paths[c]); if (D.mirror) x.fill(g.mpaths[c]); }
     for (const l of g.lines) {
-      x.setLineDash(l.kind === 'sep' ? [4, 2] : []); x.globalAlpha = l.kind === 'outline' ? 0.6 : 1;
-      x.lineWidth = l.kind === 'outline' ? 0.4 : l.kind === 'sep' ? 0.9 : 1.1;
+      if (!on.includes(l.kind)) continue;
+      x.setLineDash(l.kind === 'sep' ? [4, 2] : []);
+      x.globalAlpha = l.kind === 'outline' ? 0.6 : l.kind === 'grid' ? 0.45 : 1;
+      x.lineWidth = l.kind === 'grid' ? 0.5 : l.kind === 'outline' ? 0.4 : l.kind === 'sep' ? 0.9 : 1.1;
       x.strokeStyle = l.kind === 'outline' ? L.muted : l.kind === 'sep' ? L.ink : L.ink2; x.stroke(l.p);
     }
     x.setLineDash([]); x.globalAlpha = 1;
-    for (const c of D.bad[i0]) { cross(x, g.cen[2 * c], g.cen[2 * c + 1]);
+    if (cells) for (const c of D.bad[i0] || []) { cross(x, g.cen[2 * c], g.cen[2 * c + 1]);
       if (D.mirror) cross(x, g.mcen[2 * c], g.mcen[2 * c + 1]); }
+    if (on.includes('grid') && D.grid_note)   // the grid's edges as chords: said on the plane
+      text(x, fitText(x, [D.grid_note, D.grid_note.split(':')[0]], g.pw - 8, 10), g.ml + 4, g.mt + g.ph - 6,
+           { size: 10 });
     const pr = model.get('probe');
     if (pr >= 0 && pr < nc && drawn[pr]) for (const p of D.mirror ? [g.paths[pr], g.mpaths[pr]] : [g.paths[pr]]) {
       x.lineWidth = 2.5; x.strokeStyle = L.surf; x.stroke(p); x.lineWidth = 1.5; x.strokeStyle = L.accent; x.stroke(p); }
@@ -561,11 +606,14 @@ function render({ model, el }) {
                        geo.LW - g.ml - 4, 13);
     text(x, tt, g.ml, 16, { size: 13, color: L.ink });
     // axes: a few round R and Z values over the whole plot area (the step from the view's box)
-    const b = g.b, v = g.vis, sr = niceStep(b[1] - b[0], 4), sz = niceStep(b[3] - b[2], 6);
-    for (let R = Math.ceil(v[0] / sr) * sr; R <= v[1] + 1e-9; R += sr)
-      text(x, fmt(+R.toFixed(6)), g.X(R), geo.rzH - g.mb + 16, { align: 'center' });
-    for (let Z = Math.ceil(v[2] / sz) * sz; Z <= v[3] + 1e-9; Z += sz)
-      text(x, fmt(+Z.toFixed(6)), g.ml - 6, g.Y(Z), { align: 'right', base: 'middle' });
+    const b = g.b, v = g.vis;
+    if (b) {   // (no box, the empty run: no axis values)
+      const sr = niceStep(b[1] - b[0], 4), sz = niceStep(b[3] - b[2], 6);
+      for (let R = Math.ceil(v[0] / sr) * sr; R <= v[1] + 1e-9; R += sr)
+        text(x, fmt(+R.toFixed(6)), g.X(R), geo.rzH - g.mb + 16, { align: 'center' });
+      for (let Z = Math.ceil(v[2] / sz) * sz; Z <= v[3] + 1e-9; Z += sz)
+        text(x, fmt(+Z.toFixed(6)), g.ml - 6, g.Y(Z), { align: 'right', base: 'middle' });
+    }
     text(x, 'R (m)', g.ml + g.pw / 2, geo.rzH - 6, { align: 'center' });
     x.save(); x.translate(11, g.mt + g.ph / 2); x.rotate(-Math.PI / 2); text(x, 'Z (m)', 0, 0, { align: 'center' }); x.restore();
   }
@@ -702,6 +750,7 @@ function render({ model, el }) {
     const a = interp.checked && playing ? pos - i0 : 0;
     drawRZ(i0, i1, a); drawStrips(i0, i1, a); drawST(i0 + a); drawProf(i0, i1, a);
     scrub.value = i0;
+    if (!n) { tlab.textContent = 'no frames (no run)'; return; }   // the empty run: nothing to play
     if (D.frames[i0] !== lastSent) {   // the tabs' live charts (LivePlot) follow, in the page
       lastSent = D.frames[i0];
       window.dispatchEvent(new CustomEvent('gkv:frame', { detail: { frame: lastSent } }));
@@ -711,7 +760,7 @@ function render({ model, el }) {
   }
 
   // ---------------------------------------------------------------------------------------------- playback
-  function sync() { const k = D.frames[Math.min(n - 1, Math.floor(pos + 1e-9))];
+  function sync() { if (!n) return; const k = D.frames[Math.min(n - 1, Math.floor(pos + 1e-9))];
     if (model.get('frame') !== k) { model.set('frame', k); model.save_changes(); } }
   function tick(ts) {
     if (!playing) return;
@@ -760,11 +809,12 @@ function render({ model, el }) {
   }); };
   cv.prof.onclick = e => {   // a midplane panel: its profile's command at the shown frame
     const k = Math.floor((e.offsetY - 4) / geo.PH), p = sides[k];
-    if (!p || !p.pg) return;
+    if (!p || !p.pg || !n) return;
     const f = Math.min(n - 1, Math.floor(pos + 1e-9));
     cmd.show([{ name: `${p.name} at frame ${D.frames[f]}`, text: fillT(p.pg, { frame: D.frames[f] }) }], '· ' + p.name);
   };
   btn.onclick = () => (playing ? pause() : play());
+  for (const c of [btn, $('.prev'), $('.next'), scrub]) c.disabled = !n;   // the empty run: the controls, idle
   $('.prev').onclick = () => step(-1); $('.next').onclick = () => step(1);
   scrub.oninput = () => { if (playing) { playing = false; cancelAnimationFrame(raf); btn.innerHTML = ICON.play; }
     pos = +scrub.value; draw(); };
@@ -781,6 +831,7 @@ function render({ model, el }) {
     if (j >= 0 && j !== Math.floor(pos + 1e-9)) { pos = j; draw(); } });
   model.on('change:zoom', () => { buildRZ(); draw(); });
   model.on('change:background', () => { if (!playing) draw(); });
+  model.on('change:layers', () => { if (!playing) draw(); });
   const onBackground = () => { if (!playing) draw(); };   // the picture arrived (BackgroundLoader)
   window.addEventListener('gkv:background', onBackground);
   model.on('change:probe', () => { if (!playing) draw(); if (model.get('probe') < 0) cmd.hide(); });
@@ -794,7 +845,8 @@ function render({ model, el }) {
   draw = () => { _draw(); el.dataset.draws = ++draws; };
   // for the checks: the canvas pixel of a point (R, Z) on the poloidal plane, and the view's box [R0, R1, Z0, Z1]
   el.__rz = { px: (R, Z) => [geo.rz.X(R) * dpr(), geo.rz.Y(Z) * dpr()], box: () => geo.rz.b,
-              area: () => [geo.rz.ml, geo.rz.mt, geo.rz.ml + geo.rz.pw, geo.rz.mt + geo.rz.ph].map(v => v * dpr()) };
+              area: () => [geo.rz.ml, geo.rz.mt, geo.rz.ml + geo.rz.pw, geo.rz.mt + geo.rz.ph].map(v => v * dpr()),
+              lines: () => model.get('layers') || [] };
   applyLook(); layout(); draw();
   // re-lay out on a width change, on the next animation frame (not inside the observer's callback)
   let width = el.clientWidth, pending = 0;
@@ -1206,6 +1258,6 @@ def live_plot(fig, summ, frame, frames=None, pal=None, name='chart'):
   }
   return LivePlot(fig=json.loads(fig.to_json()),
                   live=live,
-                  frame=int(frame),
+                  frame=-1 if frame is None else int(frame),
                   slides=slides,
                   name=name)

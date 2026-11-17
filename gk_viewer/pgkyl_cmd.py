@@ -276,9 +276,12 @@ def midplane(run, side, qty, k='{frame}', blocks=None, history=False):
 
 def plate(run, tg, k='{frame}'):
   """|q_par| along a target plate (the plate cell of its leg block, across the SOL)."""
-  nt = run.nodes[tg.leg].shape[1] - 1
+  nr, nt = (n - 1 for n in run.nodes[tg.leg].shape[:2])
   needs, e, lab = recipe(run, 'q_par')
-  parts = _group(_loads(run, tg.leg, needs, k, f' --z1 {tg.j % nt}'),
+  # its rows from the plate's first open one (the files' psi index: a limited block's SOL rows only)
+  lo, hi = sorted(run.file_row(tg.leg, i) for i in (tg.open_row, nr - 1))
+  rows = f' --z0 {lo}:{hi + 1}' if tg.open_row else ''
+  parts = _group(_loads(run, tg.leg, needs, k, f'{rows} --z1 {tg.j % nt}'),
                  e + ' abs',
                  label='|q_par| (MW m^-2)')
   return _cmd(run, parts + ['plot --xlabel psi'], [
@@ -435,7 +438,11 @@ NONE = {
     'neg':
     'no pgkyl equivalent: a count of cells with n ≤ 0 over every block (gkview.summary)',
     'thomson':
-    'no pgkyl equivalent: Thomson n_e from Flux (thomson.py), not simulation output',
+    'no pgkyl equivalent: Thomson n_e / T_e from Flux (thomson.py), not simulation output',
+    'chers':
+    'no pgkyl equivalent: CHERS T_i from Flux (thomson.py), not simulation output',
+    'transp':
+    'no pgkyl equivalent: TRANSP T_i / n_D from Flux (thomson.py, flux_transp.py), not simulation output',
     'lambda':
     'λq has no pgkyl command (gkview.target_heat_flux: 63 % of the plate\'s q_par); click a point for '
     'the plate\'s q_par at that frame',

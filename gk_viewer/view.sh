@@ -41,7 +41,7 @@ if [ ! -x "$BIN/marimo" ]; then
     fi
 fi
 [ -e "$GK_VIEWER_DATA/viewer.json" ] ||
-    echo "no viewer.json in $GK_VIEWER_DATA: copy viewer.example.json there and name your simulations (--path DIR opens one run without it)" >&2
+    echo "no viewer.json in $GK_VIEWER_DATA: the page opens with every panel empty; to fill it, copy viewer.example.json there and name your simulations (or --path DIR: one run)" >&2
 MODE=run
 case "${1:-}" in run|edit) MODE=$1; shift ;; esac
 if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then

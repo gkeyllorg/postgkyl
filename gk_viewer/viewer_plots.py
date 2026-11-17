@@ -30,6 +30,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker  # noqa: E402
 from matplotlib import font_manager, ft2font, patheffects  # noqa: E402
+from matplotlib.cm import ScalarMappable  # noqa: E402
+from matplotlib.collections import LineCollection, PolyCollection  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, LogNorm, Normalize  # noqa: E402
 import numpy as np  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
@@ -512,9 +514,10 @@ def _scale(steps):
   return [[i / (len(steps) - 1), c] for i, c in enumerate(steps)]
 
 
-def time_unit(t_max):
-  """(scale, label) of the time axes: us for runs shorter than 1 ms."""
-  return (1e6, 'µs') if t_max < 1e-3 else (1e3, 'ms')
+def time_unit(t):
+  """(scale, label) of the time axes over the times t (a run's last time, or all of them): us for runs shorter than
+  1 ms (and for no time at all)."""
+  return (1e6, 'µs') if np.max(t, initial=0.0) < 1e-3 else (1e3, 'ms')
 
 
 def nice_limit(x):
@@ -616,7 +619,7 @@ def colour_norm(run, vals, qty, mode, whole_run, log, summ, pal, cells=None):
   label, sym, unit, scale, kind = gv.quantities(run)[qty]
   u = f' (${unit}$)' if unit else ''
   div = LinearSegmentedColormap.from_list(f'div_{pal.name}', pal.div)
-  allv = np.concatenate([v.ravel() for v in vals.values()])
+  allv = np.concatenate([np.zeros(0)] + [v.ravel() for v in vals.values()])
   allv = allv[np.isfinite(allv)]
   whole = whole_run and summ is not None and f'pct|{qty}' in summ
   pct = None
@@ -691,11 +694,11 @@ def _picture(path, stamp, max_px):
     return np.asarray(im)
 
 
-def device_background():
-  """(RGBA pixels, extent [R_left, R_right, Z_bottom, Z_top], opacity) of viewer.json's device picture
-  (gkview.device_image), for map_figure's background; None when there is none. Raises ValueError (gkview) or
-  OSError (an unreadable picture)."""
-  d = gv.device_image()
+def device_background(device):
+  """(RGBA pixels, extent [R_left, R_right, Z_bottom, Z_top], opacity) of a device's picture in viewer.json
+  (gkview.device_image; a run's: Run.device), for map_figure's background; None when there is none. Raises
+  ValueError (gkview) or OSError (an unreadable picture)."""
+  d = gv.device_image(device)
   if d is None:
     return None
   path, extent, opacity = d
@@ -709,10 +712,35 @@ def z_signs(run, mirror=False):
   return (1, -1) if mirror and run.layout.half else (1, )
 
 
+@dataclass(frozen=True)
+class Layers:
+  """What the poloidal plane draws, each on a switch of its own (the sidebar's; view keys of the same names): the
+  quantity's cells (and its colour bar where only they use it), the grid (every cell edge), the outline of every
+  block (the block boundaries and interfaces), the separatrix (dashed), the wall (the geqdsk's limiter). Cell edges
+  are curves (gkview.cell_edges). The unrolled strips keep their cells and lines: there the lines mark the bands and
+  segments they label."""
+  quantity: bool = True
+  grid: bool = False
+  outlines: bool = True
+  separatrix: bool = True
+  wall: bool = True
+
+
+def separatrix_rows(run, blocks=None):
+  """(block, node row) of the separatrix in the drawn blocks: the inner edge (row 0) of each SOL block with an
+  aligned block under it, and the LCFS row of a block holding closed and open field lines (Layout.lcfs)."""
+  lay = run.layout
+  return [(b, lay.lcfs.get(b, 0)) for b in shown_blocks(run, blocks) if (
+      lay.region[b] == 'sol' and lay.under.get(b) is not None) or b in lay.lcfs]
+
+
 def zoom_boxes(run, blocks=None, mirror=False):
   """name -> (R0, R1, Z0, Z1) views of the poloidal plane, from the layout ('whole domain': the chosen blocks;
-  mirror: a half domain shown whole, z_signs, with its other divertor's view too)."""
+  mirror: a half domain shown whole, z_signs, with its other divertor's view too). A run with no block (the empty
+  run): {'whole domain': None}, nothing to frame."""
   nd = run.nodes
+  if not run.nb:
+    return {'whole domain': None}
   allp = np.concatenate([
       nd[b].reshape(-1, 2) * [1, sz] for b in shown_blocks(run, blocks)
       for sz in z_signs(run, mirror)
@@ -774,14 +802,16 @@ def map_figure(run,
                vals=None,
                slide=None,
                background=None,
-               mirror=False):
+               mirror=False,
+               layers=Layers()):
   """Poloidal plane (true R-Z, wall, separatrix) + every cell unrolled; x = cells with n <= 0 (any species).
     scale: a fixed_scale() dict (one colour scale over a movie's frames), else colour_norm's. blocks: draw only these
     (None: all; the colour scale and the 'whole domain' view are theirs). vals: block -> values to draw instead of the
     quantity (with scale; no n <= 0 marks), e.g. the diffusivity. slide: laid out for a slide (SLIDE_SIZES): 'full',
     the whole figure; 'half', the poloidal plane alone (the strips need the width); None: the page's.
     background: device_background(), drawn behind the cells on the poloidal plane (None: none). mirror: a half
-    domain drawn whole on the poloidal plane, its mirror image across Z = 0 too (z_signs; the strips stay one half)."""
+    domain drawn whole on the poloidal plane, its mirror image across Z = 0 too (z_signs; the strips stay one half).
+    layers: what the poloidal plane draws (Layers; mirrored with its cells)."""
   shown = shown_blocks(run, blocks)
   sel = None if len(shown) == run.nb else set(shown)
   if vals is None:
@@ -882,33 +912,54 @@ def map_figure(run,
                 zorder=0,
                 interpolation='antialiased')
     kw = dict(cmap=cmap, norm=norm, shading='flat')
+    edges = gv.cell_edges(run)  # every line along cell edges: curves
+    sep = dict(separatrix_rows(run, blocks)) if layers.separatrix else {}
     for b, sz in [(b, sz) for sz in z_signs(run, mirror) for b in shown]:
-      nd = run.nodes[b] * [1, sz]
-      m = ax.pcolormesh(nd[..., 0],
-                        nd[..., 1],
-                        np.ma.masked_invalid(vals[b]),
-                        edgecolors='none',
-                        **kw)
-      outline = np.concatenate([nd[0, :], nd[:, -1], nd[-1, ::-1], nd[::-1, 0]])
-      ax.plot(outline[:, 0],
-              outline[:, 1],
-              color=pal.muted,
-              lw=lw(0.35),
-              alpha=0.7)
-      if lay.region[b] == 'sol' and lay.under.get(
-          b) is not None:  # its inner edge: the separatrix
-        ax.plot(nd[0, :, 0],
-                nd[0, :, 1],
+      rows, cols = edges['rows'][b] * [1, sz], edges['cols'][b] * [1, sz]
+      if layers.quantity:  # each cell the region its edges bound (curves where the run gives them)
+        poly = gv.cell_polygons(run, b) * [1, sz]
+        ax.add_collection(
+            PolyCollection(poly.reshape(-1, *poly.shape[2:]),
+                           array=np.ma.masked_invalid(vals[b]).ravel(),
+                           cmap=cmap,
+                           norm=norm,
+                           edgecolors='none',
+                           antialiaseds=False))
+      if layers.grid:  # every cell edge, under the outlines
+        ax.add_collection(
+            LineCollection([*rows, *cols],
+                           colors=pal.ink2,
+                           linewidths=lw(0.25),
+                           alpha=0.45))
+      if layers.outlines:
+        outline = np.concatenate(
+            [rows[0], cols[-1], rows[-1][::-1], cols[0][::-1]])
+        ax.plot(outline[:, 0],
+                outline[:, 1],
+                color=pal.muted,
+                lw=lw(0.35),
+                alpha=0.7)
+      if b in sep:  # the separatrix: its inner edge, or its LCFS row
+        ax.plot(rows[sep[b], :, 0],
+                rows[sep[b], :, 1],
                 color=pal.ink,
                 lw=lw(0.8),
                 ls=(0, (4, 2)))
-    w = gv.wall(run)
+    w = gv.wall(run) if layers.wall else None
     if w is not None:
       ax.plot(w[:, 0], w[:, 1], color=pal.ink2, lw=lw(1.0))
+    if layers.grid and not edges['curved']:  # say so where the grid shows chords
+      ax.text(0.01,
+              0.01,
+              edges['note'],
+              transform=ax.transAxes,
+              fontsize=fs(7.5),
+              color=pal.ink2,
+              va='bottom')
     pts = np.array([
         gv.cell_centres(run.nodes[b])[i, j] * [1, sz] for b in shown
         for i, j in np.argwhere(bad[b]) for sz in z_signs(run, mirror)
-    ])
+    ]) if layers.quantity else np.zeros((0, 2))
     if len(pts):
       ax.scatter(pts[:, 0],
                  pts[:, 1],
@@ -919,9 +970,10 @@ def map_figure(run,
                  zorder=5,
                  path_effects=halo)
     boxes = zoom_boxes(run, sel, mirror)
-    r0, r1, z0, z1 = boxes.get(zoom, boxes['whole domain'])
-    ax.set_xlim(r0, r1)
-    ax.set_ylim(z0, z1)
+    box = boxes.get(zoom, boxes['whole domain'])
+    if box is not None:  # None: nothing drawn (the empty run), the axes left as they are
+      ax.set_xlim(box[0], box[1])
+      ax.set_ylim(box[2], box[3])
     ax.set_aspect('equal')
     # few, short tick labels: a zoomed view's 0.0025 m steps ('−0.0075') ran into each other and pushed the Z
     # label off the figure
@@ -944,6 +996,9 @@ def map_figure(run,
     axs = [] if slide == 'half' else [
         fig.add_subplot(gs[i, 1]) for i in range(nstrip)
     ]
+    # a strip's place with no strip in it (the empty run): empty
+    for axk in axs[len(strips):]:
+      axk.set_axis_off()
     for axk, st in zip(axs, strips):
       for b, x0, band in st.items:
         nr, nt = vals[b].shape
@@ -1008,18 +1063,21 @@ def map_figure(run,
                     fontfamily=title_font)
       for s in axk.spines.values():
         s.set_visible(False)
-    cax = fig.add_subplot(gs[0, 1] if slide == 'half' else gs[nstrip, 1])
-    cb = fig.colorbar(
-        m,
-        cax=cax,
-        orientation='vertical' if slide == 'half' else 'horizontal',
-        extend=extend)
-    cb.outline.set_visible(False)
-    if fmt:
-      cb.formatter = matplotlib.ticker.FuncFormatter(fmt)
-      cb.update_ticks()
-    cb.set_label(cblabel + ('   (x: n ≤ 0)' if len(pts) else ''),
-                 color=pal.ink2)
+    # the colour bar: the strips' and the plane's; none where neither shows the quantity (the plane alone, without it)
+    if layers.quantity or axs:
+      cax = fig.add_subplot(gs[0, 1] if slide == 'half' else gs[nstrip, 1])
+      cb = fig.colorbar(
+          ScalarMappable(norm=norm, cmap=cmap),
+          cax=cax,
+          orientation='vertical' if slide == 'half' else 'horizontal',
+          extend=extend)
+      cb.outline.set_visible(False)
+      if fmt:
+        cb.formatter = matplotlib.ticker.FuncFormatter(fmt)
+        cb.update_ticks()
+      marked = len(pts) or (axs and any(bad[b].any() for b in shown))
+      cb.set_label(cblabel + ('   (x: n ≤ 0)' if marked else ''),
+                   color=pal.ink2)
     if title:
       fig.text(0.05 if slide is None else 0.02,
                1 - 6 / 72 / height,
@@ -1195,6 +1253,11 @@ def _layout(fig, height, pal, t=60, b=50, l=60, r=20, gap=LEGEND_GAP, **kw):
       a.font.color = pal.ink
     if a.xref == 'paper' and a.yref == 'paper':  # subplot and column titles (no other text sits on the paper)
       a.font.family = head
+  # a curve with no point at all (the empty run's) keeps its legend entry: plotly lists only curves with a point
+  for tr in fig.data:
+    if tr.type == 'scatter' and tr.x is not None and not len(
+        tr.x) and tr.showlegend is not False:
+      tr.update(x=[None], y=[None])
   return fig
 
 
@@ -1694,6 +1757,15 @@ def envelope(t, v, nmax=8000):
   return np.append(tt, t[n:]), np.append(vv, v[n:])
 
 
+def midplane_sides(run, blocks=None):
+  """The midplanes a chart draws, outboard then inboard: those of the run's midplane stacks that hold a row of the
+  chosen blocks (None: every stack; the empty run's hold no block and are drawn empty)."""
+  return [
+      s for s in ('outboard', 'inboard') if s in run.layout.stacks and (
+          blocks is None or gv.stack_rows(run, s, blocks).any())
+  ]
+
+
 def side_coordinate(R, rsep, side, x_mode):
   """Distance from the separatrix (mm, positive into the SOL on either side) or R (m)."""
   if x_mode == 'R':
@@ -1710,61 +1782,84 @@ PROFILE_ROWS = [('density', 'n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'),
                  r'$u_{\parallel,\mathrm{i}}/c_\mathrm{s}$'),
                 ('potential', 'phi', r'$\phi$ (V)')]
 
+# how each measured source is drawn (thomson.profiles): a diagnostic's channels as open markers with bars, this
+# symbol; TRANSP's modelled zones as a wide pale line (None), dotted where TRANSP predicts the profile
+MEASURED_MARKER = {
+    'Thomson': 'circle-open',
+    'CHERS': 'diamond-open',
+    'TRANSP': None
+}
+MODEL_LINE = dict(width=5)
+MODEL_OPACITY = 0.45
 
-def thomson_trace(th, t0, t1, eq_s, side, rsep, x_mode, span, scale, pal,
-                  showlegend):
-  """Thomson n_e over the frames t0..t1 (s) on one side, in the profile figure's x coordinate (thomson.window_profile:
-    from the run's separatrix rsep at its time eq_s, moved by EFIT01's shift to each frame); None when no channel lies
-    in the run's span (Thomson does not reach the inboard SOL). Bars: the spread over the frames, or the fit error where
-    a channel has one valid frame."""
-  p = thomson.window_profile(th, side, t0, t1, eq_s, rsep)
+
+def measured_trace(p, side, rsep, x_mode, span, scale, pal, legend=None):
+  """A thomson.Profile in the profile figure's x coordinate (its distance from the separatrix put on the run's
+    separatrix rsep, m) in its species' colour, its values times scale; None when none of it lies in the run's span
+    (the run's x values: Thomson does not reach the inboard SOL, TRANSP stops at its boundary). Bars: the spread over
+    the window's samples, or the error where a channel has one sample (none for TRANSP). legend: its legend entry's
+    name (None: no entry)."""
   sign = 1.0 if side == 'outboard' else -1.0
-  x, _, _ = side_coordinate(rsep + sign * p['d'], rsep, side, x_mode)
+  x, _, _ = side_coordinate(rsep + sign * p.d, rsep, side, x_mode)
   inside = (x >= np.min(span)) & (x <= np.max(span))
   if not inside.any():
     return None
-  one = p['n'] == 1
-  bar = np.where(one, p['err'], p['ne_sd'])
-  xbar = np.where(one, 0.0, p['d_sd']) * (1.0 if x_mode == 'R' else 1e3)
-  kind = np.where(one, 'fit error, 1 frame',
-                  [f'spread over {n} frames' for n in p['n']])
-  cd = [[float(a), float(b), str(k)]
-        for a, b, k in zip(p['R'][inside], (bar * scale)[inside], kind[inside])]
-  return go.Scatter(
-      x=x[inside],
-      y=p['ne'][inside] * scale,
-      mode='markers',
-      customdata=cd,
-      marker=dict(symbol='circle-open',
-                  size=7,
-                  color=pal.elc,
-                  line=dict(width=1.5)),
-      error_y=dict(type='data',
-                   array=(bar * scale)[inside],
-                   color=pal.elc,
-                   thickness=1,
-                   width=3),
-      error_x=dict(type='data',
-                   array=xbar[inside],
-                   color=pal.elc,
-                   thickness=1,
-                   width=0),
-      name=tl.html(
-          f'Thomson $n_\\mathrm{{e}}$ {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms'),
-      legendgroup='thomson',
-      showlegend=showlegend,
-      meta=dict(pgkyl=pc.NONE['thomson']),
-      hovertemplate=
-      'Thomson n_e: %{y:.4g} ± %{customdata[1]:.2g} (%{customdata[2]}), channel at R '
-      '%{customdata[0]:.3f} m<extra></extra>')
+  col = species_colour(pal, p.key.split('_', 1)[1])
+  one = p.n == 1
+  bar = np.where(one, p.err, p.v_sd) * scale
+  xbar = np.where(one, 0.0, p.d_sd) * (1.0 if x_mode == 'R' else 1e3)
+  spread = [
+      f'± {b:.2g} ({"error, 1 sample" if n == 1 else f"spread over {n} samples"})'
+      if np.isfinite(b) else '' for b, n in zip(bar, p.n)
+  ]
+  what = f'{p.label} {p.quantity}' + (', predicted by TRANSP\'s model'
+                                      if p.predicted else '')
+  common = dict(x=x[inside],
+                y=p.v[inside] * scale,
+                customdata=[[float(a), s]
+                            for a, s, k in zip(p.R, spread, inside) if k],
+                name=legend or tl.html(p.label),
+                legendgroup=p.source.lower(),
+                showlegend=legend is not None,
+                meta=dict(pgkyl=pc.NONE[p.source.lower()]),
+                hovertemplate=f'{what}: %{{y:.4g}} %{{customdata[1]}}, at R '
+                '%{customdata[0]:.3f} m<extra></extra>')
+  symbol = MEASURED_MARKER[p.source]
+  if symbol is None:
+    return go.Scatter(mode='lines',
+                      line=dict(MODEL_LINE,
+                                color=col,
+                                dash='dot' if p.predicted else 'solid'),
+                      opacity=MODEL_OPACITY,
+                      **common)
+  return go.Scatter(mode='markers',
+                    marker=dict(symbol=symbol,
+                                size=7,
+                                color=col,
+                                line=dict(width=1.5)),
+                    error_y=dict(type='data',
+                                 array=bar[inside],
+                                 color=col,
+                                 thickness=1,
+                                 width=3),
+                    error_x=dict(type='data',
+                                 array=xbar[inside],
+                                 color=col,
+                                 thickness=1,
+                                 width=0),
+                    **common)
 
 
-def thomson_note(run, fr, th, t0, t1):
-  """The line under the Thomson overlay: what is averaged, the beam flattop and the scan's equilibrium time against
-    the run's, how far the separatrix moves in the window, and EFIT01's separatrix against the run's own."""
-  k = (th.t >= t0) & (th.t <= t1)
+def measured_note(run, fr, th, t0, t1):
+  """The lines under the measured profiles: per source what is averaged and how it is placed (Thomson; CHERS, or why
+    none; TRANSP: its run, why, what it predicts, that it stops at its boundary, or why none); how far EFIT01's
+    separatrix moves over the window and where it sits against the run's own; the beam flattop and the scan's
+    equilibrium time against the run's."""
+  k = thomson.samples(th.t, t0, t1)
+  lo, hi = thomson.band(th, t0, t1)
+  span = f'{lo * 1e3:.1f} to {hi * 1e3:.1f} ms (the Thomson frames\' span)'
   out = [
-      f'Thomson n_e (MPTS {th.branch}, per-channel fits where VALID): the mean of {k.sum()} frame(s), '
+      f'Thomson n_e and T_e (MPTS {th.branch}, per-channel fits where VALID): the mean of {len(k)} frame(s), '
       f'{t0 * 1e3:.1f} to {t1 * 1e3:.1f} ms. Each frame\'s channels are placed from the run\'s separatrix, moved by '
       f'how far EFIT01\'s separatrix moves between {run.eq_ms} ms and that frame.'
   ]
@@ -1778,6 +1873,44 @@ def thomson_note(run, fr, th, t0, t1):
         f'{side.capitalize()}: EFIT01\'s separatrix moves {shift.min():+.1f} to {shift.max():+.1f} mm (in R) '
         f'from {run.eq_ms} ms over the window; its own position there, {off:+.1f} mm from the run\'s, is not '
         'used.')
+  ch = thomson.chers_in(th, lo, hi)
+  n = 0 if ch is None else len(thomson.samples(ch.t, lo, hi))
+  if ch is None:
+    out.append(f'CHERS T_i: {th.chers_why}.')
+  elif n == 0:
+    out.append(
+        f'CHERS T_i: no sample from {span} (its {len(ch.t)} samples run from {ch.t.min() * 1e3:.0f} to '
+        f'{ch.t.max() * 1e3:.0f} ms).')
+  else:
+    out.append(
+        f'CHERS T_i ({ch.name}, of the two analyses CT1 and CT2 the one with more valid points in the window, '
+        f'{thomson.CHERS_TIE} on a tie; points where VALID and T_i > 0): the mean of {n} sample(s) from {span}, '
+        'placed as Thomson\'s channels (each view\'s radius taken at the midplane). An impurity temperature, '
+        'taken as the deuterium one.')
+  tr = th.transp
+  if th.transp_why is None:
+    out.append(
+        'TRANSP: this file has none (fetched before TRANSP was added, or the sim-init workflow\'s copy); '
+        'Fetch from Flux adds it.')
+  elif tr is None:
+    out.append(f'TRANSP: none for this shot ({th.transp_why}).')
+  else:
+    n = len(thomson.samples(tr.t, lo, hi))
+    pred = [
+        f'{thomson.PREDICTS[f]} '
+        f'{"throughout" if not np.isfinite(t) else f"from {t * 1e3:.0f} ms"}'
+        for f, t in tr.predicts.items()
+    ]
+    out.append(
+        f'TRANSP run {tr.run} ({th.transp_why}): T_i and the thermal deuterium density n_D, '
+        + (f'the mean of {n} of its times from {span}'
+           if n else f'none of its times from {span}') +
+        ', each zone placed by its midplane distance from TRANSP\'s boundary (RMAJM), that boundary put on the '
+        'run\'s separatrix. TRANSP models the plasma inside its boundary only: its profiles stop there, nothing in '
+        'the SOL.' +
+        (f' It predicts {", ".join(pred)} with a transport model (lpredict in its namelist; dotted where the '
+         'window holds such times): there they are the model\'s, not fitted to measurements.'
+         if pred else ''))
   if th.pnb is None:
     out.append(
         'This file has no beam power (the sim-init workflow\'s copy), so no flattop: the window offers every '
@@ -1847,11 +1980,10 @@ def thomson_timeline(th, t0, t1, eq_s, pal=LOOKS['dark']):
       r'$\int n_\mathrm{e}\,\mathrm{d}l$ ($10^{19}\,\mathrm{m^{-2}}$)'),
                    row=rows,
                    col=1)
-  half = 0.5 * np.median(np.diff(
-      th.t)) * 1e3  # the band reaches half a frame past the window's end frames
+  lo, hi = thomson.band(th, t0, t1)  # half a frame past the window's end frames
   for r in range(1, rows + 1):
-    fig.add_vrect(x0=t0 * 1e3 - half,
-                  x1=t1 * 1e3 + half,
+    fig.add_vrect(x0=lo * 1e3,
+                  x1=hi * 1e3,
                   fillcolor=pal.elc,
                   opacity=0.18,
                   line_width=0,
@@ -1925,7 +2057,7 @@ def cmp_note(cmp, tu_scale=None):
     return ''
   if cmp.k < 0:
     return f'{CMP_LEGEND}: {cmp.label} (no frame of it near the shown time)'
-  ts, tu = tu_scale or time_unit(float(cmp.summ['t'][-1]))
+  ts, tu = tu_scale or time_unit(cmp.summ['t'])
   return f'{CMP_LEGEND}: {cmp.label}, its frame {cmp.k} ({cmp.dt * ts:+.3g} {tu} from the shown time)'
 
 
@@ -1939,7 +2071,8 @@ def profiles_figure(run,
                     cmp=None,
                     blocks=None):
   """Outboard and inboard midplane profiles: rows = quantity, both species; solid = shown frame, dotted = first.
-    measured = (Thomson data, t0, t1 in s): its n_e over that window on the density row, placed from the run's time.
+    measured = (thomson.Shot, t0, t1 in s): every measured profile over that window (thomson.profiles: Thomson n_e and
+    T_e, CHERS T_i, TRANSP T_i and n_D) on its row and species, placed from the run's separatrix at its time.
     cmp: a Cmp, its profiles at its matched frame (long dashes, following the movie). blocks: only the rows of these
     blocks (None: all)."""
   qs = gv.quantities(run)
@@ -1948,10 +2081,7 @@ def profiles_figure(run,
       if (r[1] in ('mach', 'phi') and r[1] in qs) or any(f'{r[1]}_{s}' in qs
                                                          for s in run.species)
   ]
-  sides = [
-      s for s in ('outboard', 'inboard')
-      if s in run.layout.stacks and gv.stack_rows(run, s, blocks).any()
-  ]
+  sides = midplane_sides(run, blocks)
   if not sides:
     raise ValueError(
         'none of the chosen blocks is on a midplane stack (the core and SOL blocks at Z = 0)'
@@ -1964,9 +2094,10 @@ def profiles_figure(run,
                  horizontal_spacing=0.07,
                  column_titles=[f'{s} midplane' for s in sides])
   qb = gv.quantities(cmp.run) if cmp is not None else {}
-  k0 = run.frames()[0]
+  k0 = next(iter(run.frames()), None)
   for c, side in enumerate(sides, 1):
     keep = np.nonzero(gv.stack_rows(run, side, blocks))[0]
+    meas = None  # this side's measured profiles: placed from the run's separatrix, known once a row is drawn
     for r, (title, base, ylab) in enumerate(rows, 1):
       keys = [(base, None)] if base in ('mach',
                                         'phi') else [(f'{base}_{s}', s)
@@ -2033,16 +2164,22 @@ def profiles_figure(run,
                         row=r,
                         col=c)
           seen.add('cmp')
-      if measured is not None and base == 'n':
-        tr = thomson_trace(*measured, run.eq_ms / 1e3, side, rsep, x_mode, x,
-                           scale, pal, 'thomson' not in seen)
-        if tr is not None:
-          seen.add('thomson')
-          fig.add_trace(tr, row=r, col=c)
-      fig.add_vline(x=xsep,
-                    line=dict(color=pal.muted, width=1, dash='dash'),
-                    row=r,
-                    col=c)
+      if measured is not None:
+        th, t0, t1 = measured
+        if meas is None:
+          meas = thomson.profiles(th, side, t0, t1, run.eq_ms / 1e3, rsep)
+        for p in [p for p in meas if p.key in {k for k, _ in keys}]:
+          tr = measured_trace(
+              p, side, rsep, x_mode, x, scale, pal, None if p.source in seen
+              else tl.html(f'{p.label}, {t0 * 1e3:.0f}–{t1 * 1e3:.0f} ms'))
+          if tr is not None:
+            seen.update({p.source} | ({'predicted'} if p.predicted else set()))
+            fig.add_trace(tr, row=r, col=c)
+      if np.isfinite(xsep):  # R of the empty run's separatrix: none
+        fig.add_vline(x=xsep,
+                      line=dict(color=pal.muted, width=1, dash='dash'),
+                      row=r,
+                      col=c)
       fig.update_yaxes(title_text=tl.html(ylab) if c == 1 else None,
                        row=r,
                        col=c)
@@ -2054,6 +2191,10 @@ def profiles_figure(run,
   legend_key(fig,
              'separatrix',
              line=dict(color=pal.muted, width=1, dash='dash'))
+  if 'predicted' in seen:
+    legend_key(fig,
+               'TRANSP, predicted by its model',
+               line=dict(MODEL_LINE, color=pal.ink2, dash='dot'))
   return _layout(fig, 190 * len(rows) + 120, pal, hovermode='x unified')
 
 
@@ -2066,7 +2207,7 @@ def history_figure(run,
                    pal=LOOKS['dark']):
   """The quantity at the outboard and inboard midplane over (radius, time); the shown frame's time marked."""
   label, sym, unit, scale, kind = gv.quantities(run)[qty]
-  ts, tu = time_unit(summ['t'][-1])
+  ts, tu = time_unit(summ['t'])
   sides = [
       s for s in ('outboard', 'inboard')
       if s in run.layout.stacks and f'mid|{s}|{qty}' in summ
@@ -2077,8 +2218,7 @@ def history_figure(run,
                  subplot_titles=[f'{s} midplane' for s in sides])
   for c, side in enumerate(sides, 1):
     Z = summ[f'mid|{side}|{qty}']
-    R, _, rsep = gv.midplane_profile(run, gv.frame(run, int(summ['frames'][0])),
-                                     side, qty)
+    R, rsep = gv.midplane_radii(run, side)
     x, xsep, xlab = side_coordinate(R, rsep, side, x_mode)
     with np.errstate(divide='ignore', invalid='ignore'):
       if mode == 'value':
@@ -2098,7 +2238,7 @@ def history_figure(run,
     o = np.argsort(x)
     fin = z[np.isfinite(z)]
     lim = np.percentile(np.abs(fin), 99) if len(fin) else 1.0
-    rng = dict(zmin=0, zmax=np.percentile(fin, 99)) if (
+    rng = dict(zmin=0, zmax=np.percentile(fin, 99) if len(fin) else 1.0) if (
         mode == 'value' and kind == 'pos') else dict(zmin=-lim, zmax=lim)
     cmd = pc.midplane(run, side, qty, history=True)
     if mode != 'value':
@@ -2116,15 +2256,18 @@ def history_figure(run,
         f'%{{x:.4g}}, t = %{{y:.4g}} {tu}: %{{z:.4g}}<extra></extra>'),
                   row=1,
                   col=c)
-    fig.add_hline(y=t_now * ts,
-                  line=dict(color=pal.ink, width=1),
-                  row=1,
-                  col=c,
-                  name='cursor-y')
-    fig.add_vline(x=xsep,
-                  line=dict(color=pal.ink2, width=1, dash='dash'),
-                  row=1,
-                  col=c)
+    # no time cursor without a frame shown (the empty run)
+    if np.isfinite(t_now):
+      fig.add_hline(y=t_now * ts,
+                    line=dict(color=pal.ink, width=1),
+                    row=1,
+                    col=c,
+                    name='cursor-y')
+    if np.isfinite(xsep):
+      fig.add_vline(x=xsep,
+                    line=dict(color=pal.ink2, width=1, dash='dash'),
+                    row=1,
+                    col=c)
     fig.update_xaxes(title_text=tl.html(xlab), row=1, col=c)
   fig.update_yaxes(title_text=tl.html(f'$t$ ({tu})'), row=1, col=1)
   fig = _layout(fig, 380, pal, t=80)
@@ -2143,6 +2286,8 @@ def _cursor(fig, t_now, ts, rows_cols, pal):
   """The shown frame's time on these subplots: shapes named 'cursor-x', moved by a LivePlot as the movie plays
     (layout.meta.tscale: the figure's time unit)."""
   fig.update_layout(meta=dict(fig.layout.meta or {}, tscale=ts))
+  if not np.isfinite(t_now):  # no frame shown (the empty run)
+    return
   for r, c in rows_cols:
     fig.add_vline(x=t_now * ts,
                   line=dict(color=pal.ink, width=1),
@@ -2166,9 +2311,9 @@ def targets_figure(run,
   """q_par at each target against the midplane distance of its flux surface (shown frame, lambda_q as vertical
     lines); lambda_q and the peak q_par over time. cmp: a Cmp, its targets of the same name in long dashes. blocks:
     the targets whose leg is chosen."""
-  ts, tu = time_unit(summ['t'][-1])
+  ts, tu = time_unit(summ['t'])
   tgs = shown_targets(run, blocks)
-  if not tgs:
+  if not tgs and run.nb:  # the empty run: the panels, empty
     raise ValueError(
         'no target among the chosen blocks (a target belongs to the SOL block holding its plate)'
         if run.layout.targets else
@@ -2293,8 +2438,8 @@ def targets_figure(run,
                     row=1,
                     col=c)
   outb = run.layout.stacks.get('outboard')
-  if outb is not None:
-    sol = gv.mid_edges(run.nodes[outb.sol], outb.j)
+  if outb is not None and outb.sol is not None:
+    sol = gv.mid_edges(run.nodes[outb.sol], outb.j)[outb.sep_row:]
     cell = np.abs(np.diff(sol)).max() * 1e3
     if len(sol) - 1 <= 8:  # a coarse outboard SOL: is lambda_q resolved at all?
       fig.add_hline(y=cell,
@@ -2352,7 +2497,7 @@ def timetraces_figure(run,
                       blocks=None):
   """Time step; cells with n <= 0; particle content; field energy; volume-mean change by region. cmp: a Cmp (with
     its hist), the same traces in long dashes. blocks: a choice of blocks, its volume mean added to the region rows."""
-  ts, tu = time_unit(summ['t'][-1])
+  ts, tu = time_unit(summ['t'])
   fig = subplots(rows=3,
                  cols=2,
                  vertical_spacing=0.11,
@@ -2586,7 +2731,10 @@ def timetraces_figure(run,
         title_text=tl.html(f'${base}_\\mathrm{{{tag}}}$ change (%)'),
         row=3,
         col=c)
-    fig.update_xaxes(range=[t[0], t[-1] + room * (t[-1] - t[0])], row=3, col=c)
+    if len(t):
+      fig.update_xaxes(range=[t[0], t[-1] + room * (t[-1] - t[0])],
+                       row=3,
+                       col=c)
   fig.update_yaxes(title_text=tl.html('$N/N_0$'), row=2, col=1)
   fig.update_yaxes(title_text='cells', rangemode='tozero', row=1, col=2)
   for r in (1, 2, 3):
@@ -2618,7 +2766,7 @@ def cell_rows(run, fr, fr0, qty, blocks=None):
     v, v0 = fr[b][qty] * scale, fr0[b][qty] * scale
     for (i, j), x in np.ndenumerate(v):
       cols['block'].append(b)
-      cols['region'].append(REGION_NAME[run.layout.region[b]])
+      cols['region'].append(REGION_NAME[gv.cell_region(run, b, i)])
       cols['i (psi)'].append(run.file_row(b, i))
       cols['j (theta)'].append(j)
       cols['R (m)'].append(round(float(c[i, j, 0]), 5))
@@ -2710,7 +2858,7 @@ def conservation_figure(run,
     and round-off) and one that does not read apart at a glance. Each species' particles in its colour, the energy in
     ink; an overlay's thin and faint. Returns (figure, notes: per budget, the median and the largest imbalance over
     the run, and when the largest was)."""
-  ts, tu = time_unit(B['t'][-1])
+  ts, tu = time_unit(B['t'])
   fig = go.Figure()
   notes = []
 
@@ -2768,7 +2916,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
     Terms: source (dashed gray), boundary losses (crimson), rate of change (gold, dash-dot), residual (ink, dotted):
     hues clear of the targets' orange and teal. The y ranges fit the second half of the run (the start-up transient
     is tens of times larger; double-click a panel to see it)."""
-  ts, tu = time_unit(B['t'][-1])
+  ts, tu = time_unit(B['t'])
   fd = gv.full_device(run)
   sp = list(B['species'])
   fig = subplots(rows=2,
@@ -2786,8 +2934,11 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
           ('rate of change', pal.sol, 'dashdot'), ('residual', pal.ink, 'dot')]
 
   def fit(r, c, ys):
-    late = np.concatenate([np.abs(np.asarray(y)[len(y) // 2:]) for y in ys])
-    top = 1.25 * np.nanmax(late) if late.size and np.nanmax(late) > 0 else None
+    late = np.concatenate([np.zeros(0)] +
+                          [np.abs(np.asarray(y)[len(y) // 2:]) for y in ys])
+    if not late.size:  # no sample (the empty run), or no target
+      return
+    top = 1.25 * np.nanmax(late) if np.nanmax(late) > 0 else None
     lo = min(0.0, min(np.nanmin(np.asarray(y)[len(y) // 2:]) for y in ys))
     if top:
       fig.update_yaxes(range=[1.25 * lo if lo < 0 else -0.05 * top, top],
@@ -2836,7 +2987,7 @@ def balance_figure(run, B, t_now, pal=LOOKS['dark'], cmp=None, B_cmp=None):
                       col=c)
         cmp_seen.append(1)
     k = len(t) - 1
-    return res[k] / src[k] * 100 if src[k] else np.nan
+    return res[k] / src[k] * 100 if k >= 0 and src[k] else np.nan
 
   for c, s in enumerate(sp[:2], 1):
     d = B['species'][s]
@@ -2936,10 +3087,7 @@ def diffusivity_figure(run,
     across the core and SOL blocks: the D the driver gave at each node row's psi. One curve when every species has the
     same D, one per species otherwise. cmp / D_cmp: a Cmp and its diffusivity, in long dashes. blocks: the rows of the
     chosen blocks. A log y axis when D spans more than a factor 20."""
-  sides = [
-      s for s in ('outboard', 'inboard')
-      if s in run.layout.stacks and gv.stack_rows(run, s, blocks).any()
-  ]
+  sides = midplane_sides(run, blocks)
   if not sides:
     raise ValueError(
         'no midplane stack among the chosen blocks: see the map below')
@@ -2957,9 +3105,9 @@ def diffusivity_figure(run,
       if blocks is not None and r is run:  # node rows of the chosen blocks
         keep = np.isin(Bn, list(blocks))
         Rn, Dm = Rn[keep], Dm[keep]
-      x, xsep, xlab = side_coordinate(Rn,
-                                      gv.mid_edges(r.nodes[st.sol], st.j)[0],
-                                      side, x_mode)
+      x, xsep, _ = side_coordinate(
+          Rn,
+          gv.mid_edges(r.nodes[st.sol], st.j)[st.sep_row], side, x_mode)
       col = pal.ink2 if D['same'] else species_colour(pal, s)
       name = label + ('' if D['same'] else f', {gv.species_tag(s)[0]}s')
       o = np.argsort(x)
@@ -2988,9 +3136,12 @@ def diffusivity_figure(run,
                       line=dict(color=pal.muted, width=1, dash='dash'),
                       row=1,
                       col=c)
-        fig.update_xaxes(title_text=tl.html(xlab), row=1, col=c)
 
   for c, side in enumerate(sides, 1):
+    fig.update_xaxes(title_text=tl.html(
+        side_coordinate(np.zeros(0), np.nan, side, x_mode)[2]),
+                     row=1,
+                     col=c)
     if Dinfo['kind']:
       curves(run, Dinfo, run.name, lambda d: d, c, side, True)
     if cmp is not None and D_cmp is not None and D_cmp[
@@ -3017,9 +3168,10 @@ def diffusivity_map(run,
                     blocks=None,
                     species=None,
                     background=None,
-                    mirror=False):
+                    mirror=False,
+                    layers=Layers()):
   """The diffusivity of every cell (its cell average) on the poloidal plane and the unrolled strips (map_figure;
-  background, mirror: its)."""
+  background, mirror, layers: its)."""
   s = species or next(iter(Dinfo['species']))
   cells = Dinfo['species'][s]['cells']
   V = np.concatenate([cells[b].ravel() for b in shown_blocks(run, blocks)])
@@ -3040,7 +3192,8 @@ def diffusivity_map(run,
                     blocks=blocks,
                     vals=cells,
                     background=background,
-                    mirror=mirror)
+                    mirror=mirror,
+                    layers=layers)
 
 
 PROBE_ROWS = [('n', r'$n$ ($10^{19}\,\mathrm{m^{-3}}$)'), ('T', '$T$ (eV)'),
@@ -3057,7 +3210,7 @@ def probe_cell(run, c):
   nt = run.nodes[b].shape[1] - 1
   i, j = divmod(c - off[b], nt)
   R, Z = gv.cell_centres(run.nodes[b])[i, j]
-  return b, run.file_row(b, i), j, run.layout.region[b], float(R), float(Z)
+  return b, run.file_row(b, i), j, gv.cell_region(run, b, i), float(R), float(Z)
 
 
 def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
@@ -3068,7 +3221,7 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
   cb, cd = gv.nearest_cell(cmp.run, R, Z, reg) if cmp is not None else (-1,
                                                                         np.nan)
   qb = gv.quantities(cmp.run) if cmp is not None else {}
-  ts, tu = time_unit(summ['t'][-1])
+  ts, tu = time_unit(summ['t'])
   t = summ['t'] * ts
   rows = [
       r for r in PROBE_ROWS
@@ -3218,10 +3371,12 @@ def render_movie(run,
                  blocks=None,
                  slide=None,
                  background=None,
-                 mirror=False):
+                 mirror=False,
+                 layers=Layers()):
   """An MP4 of the map over the given frame numbers, one colour scale for all of them, the time and frame on each.
     H.264 from imageio-ffmpeg's ffmpeg (the system ffmpeg has no H.264 encoder). progress(iterable, total) wraps the
-    loop. slide, background, mirror: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the path."""
+    loop. slide, background, mirror, layers: map_figure's (frames drawn at 110 dpi x 1.5 for a slide). Returns the
+    path."""
   import imageio_ffmpeg
   allf = [int(k) for k in summ['frames']]
   rows = [allf.index(k) for k in frames]
@@ -3237,7 +3392,7 @@ def render_movie(run,
                       mode,
                       log,
                       step_first=(mode == 'step' and rows[0] == 0))
-  ts, tu = time_unit(float(summ['t'][-1]))
+  ts, tu = time_unit(summ['t'])
   fr0 = gv.frame(run, allf[0])
   writer = None
   try:
@@ -3261,7 +3416,8 @@ def render_movie(run,
           title=f'{title}   t = {summ["t"][row] * ts:.4g} {tu}   (frame {k})',
           slide=slide,
           background=background,
-          mirror=mirror)
+          mirror=mirror,
+          layers=layers)
       if slide:
         fig.set_dpi(165)  # 1980 px across a full-width slide
       fig.canvas.draw()
@@ -3340,7 +3496,7 @@ def live_spec(fig, summ, frames=None, shown=None):
   over = np.zeros(len(allf), dtype=bool)
   for key, Ys in live.items():
     ax = fig.layout[key]
-    if ax.range is not None:
+    if ax.range is not None or not span:  # (no frame at all, the empty run: nothing to span)
       continue
     log, tozero = ax.type == 'log', ax.rangemode == 'tozero'
     A, o = np.hstack(Ys), np.concatenate(other.get(key, [np.array([])]))

@@ -102,10 +102,12 @@ def _(dark_pick, json, mo, theme_pick, vp):
 
 
 @app.cell
-def _(boot, gv, mo, os, prefs, vs):
+def _(HERE, boot, gv, mo, os, prefs, vs):
   # each simulation's default run is opened once at start-up: its own geqdsk names the shot and time
-  # a run directory given with --path (or a directory of runs): one more simulation, its directory's runs offered
+  # a run directory given with --path (or a directory of runs): one more simulation, its directory's runs offered.
+  # None to offer: the page opens anyway, every panel empty (gkview.empty_run), and says how to add one
   sim_info = {}
+  boot['notes'] += gv.CONFIG_PROBLEMS
   _sims = [(_lab, gv.runs_root(_dir), _dflt, _desc)
            for _lab, _dir, _dflt, _desc in gv.SIMS]
   _path = prefs.get('path')
@@ -145,16 +147,9 @@ def _(boot, gv, mo, os, prefs, vs):
     _pick = next((_k for _k in _keys if f"#{prefs['shot']} " in _k), None)
     if _pick is None:
       boot['notes'].append(f"no simulation of shot {prefs['shot']}")
-  mo.stop(
-      not _keys,
-      mo.callout(mo.md(
-          f'No simulation to show: `{gv.CONFIG_FILE}` offers none{"" if os.path.exists(gv.CONFIG_FILE) else " (no such file)"}'
-          ' and no `--path` was given. List simulations there (see `viewer.example.json`), or open a run directory with '
-          '`./view.sh --path DIR`.' + ''.join(f'\n\n{_n}'
-                                              for _n in boot['notes'])),
-                 kind='warn'))
-  _pick = _pick or _keys[0]
-  prefs['sim'] = sim_info[_pick][0]
+  if _keys:
+    _pick = _pick or _keys[0]
+    prefs['sim'] = sim_info[_pick][0]
   # another simulation: its default run, from its last frame
   sim_pick = mo.ui.dropdown(
       sim_info,
@@ -162,26 +157,39 @@ def _(boot, gv, mo, os, prefs, vs):
       searchable=True,
       label='shot (type to search)',
       full_width=True,
+      disabled=not _keys,
       on_change=lambda v: prefs.update(
           sim=v[0], run=None, frame=None, probe=None, blocks=None))
+  _ex = os.path.join(HERE, 'viewer.example.json')
+  _cfg = ('offers no simulation that can be read (the notes below say why)'
+          if os.path.exists(gv.CONFIG_FILE) else 'does not exist')
+  mo.callout(mo.md(
+      f'**No simulation data yet: every panel below is empty** (the page\'s layout, no data). `{gv.CONFIG_FILE}` '
+      f'{_cfg}. To add one: copy `{_ex}` to that file, set its `base` and list your simulations in `sims` '
+      '(README: Setup), then restart `./view.sh`; or open one run directory with `./view.sh --path DIR`.'
+  ),
+             kind='info') if not _keys else None
   return (sim_info, sim_pick)
 
 
 @app.cell
 def _(boot, gv, mo, prefs, sim_pick):
-  _lab, _root, _dflt, _ = sim_pick.value
-  _runs = gv.runs_in(_root)
+  # no simulation offered: no run either
+  _lab, _root, _dflt, _ = sim_pick.value or (None, None, None, None)
+  _runs = gv.runs_in(_root) if _root else []
   _want = prefs.get('run')
-  if _want is not None and _want not in _runs and 'run' not in boot['done']:
+  if _runs and _want not in (None, *_runs) and 'run' not in boot['done']:
     boot['notes'].append(f'{_lab} has no run {_want!r}: opened {_dflt}')
   boot['done'].add('run')
-  _value = _want if _want in _runs else (_dflt if _dflt in _runs else _runs[-1])
+  _value = _want if _want in _runs else (
+      _dflt if _dflt in _runs else _runs[-1]) if _runs else None
   prefs['run'] = _value
   run_pick = mo.ui.dropdown(_runs,
                             value=_value,
                             searchable=True,
                             label='run',
                             full_width=True,
+                            disabled=not _runs,
                             on_change=lambda v: prefs.update(
                                 run=v, frame=None, probe=None, blocks=None))
   reload_btn = mo.ui.button(
@@ -194,8 +202,13 @@ def _(boot, gv, mo, prefs, sim_pick):
 
 @app.cell
 def _(gv, os, run_pick, sim_pick):
-  _lab, _root, _, _ = sim_pick.value
-  run = gv.open_run(os.path.join(_root, run_pick.value), _lab)
+  # the run shown; none to show: the empty run (no blocks, no frames), which every cell and chart below takes as it
+  # takes a run, drawing its places with nothing in them
+  if run_pick.value is None:
+    run = gv.empty_run()
+  else:
+    _lab, _root, _, _ = sim_pick.value
+    run = gv.open_run(os.path.join(_root, run_pick.value), _lab)
   return (run, )
 
 
@@ -363,7 +376,8 @@ def _(mo, os):
       label='Fetch from Flux',
       kind='neutral',
       tooltip=
-      "copy this shot's Thomson, EFIT01, CHERS and beam power to runs/flux")
+      "copy this shot's Thomson, EFIT01, CHERS, beam power and TRANSP run to runs/flux"
+  )
   return fetch_btn, flux_cm
 
 
@@ -389,8 +403,9 @@ def _(HERE, fetch_btn, flux_cm, mo, os, run, subprocess):
 
 @app.cell
 def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
-  # Thomson n_e of the run's shot (thomson.py) and the frames to average: the window snaps to the Thomson frames of
-  # the beam flattop (every frame when the file has no beam power) and opens on thomson.default_window
+  # the measured profiles of the run's shot (thomson.py: Thomson, CHERS, TRANSP) and the frames to average: the window
+  # snaps to the Thomson frames of the beam flattop (every frame when the file has no beam power) and opens on
+  # thomson.default_window
   reload_btn.value, fetch_log, sync_log  # re-read after a fetch or a sync
   th, th_note, th_pick, th_show = None, '', None, None
   try:
@@ -408,7 +423,7 @@ def _(fetch_log, mo, reload_btn, run, sync_log, thomson):
         show_value=True,
         label='Thomson frames to average (ms in the shot)',
         full_width=True)
-    th_show = mo.ui.switch(value=True, label='Thomson n_e')
+    th_show = mo.ui.switch(value=True, label='measured profiles')
   return th, th_note, th_pick, th_show
 
 
@@ -481,12 +496,13 @@ def _(
 
 
 @app.cell
-def _(mo, prefs, vp, vs):
-  # the device's picture behind the poloidal plane (viewer.json "device_image", viewer_plots.device_background): a
-  # switch in the sidebar when there is one, a note when viewer.json names one that cannot be used
+def _(mo, prefs, run, vp, vs):
+  # the picture of the shown run's device behind the poloidal plane (viewer.json "devices" / "device_image",
+  # viewer_plots.device_background): a switch in the sidebar when its device has one, a note when viewer.json names
+  # one that cannot be used
   background, bg_note = None, mo.md('')
   try:
-    background = vp.device_background()
+    background = vp.device_background(run.device)
   except (OSError, ValueError) as _e:
     bg_note = mo.callout(mo.md(f'No device background: {_e}'), kind='warn')
   bg_pick = mo.ui.switch(value=vs.as_bool(prefs.get('background', False)),
@@ -532,6 +548,37 @@ def _(mirror_pick):
 
 
 @app.cell
+def _(gv, mo, prefs, run, vp, vs):
+  # what the poloidal plane draws, each on a switch (viewer_plots.Layers, its defaults): the quantity's cells, the
+  # grid, the block boundaries, and the separatrix and the wall where the run has them
+  def _switch(key, label):
+    return mo.ui.switch(value=vs.as_bool(
+        prefs.get(key, getattr(vp.Layers(), key))),
+                        label=label,
+                        on_change=lambda v: prefs.update({key: v}))
+
+  quantity_pick = _switch('quantity', 'show the plotted quantity')
+  grid_pick = _switch('grid', 'show the grid (every cell edge)')
+  sep_pick = _switch('separatrix',
+                     'show the separatrix') if vp.separatrix_rows(run) else None
+  wall_pick = _switch(
+      'wall', 'show the wall (limiter)') if gv.wall(run) is not None else None
+  outlines_pick = _switch('outlines', 'show the block boundaries')
+  return grid_pick, outlines_pick, quantity_pick, sep_pick, wall_pick
+
+
+@app.cell
+def _(grid_pick, outlines_pick, quantity_pick, sep_pick, vp, wall_pick):
+  # what the poloidal views draw (a line the run lacks has no switch: there is nothing to draw)
+  layers_shown = vp.Layers(quantity=bool(quantity_pick.value),
+                           grid=bool(grid_pick.value),
+                           separatrix=sep_pick is None or bool(sep_pick.value),
+                           wall=wall_pick is None or bool(wall_pick.value),
+                           outlines=bool(outlines_pick.value))
+  return (layers_shown, )
+
+
+@app.cell
 def _(background, mm, mo):
   # the picture put into the page once (hidden), for the movie (movie_widget.BackgroundLoader)
   mo.ui.anywidget(
@@ -556,7 +603,7 @@ def _(boot, frames, gv, mo, prefs, run):
     return gv.cell_offsets(run)[b] + run.file_row(
         b, i) * (run.nodes[b].shape[1] - 1) + j
 
-  _k = frames[-1]
+  _k = frames[-1] if frames else None  # no frame: the empty run
   if prefs.get('frame') is not None and prefs.get('run') == run.name:
     try:
       _sel = gv.select_frames(str(prefs['frame']), frames)
@@ -583,12 +630,15 @@ def _(boot, frames, gv, mo, prefs, run):
 
 @app.cell
 def _(frames, get_k, mo, set_k):
-  frame_pick = mo.ui.slider(steps=frames,
-                            value=get_k() if get_k() in frames else frames[-1],
+  # no frames (the empty run): the slider in its place, idle (a slider needs a step: 0, never read)
+  frame_pick = mo.ui.slider(steps=frames or [0],
+                            value=get_k() if get_k() in frames else
+                            (frames or [0])[-1],
                             show_value=True,
                             include_input=True,
-                            label='frame',
+                            label='frame' if frames else 'frame (no run)',
                             full_width=True,
+                            disabled=not frames,
                             on_change=set_k)
   return (frame_pick, )
 
@@ -633,10 +683,10 @@ def _(frames, frames_text, gv, mo):
   try:
     movie_frames = gv.select_frames(frames_text.value, frames)
     movie_frames = [f for f in movie_frames if f in set(frames)]
-    frames_msg = None if movie_frames else mo.callout(mo.md(
+    frames_msg = None if movie_frames or not frames else mo.callout(mo.md(
         f'**{frames_text.value}** selects no frame: '
         'playing all'),
-                                                      kind='warn')
+                                                                    kind='warn')
   except ValueError as _e:
     movie_frames, frames_msg = [], mo.callout(mo.md(f'{_e}: playing all'),
                                               kind='warn')
@@ -656,18 +706,23 @@ def _(
     frame_pick,
     frames_msg,
     frames_text,
+    grid_pick,
     log_pick,
     mirror_pick,
     mo,
     mode_pick,
+    outlines_pick,
     probe_text,
     qty_pick,
+    quantity_pick,
     reload_btn,
     run_pick,
+    sep_pick,
     sim_pick,
     sync_btn,
     sync_note,
     theme_pick,
+    wall_pick,
     x_pick,
     zoom_pick,
 ):
@@ -684,7 +739,9 @@ def _(
           mirror_pick if mirror_pick is not None else mo.md(''),
           bg_pick if bg_pick is not None else mo.md(''),
           bg_opacity if bg_opacity is not None else mo.md(''), bg_note,
-          blocks_pick,
+          quantity_pick, grid_pick,
+          sep_pick if sep_pick is not None else mo.md(''), wall_pick
+          if wall_pick is not None else mo.md(''), outlines_pick, blocks_pick,
           mo.md('---'), cmp_pick,
           mo.callout(mo.md(f'Not drawn: {cmp_err}'), kind='warn')
           if cmp_err else mo.md(''),
@@ -700,14 +757,18 @@ def _(
 
 
 @app.cell
-def _(frame_pick, frames, gv, now, prefs, run):
-  k = int(frame_pick.value)
+def _(frame_pick, frames, gv, np, now, prefs, run):
+  # the shown frame k, its fields (block -> quantity), the first and the previous frame's, its time; no frame (the
+  # empty run): k None, no fields, no time
+  k = int(frame_pick.value) if frames else None
   now['k'] = k
   prefs['frame'] = k
-  fr = gv.frame(run, k)
-  fr0 = gv.frame(run, frames[0])
-  fr_prev = gv.frame(run, frames[max(frames.index(k) - 1, 0)])
-  t_now = run.time(k)
+  fr, fr0, fr_prev, t_now = {}, {}, {}, np.nan
+  if k is not None:
+    fr = gv.frame(run, k)
+    fr0 = gv.frame(run, frames[0])
+    fr_prev = gv.frame(run, frames[max(frames.index(k) - 1, 0)])
+    t_now = run.time(k)
   return fr, fr0, fr_prev, k, t_now
 
 
@@ -747,6 +808,22 @@ def _(boot, frame_pick, mo, probe_text, qty_pick, run_pick, sim_pick):
 @app.cell
 def _(blocks, cmp, dt_hist, fr, frames, gv, k, mo, np, run, sim_pick, t_now,
       vp):
+  # no frame shown (the empty run): the header's places, nothing in them
+  mo.stop(
+      k is None,
+      mo.vstack([
+          mo.md('## No simulation\n\nrun, domain, cells, frames: none'),
+          mo.md('<small>**Simulation output:** none</small>'),
+          mo.hstack([
+              mo.stat('—', label=_lab, caption=_cap, bordered=True)
+              for _lab, _cap in (('time', 'no frame'), ('time step', 'no step'),
+                                 ('λq', 'no target'),
+                                 ('cells with n ≤ 0', 'no cell'))
+          ],
+                    justify='start',
+                    wrap=True,
+                    gap=0.75)
+      ]))
   _, _, _, _desc = sim_pick.value
   _ts, _tu = vp.time_unit(run.time(frames[-1]))
   _ncell = sum(v.size
@@ -764,6 +841,10 @@ def _(blocks, cmp, dt_hist, fr, frames, gv, k, mo, np, run, sim_pick, t_now,
       _bits.append(f'{_key} = {_opt[_key].split("/")[-1]}')
   if run.flip:
     _bits.append('psi index grows inward in the files (rows shown inside out)')
+  if run.contrary:
+    _bits.append(
+        f'blocks {vp.block_list(run.contrary)}: psi index against the topology (read reversed; Run tab)'
+    )
   if blocks is not None:
     _bits.append(f'drawing blocks {vp.block_list(blocks)}')
   _td, _vd = dt_hist
@@ -815,6 +896,16 @@ def _(blocks, cmp, dt_hist, fr, frames, gv, k, mo, np, run, sim_pick, t_now,
         )))
   _files = f'{run.stem}-<what>_<frame>.gkyl' if run.single else f'{run.stem}_b<block>-<what>_<frame>.gkyl'
   _where = [f'**Simulation output:** `{run.path}/` (files `{_files}`)']
+  # the geqdsk (shot, time, wall): the run's own, else viewer.json's for its simulation (gkview.geqdsk_path)
+  _dis = gv.geqdsk_disagreement(run)
+  if _dis is not None:
+    _where.append(
+        f"**geqdsk:** the run's own, `{_dis[0]}`; viewer.json names `{_dis[1]}` for {run.sim}: not used"
+    )
+  elif run.geqdsk and gv.geqdsk_named(run.path, run.options) is None:
+    _where.append(
+        f"**geqdsk:** `{run.geqdsk}`, viewer.json's for {run.sim} (the run's files name none)"
+        + ('' if gv.geqdsk_path(run) else ': not found'))
   if cmp is not None:
     _where.append(f'**Overlay output:** `{cmp.run.path}/`')
   mo.vstack([
@@ -866,6 +957,13 @@ def _(
 def _(bg_shown, mm, movie):
   # the device picture behind the movie, set on the widget: the switch and the opacity slider redraw it, no rebuild
   movie.widget.background = mm.background_ref(bg_shown)
+  return
+
+
+@app.cell
+def _(layers_shown, mm, movie):
+  # the lines over the movie's cells, set on the widget: their switches redraw it, no rebuild
+  movie.widget.layers = mm.layer_kinds(layers_shown)
   return
 
 
@@ -939,29 +1037,34 @@ def _(
     frames_text,
     get_probe,
     get_tab,
+    grid_pick,
     k,
     log_pick,
     mirror_pick,
     mo,
     mode_pick,
     os,
+    outlines_pick,
     prefs,
     qty_pick,
+    quantity_pick,
     run,
     run_pick,
+    sep_pick,
     sim_pick,
     theme_pick,
     vp,
     vs,
+    wall_pick,
     x_pick,
     zoom_pick,
 ):
   # the current view, also written to the page's address (a reload or a bookmark comes back to it)
   _p = get_probe()
   view = dict(
-      sim=sim_pick.value[0],
+      sim=sim_pick.value[0] if sim_pick.value else None,
       run=run_pick.value,
-      frame=int(k),
+      frame=k,
       qty=qty_pick.value,
       mode=mode_pick.value,
       log=bool(log_pick.value),
@@ -972,6 +1075,11 @@ def _(
       background=bool(bg_pick.value) if bg_pick is not None else None,
       opacity=float(bg_opacity.value) if bg_opacity is not None else None,
       mirror=bool(mirror_pick.value) if mirror_pick is not None else None,
+      quantity=bool(quantity_pick.value),
+      grid=bool(grid_pick.value),
+      separatrix=bool(sep_pick.value) if sep_pick is not None else None,
+      wall=bool(wall_pick.value) if wall_pick is not None else None,
+      outlines=bool(outlines_pick.value),
       tab=get_tab(),
       frames=frames_text.value.strip(),
       probe=','.join(map(str,
@@ -998,6 +1106,7 @@ def _(
     fr,
     fr0,
     fr_prev,
+    layers_shown,
     log_pick,
     mirror_on,
     mode_pick,
@@ -1029,14 +1138,16 @@ def _(
                          blocks=blocks,
                          slide=slide,
                          background=bg_shown,
-                         mirror=mirror_on)
+                         mirror=mirror_on,
+                         layers=layers_shown)
 
   return (static_figure, )
 
 
 @app.cell
-def _(mo):
-  # Save & export: the view (a state file), the shown figure, a movie of the movie's frames
+def _(frames, mo):
+  # Save & export: the view (a state file), the shown figure, a movie of the movie's frames (no frames, the empty
+  # run: the figure and the movie buttons idle)
   state_name = mo.ui.text(label='save the view as',
                           placeholder='my_view (runs/states/<name>.json)',
                           full_width=True)
@@ -1045,12 +1156,12 @@ def _(mo):
                         placeholder='automatic (runs/exports/<name>)',
                         full_width=True)
   fig_fmt = mo.ui.dropdown(['png', 'pdf', 'svg'], value='png', label='format')
-  save_fig_btn = mo.ui.run_button(label='Save figure')
+  save_fig_btn = mo.ui.run_button(label='Save figure', disabled=not frames)
   movie_name = mo.ui.text(label='movie file',
                           placeholder='automatic (runs/exports/<name>.mp4)',
                           full_width=True)
   movie_fps = mo.ui.number(start=1, stop=60, step=1, value=10, label='frames/s')
-  make_movie_btn = mo.ui.run_button(label='Make movie')
+  make_movie_btn = mo.ui.run_button(label='Make movie', disabled=not frames)
   # the figure and the movie laid out for the page or for a slide (viewer_plots.SLIDE_SIZES: text >= 16 pt there)
   export_size = mo.ui.dropdown(
       {
@@ -1104,8 +1215,8 @@ def _(gv, mo, os, out_path, save_view_btn, state_name, view, vs):
 
 
 @app.cell
-def _(base_name, export_size, fig_fmt, fig_name, mo, os, out_path, save_fig_btn,
-      static_figure, traceback, vp):
+def _(base_name, export_size, fig_fmt, fig_name, k, mo, os, out_path,
+      save_fig_btn, static_figure, traceback, vp):
   _slide = None if export_size.value == 'page' else export_size.value
   _stem = base_name + (f'_slide_{_slide}' if _slide else '')
 
@@ -1136,6 +1247,7 @@ def _(base_name, export_size, fig_fmt, fig_name, mo, os, out_path, save_fig_btn,
                            kind='danger')
   fig_download = mo.download(data=lambda: _render(),
                              filename=f'{_stem}.{fig_fmt.value}',
+                             disabled=k is None,
                              label=f'Download the figure ({fig_fmt.value})')
   return fig_download, fig_msg
 
@@ -1146,6 +1258,7 @@ def _(
     bg_shown,
     blocks,
     export_size,
+    layers_shown,
     log_pick,
     make_movie_btn,
     mirror_on,
@@ -1193,6 +1306,7 @@ def _(
           slide=_slide,
           background=bg_shown,
           mirror=mirror_on,
+          layers=layers_shown,
           title=f'{run.title} · {run.sim} · {run.name} · {_label}',
           progress=lambda it, n: mo.status.progress_bar(
               it, total=n, title='Rendering the movie', remove_on_exit=True))
@@ -1244,6 +1358,7 @@ def _(
     html,
     integ,
     k,
+    layers_shown,
     live_summ,
     make_movie_btn,
     mirror_on,
@@ -1317,7 +1432,8 @@ def _(
         mm.live_plot(fig, live_summ, k, movie_frames, pal, _name))
 
   def _fetch():
-    # the Fetch button where the shot has no Flux copy yet (no data, or the workflow's copy without beam power)
+    # the Fetch button where the shot has no Flux copy yet (no data, the workflow's copy without beam power, or a
+    # copy fetched before TRANSP was added)
     _items = []
     if fetch_log is not None:
       _rc, _out = fetch_log
@@ -1326,13 +1442,15 @@ def _(
               f'fetch {"done" if _rc == 0 else f"FAILED (exit {_rc})"}: log':
               mo.plain_text(_out)
           }))
-    if th is not None and th.pnb is not None:
-      return _items
+    if (th is not None and th.pnb is not None
+        and th.transp_why is not None) or not run.shot:
+      return _items  # (no shot, as the empty run's: nothing to fetch)
     _why = (
         f'No Thomson data for shot {run.shot} here{f" ({th_note})" if th_note else ""}.'
         if th is None else
-        f'Shot {run.shot}: the workflow\'s copy, without beam power (no flattop).'
-    )
+        f'Shot {run.shot}: the workflow\'s copy, without beam power (no flattop) or TRANSP.'
+        if th.pnb is None else
+        f'Shot {run.shot}: fetched before TRANSP was added to the fetch.')
     if flux_cm and subprocess.run([
         'bash', os.path.join(HERE, 'fetch_flux.sh'), '--check', flux_cm
     ]).returncode == 0:
@@ -1359,7 +1477,7 @@ def _(
                 'thomson')
       ]
       _notes.append(
-          mo.md(f'<small>{vp.thomson_note(run, fr, th, _t0, _t1)}</small>'))
+          mo.md(f'<small>{vp.measured_note(run, fr, th, _t0, _t1)}</small>'))
     return mo.vstack(_top + [
         _live(
             vp.profiles_figure(run,
@@ -1449,11 +1567,12 @@ def _(
         B_cmp=_Bb,
         t_frames_cmp=cmp.summ['t'] if cmp is not None else None)
     _fig = vp.balance_figure(run, _B, t_now, pal=pal, cmp=cmp, B_cmp=_Bb)[0]
+    # the last sample (none: the empty run, no numbers to give)
     _i = len(_B['t']) - 1
     _tg = ', '.join(f"{name} {v['power'][_i] * 2 * vp.np.pi / 1e6:.3g} MW"
                     for name, v in _B['targets'].items())
-    _share = sum(v['power'][_i]
-                 for v in _B['targets'].values()) / _B['E']['out'][_i] * 100
+    _share = sum(v['power'][_i] for v in _B['targets'].values()
+                 ) / _B['E']['out'][_i] * 100 if _i >= 0 else vp.np.nan
     return mo.vstack([
         mo.
         md('#### Conservation: the particle and energy budgets over each interval between frames'
@@ -1461,14 +1580,15 @@ def _(
         _live(_cfig, 'conservation'),
         mo.
         md(f"Imbalance (sources − boundary losses − content gained, of the largest), typical (median, signed) "
-           f"and largest over the run: {'; '.join(_cnotes)}."),
+           f"and largest over the run: {'; '.join(_cnotes)}.")
+        if _cnotes else mo.md(''),
         mo.md('#### The budgets\' terms, and the power to each target'),
         _live(_fig, 'balance'),
         mo.
-        md(f"At {_B['t'][_i] * vp.time_unit(_B['t'][-1])[0]:.4g} {vp.time_unit(_B['t'][-1])[1]}: source "
+        md(f"At {_B['t'][_i] * vp.time_unit(_B['t'])[0]:.4g} {vp.time_unit(_B['t'])[1]}: source "
            f"{_B['E']['src'][_i] * gv.full_device(run) / 1e6:.3g} MW (whole device); targets: {_tg} "
            f"({_share:.0f} % of all boundary energy losses; the rest leaves through the radial walls)."
-           ),
+           ) if _i >= 0 else mo.md(''),
         mo.callout(mo.md(
             '**Reading the conservation chart.** Each point is one interval between output frames: what the '
             'sources put in, less what the boundaries took out, less what the content gained, as a share of the '
@@ -1490,6 +1610,13 @@ def _(
 
   def _options():
     # the options the run was started with, read with the driver's own source (run_options.py)
+    if not run.path:  # the empty run: no files to read
+      return mo.callout(mo.md(
+          'No run. Here: the options a run was started with (its driver\'s sections, what each is and its '
+          'default), every other option the driver reads, the files it was given, the overlay\'s options side '
+          'by side, its jobs and what the driver reported while setting it up.'
+      ),
+                        kind='neutral')
     _v = ro.options_view(run)
     _items = []
     _bin = _v['binary']
@@ -1621,13 +1748,13 @@ def _(
         mo.
         md(f'**{run.name}:** {"D from " if _D["kind"] == "file" else "a uniform D, from " if _D["kind"] else ""}'
            f'{_D["source"]}.')
-    ]
+    ] if run.nb else []  # (the empty run: no D, the chart's places below)
     if _Db is not None:
       _items.append(
           mo.
           md(f'**{cmp.label}** (overlay): {"D from " if _Db["kind"] == "file" else "a uniform D, from " if _Db["kind"] else ""}{_Db["source"]}.'
              ))
-    if not _D['kind'] and not (_Db and _Db['kind']):
+    if run.nb and not _D['kind'] and not (_Db and _Db['kind']):
       return mo.vstack(_items + [
           mo.callout(mo.md(
               'Nothing to draw. A driver that writes the diffusivity (`anomalous_diffusion.write_diagnostics = '
@@ -1657,7 +1784,8 @@ def _(
                                   blocks=blocks,
                                   species=_s,
                                   background=bg_shown,
-                                  mirror=mirror_on)
+                                  mirror=mirror_on,
+                                  layers=layers_shown)
         _items.append(
             _clickable(
                 _fig,
@@ -1680,10 +1808,12 @@ def _(
   def _static():
     _fig = static_figure()
     _m = mode_pick.value
-    _ref = None if _m == 'value' else frames[0] if _m == 'change' else frames[
-        max(frames.index(k) - 1, 0)]
-    _out = _clickable(_fig,
-                      pc.blocks_maps(run, qty_pick.value, k, blocks, _m, _ref))
+    _ref = None if _m == 'value' or k is None else frames[
+        0] if _m == 'change' else frames[max(frames.index(k) - 1, 0)]
+    _out = _clickable(
+        _fig,
+        pc.blocks_maps(run, qty_pick.value, k, blocks, _m, _ref)
+        if run.nb else '# no run: no files to load')
     vp.plt.close(_fig)
     return mo.vstack([
         scale_pick,
@@ -1691,6 +1821,12 @@ def _(
     ])
 
   def _run():
+    if not run.path:  # the empty run: no files to read
+      return mo.callout(mo.md(
+          'No run. Here: its directory, block layout (each block\'s region, role, cells, R and Z), targets, '
+          'options_used.txt, command.txt, restarts.log and the end of its slurm output.'
+      ),
+                        kind='neutral')
     _lay = run.layout
     _role = {}
     for _st in _lay.strips:  # each item's segment: a SOL block's own, the block under it 'under the ...'
@@ -1700,7 +1836,9 @@ def _(
     _rows = [
         dict(
             block=b,
-            region=vp.REGION_NAME[_lay.region[b]],
+            region=' and '.join(vp.REGION_NAME[g] for g in ('core', 'sol', 'pf')
+                                if gv.region_rows(run, b, g).stop >
+                                gv.region_rows(run, b, g).start),
             role=_role.get(b, ''),
             cells=
             f'{run.nodes[b].shape[0] - 1} psi × {run.nodes[b].shape[1] - 1} theta',
@@ -1732,6 +1870,19 @@ def _(
       _notes.append(
           'The files\' psi index grows inward: every block\'s rows are shown inside out (row 0 '
           'innermost); the cell table and the probe give the files\' own i.')
+    if run.contrary:
+      _notes.append(
+          f'Blocks {vp.block_list(run.contrary)}: each one\'s psi index runs against the topology file: the '
+          'block it names across a psi face lies against the block\'s other psi face, so the written '
+          'topology joins faces that do not touch. Their rows are shown reversed, so that each '
+          'lies where its nodes put it; the cell table and the probe give the files\' own i.'
+      )
+    for _b, _m in _lay.lcfs.items():
+      _notes.append(
+          f'Block {_b} holds closed and open field lines: rows 0-{_m - 1} close on themselves '
+          f'(core), rows {_m}-{run.nodes[_b].shape[0] - 2} end on the sheath at its theta ends (the '
+          'range its sheath boundary condition\'s files cover: SOL, its two targets).'
+      )
     if _notes:
       _items.append(mo.md(' '.join(_notes)))
     if run.options:

@@ -41,9 +41,75 @@ DATA = os.path.abspath(
     or os.path.dirname(os.path.abspath(__file__)))
 RUNS = os.path.join(DATA, 'runs')
 CONFIG_FILE = os.path.join(DATA, 'viewer.json')
-CONFIG = json.load(open(CONFIG_FILE)) if os.path.exists(CONFIG_FILE) else {}
-# Simulation directories and cache names are relative to 'base' (relative to the data directory; absolute paths too).
-BASE = os.path.normpath(os.path.join(DATA, CONFIG.get('base', '.')))
+CACHE_DIR = os.path.join(RUNS, 'cache')
+CACHE_VERSION = 3  # bump when a summary definition changes: old cache files are then ignored (2: + fields, 3: + q_perp)
+
+
+@dataclass(frozen=True)
+class SimSettings:
+  """A simulation's own settings: a "sims" entry's optional fifth element, {"device": ..., "geqdsk": ...}."""
+  device: str  # the device its runs simulate (else viewer.json's "device"; '': none)
+  geqdsk: object = None  # the equilibrium file its runs read (absolute), for runs whose own files name none; or None
+
+
+SIM_KEYS = ('device', 'geqdsk')
+
+
+def load_config(path):
+  """viewer.json at path, read: (its settings, base (absolute), the simulations offered [(label, directory under
+  base, default run, one-line description)], their SimSettings by label, problems). Every path in it is relative to
+  base, itself relative to the file's directory (absolute paths too). A sims entry is [label, directory, default run,
+  description] or those and {"device": <name>, "geqdsk": <file>} (both optional; the device defaults to the
+  top-level "device"). No file offers nothing; a file that cannot be read, or an entry that does not parse, offers
+  nothing from it and is named in problems, so the page opens anyway and says why."""
+  if not os.path.exists(path):
+    return {}, os.path.dirname(path), [], {}, []
+  try:
+    with open(path) as f:
+      cfg = json.load(f)
+    if not isinstance(cfg, dict):
+      raise ValueError('not a JSON object')
+  except (OSError, ValueError) as e:
+    return {}, os.path.dirname(path), [], {}, [f'{path}: {e}']
+  base = os.path.normpath(
+      os.path.join(os.path.dirname(path),
+                   cfg.get('base') or '.'))
+  device = cfg.get('device') or ''
+  sims, settings, problems = [], {}, []
+  for e in cfg.get('sims') or []:
+    own = e[4] if isinstance(e, list) and len(e) == 5 else {}
+    ok = (isinstance(e, list) and len(e) in (4, 5)
+          and all(isinstance(v, str) for v in e[:4]) and isinstance(own, dict)
+          and set(own) <= set(SIM_KEYS)
+          and all(isinstance(v, str) for v in own.values()))
+    if not ok:
+      problems.append(
+          f'"sims": {json.dumps(e)} left out: an entry is [label, directory, default run, description], '
+          'optionally followed by {"device": <name>, "geqdsk": <file>}')
+      continue
+    sims.append(tuple(e[:4]))
+    settings[e[0]] = SimSettings(
+        own.get('device') or device,
+        os.path.normpath(os.path.join(base, own['geqdsk']))
+        if own.get('geqdsk') else None)
+  return cfg, base, sims, settings, problems
+
+
+def reload():
+  """Read viewer.json (CONFIG_FILE) into this module's settings, the one place it is read: CONFIG (the file's
+  settings), BASE, SIMS, SIM_SETTINGS, DEVICE (the default device) and CONFIG_PROBLEMS. A form that writes
+  viewer.json calls this after (thomson reads its directories at each call; pgkyl_cmd's pgkyl is read at its
+  import)."""
+  global CONFIG, BASE, SIMS, SIM_SETTINGS, DEVICE, CONFIG_PROBLEMS
+  CONFIG, BASE, SIMS, SIM_SETTINGS, CONFIG_PROBLEMS = load_config(CONFIG_FILE)
+  DEVICE = CONFIG.get('device') or ''
+
+
+# CONFIG: viewer.json's settings. BASE: what simulation directories and cache names are relative to. SIMS: the
+# simulations the viewer offers, (label, directory under base, default run, one-line description); the shot and
+# equilibrium time come from each run's own files. SIM_SETTINGS: label -> SimSettings. DEVICE: the device runs
+# simulate unless their simulation names its own, named in a run's title before its shot ('': none).
+reload()
 
 
 def data_path(key):
@@ -52,46 +118,47 @@ def data_path(key):
       BASE, CONFIG[key])) if CONFIG.get(key) else None
 
 
-CACHE_DIR = os.path.join(RUNS, 'cache')
-CACHE_VERSION = 3  # bump when a summary definition changes: old cache files are then ignored (2: + fields, 3: + q_perp)
-
-# The simulations the viewer offers: (label, directory under base, default run, one-line description), from
-# viewer.json's "sims". The shot and equilibrium time come from each run's own files.
-SIMS = [tuple(s) for s in CONFIG.get('sims', [])]
-# The device the runs simulate, named in a run's title before its shot (viewer.json "device"; blank: none).
-DEVICE = CONFIG.get('device', '')
+def device_settings(device):
+  """viewer.json's "devices" entry of a device: {"device_image": ..., "wall": ...} ({} when it has none)."""
+  d = (CONFIG.get('devices') or {}).get(device) or {}
+  if not isinstance(d, dict):
+    raise ValueError(f'viewer.json "devices": "{device}" must be an object')
+  return d
 
 
-def device_image():
-  """viewer.json's "device_image": a picture of the device's poloidal cross-section to draw behind the poloidal
-  plane, {"file": <path, relative to base>, "extent": [R_left, R_right, Z_bottom, Z_top] (m: where the picture's
-  edges lie, so that it sits on the R-Z axes), "opacity": <0 to 1, default 1>}. Returns (path, extent, opacity), or
-  None when viewer.json names none; raises ValueError when it names one that cannot be used."""
-  d = CONFIG.get('device_image')
+def device_image(device):
+  """The picture of a device's poloidal cross-section to draw behind the poloidal plane: its own ("devices":
+  {device: {"device_image": ...}}), else the top-level "device_image" when the device is viewer.json's default
+  ("device", or none: the picture of the device every simulation without one of its own simulates; another device's
+  runs do not get it). {"file": <path, relative to base>, "extent": [R_left, R_right, Z_bottom, Z_top] (m: where the
+  picture's edges lie, so that it sits on the R-Z axes), "opacity": <0 to 1, default 1>}. Returns (path, extent,
+  opacity), or None when there is none; raises ValueError when the one named cannot be used."""
+  own = device_settings(device).get('device_image')
+  d = own if own else CONFIG.get('device_image') if device == DEVICE else None
+  where = f'viewer.json "devices": "{device}": "device_image"' if own else 'viewer.json "device_image"'
   if not d:
     return None
   if not isinstance(d, dict) or not d.get('file'):
-    raise ValueError('viewer.json "device_image" needs a "file"')
+    raise ValueError(f'{where} needs a "file"')
   path = os.path.normpath(os.path.join(BASE, d['file']))
   if not os.path.isfile(path):
-    raise ValueError(f'viewer.json "device_image": no file {path}')
+    raise ValueError(f'{where}: no file {path}')
   e = d.get('extent')
   if not (isinstance(e, list) and len(e) == 4
           and all(isinstance(v, (int, float))
                   for v in e) and e[1] > e[0] and e[3] > e[2]):
     raise ValueError(
-        'viewer.json "device_image": "extent" must be [R_left, R_right, Z_bottom, Z_top] (m), '
+        f'{where}: "extent" must be [R_left, R_right, Z_bottom, Z_top] (m), '
         f'R_right > R_left and Z_top > Z_bottom; it is {e!r}')
   opacity = float(d.get('opacity', 1.0))
   if not 0 < opacity <= 1:
-    raise ValueError(
-        f'viewer.json "device_image": "opacity" must be in (0, 1]; it is {opacity}'
-    )
+    raise ValueError(f'{where}: "opacity" must be in (0, 1]; it is {opacity}')
   return path, tuple(float(v) for v in e), opacity
 
 
 PHYSICAL = 5  # gkyl_oriented_edge (core/zero/gkyl_block_topo.h)
 LOWER_POS, LOWER_NEG, UPPER_POS, UPPER_NEG = 1, 2, 3, 4
+GEOMETRY_MAPC2P = 3  # gkyl_geometry_id (core/zero/gkyl_eqn_type.h): a user's mapc2p, positions Cartesian X, Y, Z
 MOMS = ('M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3par', 'M3perp')
 SPECIES_TAG = {'elc': ('electron', 'e'), 'ion': ('ion', 'i')}
 TARGET_ORDER = [
@@ -159,11 +226,28 @@ def _pick(k, j_near, offset):
       np.abs(k + offset - j_near))])
 
 
+def closes(nd):
+  """Whether a block of nodes closes on itself in theta: its first and last node columns are one."""
+  return np.allclose(nd[:, 0], nd[:, -1], rtol=0, atol=1e-9 * np.ptp(nd))
+
+
+def at_seam(nd, j_near):
+  """Whether j_near (a theta node position) asks for the crossing at the seam of a block closing on itself: within
+    half a node of either end."""
+  nt = nd.shape[1] - 1
+  return j_near is not None and min(j_near, nt - j_near) < 0.5 and closes(nd)
+
+
 def mid_edges(nd, j_near=None):
   """Radial node positions where each psi row of nodes crosses Z = 0 (linear in theta between the bracketing nodes);
-    j_near: which crossing, for a block crossing Z = 0 more than once (default the first)."""
+    j_near: which crossing, for a block crossing Z = 0 more than once (default the first); at_seam: the crossing
+    across its seam (the last node, the first, the second)."""
   out = []
+  seam = at_seam(nd, j_near)
   for R, Z in zip(nd[..., 0], nd[..., 1]):
+    if seam:
+      R, Z = R[[-2, 0, 1]], Z[[-2, 0, 1]]
+      j_near = 1
     k = np.where(np.diff(np.sign(Z)) != 0)[0]
     if len(k) == 0:
       out.append(R[np.argmin(np.abs(Z))])
@@ -179,10 +263,17 @@ def cell_centres(nd):
 
 
 def midplane_weights(nd, j_near=None):
-  """Per cell row (j0, j1, w): the value at Z = 0 is (1 - w) v[i, j0] + w v[i, j1] (j_near: as mid_edges)."""
+  """Per cell row (j0, j1, w): the value at Z = 0 is (1 - w) v[i, j0] + w v[i, j1] (j_near: as mid_edges). A block
+    closing on itself in theta (its first and last node columns one) crosses Z = 0 between its last and first cells
+    too: j_near at either end picks that crossing."""
   Zc = cell_centres(nd)[..., 1]
+  nt = Zc.shape[1]
+  seam = at_seam(nd, j_near)
   out = []
   for z in Zc:
+    if seam and z[-1] * z[0] < 0:
+      out.append((nt - 1, 0, float(z[-1] / (z[-1] - z[0]))))
+      continue
     k = np.where(np.diff(np.sign(z)) != 0)[0]
     if len(
         k
@@ -223,15 +314,17 @@ class Target:
   updown: str = ''  # 'lower' or 'upper'
   side: str = ''  # 'outer' or 'inner'
   mid_j: object = None  # theta node position of that block's midplane crossing, where it crosses Z = 0 twice
+  open_row: int = 0  # the leg's first row on the plate: its LCFS row in a block holding closed rows too (Layout.lcfs)
 
 
 @dataclass
 class Stack:
   side: str  # 'outboard' or 'inboard'
   core: object  # the core block under the SOL block at the midplane, or None
-  sol: int
+  sol: object  # the SOL block reaching the midplane; None only in empty_run (a midplane holding no block)
   mirror: bool  # the midplane is the reflecting boundary of a half domain
   j: object = None  # theta node position of the crossing, where the block crosses Z = 0 more than once
+  sep_row: int = 0  # the SOL block's node row on the separatrix (its LCFS in a block holding closed rows too)
 
 
 # strip bands, y in 0..8: (y0, height). A chain's SOL blocks over the blocks under them, or one band for a chain
@@ -263,6 +356,9 @@ class Layout:
   under: dict = field(
       default_factory=dict
   )  # block -> the aligned block under it (psi-lower partner), or None
+  lcfs: dict = field(
+      default_factory=dict
+  )  # block -> its LCFS node row, in a block holding closed rows (below it) and open ones (a limited run)
 
 
 def theta_chains(conn):
@@ -341,10 +437,13 @@ def psi_grows_outward(conn, nodes, r_axis=None):
   return True
 
 
-def derive_layout(conn, nodes, r_axis=None):
+def derive_layout(conn, nodes, r_axis=None, lcfs=None):
   """The block layout from the topology (psi growing outward: flip_conn first where it does not) and the nodes.
-    r_axis: R of the magnetic axis, for the inner/outer side where the domain has no core block."""
+    r_axis: R of the magnetic axis, for the inner/outer side where the domain has no core block. lcfs: block -> its
+    LCFS node row, for a block closing on itself in theta whose rows from there on end on a sheath at its theta
+    ends instead (a limited run, sheath_open_rows): those rows are its SOL, their ends its targets."""
   nb = len(conn)
+  lcfs = lcfs or {}
   allZ = np.concatenate([nodes[b][..., 1].ravel() for b in range(nb)])
   ztol = 1e-9 * np.ptp(allZ)
 
@@ -392,6 +491,15 @@ def derive_layout(conn, nodes, r_axis=None):
         np.mean(np.concatenate([nodes[b][..., 0].ravel() for b in range(nb)])))
   side_of = lambda R: 'outboard' if R > r_ref else 'inboard'  # noqa: E731
 
+  def crossings(b, row):
+    """(theta node position, R) where one node row of block b crosses Z = 0."""
+    R0, Z0 = nodes[b][row, :, 0], nodes[b][row, :, 1]
+    out = []
+    for p in row_crossings(Z0, ztol):
+      k = min(int(p), len(R0) - 2)
+      out.append((p, R0[k] + (p - k) * (R0[k + 1] - R0[k])))
+    return out
+
   # SOL chains (open, every block SOL), in the order of their first block; their midplane crossings (row 0)
   sol_chains = sorted([
       c for c in chains if not c['closed'] and all(region[b] == 'sol'
@@ -404,10 +512,7 @@ def derive_layout(conn, nodes, r_axis=None):
     cross = [
     ]  # (block, theta node position, R), in chain order; a crossing on a shared node once
     for b in c['blocks']:
-      R0, Z0 = nodes[b][0, :, 0], nodes[b][0, :, 1]
-      for p in row_crossings(Z0, ztol):
-        k = min(int(p), len(R0) - 2)
-        R = R0[k] + (p - k) * (R0[k + 1] - R0[k])
+      for p, R in crossings(b, 0):
         if not cross or abs(R - cross[-1][2]) > 1e-9 * span:
           cross.append((b, p, R))
     nby = {b: sum(1 for x in cross if x[0] == b) for b in c['blocks']}
@@ -457,6 +562,29 @@ def derive_layout(conn, nodes, r_axis=None):
         lab.append(own[0] if len(own) == 1 else 'main SOL' if len(own) >
                    1 else c['side'] if c['side'] != 'SOL' else 'SOL')
     c['labels'] = lab
+  # a block closing on itself whose rows from its LCFS on end on a sheath at its theta ends (a limited run): its
+  # LCFS row's midplane crossings make the stacks (core rows then SOL rows), its open rows at each theta end a target
+  # (named by the side its cells reach it from: the theta ends meet where the field lines end)
+  for b, m in lcfs.items():
+    if not chain_of[b]['ring'] or len(chain_of[b]['blocks']) != 1:
+      continue
+    cross = crossings(b, m)
+    nt = nodes[b].shape[1] - 1
+    if abs(nodes[b][m, 0, 1]) <= ztol and not any(
+        min(p, nt - p) < 0.5 for p, _ in cross):  # its seam on Z = 0
+      cross.insert(0, (0.0, float(nodes[b][m, 0, 0])))
+    for p, R in cross:
+      stacks.setdefault(
+          side_of(R),
+          Stack(side_of(R), None, b, False, p if len(cross) > 1 else None, m))
+    mid = max(cross, key=lambda x: x[1])[0] if cross else None
+    for e in (0, -1):
+      ud = 'upper' if cell_centres(nodes[b][m:])[:, e,
+                                                 1].mean() > 0 else 'lower'
+      io = 'outer' if nodes[b][m:, e, 0].mean() > r_ref else 'inner'
+      targets.append(
+          Target(f'{ud} {io} target', b, None, e, b if cross else None, ud, io,
+                 mid, m))
 
   # strips: a target-to-target chain alone; chains meeting at the mirror joined there (target -> mirror first)
   strips = []
@@ -513,6 +641,19 @@ def derive_layout(conn, nodes, r_axis=None):
       x += nt
     regs = ', '.join(dict.fromkeys(REGION_LABEL[region[b]] for b in rest))
     mx = 0 if c['start'] == 'mirror' else (x if c['end'] == 'mirror' else None)
+    m = lcfs.get(rest[0]) if len(rest) == 1 else None
+    if m is not None:  # a limited block: its core rows under its LCFS, its SOL rows over it, in one band
+      ys = 8.0 * m / (nodes[rest[0]].shape[0] - 1)
+      strips.append(
+          Strip('every cell, unrolled: core (closes on itself) and SOL',
+                items,
+                segs,
+                mx,
+                x,
+                ylabels=(('core edge', 0.4), ('core', ys / 2), ('LCFS', ys),
+                         ('SOL', (ys + 8) / 2)),
+                sep=ys))
+      continue
     strips.append(
         Strip(f'every cell, unrolled: {regs}' +
               (' (closes on itself)' if c['ring'] else ''),
@@ -531,7 +672,8 @@ def derive_layout(conn, nodes, r_axis=None):
                 stacks,
                 half=half,
                 under={b: inner_of(b)
-                       for b in range(nb)})
+                       for b in range(nb)},
+                lcfs=dict(lcfs))
 
 
 def select_strips(layout, blocks=None):
@@ -576,6 +718,8 @@ class Run:
   charge: dict = field(default_factory=dict)
   e: float = 0.0
   nodes: dict = field(default_factory=dict)
+  # blocks whose psi index runs against their own topology entry (contrary_blocks): read reversed
+  contrary: tuple = ()
   layout: Layout = None
   options: dict = field(default_factory=dict)
   shot: int = 0
@@ -583,6 +727,8 @@ class Run:
   half_meta: int = -1
   single: bool = False  # a single-block run (the gyrokinetic app's own files: no _b<k> in the names, no topology)
   flip: bool = False  # its psi index grows inward: every block's rows are reversed on reading (rows())
+  device: str = ''  # the device it simulates (its simulation's SimSettings; '': none)
+  geqdsk: object = None  # its simulation's equilibrium file (SimSettings), for when its own files name none
 
   @property
   def name(self):
@@ -611,22 +757,28 @@ class Run:
     st = os.stat(self.f(0, f'{self.species[0]}_M0', k))
     return st.st_mtime_ns ^ st.st_size
 
-  def rows(self, a):
-    """A block's array (psi rows first) in the viewer's order, row 0 innermost: the file's, or reversed where the
-        psi index grows inward. Only for cell averages and node values (a modal coefficient odd in psi changes sign)."""
-    return a[::-1] if self.flip else a
+  def reversed(self, b):
+    """Whether block b's rows are read reversed: the run's psi index grows inward (flip), or the block's own runs
+        against its topology entry (contrary), not both."""
+    return self.flip != (b in self.contrary)
+
+  def rows(self, b, a):
+    """Block b's array (psi rows first) in the viewer's order, row 0 innermost: the file's, or reversed (reversed()).
+        Only for cell averages and node values (a modal coefficient odd in psi changes sign)."""
+    return a[::-1] if self.reversed(b) else a
 
   def file_row(self, b, i):
     """The file's psi index of the viewer's row i of block b, and back (the same map both ways)."""
-    return self.nodes[b].shape[0] - 2 - i if self.flip else i
+    return self.nodes[b].shape[0] - 2 - i if self.reversed(b) else i
 
   @property
   def title(self):
-    """'NSTX-U #203899 @ 325 ms' (viewer.json's "device", then the shot) when the run's geqdsk names a shot,
-    else its directory."""
+    """'NSTX-U #203899 @ 325 ms' (its device, then the shot) when the run's geqdsk names a shot, else its
+    directory."""
     if not self.shot:
       return self.name
-    return (f'{DEVICE} ' if DEVICE else '') + f'#{self.shot} @ {self.eq_ms} ms'
+    return (f'{self.device} '
+            if self.device else '') + f'#{self.shot} @ {self.eq_ms} ms'
 
 
 def find_stem(path):
@@ -654,9 +806,72 @@ def single_block_topology(nd):
     closes on itself (its first and last theta node columns coincide: a core ring, periodic in theta)."""
   conn = np.zeros((1, 2, 2, 3), dtype=int)
   conn[..., 2] = PHYSICAL
-  if np.allclose(nd[:, 0], nd[:, -1], rtol=0, atol=1e-9 * np.ptp(nd[..., :2])):
+  if closes(nd):
     conn[0, 1, 0], conn[0, 1, 1] = (0, 1, UPPER_POS), (0, 1, LOWER_POS)
   return conn
+
+
+def physical_rz(xyz, geometry_type):
+  """(R, Z) of positions as a geometry file writes them (last axis): the tokamak geometry's (R, Z, phi), or a mapc2p
+    geometry's Cartesian (X, Y, Z) (geometry_type GEOMETRY_MAPC2P, the file's metadata): R = hypot(X, Y)."""
+  xyz = np.asarray(xyz)
+  if geometry_type == GEOMETRY_MAPC2P:
+    return np.stack([np.hypot(xyz[..., 0], xyz[..., 1]), xyz[..., 2]], axis=-1)
+  return xyz[..., :2]
+
+
+def corner_nodes(path):
+  """(R, Z) of a block's corner nodes, from its geo_corn_nodes file (physical_rz by its geometry_type)."""
+  g = read_gkyl(path)
+  return physical_rz(g['data'], int(g['meta'].get('geometry_type', -1)))
+
+
+def _gaps(pts, poly):
+  """The distance of each point to a polyline [n, (R, Z)]."""
+  a, d = poly[:-1], np.diff(poly, axis=0)
+  t = np.clip(((pts[:, None] - a) * d).sum(-1) / np.maximum(
+      (d * d).sum(-1), 1e-300), 0, 1)
+  return np.hypot(*(a + t[..., None] * d -
+                    pts[:, None]).transpose(2, 0, 1)).min(1)
+
+
+def contrary_blocks(conn, nodes):
+  """The blocks whose psi index runs against their own topology entry: across each of their connected psi faces
+    the topology names a block whose psi faces lie against their other psi face (nearer it than the named one, by
+    the median distance of the face's nodes). Such a topology joins faces that do not touch (TCV x21's fixture,
+    2026-11-16: blocks 0-4, 0.1 m apart; every other run here: the named face, 1e-10 cells off, the other 1-300
+    cells); reading the block reversed makes its rows run as the topology says."""
+
+  def gap(face, p):
+    """How far a face of nodes lies from the nearer psi face of block p."""
+    return min(np.median(_gaps(face, nodes[p][e])) for e in (0, -1))
+
+  out = []
+  for b, nd in nodes.items():
+    against = [
+        gap(nd[e - 1], int(conn[b, 0, e, 0]))
+        < gap(nd[-e], int(conn[b, 0, e, 0])) for e in (0, 1)
+        if conn[b, 0, e, 2] != PHYSICAL
+    ]
+    if against and all(against):
+      out.append(b)
+  return tuple(out)
+
+
+def sheath_open_rows(run, b, k):
+  """The rows of block b (the file's psi index, a range) whose field lines end on a sheath at its theta ends: the
+    range the sheath boundary condition's own files of frame k cover (<species>_bc_z{lower,upper}_vcutsq, written
+    where it applies: a limited run's SOL rows only, its core rows closing on themselves); None where the block
+    writes none."""
+  p = next((q for s in run.species for e in ('lower', 'upper')
+            if os.path.exists(q := run.f(b, f'{s}_bc_z{e}_vcutsq', k))), None)
+  if p is None:
+    return None
+  grid, g = read_gkyl(run.f(b, 'field', k)), read_gkyl(p)
+  lo, dx = grid['lower'][0], (grid['upper'][0] -
+                              grid['lower'][0]) / grid['cells'][0]
+  return range(int(round((g['lower'][0] - lo) / dx)),
+               int(round((g['upper'][0] - lo) / dx)))
 
 
 def magnetic_axis_R(run):
@@ -674,18 +889,25 @@ def magnetic_axis_R(run):
 
 
 def open_run(path, sim=''):
+  """The run in directory path, of the simulation labelled sim (its SimSettings: the device, the geqdsk; a run of
+    no simulation offered, as --path's: viewer.json's default device)."""
   path = os.path.abspath(path)
-  r = Run(path, sim)
+  own = SIM_SETTINGS.get(sim) or SimSettings(DEVICE)
+  r = Run(path, sim, device=own.device, geqdsk=own.geqdsk)
   r.stem, r.single = find_stem(path)
   frames = r.frames()
   if not frames:
     raise FileNotFoundError(f'{path}: no frames')
   k0 = frames[0]
   pre = f'{r.stem}-' if r.single else f'{r.stem}_b0-'
-  r.species = sorted({
+  names = {
       re.search(rf'{re.escape(pre)}(\w+?)_M0_{k0}\.gkyl$', p).group(1)
       for p in glob.glob(f'{path}/{pre}*_M0_{k0}.gkyl')
-  })
+  }
+  # a species' source writes its moments as <species>_source_<moment> (gk_species_source.c): not a species
+  r.species = sorted(
+      n for n in names
+      if not (n.endswith('_source') and n.removesuffix('_source') in names))
   if not r.species:
     raise FileNotFoundError(f'{path}: no moments at frame {k0}')
   for s in r.species:
@@ -699,24 +921,32 @@ def open_run(path, sim=''):
   r.options = read_options(path)
   if r.single:
     r.nb = 1
-    nodes = {
-        0: np.asarray(read_gkyl(r.f(0, 'geo_corn_nodes'))['data'])[..., :2]
-    }
+    nodes = {0: corner_nodes(r.f(0, 'geo_corn_nodes'))}
     conn = single_block_topology(nodes[0])
   else:
     tm = read_gkyl(f'{path}/{r.stem}-block_topo.gkyl')['meta']
     r.nb = int(tm['num_blocks'])
     conn = np.array(tm['connections']).reshape(r.nb, int(tm['ndim']), 2, 3)
-    nodes = {
-        b: np.asarray(read_gkyl(r.f(b, 'geo_corn_nodes'))['data'])[..., :2]
-        for b in range(r.nb)
-    }
+    nodes = {b: corner_nodes(r.f(b, 'geo_corn_nodes')) for b in range(r.nb)}
+    r.contrary = contrary_blocks(conn, nodes)
   r_axis = magnetic_axis_R(r)
-  r.flip = not psi_grows_outward(conn, nodes, r_axis)
+  r.flip = not psi_grows_outward(conn, {
+      b: nd[::-1] if b in r.contrary else nd
+      for b, nd in nodes.items()
+  }, r_axis)
   if r.flip:
     conn = flip_conn(conn)
-  r.nodes = {b: r.rows(nd) for b, nd in nodes.items()}
-  r.layout = derive_layout(conn, r.nodes, r_axis)
+  r.nodes = {b: r.rows(b, nd) for b, nd in nodes.items()}
+  # a block whose sheath covers its outer rows only (a limited run): the first of them is its LCFS row
+  lcfs = {}
+  for b in range(r.nb):
+    open_rows = sheath_open_rows(r, b, k0)
+    if open_rows is not None and len(open_rows):
+      rows = sorted(r.file_row(b, i) for i in open_rows)
+      nr = r.nodes[b].shape[0] - 1
+      if 0 < rows[0] and rows == list(range(rows[0], nr)):
+        lcfs[b] = rows[0]
+  r.layout = derive_layout(conn, r.nodes, r_axis, lcfs)
   r.layout.flip = r.flip
   # shot and equilibrium time: the header of the geqdsk the run read, else its file stem
   g = geqdsk_path(r)
@@ -725,6 +955,24 @@ def open_run(path, sim=''):
   if m:
     r.shot, r.eq_ms = int(m.group(1)), int(m.group(2))
   return r
+
+
+def empty_run():
+  """The run shown when there is none (viewer.json offers no simulation, or none of its runs can be read): no
+    directory, no block, no frame, nothing to read. Its species are SPECIES_TAG's (their masses and charges unknown:
+    nan) and its outboard and inboard midplanes hold no block, so that each chart keeps the panels, axes and legend
+    it has for a run, with nothing in them: what the page looks like, never data."""
+  unknown = dict.fromkeys(SPECIES_TAG, np.nan)
+  return Run(
+      '',
+      species=list(SPECIES_TAG),
+      mass=dict(unknown),
+      charge=dict(unknown),
+      e=np.nan,
+      layout=Layout(
+          {}, [], [],
+          {s: Stack(s, None, None, False)
+           for s in ('outboard', 'inboard')}, False))
 
 
 def is_run_dir(p):
@@ -762,6 +1010,8 @@ def sim_runs(simdir):
 def geqdsk_named(path, options):
   """The geqdsk the run at path read, as its files name it: options_used.txt (options), else the -o geqdsk= of
     command.txt; a relative name made absolute from the run. None when neither names one."""
+  if not path:  # no directory (the empty run): no files to name one
+    return None
   name = options.get('geqdsk')
   cmd = os.path.join(path, 'command.txt')
   if not name and os.path.exists(cmd):
@@ -772,10 +1022,23 @@ def geqdsk_named(path, options):
 
 
 def geqdsk_path(run):
-  """The geqdsk the run read, here (here()), or None when it is not."""
+  """The geqdsk the run read, here (here()): the one its own files name, else (they name none) the one viewer.json
+    names for its simulation (Run.geqdsk); None when that is not here, or there is none. It gives the run's shot and
+    time and its wall."""
   path = geqdsk_named(run.path, run.options)
-  path = path and here(path)
+  path = here(path) if path else run.geqdsk
   return path if path and os.path.exists(path) else None
+
+
+def geqdsk_disagreement(run):
+  """(the geqdsk the run's own files name, the one viewer.json names for its simulation) when both are here and
+    are different files, else None. The run's own is the one used."""
+  named = geqdsk_named(run.path, run.options)
+  named = named and here(named)
+  if named and run.geqdsk and os.path.exists(named) and os.path.exists(
+      run.geqdsk) and not os.path.samefile(named, run.geqdsk):
+    return named, run.geqdsk
+  return None
 
 
 def here(path):
@@ -790,10 +1053,20 @@ def here(path):
 
 
 def wall(run):
-  """Limiter outline (R, Z) from the run's geqdsk, or None."""
-  path = geqdsk_path(run)
-  if path is None:
-    return None
+  """The wall drawn with a run, (R, Z) closed: the limiter of its geqdsk (geqdsk_path); where that gives none (no
+    geqdsk, or fewer than 3 limiter points), the limiter of the geqdsk viewer.json names as its device's "wall"
+    ("devices": {device: {"wall": <file, relative to base>}}: the wall only, never the run's shot); else None."""
+  own = device_settings(run.device).get('wall')
+  for path in (geqdsk_path(run),
+               os.path.normpath(os.path.join(BASE, own)) if own else None):
+    w = limiter(path) if path and os.path.exists(path) else None
+    if w is not None:
+      return w
+  return None
+
+
+def limiter(path):
+  """The limiter outline (R, Z) of a geqdsk, closed; None when it has fewer than 3 points (no vessel)."""
   lines = open(path).read().split('\n')
   fre = re.compile(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?')
   floats, intline = [], None
@@ -808,7 +1081,7 @@ def wall(run):
   pos, (nbdy, nlim) = intline
   lim = np.array(floats[pos + 2 * nbdy:pos + 2 * nbdy + 2 * nlim]).reshape(
       -1, 2)
-  return np.vstack([lim, lim[:1]])
+  return np.vstack([lim, lim[:1]]) if len(lim) >= 3 else None
 
 
 # ----------------------------------------------------------------------------------------------------------- frames
@@ -850,7 +1123,7 @@ def _block_fields(run, b, k):
   d = {}
   qpar, qperp = 0.0, 0.0
   for s in run.species:
-    M = {m: run.rows(cav(run.f(b, f'{s}_{m}', k))) for m in MOMS}
+    M = {m: run.rows(b, cav(run.f(b, f'{s}_{m}', k))) for m in MOMS}
     n = M['M0']
     ok = n > 0
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -869,7 +1142,7 @@ def _block_fields(run, b, k):
     with np.errstate(invalid='ignore'):
       cs = np.sqrt((d['T_elc'] + d['T_ion']) * run.e / run.mass['ion'])
       d['mach'] = d['upar_ion'] / cs
-  d['phi'] = run.rows(cav(run.f(b, 'field', k)))
+  d['phi'] = run.rows(b, cav(run.f(b, 'field', k)))
   d['q_par'] = qpar
   d['q_perp'] = qperp
   return d
@@ -897,27 +1170,37 @@ def stack_blocks(st):
   return [b for b in (st.core, st.sol) if b is not None]
 
 
+def midplane_radii(run, side):
+  """(R at Z = 0 of each cell row through the core block then the SOL block on one side, R_sep); none and nan at
+    a midplane holding no block (the empty run)."""
+  st = run.layout.stacks[side]
+  Rs = [
+      0.5 * (e[1:] + e[:-1])
+      for e in (mid_edges(run.nodes[b], st.j) for b in stack_blocks(st))
+  ]
+  return np.concatenate([np.zeros(0)] + Rs), mid_edges(
+      run.nodes[st.sol], st.j)[st.sep_row] if st.sol is not None else np.nan
+
+
 def midplane_profile(run, fr, side, qty):
   """(R at Z = 0 per cell row, value) through the core block then the SOL block on one side; R_sep."""
   st = run.layout.stacks[side]
-  Rs, vs = [], []
+  vs = []
   for b in stack_blocks(st):
-    e = mid_edges(run.nodes[b], st.j)
-    Rs.append(0.5 * (e[1:] + e[:-1]))
     v = fr[b][qty]
     vs.append(
         np.array([(1 - w) * v[i, j0] + w * v[i, j1]
                   for i, (j0, j1,
                           w) in enumerate(midplane_weights(run.nodes[b], st.j))
                   ]))
-  return np.concatenate(Rs), np.concatenate(vs), mid_edges(
-      run.nodes[st.sol], st.j)[0]
+  R, rsep = midplane_radii(run, side)
+  return R, np.concatenate([np.zeros(0)] + vs), rsep
 
 
 def stack_rows(run, side, blocks=None):
   """Which rows of a midplane profile (midplane_profile's order) belong to the chosen blocks (None: all)."""
   st = run.layout.stacks[side]
-  return np.concatenate([
+  return np.concatenate([np.zeros(0, bool)] + [
       np.full(run.nodes[b].shape[0] - 1, blocks is None or b in blocks)
       for b in stack_blocks(st)
   ])
@@ -927,13 +1210,14 @@ def target_heat_flux(run, fr, tgt):
   """|q_par| per SOL surface at the plate cell, the surfaces' midplane distance from the separatrix (mm), lambda_q.
     Where no block of the leg's chain reaches Z = 0 (tgt.mid None) the surfaces sit at their distance along the plate
     from its inner corner instead, and there is no lambda_q."""
-  q = np.abs(fr[tgt.leg]['q_par'][:, tgt.j])
+  r0 = tgt.open_row
+  q = np.abs(fr[tgt.leg]['q_par'][r0:, tgt.j])
   if tgt.mid is None:
-    face = run.nodes[tgt.leg][:, tgt.j]
+    face = run.nodes[tgt.leg][r0:, tgt.j]
     dist = np.concatenate([[0.0],
                            np.cumsum(np.hypot(*np.diff(face, axis=0).T))])
     return q, 0.5 * (dist[1:] + dist[:-1]) * 1e3, np.nan
-  edges = mid_edges(run.nodes[tgt.mid], tgt.mid_j)
+  edges = mid_edges(run.nodes[tgt.mid], tgt.mid_j)[r0:]
   dist = np.abs(edges - edges[0])
   C = np.concatenate([[0.0], np.cumsum(q * np.diff(dist))])
   lam = (np.interp(LAMBDA_FRACTION *
@@ -951,9 +1235,9 @@ def cell_offsets(run):
   return off
 
 
-def _summary_one(run, k, fr0):
-  fr = frame(run, k)
-  out = {'t': run.time(k)}
+def _summary_one(run, fr, t, fr0):
+  """The summary entries of one frame fr (block -> fields) at time t."""
+  out = {'t': t}
   for tgt in run.layout.targets:
     q, _, lam = target_heat_flux(run, fr, tgt)
     out[f'q|{tgt.name}'] = q
@@ -962,20 +1246,21 @@ def _summary_one(run, k, fr0):
     for qty in quantities(run):
       out[f'mid|{side}|{qty}'] = midplane_profile(run, fr, side, qty)[1]
   for qty in quantities(run):
-    v = np.concatenate([fr[b][qty].ravel() for b in range(run.nb)])
+    v = np.concatenate([np.zeros(0)] +
+                       [fr[b][qty].ravel() for b in range(run.nb)])
     out[f'fld|{qty}'] = v.astype(
         np.float32)  # every cell (cell_offsets order): the browser-side movie
     v = v[np.isfinite(v)]
     out[f'pct|{qty}'] = np.percentile(
         v, [0, 1, 50, 99, 100]) if len(v) else np.full(5, np.nan)
   for reg in ('core', 'sol', 'pf'):
-    bs = [b for b in range(run.nb) if run.layout.region[b] == reg]
+    bs = [(b, region_rows(run, b, reg)) for b in range(run.nb)]
     for s in run.species:
       for base in ('n', 'T'):
         qty = f'{base}_{s}'
         with np.errstate(divide='ignore', invalid='ignore'):
-          rel = np.concatenate([(fr[b][qty] / fr0[b][qty] - 1).ravel()
-                                for b in bs] or [np.zeros(0)])
+          rel = np.concatenate([(fr[b][qty][i] / fr0[b][qty][i] - 1).ravel()
+                                for b, i in bs] or [np.zeros(0)])
         rel = rel[np.isfinite(rel)]
         out[f'med|{reg}|{qty}'] = np.median(rel) if len(rel) else np.nan
   for s in run.species:
@@ -998,6 +1283,14 @@ def summary(run, progress=None):
     in memory); only new or rewritten frames are read. progress(iterable, total) wraps the loop over them (a progress
     bar). 'fld|<qty>' holds every cell's value (float32, cell_offsets order)."""
   frames = run.frames()
+  if not frames:  # nothing written (the empty run): every entry, no row
+    return dict(
+        {
+            key: np.zeros((0, ) + np.shape(v))
+            for key, v in _summary_one(run, {}, np.nan, {}).items()
+        },
+        frames=np.zeros(0, int),
+        stamp=np.zeros(0, np.int64))
   stamps = np.array([run.stamp(k) for k in frames], dtype=np.int64)
   memo = _SUMMARY.get(run.path)
   if memo is not None and np.array_equal(memo['stamp'], stamps):
@@ -1016,7 +1309,7 @@ def summary(run, progress=None):
   new = {}
   it = progress(todo, len(todo)) if (progress and todo) else todo
   for k in it:
-    new[k] = _summary_one(run, k, fr0)
+    new[k] = _summary_one(run, frame(run, k), run.time(k), fr0)
   keys = sorted(set(new[todo[0]]) if todo else set(old) - {'frames', 'stamp'})
   out = {'frames': np.array(frames), 'stamp': stamps}
   for key in keys:
@@ -1040,6 +1333,9 @@ def summary(run, progress=None):
 
 # ------------------------------------------------------------------------------------------------------ time traces
 def dt_history(run):
+  """(t, dt) of every step (the run's -dt file); none for a run with no block (the empty run)."""
+  if not run.nb:
+    return np.zeros(0), np.zeros(0)
   t, d = read_dynvec(f'{run.path}/{run.stem}-dt.gkyl')
   return t, d[:, 0]
 
@@ -1078,7 +1374,7 @@ def field_energy(run):
     else:
       n = min(len(t0), len(t))
       t0, tot = t0[:n], tot[:n] + d[:n, 0]
-  return t0, tot
+  return (t0, tot) if tot is not None else None
 
 
 # --------------------------------------------------------------------------------------------------- frame ranges
@@ -1126,6 +1422,117 @@ def select_frames(spec, available):
   return [f for f in available if lo <= f < hi and (f - lo) % step == 0]
 
 
+# ------------------------------------------------------------------------------------------------------- cell edges
+# where a cell edge's two Gauss-Legendre nodes lie along it (0 and 1: its corners), and where a drawn edge passes:
+# the cubic through the corners and those nodes, sampled at them and evenly between
+GAUSS_T = (0.5 - 0.5 / np.sqrt(3), 0.5 + 0.5 / np.sqrt(3))
+EDGE_T = np.sort(np.r_[np.linspace(0, 1, 7)[1:-1], GAUSS_T])
+
+
+def _edge_weights():
+  """[len(EDGE_T), 4]: the weights of an edge's corner, Gauss nodes and corner (Lagrange in t at 0, GAUSS_T, 1) at
+    each of EDGE_T."""
+  nodes = np.r_[0.0, GAUSS_T, 1.0]
+  return np.array([[
+      np.prod([(t - nodes[m]) / (nodes[k] - nodes[m]) for m in range(4)
+               if m != k]) for k in range(4)
+  ] for t in EDGE_T])
+
+
+def _edge_polylines(C, s0, s1):
+  """A block's cell edges as polylines along curves, each edge the cubic through its corners and its two Gauss nodes
+    (EDGE_T): its node rows [nr + 1, (len(EDGE_T) + 1) nt + 1, 2] and node columns [nt + 1, (len(EDGE_T) + 1) nr + 1,
+    2], from its corners C [nr + 1, nt + 1, 2] and the two Gauss nodes on each constant-psi edge s0 [nr + 1, 2 nt, 2]
+    and constant-theta edge s1 [2 nr, nt + 1, 2]."""
+  W = _edge_weights()
+
+  def along(
+      A, G1, G2,
+      B):  # edges [..., n, 2] -> polylines [..., (len(EDGE_T) + 1) n + 1, 2]
+    inner = np.einsum('sk,k...->...s', W, np.stack([A, G1, G2,
+                                                    B]))  # [..., n, 2, s]
+    pts = np.concatenate([A[..., None], inner],
+                         axis=-1).transpose(*range(A.ndim - 2), A.ndim - 2,
+                                            A.ndim,
+                                            A.ndim - 1)  # [..., n, 1 + s, 2]
+    flat = pts.reshape(*pts.shape[:-3], -1, 2)
+    return np.concatenate([flat, B[..., -1:, :]], axis=-2)
+
+  rows = along(C[:, :-1], s0[:, 0::2], s0[:, 1::2], C[:, 1:])
+  cols = along(*(a.transpose(1, 0, 2)
+                 for a in (C[:-1], s1[0::2], s1[1::2], C[1:])))
+  return rows, cols
+
+
+def _gauss_nodes_by_edges(C, s0, s1):
+  """Whether every Gauss node lies by its edge: within one chord length of the chord's middle (a curved edge bends
+    away from its chord, by up to 0.88 of it at STEP's X point, 2026-11-16; a misread or unwritten node lies
+    anywhere: Sim 1's and Sim 2's files hold zeros)."""
+  tol = 1e-9 * np.ptp(C)
+  for A, B, G in ((C[:, :-1], C[:, 1:], (s0[:, 0::2], s0[:, 1::2])),
+                  (C[:-1], C[1:], (s1[0::2], s1[1::2]))):
+    L, M = np.hypot(*(B - A).transpose(2, 0, 1)), 0.5 * (A + B)
+    if any((np.hypot(*(g - M).transpose(2, 0, 1)) > L + tol).any() for g in G):
+      return False
+  return True
+
+
+def cell_edges(run):
+  """Every block's cell edges as curves, for drawing: dict(rows={b: node rows}, cols={b: node columns}, curved, note),
+    polylines in the viewer's orientation. A Gkeyll cell edge is a curve through its two corners and the two
+    Gauss-Legendre nodes between them (GAUSS_T), drawn as the cubic through the four (_edge_polylines); the nodes'
+    positions are the first three components of the block's geo_surf0 (constant-psi edges) and geo_surf1
+    (constant-theta edges) mc2p_nodal_fd files (the rest are a finite-difference stencil), physical_rz as the
+    corners. Where a block lacks them, or one of its nodes lies away from its edge (_gauss_nodes_by_edges), every
+    edge is drawn as its chord instead (curved False) and note says so."""
+  if getattr(run, '_edges', None) is not None:
+    return run._edges
+  rows, cols, note = {}, {}, ''
+  for b in range(run.nb):
+    g = read_gkyl(run.f(b, 'geo_corn_nodes'))
+    gt = int(g['meta'].get('geometry_type', -1))
+    C = physical_rz(g['data'], gt)
+    try:
+      s0, s1 = (physical_rz(
+          np.asarray(read_gkyl(run.f(
+              b, f'geo_surf{d}_mc2p_nodal_fd'))['data'])[..., :3], gt)
+                for d in (0, 1))
+    except (OSError, ValueError) as e:
+      note = f'no surface nodes ({os.path.basename(str(getattr(e, "filename", None) or e))})'
+      break
+    if not _gauss_nodes_by_edges(C, s0, s1):
+      note = f'block {b}\'s surface nodes lie off their edges'
+      break
+    r, c = _edge_polylines(C, s0, s1)
+    rows[b], cols[b] = (r[::-1], c[:, ::-1]) if run.reversed(b) else (r, c)
+  if note:  # chords: the corners alone
+    rows = {b: run.nodes[b] for b in range(run.nb)}
+    cols = {b: run.nodes[b].transpose(1, 0, 2) for b in range(run.nb)}
+  run._edges = dict(rows=rows,
+                    cols=cols,
+                    curved=not note,
+                    note=f'cell edges drawn as chords: {note}' if note else '')
+  return run._edges
+
+
+def cell_polygons(run, b):
+  """Block b's cells as the regions their edges bound (cell_edges: curves, or chords): [nr, nt, 4 k, (R, Z)], each
+    cell's edges in turn from its first corner (rows i, then theta j, as the viewer's cells), k points to an edge."""
+  E = cell_edges(run)
+  R, C = E['rows'][b], E['cols'][b]
+  nr, nt = R.shape[0] - 1, C.shape[0] - 1
+  k = (R.shape[1] - 1) // nt
+  a = np.arange(k)
+  j, i = np.arange(nt)[:, None] * k, np.arange(nr)[:, None] * k
+  bottom, top = R[:-1][:, j + a], R[1:][:, j + k - a]  # [nr, nt, k, 2]
+  right, left = C[1:][:, i + a], C[:-1][:, i + k - a]  # [nt, nr, k, 2]
+  return np.concatenate(
+      [bottom,
+       right.transpose(1, 0, 2, 3), top,
+       left.transpose(1, 0, 2, 3)],
+      axis=2)
+
+
 # ------------------------------------------------------------------------------------- volumes and region means
 def cell_volumes(run):
   """Volume of every cell (cell_offsets order): the Jacobian's cell average times the logical cell size, per radian
@@ -1136,23 +1543,43 @@ def cell_volumes(run):
       g = read_gkyl(run.f(b, 'geo_int_jacobgeo'))
       cell = np.prod((np.asarray(g['upper']) - np.asarray(g['lower'])) /
                      np.asarray(g['cells']))
-      out.append(run.rows(np.asarray(g['data'])[..., 0] / 2.0 * cell).ravel())
+      out.append(
+          run.rows(b,
+                   np.asarray(g['data'])[..., 0] / 2.0 * cell).ravel())
     run._volumes = np.concatenate(out)
   return run._volumes
 
 
+def region_rows(run, b, region):
+  """The rows of block b in a region ('core', 'sol', 'pf'), a slice: all or none, but in a block holding closed and
+    open field lines (Layout.lcfs) its rows under the LCFS are core and the others SOL."""
+  nr = run.nodes[b].shape[0] - 1
+  m = run.layout.lcfs.get(b)
+  if m is not None:
+    return {'core': slice(0, m), 'sol': slice(m, nr)}.get(region, slice(0, 0))
+  return slice(0, nr) if run.layout.region[b] == region else slice(0, 0)
+
+
+def cell_region(run, b, i):
+  """The region of the viewer's row i of block b."""
+  return next(
+      (reg for reg in ('core', 'sol', 'pf')
+       if region_rows(run, b, reg).start <= i < region_rows(run, b, reg).stop),
+      run.layout.region[b])
+
+
 def region_cells(run, region):
-  """Cell indices (cell_offsets order) of a region ('core', 'sol', 'pf'), of every cell ('all'), or of a list of
-    blocks."""
+  """Cell indices (cell_offsets order) of a region ('core', 'sol', 'pf': region_rows), of every cell ('all'), or of
+    a list of blocks."""
   off = cell_offsets(run)
-  pick = (lambda b: b in region) if isinstance(region, (list, tuple, set, frozenset)) else \
-      (lambda b: region == 'all' or run.layout.region[b] == region)
-  idx = [
-      np.arange(
-          off[b],
-          off[b] + (run.nodes[b].shape[0] - 1) * (run.nodes[b].shape[1] - 1))
-      for b in range(run.nb) if pick(b)
-  ]
+  idx = []
+  for b in range(run.nb):
+    nr, nt = run.nodes[b].shape[0] - 1, run.nodes[b].shape[1] - 1
+    if isinstance(region, (list, tuple, set, frozenset)) or region == 'all':
+      i = slice(0, nr if region == 'all' or b in region else 0)
+    else:
+      i = region_rows(run, b, region)
+    idx.append(np.arange(off[b] + i.start * nt, off[b] + i.stop * nt))
   return np.concatenate(idx) if idx else np.zeros(0, int)
 
 
@@ -1174,14 +1601,14 @@ def full_device(run):
 
 # -------------------------------------------------------------------------------------------- particle / energy
 def _dyn_sum(run, what, comp, blocks=None):
-  """(t, sum over blocks of one component) of an integrated time trace, the blocks that wrote it."""
+  """(t, sum over blocks of one component) of an integrated time trace, the blocks that wrote it; (None, None)
+    when none did; empty when there is no block to sum over (the empty run)."""
+  bs = range(run.nb) if blocks is None else blocks
   found = [
-      read_dynvec(run.f(b, what))
-      for b in (range(run.nb) if blocks is None else blocks)
-      if os.path.exists(run.f(b, what))
+      read_dynvec(run.f(b, what)) for b in bs if os.path.exists(run.f(b, what))
   ]
   if not found:
-    return None, None
+    return (np.zeros(0), np.zeros(0)) if not len(bs) else (None, None)
   n = min(len(t) for t, _ in found)
   return found[0][0][:n], sum(d[:n, comp] for _, d in found)
 
@@ -1267,6 +1694,8 @@ def conservation(B, t_frames):
     'energy': (t_mid, r)}; (empty, empty) where fewer than two frames fall inside the diagnostics' span."""
 
   def per_interval(t, d):
+    if not len(t):  # no sample (the empty run)
+      return np.zeros(0), np.zeros(0)
     first = np.argmax(
         (d['out'] != 0) |
         (d['dot'] != 0))  # the samples before a step hold nothing yet
@@ -1418,6 +1847,8 @@ def diffusivity(run):
   if run.path in _DIFF:
     return _DIFF[run.path]
   out = dict(kind=None, source='', species={}, gap=0.0)
+  if not run.nb:  # the empty run: nothing to read
+    return dict(out, source='no run', same=True)
   if all(
       os.path.exists(run.f(b, f'{s}_anom_diff', 0)) for b in range(run.nb)
       for s in run.species):
@@ -1428,7 +1859,7 @@ def diffusivity(run):
         G = np.asarray(read_gkyl(run.f(b, 'geo_int_gxxj'))['data'])
         D = weak_divide(A, G)
         nv, gap = node_values(D)
-        nodes[b], cells[b] = run.rows(nv), run.rows(D[..., 0] / 2.0)
+        nodes[b], cells[b] = run.rows(b, nv), run.rows(b, D[..., 0] / 2.0)
         out['gap'] = max(out['gap'], gap / max(np.nanmax(np.abs(nv)), 1e-300))
       out['species'][s] = dict(nodes=nodes, cells=cells)
     out['kind'], out['source'] = 'file', (
@@ -1539,10 +1970,14 @@ def nearest_cell(run, R, Z, region=None):
   best = (np.inf, -1)
   for pass_region in ([region, None] if region else [None]):
     for b in range(run.nb):
-      if pass_region and run.layout.region[b] != pass_region:
-        continue
       c = cell_centres(run.nodes[b])
       d = np.hypot(c[..., 0] - R, c[..., 1] - Z)
+      if pass_region:  # the other rows out of the running
+        keep = np.zeros(len(d), bool)
+        keep[region_rows(run, b, pass_region)] = True
+        d = np.where(keep[:, None], d, np.inf)
+        if not keep.any():
+          continue
       i, j = np.unravel_index(int(np.argmin(d)), d.shape)
       if d[i, j] < best[0]:
         best = (float(d[i, j]), off[b] + i * d.shape[1] + j)

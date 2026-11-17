@@ -7,8 +7,10 @@
 
 1. headless: the notebook runs with every tab built (mo.ui.tabs made eager), for each simulation; a launch view
    (mo.cli_args) opens where it says; one that does not fit falls back with a note per key;
-2. thomson: the reader equals the sim-init workflow's 203899 channel export; the beam flattop equals the scan's own
-   loop on random traces; Sim 2's profiles carry the Thomson points on each side;
+2. thomson: the reader equals the sim-init workflow's 203899 channel export (n_e and T_e); the beam flattop equals
+   the scan's own loop on random traces; Sim 2's profiles carry the Thomson points on each side, n and T rows;
+   measured (2026-11-16): CHERS and TRANSP (part_measured's docstring), with a postgkyl venv's python (viewer.json's
+   pgkyl) for scipy;
    exports: a state file round-trips and a foreign one is refused; the figure saves as png / pdf / svg (the svg names
    the theme font first); a 10-frame movie is H.264 with 10 frames;
 3. --browser: ./view.sh with launch keys (OPEN=0, a fixed port) driven over the DevTools protocol: the launch frame
@@ -35,6 +37,20 @@
 8. (2026-11-14, --browser) the page's layout: the movie's poloidal plane stays in its plot area (every simulation
    in its views, mirrored too, with the device picture, light and dark: nothing but text in the canvas's margins);
    the Options tab's tables fit their panel.
+9. (2026-11-16) the lines over the poloidal plane's cells (the separatrix, the wall, the block outlines), each on a
+   switch: on Sim 2 each switch draws or takes away pixels along its own line only (mirrored halves too), in the map
+   and (--browser) in the movie, which is not made again; all off leaves the map without lines; every map the viewer
+   draws takes the switches.
+10. (2026-11-16) the grid (every cell edge, curves through the Gauss nodes) and the quantity, each on a switch: on
+   ASDEX Upgrade's device run (by path, beside base) and Sim 2 (chords: its surface nodes are zeros, said on the
+   plane), the map, and (--browser) TCV's and DIII-D's movies: the grid draws along the cell edges only, the
+   quantity inside the cells only, the grid passes through the Gauss nodes and not along the chords.
+11. (2026-11-16) blank: with no viewer.json, with "sims": [] and with a simulation whose directory is missing, the
+    notebook opens on the empty run with every tab built, its charts and movie empty but whole; with --browser the
+    three served, every tab opened in the page, screenshots (--shots); the per-simulation and per-device settings of
+    viewer.json (part_schema).
+--parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, fonts, sync, poloidal,
+lines, grid, blank, browser, layout, liveplot).
 Exit status: the number of failures.
 """
 import argparse
@@ -208,14 +224,17 @@ def part_thomson():
   rows = list(csv.DictReader(open(ref)))
   i = int(np.argmin(np.abs(th.t - 0.325)))
   R = np.array([float(r['RADIUS_M']) for r in rows])
-  ne = np.array([
-      float(r['FIT_NE_CM3']) if float(r['VALID']) == 1 else np.nan for r in rows
-  ])
-  rel = np.nanmax(np.abs(th.ne[:, i] * 1e-6 / ne - 1))
+  rel, same = 0.0, True
+  for ch, col, unit in ((th.ne, 'FIT_NE_CM3', 1e6), (th.te, 'FIT_TE_KEV', 1e3)):
+    want = np.array([
+        float(r[col]) * unit if float(r['VALID']) == 1 else np.nan for r in rows
+    ])
+    rel = max(rel, np.nanmax(np.abs(ch.v[:, i] / want - 1)))
+    same &= np.array_equal(R, ch.R) and np.array_equal(np.isnan(want),
+                                                       np.isnan(ch.v[:, i]))
   check(
-      th.branch == 'TS3' and np.array_equal(R, th.R)
-      and np.array_equal(np.isnan(ne), np.isnan(th.ne[:, i])) and rel < 1e-14,
-      f'Thomson reader == the workflow\'s 203899 channel export ({th.branch}, frame {i}, '
+      th.branch == 'TS3' and same and rel < 1e-14,
+      f'Thomson reader == the workflow\'s 203899 channel export, n_e and T_e ({th.branch}, frame {i}, '
       f'max rel {rel:.1e})')
   # the flattop rule against the scan's own loop (upstream/elong_tri_range_scan.py), on beam traces with steps,
   # notches and noise
@@ -249,10 +268,536 @@ def part_thomson():
                            '',
                            'distance',
                            measured=(th, t0, t1))
-  pts = {tr.xaxis: len(tr.x) for tr in fig.data if tr.legendgroup == 'thomson'}
+  cell = _cells(fig)
+  pts = {
+      cell[tr.xaxis, tr.yaxis]: len(tr.x)
+      for tr in fig.data if tr.legendgroup == 'thomson'
+  }
+  sides = range(1, len(run.layout.stacks) + 1)
   check(
-      pts.get('x', 0) > 0 and len(pts) == len(run.layout.stacks),
-      f'Sim 2 profiles: Thomson points on each side ({pts})')
+      pts.get((1, 1), 0) > 0 and all(
+          (r, c) in pts for r in (1, 2) for c in sides),
+      f'Sim 2 profiles: Thomson points on the density and temperature rows, each side ({pts})'
+  )
+
+
+def _cells(fig):
+  """{(xaxis, yaxis) of a trace: (row, column)} of a figure made by plotly's make_subplots."""
+  grid = fig._grid_ref
+  out = {}
+  for r in range(1, len(grid) + 1):
+    for c in range(1, len(grid[0]) + 1):
+      sp = fig.get_subplot(r, c)
+      out[sp.xaxis.plotly_name.replace('axis', ''),
+          sp.yaxis.plotly_name.replace('axis', '')] = (r, c)
+  return out
+
+
+# ---------------------------------------------------------------------------------- measured profiles (11-16)
+# A TRANSP run for part_measured, NOT TRANSP output, made with a postgkyl venv's python (scipy): the variables of a
+# real slim TRANSP CDF (argv[1]) and, which the slim copies lack, a SYNTHETIC ND (0.8 NE) and RMAJM (midplane radii
+# of the zone boundaries, moving in time), as netCDF-3 classic (argv[2]), leaving out the variables named after
+# argv[4:]; then every variable of it as scipy reads it (argv[3], .npz; the units as 'units:<name>')
+TRANSP_FIXTURE = r'''
+import sys
+import numpy as np
+from scipy.io import netcdf_file
+src, dst, ref, drop = sys.argv[1], sys.argv[2], sys.argv[3], set(sys.argv[4:])
+with netcdf_file(src, 'r', mmap=False) as f:
+  out = netcdf_file(dst, 'w', version=1)
+  out.synthetic = b'gk_viewer check fixture: ND and RMAJM are made up, not TRANSP output'
+  for k, n in f.dimensions.items():
+    out.createDimension(k, n)
+  nb = f.dimensions['XB']
+  out.createDimension('RMJSYMB', 2 * nb + 1)
+  for name, v in f.variables.items():
+    if name not in drop:
+      w = out.createVariable(name, v.data.dtype, v.dimensions)
+      w[:] = v.data
+      for a, val in v._attributes.items():
+        setattr(w, a, val)
+  t = f.variables['TIME3'].data.astype(float)
+  xb = f.variables['XB'].data.astype(float)
+  ne = f.variables['NE'].data
+  if 'ND' not in drop:
+    w = out.createVariable('ND', ne.dtype, ('TIME3', 'X'))
+    w[:] = (0.8 * ne).astype(ne.dtype)
+    w.units, w.long_name = b'N/CM**3', b'SYNTHETIC: 0.8 NE (a viewer check fixture)'
+  if 'RMAJM' not in drop:
+    axis = 100 + 3 * np.sin(4 * t)  # cm
+    a_out, a_in = 47 + np.cos(3 * t), 68 + 0.5 * np.sin(5 * t)
+    shape = 0.75 * xb + 0.25 * xb**2
+    R = np.hstack([(axis[:, None] - a_in[:, None] * shape)[:, ::-1], axis[:, None],
+                   axis[:, None] + a_out[:, None] * shape])
+    w = out.createVariable('RMAJM', np.dtype('>f4'), ('TIME3', 'RMJSYMB'))
+    w[:] = R.astype('>f4')
+    w.units, w.long_name = b'CM', b'SYNTHETIC: midplane radii (a viewer check fixture)'
+  out.close()
+with netcdf_file(dst, 'r', mmap=False) as g:
+  np.savez(ref, **{k: np.asarray(v.data) for k, v in g.variables.items()},
+           **{f'units:{k}': np.array(v._attributes.get('units', b'').decode().strip())
+              for k, v in g.variables.items()})
+'''
+NAMELIST = {  # TRANSP namelists made up for the stand-in archive
+    'unset': '! made up for the viewer\'s checks: no lpredict set\nNZONES=40\n',
+    'interpretive': 'lpredict_te = 0\nlpredict_ti = 0, lpredict_ne = 0\n',
+    'predictive': 'lpredict_te = 0\nlpredict_ti = 0\nlpredict_ne = 0\n~update_time = 0.2\nlpredict_te = 1\n',
+}
+
+
+def _h5_datasets(path, skip=None):
+  """{name: value} of every dataset of an HDF5 file, but those under `skip`."""
+  import h5py
+  out = {}
+  with h5py.File(path, 'r') as f:
+    f.visititems(lambda n, o: out.__setitem__(n, o[()]) if isinstance(
+        o, h5py.Dataset) and not (skip and n.startswith(skip)) else None)
+  return out
+
+
+def _same(a, b):
+  try:
+    return np.array_equal(a, b, equal_nan=True)
+  except TypeError:  # strings
+    return np.array_equal(a, b)
+
+
+def _by_hand(nrow, idx, value, dist, R):
+  """Per row with a value: (mean R, mean distance, mean value, count) over the samples idx, in plain loops (the
+    definition, against thomson._average)."""
+  out = []
+  for j in range(nrow):
+    got = [(R(j, i), dist(j, i), value(j, i)) for i in idx
+           if np.isfinite(value(j, i)) and np.isfinite(dist(j, i))]
+    if got:
+      out.append([sum(g[q] for g in got) / len(got)
+                  for q in range(3)] + [len(got)])
+  return np.array(out).reshape(-1, 4)
+
+
+def part_measured():
+  """(2026-11-16) Thomson T_e, CHERS T_i and TRANSP's T_i and n_D (thomson.py, flux_transp.py, fetch_flux.sh): CHERS
+    against the sim-init workflow's direct points, its VALID masking, wrong units and axes refused (Thomson left
+    standing where CHERS or TRANSP fail); a TRANSP run made up for the check (TRANSP_FIXTURE: the real slim 203899S18
+    CDF and a synthetic ND and RMAJM) read as scipy reads it; fetch_flux.sh through a stand-in Flux (part_sync's ssh,
+    a banner on stdout; the MDSplus dumps and TRANSP's archive in a temporary directory, the archive with runs that
+    each rule step passes over) choosing each shot's run and delivering the files; window means against plain loops;
+    the profiles figure's rows, colours and both x modes; the notes for missing sources; the notebook on the files."""
+  import csv
+  import shutil
+  import h5py
+  import flux_transp as ft
+  import gkview as gv
+  import pgkyl_cmd as pc
+  import thomson
+  import viewer_plots as vp
+  wf = os.path.join(gv.BASE, 'nstxu_sim_init_workflow')
+  slim = os.path.join(wf, 'data', 'transp', 'NSTU', '16')
+  with tempfile.TemporaryDirectory() as tmp:
+    # the fixture, and the netCDF-3 reader against scipy on it
+    py = os.path.join(os.path.dirname(shutil.which(pc.PGKYL) or pc.PGKYL),
+                      'python')
+    with open(f'{tmp}/fixture.py', 'w') as f:
+      f.write(TRANSP_FIXTURE)
+    made = [
+        subprocess.run([
+            py, f'{tmp}/fixture.py', f'{slim}/203899S18.CDF', f'{tmp}/{nm}.CDF',
+            f'{tmp}/{nm}.npz', *drop
+        ],
+                       capture_output=True,
+                       text=True,
+                       timeout=300)
+        for nm, drop in (('full', ()), ('noND', ('ND', )))
+    ]
+    if any(p.returncode for p in made):
+      check(
+          False,
+          f'TRANSP fixture: made with {py} (a postgkyl venv: scipy): {[p.stderr[-300:] for p in made]}'
+      )
+      return
+    bad, nvar = [], 0
+    for nm in ('full', 'noND'):
+      ref, head = np.load(f'{tmp}/{nm}.npz'), ft.netcdf3(f'{tmp}/{nm}.CDF')
+      names = [k for k in ref.files if not k.startswith('units:')]
+      nvar += len(names)
+      bad += [
+          f'{nm}:{n}' for n in names if n not in head or not np.array_equal(
+              ft.netcdf3_data(f'{tmp}/{nm}.CDF', head[n]), ref[n])
+          or str(head[n][2].get('units', '')).strip() != str(ref[f'units:{n}'])
+      ] + ([f'{nm}: other names'] if set(names) != set(head) else [])
+    check(
+        not bad,
+        f'TRANSP fixture (the slim 203899S18 CDF + a synthetic ND, RMAJM): flux_transp\'s netCDF-3 reader == '
+        f'scipy, values and units, {nvar} variables in 2 files {bad[:4] or ""}')
+    # a stand-in Flux: the MDSplus dumps, TRANSP's archive with a run for each step of the rule to pass over
+    arch, troot, dest, data = (f'{tmp}/{d}' for d in ('archive', 'transparch',
+                                                      'dest', 'data'))
+    for d in (arch, f'{troot}/16', data, f'{tmp}/bin'):
+      os.makedirs(d)
+    sources = {
+        203655: os.path.join(thomson.flux_dir(), '203655.h5'),
+        203899: os.path.join(thomson.fallback_dir(), '203899.h5')
+    }
+    for s, p in sources.items():
+      os.symlink(p, f'{arch}/{s}.h5')
+    t_old = time.time() - 86400
+    runs = {  # run: (its CDF, namelist, TR.MSG, age order)
+        '203899S18': ('full', None, None, 0),
+        '203899X01': ('full', 'predictive', '', 9),
+        '203655A01': ('full', 'unset', ' MCINIT: fine\n', 0),
+        '203655A02': ('noND', 'unset', '', 1),
+        '203655A03': ('full', 'unset', ' ... TRANSP ABORT ...\n', 2),
+        '203655S05': (None, 'interpretive', '', 3),
+    }
+    for run, (cdf, nl, msg, age) in runs.items():
+      base = f'{troot}/16/{run}'
+      if cdf:
+        os.symlink(f'{tmp}/{cdf}.CDF', f'{base}.CDF')
+      if nl is None:  # the real namelist and log
+        shutil.copy(f'{slim}/{run}TR.DAT', f'{base}TR.DAT')
+        shutil.copy(f'{slim}/{run}TR.MSG', f'{base}TR.MSG')
+      else:
+        with open(f'{base}TR.DAT', 'w') as f:
+          f.write(NAMELIST[nl])
+        with open(f'{base}TR.MSG', 'w') as f:
+          f.write(msg)
+      os.utime(f'{base}TR.DAT', (t_old + 60 * age, t_old + 60 * age))
+    with open(f'{tmp}/bin/ssh', 'w') as f:
+      f.write(
+          STAND_IN_SSH.replace(
+              'exec sh -c "$*"',
+              'echo "Flux stand-in: welcome"; echo "module: loaded"\nexec sh -c "$*"'
+          ))
+    os.chmod(f'{tmp}/bin/ssh', 0o755)
+    with open(f'{data}/flux.env', 'w') as f:
+      f.write(f'FLUX_HOST=stand-in\nFLUX_PY={sys.executable}\n'
+              f'FLUX_TOOL={wf}/tools/extract_slim_h5.py\n'
+              f'FLUX_TRANSP_ROOT={troot}\nFLUX_H5_ROOT={arch}\n')
+    open(f'{tmp}/cm',
+         'w').close()  # view.sh --flux's login, as the stand-in keeps one
+    env = {k: v for k, v in os.environ.items() if not k.startswith('FLUX_')}
+    env.update(GK_VIEWER_DATA=data,
+               PATH=f'{tmp}/bin:' + os.environ['PATH'],
+               FLUX_CM=f'{tmp}/cm',
+               FLUX_DEST=dest,
+               TMPDIR=tmp)
+    p = subprocess.run(
+        ['bash',
+         os.path.join(HERE, 'fetch_flux.sh'), '203655', '203899'],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=900)
+    got = {s: f'{dest}/{s}.h5' for s in sources}
+    check(
+        p.returncode == 0 and all(os.path.exists(g) for g in got.values())
+        and 'Flux stand-in: welcome' not in p.stdout + p.stderr
+        and '203899: TRANSP 203899S18' in p.stderr,
+        f'fetch_flux.sh through a stand-in Flux (banner on stdout; the workflow\'s CSV found from FLUX_TOOL): '
+        f'rc {p.returncode}, delivered {sorted(os.listdir(dest)) if os.path.isdir(dest) else None} '
+        f'{"" if p.returncode == 0 else p.stderr[-400:]}')
+    if p.returncode:
+      return
+    diff = []
+    for s, src in sources.items():
+      a, b = _h5_datasets(src), _h5_datasets(got[s], skip=f'{s}/TRANSP')
+      diff += [f'{s}: {set(a) ^ set(b)}'] if set(a) != set(b) else []
+      diff += [f'{s}: {n}' for n in a if n in b and not _same(a[n], b[n])]
+    check(
+        not diff,
+        f'fetch: Thomson, EFIT01, CHERS (and beam power) == the archive\'s, dataset for dataset, both shots '
+        f'{diff[:4] or ""}')
+    # the run each shot got, and why
+    att = {}
+    for s in sources:
+      with h5py.File(got[s], 'r') as f:
+        g = f[f'{s}/TRANSP']
+        att[s] = {k: g.attrs[k] for k in g.attrs}
+    txt = lambda v: [thomson._text(x) for x in np.atleast_1d(v)]
+    c55, c99 = ' | '.join(txt(att[203655]['considered'])), ' | '.join(
+        txt(att[203899]['considered']))
+    check(
+        thomson._text(att[203899]['run']) == '203899S18'
+        and 'workflow' in thomson._text(att[203899]['why'])
+        and '203899X01: namelist predictive' in c99
+        and txt(att[203899]['predicts']) == ['lpredict_te', 'lpredict_ti']
+        and np.allclose(att[203899]['predicts_from'], 0.128287)
+        and thomson._text(att[203655]['run']) == '203655A01'
+        and 'set no lpredict' in thomson._text(att[203655]['why'])
+        and '203655S05: namelist interpretive; no CDF' in c55
+        and '203655A03: namelist unset; TR.MSG: TRANSP ABORT' in c55
+        and '203655A02: namelist unset; no ND' in c55
+        and '203655A01: namelist unset; CHOSEN' in c55,
+        f'TRANSP run choice: 203899 -> {txt(att[203899]["run"])} (the workflow\'s CSV; predicts '
+        f'{txt(att[203899]["predicts"])} from {att[203899]["predicts_from"]} s), 203655 -> '
+        f'{txt(att[203655]["run"])} ({c55})')
+    none = ft.choose(203899, troot)
+    check(
+        none[0] == '' and none[2] == 'no run qualifies'
+        and ft.choose(203655, troot, '203655Z99')[3][-1].startswith(
+            '203655Z99: the sim-init workflow\'s choice: not in the archive'),
+        f'TRANSP run choice without the CSV: 203899 (both runs predictive) gets none ({none[2]!r}); a CSV run '
+        'missing from the archive is said so')
+    # the delivered TRANSP == the fixture; the reader's units and midplane geometry
+    ref = np.load(f'{tmp}/full.npz')
+    head = ft.netcdf3(f'{tmp}/full.CDF')
+    with h5py.File(got[203899], 'r') as f:
+      g = f['203899/TRANSP']
+      bad = [
+          n for n in ft.VARIABLES
+          if not np.array_equal(g[n]['data'][()], ref[n])
+          or thomson._text(g[n]['units'][()]) != str(ref[f'units:{n}'])
+          or tuple(txt(g[n]['dims'][()])) != head[n][0]
+      ]
+    th = thomson.load(got[203899])
+    tr, nb = th.transp, ref['XB'].shape[1]
+    rm = ref['RMAJM'].astype(float) / 100
+    mid = lambda b: 0.5 * (b[:, :-1] + b[:, 1:]
+                           ).T  # the fixture's X: midway between its XB
+    geo = (np.array_equal(tr.edge['outboard'], rm[:, -1])
+           and np.array_equal(tr.edge['inboard'], rm[:, 0])
+           and np.allclose(tr.R['outboard'], mid(rm[:, nb:]), rtol=0, atol=1e-6)
+           and np.allclose(
+               tr.R['inboard'], mid(rm[:, nb::-1]), rtol=0, atol=1e-6))
+    check(
+        not bad and geo and np.array_equal(tr.ti, ref['TI'].T.astype(float))
+        and np.array_equal(tr.nd, ref['ND'].T.astype(float) * 1e6)
+        and tr.predicts == {
+            'lpredict_te': 0.128287,
+            'lpredict_ti': 0.128287
+        },
+        f'TRANSP delivered == the fixture ({len(ft.VARIABLES)} variables, units, dims {bad or ""}); read: n_D = '
+        f'1e6 ND (m^-3), T_i in eV, the boundary at RMAJM\'s ends, each zone centre midway between its boundaries '
+        f'({geo}), predicts {tr.predicts}')
+    # CHERS: against the workflow's direct points at 325 ms; VALID masking
+    pts = [
+        r for r in csv.DictReader(
+            open(
+                os.path.join(wf, 'reference_run',
+                             'transp_chers_rhoi_direct_chers_points.csv')))
+        if r['SHOT'] == '203899'
+    ]
+    by = {c.name: c for c in th.chers}
+    rel = 0.0
+    for r in pts:
+      c = by[r['CHERS_SYSTEM']]
+      i, j = int(np.argmin(np.abs(c.t - float(r['NEAREST_TIME_S'])))), int(
+          r['CHANNEL_INDEX'])
+      rel = max(rel, abs(c.v[j, i] / float(r['TI_EV']) - 1),
+                abs(c.err[j, i] / float(r['DTI_EV']) - 1),
+                abs(c.R[j] / float(r['R_M']) - 1))
+    check(
+        len(pts) > 0 and rel < 1e-14,
+        f'CHERS reader == the workflow\'s direct CHERS points (203899 @ 325 ms, CT1 and CT2): {len(pts)} points, '
+        f'R, T_i, dT_i to max rel {rel:.1e}')
+    pre = thomson.CHERS[1]
+    masks = []
+    with h5py.File(got[203899], 'r') as f:
+      for c in th.chers:
+        raw = {
+            n: f[f'203899/NSTX/{pre}{c.name}:{n}/data'][()]
+            for n in ('TI', 'DTI', 'VALID')
+        }
+        want = (raw['VALID'] == 1) & (raw['TI'] > 0) & (raw['DTI'] >= 0)
+        masks.append((c.name, int(want.sum()), want.size,
+                      np.array_equal(want.T, np.isfinite(c.v))))
+    check(
+        len(masks) == 2 and all(m[3] for m in masks),
+        f'CHERS: a point counts exactly where VALID == 1, T_i > 0, dT_i >= 0 (analysis, counted, of): {masks}'
+    )
+
+    # units and axes refused: CHERS or TRANSP give way with a reason, Thomson stays; a wrong MPTS unit refuses all
+    def broken(name, edit):
+      path = f'{tmp}/{name}.h5'
+      shutil.copy(got[203899], path)
+      with h5py.File(path, 'a') as f:
+        edit(f['203899'])
+      return path
+
+    def relabel(g, units):
+      del g['units']
+      g['units'] = units
+
+    def swap(g):
+      a, b = g['dim0'][()], g['dim1'][()]
+      del g['dim0'], g['dim1']
+      g['dim0'], g['dim1'] = b, a
+
+    cases = [
+        ('chers_units', lambda s: relabel(s['NSTX'][f'{pre}CT2:TI'], 'eV'),
+         'chers', 'units'),
+        ('chers_axes', lambda s: swap(s['NSTX'][f'{pre}CT1:TI']), 'chers',
+         '(sample, channel)'),
+        ('transp_units', lambda s: relabel(s['TRANSP/TI'], 'KEV'), 'transp',
+         'units'),
+        ('transp_rmajm',
+         lambda s: s['TRANSP/RMAJM/data'].write_direct(s['TRANSP/RMAJM/data'][
+             ()][:, ::-1].copy()), 'transp', 'RMAJM'),
+    ]
+    out = []
+    for name, edit, src, word in cases:
+      b = thomson.load(broken(name, edit))
+      why = b.chers_why if src == 'chers' else b.transp_why
+      gone = b.chers == () if src == 'chers' else b.transp is None
+      out.append((name, gone and 'unreadable' in why and word in why
+                  and b.branch == 'TS3' and np.isfinite(b.te.v).any()))
+    try:
+      thomson.load(
+          broken(
+              'mpts_units', lambda s: relabel(
+                  s['ACTIVESPEC'][f'{thomson.MPTS}TS3:FIT_TE'], 'eV')))
+      out.append(('mpts_units', False))
+    except ValueError:
+      out.append(('mpts_units', True))
+    check(
+        all(o for _, o in out),
+        f'wrong units / axes: CHERS (TI in eV; dims swapped) and TRANSP (TI in KEV; RMAJM reversed) give way with '
+        f'the reason, Thomson still read; MPTS T_e in eV refused: {out}')
+    # window means against plain loops: 3 Thomson frames around 325 ms, the band half a frame past them
+    i = int(np.argmin(np.abs(th.t - 0.325)))
+    t0, t1, t_ref = th.t[i - 1], th.t[i + 1], 0.325
+    rsep_ref = th.separatrix('outboard', t_ref)
+    h = 0.5 * np.median(np.diff(th.t))
+    lo, hi = t0 - h, t1 + h
+    ps = {
+        (p.source, p.quantity): p
+        for p in thomson.profiles(th, 'outboard', t0, t1, t_ref, rsep_ref)
+    }
+    sep = lambda t: np.interp(t, th.efit_t, th.r_out)
+    on = lambda R, t: R > 0.5 * (np.interp(t, th.efit_t, th.r_in) + sep(t))
+    dist = lambda ch: lambda j, i: (ch.R[j] -
+                                    (rsep_ref + sep(ch.t[i]) - sep(t_ref))
+                                    if on(ch.R[j], ch.t[i]) else np.nan)
+    inb = lambda t: [i for i in range(len(t)) if lo <= t[i] <= hi]
+    cts = {
+        c.name:
+        sum(np.isfinite(c.v[j, i]) for j in range(len(c.R)) for i in inb(c.t))
+        for c in th.chers
+    }
+    ch = by[max(cts, key=lambda n: (cts[n], n == 'CT2'))]
+    want = {
+        ('Thomson', 'T_e'):
+        (_by_hand(len(th.te.R),
+                  [i for i in range(len(th.t)) if t0 <= th.t[i] <= t1],
+                  lambda j, i: th.te.v[j, i], dist(th.te),
+                  lambda j, i: th.te.R[j]), 3),
+        ('CHERS', 'T_i'): (_by_hand(len(ch.R), inb(ch.t),
+                                    lambda j, i: ch.v[j, i], dist(ch),
+                                    lambda j, i: ch.R[j]), len(inb(ch.t))),
+    }
+    for q, v in (('T_i', tr.ti), ('n_D', tr.nd)):
+      want['TRANSP', q] = (_by_hand(
+          v.shape[0], inb(tr.t), lambda j, i: v[j, i],
+          lambda j, i: tr.R['outboard'][j, i] - tr.edge['outboard'][i],
+          lambda j, i: tr.R['outboard'][j, i]), len(inb(tr.t)))
+    bad = []
+    for k, (w, n) in want.items():
+      p = ps.get(k)
+      if p is None or p.samples != n or len(w) != len(p.d) or not np.allclose(
+          np.c_[p.R, p.d, p.v, p.n], w, rtol=1e-12, atol=1e-12):
+        bad.append(k)
+    check(
+        not bad and thomson.band(th, t0, t1) == (lo, hi)
+        and ps['CHERS', 'T_i'].label == f'CHERS {ch.name}',
+        f'window means == plain loops (203899, frames {t0 * 1e3:.1f}-{t1 * 1e3:.1f} ms, band {lo * 1e3:.1f}-'
+        f'{hi * 1e3:.1f} ms): ' +
+        ', '.join(f'{k[0]} {k[1]} {len(w)} rows of {n} samples'
+                  for k, (w, n) in want.items()) + f' {bad or ""}')
+    # the profiles figure: each source on its rows and species, both x modes the same points
+    lab, d, dflt, _ = gv.SIMS[[s[0] for s in gv.SIMS].index('Sim 2')]
+    run = gv.open_run(os.path.join(gv.BASE, d, 'runs', dflt), lab)
+    fs = run.frames()
+    fr, fr0 = gv.frame(run, fs[-1]), gv.frame(run, fs[0])
+    t0, t1 = thomson.default_window(th, run.eq_ms / 1e3)
+    pal = vp.LOOKS['dark']
+    figs = {
+        x: vp.profiles_figure(run, fr, fr0, '', x, measured=(th, t0, t1))
+        for x in ('distance', 'R')
+    }
+    cell, seen, moved = _cells(figs['distance']), {}, []
+    sides = [s for s in ('outboard', 'inboard') if s in run.layout.stacks]
+    for a, b in zip(figs['distance'].data, figs['R'].data):
+      if a.legendgroup not in ('thomson', 'chers', 'transp'):
+        continue
+      r, c = cell[a.xaxis, a.yaxis]
+      line = a.mode == 'lines'
+      seen.setdefault(a.legendgroup, set()).add(
+          (r, a.line.color if line else a.marker.color,
+           a.line.dash if line else None))
+      rsep = gv.midplane_profile(run, fr, sides[c - 1], 'n_elc')[2]
+      sign = 1.0 if sides[c - 1] == 'outboard' else -1.0
+      moved.append(
+          np.allclose(b.x, rsep + sign * np.asarray(a.x) / 1e3, atol=1e-9))
+    want = {
+        'thomson': {(1, pal.elc, None), (2, pal.elc, None)},
+        'chers': {(2, pal.ion, None)},
+        'transp': {(1, pal.ion, 'solid'), (2, pal.ion, 'dot')}
+    }
+    keys = [t.name for t in figs['distance'].data if t.legendgroup == 'key']
+    note = vp.measured_note(run, fr, th, t0, t1)
+    words = (
+        'TRANSP run 203899S18', 'T_e from 128 ms, T_i from 128 ms',
+        f'CHERS T_i ({thomson.chers_in(th, *thomson.band(th, t0, t1)).name}',
+        'nothing in the SOL')
+    check(
+        seen == want and all(moved) and len(moved) >= 5
+        and 'TRANSP, predicted by its model' in keys and all(w in note
+                                                             for w in words),
+        f'profiles figure (Sim 2 on the fetched 203899): rows / colours / dashes {seen == want} '
+        f'({ {k: sorted(v) for k, v in seen.items()} }), {len(moved)} measured traces the same points in both x '
+        f'modes ({sum(moved)}), the predicted key, the note names each source '
+        f'({[w for w in words if w not in note] or "all"})')
+    # the notes where a source is missing or has nothing in the window
+    lab1, d1, dflt1, _ = gv.SIMS[[s[0] for s in gv.SIMS].index('Sim 1')]
+    run1 = gv.open_run(os.path.join(gv.BASE, d1, 'runs', dflt1), lab1)
+    fr1 = gv.frame(run1, run1.frames()[-1])
+
+    def note_of(th1):
+      w = thomson.default_window(th1, run1.eq_ms / 1e3)
+      return vp.measured_note(run1, fr1, th1, *w), thomson.profiles(
+          th1, 'outboard', *w, run1.eq_ms / 1e3,
+          gv.midplane_profile(run1, fr1, 'outboard', 'n_elc')[2])
+
+    empty = f'{tmp}/no_run_203655.h5'
+    shutil.copy(got[203655], empty)
+    ft.record(empty, 203655, '', 'no run qualifies', ['203655A01: made up'],
+              troot)
+    nochers = broken('no_chers', lambda s: s.__delitem__('NSTX'))
+    cases = {
+        'fetched 203655 (CHERS ends at 216 ms)':
+        (thomson.load(got[203655]), 'CHERS T_i: no sample from', 'CHERS'),
+        'the Flux copy fetched before TRANSP':
+        (thomson.read(203655), 'TRANSP: this file has none', 'TRANSP'),
+        'no run qualified':
+        (thomson.load(empty), 'TRANSP: none for this shot (no run qualifies)',
+         'TRANSP'),
+        'no CHERS in the file':
+        (thomson.load(nochers), 'CHERS T_i: none in this file.', 'CHERS'),
+    }
+    out = {}
+    for name, (th1, words1, src) in cases.items():
+      n1, p1 = note_of(th1)
+      out[name] = words1 in n1 and src not in {p.source for p in p1}
+    check(
+        all(out.values()),
+        f'a source missing or with nothing in the window: the note says so, nothing drawn for it: {out}'
+    )
+    # the notebook on the fetched files (Sim 2: TRANSP 203899S18) and on this data directory's own (Sim 1: no TRANSP)
+    keep = thomson.flux_dir
+    thomson.flux_dir = lambda: dest
+    try:
+      d2, b2 = headless({'sim': 'Sim 2'})
+    finally:
+      thomson.flux_dir = keep
+    d1, b1 = headless({'sim': 'Sim 1'})
+    bad = [n for n, v in {**b1, **b2}.items() if v != 'ok']
+    check(
+        not bad and d2['th'].transp.run == '203899S18'
+        and d2['th'].path == got[203899] and d1['th'].transp_why is None
+        and len(b1) == len(d1['TABS']) and len(b2) == len(d2['TABS']),
+        f'notebook: Sim 2 on the fetched 203899 (TRANSP {d2["th"].transp.run if d2["th"].transp else None}) and '
+        f'Sim 1 on the copy without TRANSP, every tab builds ({len(b2)} + {len(b1)} tabs) {bad or ""}'
+    )
 
 
 # ---------------------------------------------------------------------------------------------------- exports
@@ -577,7 +1122,7 @@ def part_pgkyl():
         results(pc.particles(run, 'elc'), tmp, 'parts')
     ]
     want_mid = np.concatenate([
-        run.rows(fr[bb]['n_ion'])[:, pc._mid_column(run, bb, st.j)] * 1e-19
+        run.rows(bb, fr[bb]['n_ion'])[:, pc._mid_column(run, bb, st.j)] * 1e-19
         for bb in gv.stack_blocks(st)
     ])
     want_hist = [gv.frame(run, kk)[b]['T_elc'][i, j] for kk in run.frames()]
@@ -1056,7 +1601,7 @@ def part_poloidal(chrome=None):
     keep = gv.CONFIG.get('device_image')
     gv.CONFIG['device_image'] = image
     try:
-      bg = vp.device_background()
+      bg = vp.device_background(run.device)
     finally:
       gv.CONFIG.pop('device_image') if keep is None else gv.CONFIG.update(
           device_image=keep)
@@ -1161,6 +1706,621 @@ def part_poloidal(chrome=None):
       f'the movie not made again (render {st["mirror"][7]} -> {st["off"][7]})')
 
 
+# ------------------------------------------------------------------------------ the lines over the cells (11-16)
+# viewer_plots.Layers' fields for the lines over the cells, the view keys, the switches
+LINES = ('separatrix', 'wall', 'outlines')
+LINE_LABELS = {
+    'separatrix': 'show the separatrix',
+    'wall': 'show the wall (limiter)',
+    'outlines': 'show the block boundaries'
+}
+
+
+def _line_paths(run, mirror):
+  """The lines the poloidal plane draws, by switch, as groups of (R, Z) polylines along the cell edges
+  (gkview.cell_edges: curves through the Gauss nodes, or chords): the separatrix (the inner edge of each SOL block
+  with an aligned block under it, the LCFS row of a limited block), every block's outline and the grid (every node
+  row and column), one group each, and for a half domain shown whole a second one, their mirror image across Z = 0;
+  the wall (the geqdsk's limiter, the whole vessel already), one group."""
+  import gkview as gv
+  lay, sz = run.layout, (1, -1) if mirror and run.layout.half else (1, )
+  E = gv.cell_edges(run)
+  rows, cols = E['rows'], E['cols']
+  ring = lambda b: np.concatenate(  # noqa: E731
+      [rows[b][0], cols[b][-1], rows[b][-1][::-1], cols[b][0][::-1]])
+  sep = [(b, 0) for b in range(run.nb)
+         if lay.region[b] == 'sol' and lay.under.get(b) is not None] + list(
+             lay.lcfs.items())
+  return {
+      'separatrix': [[rows[b][i] * [1, s] for b, i in sep] for s in sz],
+      'wall': [[gv.wall(run)]] if gv.wall(run) is not None else [[]],
+      'outlines': [[ring(b) * [1, s] for b in range(run.nb)] for s in sz],
+      'grid':
+      [[p * [1, s] for b in range(run.nb) for p in (*rows[b], *cols[b])]
+       for s in sz]
+  }
+
+
+def _near(shape, paths, r):
+  """A mask [h, w] of the pixels within about r of the polylines paths (px: x right, y down)."""
+  from PIL import Image, ImageDraw
+  im = Image.new('L', (shape[1], shape[0]), 0)
+  d = ImageDraw.Draw(im)
+  for p in paths:
+    p = np.asarray(p, float)
+    d.line([tuple(q) for q in p], fill=255, width=int(2 * r + 1), joint='curve')
+    for q in (p[0], p[-1]):
+      d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=255)
+  return np.asarray(im) > 0
+
+
+def _along(paths, clip, step=3.0):
+  """Points every step px along the polylines paths (px) that lie inside clip (x0, y0, x1, y1), 3 px in."""
+  out = []
+  for p in paths:
+    p = np.asarray(p, float)
+    for a, b in zip(p[:-1], p[1:]):
+      n = max(int(np.hypot(*(b - a)) // step), 1)
+      out += [a + (b - a) * t for t in np.arange(n) / n]
+  out = np.array(out).reshape(-1, 2)
+  return out[(out[:, 0] >= clip[0] + 3) & (out[:, 0] <= clip[2] - 3) &
+             (out[:, 1] >= clip[1] + 3) & (out[:, 1] <= clip[3] - 3)]
+
+
+def _switched(a, b, groups, clip, r):
+  """What one switch changed between images a and b (rows from the top), judged on its line's groups of paths (px;
+  _line_paths') inside the drawn box clip (x0, y0, x1, y1): (the least, over the groups, share of points along a
+  group's paths, every 3 px, where a pixel within 1 px differs by more than 8 in a channel; the fewest points of a
+  group; how many pixels of the whole image differ but further than r from the paths or outside clip: what else it
+  changed)."""
+  diff = np.abs(a[..., :3].astype(int) - b[..., :3].astype(int)).max(-1) > 8
+  grown = diff.copy()
+  for dy in (-1, 0, 1):
+    for dx in (-1, 0, 1):
+      grown |= np.roll(np.roll(diff, dy, 0), dx, 1)
+  share, npts = [], []
+  for paths in groups:
+    pts = _along(paths, clip)
+    hit = grown[np.round(pts[:, 1]).astype(int),
+                np.round(pts[:, 0]).astype(int)]
+    share.append(float(hit.mean()) if len(pts) else 0.0)
+    npts.append(len(pts))
+  x0, y0, x1, y1 = (int(round(v)) for v in clip)
+  allowed = np.zeros_like(diff)
+  allowed[max(y0 - 1, 0):y1 + 2, max(x0 - 1, 0):x1 + 2] = True
+  allowed &= _near(diff.shape, [p for paths in groups for p in paths], r)
+  return round(min(share), 3), min(npts), int((diff & ~allowed).sum())
+
+
+def _line_verdicts(imgs, paths, clip, r):
+  """imgs: {(separatrix, wall, outlines) switch states: image}, with all on, all off, each alone and each but one.
+  For each line: (alone against all off: its switch draws it, and nothing else; all on against all but it: its
+  switch takes it away, and nothing else), each _switched's."""
+  out = {}
+  for k, name in enumerate(LINES):
+    alone = tuple(i == k for i in range(3))
+    but = tuple(i != k for i in range(3))
+    out[name] = (_switched(imgs[alone], imgs[(False, ) * 3], paths[name], clip,
+                           r),
+                 _switched(imgs[(True, ) * 3], imgs[but], paths[name], clip, r))
+  return out
+
+
+def _verdicts_ok(v, share=0.5):
+  return all(n >= 10 and s >= share and not stray for pair in v.values()
+             for s, n, stray in pair)
+
+
+LINE_STATES = [(True, True, True), (False, True, True), (True, False, True),
+               (True, True, False), (True, False, False), (False, True, False),
+               (False, False, True), (False, False, False)]
+
+
+async def _drive_lines(url, dbg, paths, shots):
+  """The movie of Sim 2 (launched with its half domain shown whole and the device picture), its poloidal plane in
+  each LINE_STATES state, reached by clicking the sidebar's switches: {state: (canvas RGBA, the drawn box in canvas
+  px, the paths in canvas px by line, the render number of the movie shown, the page's address)}. A screenshot of
+  the page in each state with one line off, in shots."""
+  from PIL import Image
+  latest = (
+      "__deep('.gkv-movie').reduce((a, e) => (+e.dataset.render || 0) > (+(a && a.dataset.render) || 0) "
+      "? e : a, null)")
+  rz = {
+      k: [[np.asarray(p).round(5).tolist() for p in g] for g in v]
+      for k, v in paths.items()
+  }
+  grab = (
+      "(() => { const el = " + latest + ", cv = el.querySelector('canvas.rz'), "
+      f"P = {json.dumps(rz)}; "
+      "const px = {}; for (const k in P) px[k] = P[k].map(g => g.map(p => p.map(q => el.__rz.px(q[0], q[1])))); "
+      "return { png: cv.toDataURL('image/png'), area: el.__rz.area(), px, render: +el.dataset.render, "
+      "search: location.search }; })()")
+  out = {}
+  async with opened(url, dbg) as c:
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    await c.until(f"(e => e && +(e.dataset.draws || 0) > 0)({latest})", 180)
+    await c.until(
+        "Object.values(window.__gkvBackground || {}).some(i => i.complete && i.naturalWidth)",
+        60)
+    await asyncio.sleep(2)  # the movie redraws when the picture arrives
+    now = (True, True, True)
+    for state in LINE_STATES:
+      # the movie shown, drawn again (or a new one: the check below then fails on its render number)
+      render, draws = await c.strict(
+          f"(e => [+e.dataset.render, +e.dataset.draws])({latest})")
+      for name, a, b in zip(LINES, now, state):
+        if a != b:
+          await c.strict(f"__switch({json.dumps(LINE_LABELS[name])}).click()")
+      if state != now:
+        kinds = sorted(
+            ['quantity'] +
+            [k for k, on in zip(('sep', 'wall', 'outline'), state) if on])
+        if not await c.until(
+            f"(e => e && (+e.dataset.render !== {render} || +e.dataset.draws > {draws}) && "
+            f"JSON.stringify([...e.__rz.lines()].sort()) === "
+            f"{json.dumps(json.dumps(kinds, separators=(',', ':')))})({latest})",
+            60):
+          raise RuntimeError(
+              f'the movie did not redraw with the lines {kinds} in 60 s')
+        await asyncio.sleep(1.5)
+      now = state
+      g = await c.strict(grab)
+      out[state] = (np.asarray(
+          Image.open(io.BytesIO(base64.b64decode(g['png'].split(
+              ',', 1)[1]))).convert('RGBA')), g['area'], g['px'], g['render'],
+                    g['search'])
+      if shots and sum(state) == 2:
+        await c.shot(
+            os.path.join(shots, f'lines_{LINES[state.index(False)]}_off.png'))
+  return out
+
+
+def part_lines(chrome=None, shots=None):
+  """The lines over the poloidal plane's cells (2026-11-16), each on a switch: the separatrix, the wall, the block
+  outlines. On Sim 2 (a half domain), the map (matplotlib: the whole domain shown whole, the lower divertor) and,
+  with chrome, the page's movie (the whole domain shown whole, over the device picture): each line's switch alone
+  draws pixels along that line and nowhere else, and taking it away from all three changes pixels along that line
+  and nowhere else (the strips unchanged); every switch off leaves the map as it is with its lines removed; the
+  movie redraws at each click, not made again. The Static figure and Diffusivity tabs (the notebook launched with
+  switches off) and the movie export draw with the switches given."""
+  import matplotlib.pyplot as plt
+  import gkview as gv
+  import viewer_plots as vp
+  lab, simdir, run_name, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+  run = gv.open_run(os.path.join(gv.runs_root(simdir), run_name), lab)
+  fs = run.frames()
+  fr, fr0 = gv.frame(run, fs[-1]), gv.frame(run, fs[0])
+  for zoom, mirror in (('whole domain', True), ('lower divertor', False)):
+    imgs, bare = {}, None
+    for state in LINE_STATES:
+      fig = vp.map_figure(run,
+                          fr,
+                          fr0,
+                          'T_elc',
+                          'value',
+                          zoom=zoom,
+                          mirror=mirror,
+                          layers=vp.Layers(**dict(zip(LINES, state))))
+      fig.set_dpi(150)
+      fig.canvas.draw()
+      imgs[state] = np.asarray(fig.canvas.buffer_rgba()).copy()
+      ax = next(a for a in fig.axes if a.get_xlabel().startswith('R'))
+      # all on: the paths in px, and the same map with every line taken off its axes (what all off must give)
+      if all(state):
+        h = imgs[state].shape[0]
+        to_px = lambda pts: np.c_[ax.transData.transform(pts)[:, 0], h - ax.
+                                  transData.transform(pts)[:, 1]]  # noqa: E731
+        clip = (ax.bbox.x0, h - ax.bbox.y1, ax.bbox.x1, h - ax.bbox.y0)
+        px = {
+            k: [[to_px(p) for p in g] for g in v]
+            for k, v in _line_paths(run, mirror).items()
+        }
+        for ln in list(ax.lines):
+          ln.remove()
+        fig.canvas.draw()
+        bare = np.asarray(fig.canvas.buffer_rgba()).copy()
+      plt.close(fig)
+    v = _line_verdicts(imgs, px, clip, 4)
+    left = int((np.abs(imgs[(False, ) * 3][..., :3].astype(int) -
+                       bare[..., :3].astype(int)).max(-1) > 0).sum())
+    check(
+        _verdicts_ok(v) and left == 0,
+        f'lines over the cells, matplotlib ({zoom}{", shown whole" if mirror else ""}): each switch alone draws '
+        f'its line and nothing else, and taken away removes it and nothing else (share of points along the line '
+        f'changed, points, pixels changed elsewhere: {v}); all off = the map with its lines removed ({left} '
+        f'pixels differ)')
+  # every map the viewer draws takes the switches: the notebook's Static figure and Diffusivity tabs (launched with
+  # the separatrix and the outlines off), the movie export
+  want = vp.Layers(separatrix=False, outlines=False)
+  seen, orig = [], vp.map_figure
+
+  def recorded(*a, **kw):
+    seen.append((sys._getframe(1).f_code.co_name, kw.get('layers')))
+    return orig(*a, **kw)
+
+  vp.map_figure = recorded
+  try:
+    d, built = headless({
+        'sim': 'Sim 2',
+        'separatrix': 'false',
+        'outlines': 'false'
+    })
+    plt.close(d['static_figure']())
+    with tempfile.TemporaryDirectory() as tmp:
+      vp.render_movie(run,
+                      d['summ'],
+                      fs[-2:],
+                      'T_elc',
+                      'value',
+                      False,
+                      'whole domain',
+                      vp.LOOKS['dark'],
+                      os.path.join(tmp, 'm.mp4'),
+                      layers=want)
+  finally:
+    vp.map_figure = orig
+  callers = {f for f, _ in seen}
+  check(
+      d['layers_shown'] == want
+      and d['movie'].widget.layers == ['quantity', 'wall']
+      and {'static_figure', 'diffusivity_map', 'render_movie'} <= callers
+      and all(ln == want for _, ln in seen)
+      and (d['view']['separatrix'], d['view']['wall'],
+           d['view']['outlines']) == (False, True, False),
+      f'launched with the separatrix and the block outlines off: the switches {d["layers_shown"]}, the movie draws '
+      f'{d["movie"].widget.layers}, every map drawn takes them ({sorted(callers)}: '
+      f'{sorted({str(ln) for _, ln in seen})}), the view keeps them')
+  if chrome is None:
+    return
+  args = [
+      '--sim', 'Sim 2', '--mirror', 'true', '--background', 'true', '--opacity',
+      '0.6'
+  ]
+  with served(chrome, args) as (url, dbg):
+    check(url is not None, 'lines over the cells: view.sh serves the page')
+    if url is None:
+      return
+    try:
+      st = asyncio.run(
+          _drive_lines(url, dbg, {
+              k: v
+              for k, v in _line_paths(run, True).items() if k in LINES
+          }, shots))
+    except RuntimeError as e:
+      check(False, f'lines over the cells, the page: {e}')
+      return
+  _, area, px, render0, _ = st[(True, ) * 3]
+  v = _line_verdicts({k: s[0] for k, s in st.items()}, px, area, 3)
+  renders = {s[3] for s in st.values()}
+  search = st[(False, ) * 3][4]
+  check(
+      _verdicts_ok(v) and renders == {render0}
+      and all(f'{k}=false' in search for k in LINES),
+      f'lines over the cells, the page (the whole domain shown whole, over the device picture): each switch alone '
+      f'draws its line and nothing else, and taken away removes it and nothing else ({v}); the movie redrawn at '
+      f'each click, not made again (renders {sorted(renders)}); the address holds the switches ({search[-80:]})'
+  )
+  if shots:
+    from PIL import Image
+    for state, s in st.items():
+      if sum(state) == 2:
+        Image.fromarray(s[0]).save(
+            os.path.join(shots,
+                         f'lines_canvas_{LINES[state.index(False)]}_off.png'))
+
+
+# ------------------------------------------------------------------------------ the grid and the quantity (11-16)
+# the four device runs of research/tokamak/regr_devices_20261116 (beside base's research/nstxu): ASDEX Upgrade's
+# coarse grid for the curves, TCV's and DIII-D's in the page
+DEVICE_RUNS = os.path.join('..', 'tokamak', 'regr_devices_20261116', 'runs')
+
+
+def _cells_mask(shape, polys, r):
+  """A mask [h, w] of the pixels inside the polygons polys (px) or within about r of them."""
+  from PIL import Image, ImageDraw
+  im = Image.new('L', (shape[1], shape[0]), 0)
+  d = ImageDraw.Draw(im)
+  for q in polys:
+    d.polygon([tuple(p) for p in q], fill=255)
+  # grown by r: each outline drawn r wide on either side (a polygon's own outline width grows it inward)
+  return (np.asarray(im) > 0) | _near(shape,
+                                      [np.vstack([q, q[:1]]) for q in polys], r)
+
+
+def _quantity_verdict(on, off, polys, centres, clip, r):
+  """What the quantity switch changed between images on and off: (the share of the cell centres, px, inside clip,
+  where a pixel differs; how many; how many pixels differ outside the cells, polys px, grown by r, or outside
+  clip)."""
+  diff = np.abs(on[..., :3].astype(int) - off[..., :3].astype(int)).max(-1) > 8
+  c = np.array([
+      p for p in centres if clip[0] + 3 <= p[0] <= clip[2] - 3 and clip[1] +
+      3 <= p[1] <= clip[3] - 3
+  ]).reshape(-1, 2)
+  hit = diff[np.round(c[:, 1]).astype(int), np.round(c[:, 0]).astype(int)]
+  x0, y0, x1, y1 = (int(round(v)) for v in clip)
+  allowed = np.zeros_like(diff)
+  allowed[max(y0 - 1, 0):y1 + 2, max(x0 - 1, 0):x1 + 2] = True
+  allowed &= _cells_mask(diff.shape, polys, r)
+  return (round(float(hit.mean()), 3) if len(c) else 0.0, len(c),
+          int((diff & ~allowed).sum()))
+
+
+def _cell_geometry(run, mirror):
+  """(cell polygons [n, m, (R, Z)]: the regions their edges bound, gkview.cell_polygons; a point inside each [n, (R, Z)])
+  of every block, mirrored too for a half domain shown whole; cells without a value at the first frame left out
+  (they are not filled)."""
+  import gkview as gv
+  fr = gv.frame(run, run.frames()[0])
+  quads, cen = [], []
+  for s in ((1, -1) if mirror and run.layout.half else (1, )):
+    for b in range(run.nb):
+      q = gv.cell_polygons(run, b) * [1, s]
+      ok = np.isfinite(fr[b]['T_elc'])
+      quads.append(q[ok])
+      k = q.shape[
+          2] // 4  # points to an edge: a point inside each cell, between its psi edges' middles (the
+      # corners' mean of a long curved cell lies outside it)
+      cen.append(0.5 * (q[:, :, k // 2] + q[:, :, 2 * k + k // 2])[ok])
+  return np.concatenate(quads), np.concatenate(cen)
+
+
+def _gauss_vs_chords(img_grid, img_none, run, to_px, clip):
+  """Curves, not chords: (the share of the Gauss nodes, px, where the grid image differs from the bare one; how
+  many; of the points on the chords facing Gauss nodes 4 px or more off their chord, those further than 2 px from
+  every curve: how many, and how many of them differ, i.e. a chord drawn)."""
+  import gkview as gv
+  from gkyl_read import read_gkyl
+  diff = np.abs(img_grid[..., :3].astype(int) -
+                img_none[..., :3].astype(int)).max(-1) > 8
+  grown = diff.copy()
+  for dy in (-1, 0, 1):
+    for dx in (-1, 0, 1):
+      grown |= np.roll(np.roll(diff, dy, 0), dx, 1)
+  E = gv.cell_edges(run)
+  near = _near(
+      diff.shape,
+      [to_px(p) for b in range(run.nb)
+       for p in (*E['rows'][b], *E['cols'][b])], 2)
+  gauss, chord = [], []
+  for b in range(run.nb):
+    g = read_gkyl(run.f(b, 'geo_corn_nodes'))
+    gt = int(g['meta'].get('geometry_type', -1))
+    C = to_px(gv.physical_rz(g['data'], gt).reshape(
+        -1, 2)).reshape(np.shape(g['data'])[:2] + (2, ))
+    for d, (A, B) in ((0, (C[:, :-1], C[:, 1:])), (1, (C[:-1], C[1:]))):
+      s = gv.physical_rz(
+          np.asarray(read_gkyl(run.f(
+              b, f'geo_surf{d}_mc2p_nodal_fd'))['data'])[..., :3], gt)
+      S = to_px(s.reshape(-1, 2)).reshape(s.shape)
+      for G in ((S[:, 0::2], S[:, 1::2]) if d == 0 else (S[0::2], S[1::2])):
+        AB = B - A
+        t = np.clip(((G - A) * AB).sum(-1) / np.maximum(
+            (AB * AB).sum(-1), 1e-9), 0, 1)
+        P = A + t[..., None] * AB  # the chord's point facing the node
+        off = np.hypot(*(G - P).transpose(2, 0, 1))
+        gauss += list(G.reshape(-1, 2))
+        chord += list(P[off >= 4].reshape(-1, 2))
+  inside = lambda p: (
+      clip[0] + 3 <= p[0] <= clip[2] - 3 and clip[1] + 3 <= p[  # noqa: E731
+          1] <= clip[3] - 3)
+  gauss = np.array([p for p in gauss if inside(p)]).reshape(-1, 2)
+  chord = np.array([
+      p for p in chord if inside(p) and not near[int(round(p[1])),
+                                                 int(round(p[0]))]
+  ]).reshape(-1, 2)
+  at = lambda m, P: m[np.round(P[:, 1]).astype(int),
+                      np.round(P[:, 0]).astype(int)]  # noqa: E731
+  return (round(float(at(grown, gauss).mean()), 3) if len(gauss) else 0.0,
+          len(gauss), len(chord),
+          int(at(diff, chord).sum()) if len(chord) else 0)
+
+
+async def _drive_grid(url, dbg, cases, shots):
+  """The movie's poloidal plane of each case (name, view keys opening it with the grid on and the quantity off, the
+  grid's paths, cell quadrilaterals, cell centres in (R, Z)), the switches clicked through (quantity, grid) =
+  (off, on), (on, on), (on, off), (off, off): {name: {state: (canvas RGBA, drawn box, grid paths px, quads px,
+  centres px, render number)}}; screenshots of the first two states (the page and the plane) in shots."""
+  from urllib.parse import urlencode
+  from PIL import Image
+  latest = (
+      "__deep('.gkv-movie').reduce((a, e) => (+e.dataset.render || 0) > (+(a && a.dataset.render) || 0) "
+      "? e : a, null)")
+  out = {}
+  async with opened(url, dbg) as c:
+    for name, state, paths, quads, cen in cases:
+      await c.call('Page.navigate', url=url + '&' + urlencode(state))
+      await asyncio.sleep(3)
+      await c.js(DEEP)
+      await c.until(f"(e => e && +(e.dataset.draws || 0) > 0)({latest})", 240)
+      await asyncio.sleep(2)
+      P = json.dumps({
+          'g': [[np.asarray(p).round(5).tolist() for p in g] for g in paths],
+          'q':
+          np.asarray(quads).round(5).tolist(),
+          'c':
+          np.asarray(cen).round(5).tolist()
+      })
+      grab = (
+          "(() => { const el = " + latest +
+          ", cv = el.querySelector('canvas.rz'), P = " + P + ", "
+          "f = q => el.__rz.px(q[0], q[1]); return { png: cv.toDataURL('image/png'), area: el.__rz.area(), "
+          "g: P.g.map(g => g.map(p => p.map(f))), q: P.q.map(p => p.map(f)), c: P.c.map(f), "
+          "render: +el.dataset.render, layers: el.__rz.lines() }; })()")
+      got, now = {}, (False, True)
+      for st in ((False, True), (True, True), (True, False), (False, False)):
+        render, draws = await c.strict(
+            f"(e => [+e.dataset.render, +e.dataset.draws])({latest})")
+        for lab, a, b in zip(('show the plotted quantity', 'show the grid'),
+                             now, st):
+          if a != b:
+            await c.strict(f"__switch({json.dumps(lab)}).click()")
+        if st != now:  # the movie drawn again with the quantity and the grid as clicked (a line the run lacks: on)
+          if not await c.until(
+              f"(e => e && (+e.dataset.render !== {render} || +e.dataset.draws > {draws}) && "
+              f"e.__rz.lines().includes('quantity') === {str(st[0]).lower()} && "
+              f"e.__rz.lines().includes('grid') === {str(st[1]).lower()})({latest})",
+              60):
+            raise RuntimeError(
+                f'{name}: the movie did not redraw with quantity, grid = {st} in 60 s'
+            )
+          await asyncio.sleep(1.5)
+        now = st
+        g = await c.strict(grab)
+        got[st] = (np.asarray(
+            Image.open(io.BytesIO(base64.b64decode(g['png'].split(
+                ',', 1)[1]))).convert('RGBA')), g['area'], g['g'], g['q'],
+                   g['c'], g['render'])
+        if shots and st[1]:
+          tag = f'grid_{name}_quantity_{"on" if st[0] else "off"}'
+          await c.shot(os.path.join(shots, f'{tag}.png'))
+          Image.fromarray(got[st][0]).save(
+              os.path.join(shots, f'{tag}_plane.png'))
+      out[name] = got
+  return out
+
+
+def part_grid(chrome=None, shots=None):
+  """The grid (every cell edge, as curves) and the quantity on the poloidal plane, each on a switch (2026-11-16):
+  on ASDEX Upgrade's device run (a coarse grid: curved edges, by path) and Sim 2 (shown whole; its surface node files hold zeros: chords and
+  a note), the map (matplotlib) and, with chrome, the page's movie (TCV and DIII-D): the grid's switch draws or takes
+  away pixels along the cell edges only (over the quantity too); the quantity's, inside the cells only, nearly every
+  cell's centre; with both off and no other line the plane is bare; the grid passes through the Gauss nodes and not
+  along the chords where they bend away; the plane alone (a half-width slide) loses its colour bar with the
+  quantity; the movie is not made again."""
+  import matplotlib.pyplot as plt
+  import gkview as gv
+  import viewer_plots as vp
+  devices = os.path.normpath(os.path.join(gv.BASE, DEVICE_RUNS))
+  runs = []
+  if os.path.isdir(os.path.join(devices, 'asdex', 'rt_2x2v_p1')):
+    runs.append(('ASDEX Upgrade',
+                 gv.open_run(os.path.join(devices, 'asdex',
+                                          'rt_2x2v_p1')), False))
+  else:
+    print(f'SKIP the grid on a device run: no {devices}/asdex/rt_2x2v_p1',
+          flush=True)
+  lab, simdir, run_name, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+  runs.append(
+      (lab, gv.open_run(os.path.join(gv.runs_root(simdir), run_name),
+                        lab), True))
+  off = dict(outlines=False, separatrix=False, wall=False)
+  for name, run, mirror in runs:
+    fr = fr0 = gv.frame(
+        run,
+        run.frames()[0])  # the first frame: no cell marked n <= 0 (its x)
+    imgs = {}
+    for q, g in ((False, False), (False, True), (True, False), (True, True)):
+      fig = vp.map_figure(run,
+                          fr,
+                          fr0,
+                          'T_elc',
+                          'value',
+                          mirror=mirror,
+                          layers=vp.Layers(quantity=q, grid=g, **off))
+      fig.set_dpi(150)
+      ax = next(a for a in fig.axes if a.get_xlabel().startswith('R'))
+      if (q, g) == (False, True):
+        notes = [t.get_text() for t in ax.texts]
+      for t in list(
+          ax.texts):  # the chords' note (checked above): not a line's pixels
+        t.remove()
+      fig.canvas.draw()
+      imgs[q, g] = np.asarray(fig.canvas.buffer_rgba()).copy()
+      # (R, Z) -> px, frozen: a closed figure's transforms change
+      h, tr = imgs[q, g].shape[0], ax.transData.frozen()
+      to_px = lambda pts, tr=tr, h=h: tr.transform(
+          pts) * [1, -1] + [0, h]  # noqa: E731
+      clip = (ax.bbox.x0, h - ax.bbox.y1, ax.bbox.x1, h - ax.bbox.y0)
+      plt.close(fig)
+    E = gv.cell_edges(run)
+    grid = [[to_px(p) for p in grp] for grp in _line_paths(run, mirror)['grid']]
+    quads, cen = _cell_geometry(run, mirror)
+    qpx = [to_px(qq) for qq in quads]
+    v_alone = _switched(imgs[False, True], imgs[False, False], grid, clip, 3)
+    v_over = _switched(imgs[True, True], imgs[True, False], grid, clip, 3)
+    v_q = _quantity_verdict(imgs[True, False], imgs[False, False], qpx,
+                            to_px(cen), clip, 2)
+    x0, y0, x1, y1 = (int(round(v)) for v in clip)
+    inner = imgs[False, False][y0 + 2:y1 - 2, x0 + 2:x1 - 2, :3].astype(int)
+    surf = np.array(
+        [int(vp.LOOKS['dark'].surf[i:i + 2], 16) for i in (1, 3, 5)])
+    bare = int((np.abs(inner - surf).max(-1) > 2).sum())
+    curves = _gauss_vs_chords(imgs[False, True], imgs[False, False], run, to_px,
+                              clip) if E['curved'] else None
+    figs = [
+        vp.map_figure(run,
+                      fr,
+                      fr0,
+                      'T_elc',
+                      'value',
+                      slide='half',
+                      layers=vp.Layers(quantity=q)) for q in (True, False)
+    ]
+    nax = [len(f.axes) for f in figs]
+    for f in figs:
+      plt.close(f)
+    note_ok = (not E['curved']) == any(
+        t.startswith('cell edges drawn as chords') for t in notes)
+    check(
+        v_alone[0] >= 0.5 and v_alone[1] >= 10 and not v_alone[2]
+        and v_over[0] >= 0.5 and not v_over[2] and v_q[0] >= 0.9
+        and v_q[1] >= 10 and not v_q[2] and bare == 0 and nax == [2, 1]
+        and note_ok
+        and (curves is None or
+             (curves[0] >= 0.9 and curves[2] >= 5 and curves[3] == 0)),
+        f'the grid and the quantity, matplotlib ({name}{", shown whole" if mirror else ""}; edges '
+        f'{"curved" if E["curved"] else "chords, said on the plane"}): the grid alone {v_alone}, over the quantity '
+        f'{v_over} (share of points along the edges changed, points, pixels changed elsewhere); the quantity '
+        f'{v_q} (share of cell centres changed, centres, pixels changed outside the cells); both off: {bare} '
+        f'pixels of the plane not its surface; the plane alone has {nax} axes with / without the quantity'
+        +
+        ('' if curves is None else
+         f'; through the Gauss nodes {curves[0]} of {curves[1]}, along the chords where they bend away '
+         f'{curves[3]} of {curves[2]} points'))
+  if chrome is None:
+    return
+  cases = []
+  for dev in ('tcv', 'd3d'):
+    p = os.path.join(devices, dev, 'rt_2x2v_p1')
+    if not os.path.isdir(p):
+      continue
+    run = gv.open_run(p)
+    quads, cen = _cell_geometry(run, False)
+    cases.append(
+        (dev,
+         dict(path=p,
+              frame='0',
+              grid='true',
+              quantity='false',
+              **{k: 'false'
+                 for k in off}), _line_paths(run, False)['grid'], quads, cen))
+  if not cases:
+    return
+  with served(chrome, ['--path', cases[0][1]['path']]) as (url, dbg):
+    check(url is not None, 'the grid and the quantity: view.sh serves the page')
+    if url is None:
+      return
+    try:
+      got = asyncio.run(_drive_grid(url, dbg, cases, shots))
+    except RuntimeError as e:
+      check(False, f'the grid and the quantity, the page: {e}')
+      return
+  for name, st in got.items():
+    _, area, gpx, qpx, cpx, _ = st[False, True]
+    v_alone = _switched(st[False, True][0], st[False, False][0], gpx, area, 3)
+    v_over = _switched(st[True, True][0], st[True, False][0], gpx, area, 3)
+    v_q = _quantity_verdict(st[True, False][0], st[False, False][0], qpx, cpx,
+                            area, 2)
+    renders = {s[5] for s in st.values()}
+    check(
+        v_alone[0] >= 0.5 and v_alone[1] >= 10 and not v_alone[2]
+        and v_over[0] >= 0.5 and not v_over[2] and v_q[0] >= 0.9 and not v_q[2]
+        and len(renders) == 1,
+        f'the grid and the quantity, the page ({name}): the grid alone {v_alone}, over the quantity {v_over}; the '
+        f'quantity {v_q}; the movie not made again (renders {sorted(renders)})')
+
+
 # --------------------------------------------------------------------------------------- the movie's margins (11-14)
 def _margin_foreign(img, area, surf, texts):
   """Pixels of img outside the plot area (x0, y0, x1, y1; 1 px slack) that are neither the surface nor text: off the
@@ -1231,10 +2391,10 @@ def canvas_states(full=False):
   light theme."""
   import gkview as gv
   import viewer_plots as vp
-  pic = 'true' if gv.CONFIG.get('device_image') else 'false'
   out = []
   for lab, d, dflt, _ in gv.SIMS:
     run = gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+    pic = 'true' if gv.device_image(run.device) else 'false'
     for mirror in ((False, True) if run.layout.half else (False, )):
       views = list(vp.zoom_boxes(run, mirror=mirror))
       views = views if full else [
@@ -1294,6 +2454,402 @@ def part_layout(chrome, shots=None, full=False):
       f"the movie's margins: nothing of the poloidal plane past its plot area in {len(got)} views "
       f"(simulations x views, mirrored, the device picture, light and dark); stray pixels: "
       f"{[(st['sim'], st['zoom'], st['mirror'], st.get('dark', 'true'), n) for st, n in bad][:6]}"
+  )
+
+
+# ------------------------------------------------------------------------------------ a blank start, devices (11-16)
+@contextlib.contextmanager
+def config_file(path):
+  """gkview reading the viewer.json at path (gkview.reload, as a form that writes it would), its own afterwards."""
+  import gkview as gv
+  keep = gv.CONFIG_FILE
+  gv.CONFIG_FILE = path
+  gv.reload()
+  try:
+    yield gv
+  finally:
+    gv.CONFIG_FILE = keep
+    gv.reload()
+
+
+BLANK_CASES = {  # data directory -> its viewer.json (None: none)
+    'no viewer.json': None,
+    '"sims": []': {
+        'sims': []
+    },
+    'a simulation whose directory is missing': {
+        'device': 'NSTX-U',
+        'sims': [['Gone', 'no_such_simulation', 'prod', 'its directory is missing']]
+    },
+}
+
+
+def blank_data_dirs(tmp):
+  """BLANK_CASES as data directories under tmp: {case: directory}."""
+  out = {}
+  for i, (case, cfg) in enumerate(BLANK_CASES.items()):
+    d = os.path.join(tmp, f'blank{i}')
+    os.makedirs(d)
+    if cfg is not None:
+      json.dump(cfg, open(os.path.join(d, 'viewer.json'), 'w'))
+    out[case] = d
+  return out
+
+
+def _plotly_blank(fig):
+  """(data points drawn, panel titles, axis titles, legend entries) of a plotly figure."""
+  pts = 0
+  for tr in fig.data:
+    for a in ('x', 'y', 'z'):
+      v = getattr(tr, a, None)
+      if v is not None:
+        pts = max(
+            pts,
+            sum(x is not None for x in np.ravel(np.asarray(v, dtype=object))))
+  titles = [a.text for a in fig.layout.annotations or ()
+            ] + ([fig.layout.title.text] if fig.layout.title.text else [])
+  axes = [
+      fig.layout[k].title.text for k in fig.layout
+      if k.startswith(('xaxis', 'yaxis')) and fig.layout[k].title.text
+  ]
+  legend = [
+      tr.name for tr in fig.data if tr.showlegend is not False and tr.name
+  ]
+  return pts, titles, axes, legend
+
+
+def part_blank(chrome=None, shots=None):
+  """A blank start (2026-11-16): on a data directory with no viewer.json, with "sims": [], and naming a simulation
+  whose directory is missing, the notebook runs with every tab built on the empty run (gkview.empty_run); each chart
+  of the empty run has its panel titles, axis titles and legend and draws no data point; the movie has no frame and
+  every view of the poloidal plane none. With chrome, the same three served by view.sh: the note at the top, the
+  movie's canvases with its controls idle, every tab opened with its charts drawn and no error text (screenshots of
+  the blank page, dark and light, in shots). The per-device schema of viewer.json: an old file reads as before; a
+  simulation's own device, picture, geqdsk and wall; entries that do not parse left out with a note."""
+  import gkview as gv
+  import movie_widget as mm
+  import viewer_plots as vp
+  with tempfile.TemporaryDirectory() as tmp:
+    dirs = blank_data_dirs(tmp)
+    tabs = None
+    for case, d in dirs.items():
+      t = time.time()
+      with config_file(os.path.join(d, 'viewer.json')):
+        defs, built = headless({})
+      tabs = defs['TABS']
+      bad = [n for n, v in built.items() if v != 'ok']
+      notes = defs['boot']['notes']
+      check(
+          defs['run'].path == '' and not defs['frames'] and defs['k'] is None
+          and defs['sim_pick'].value is None and defs['run_pick'].value is None
+          and len(built) == len(tabs) and not bad
+          and (any('Gone: skipped' in n
+                   for n in notes) if 'missing' in case else not notes),
+          f'a blank start, {case}: the notebook opens on the empty run, every tab builds ({len(built)} of '
+          f'{len(tabs)}{", failed: " + str(bad) if bad else ""}), notes {notes} ({time.time() - t:.1f} s)'
+      )
+    run, pal = gv.empty_run(), vp.look('NSTX-U', True)
+    summ = gv.summary(run)
+    B = gv.balance(run)
+    figs = {
+        'profiles':
+        vp.profiles_figure(run, {}, {}, '', pal=pal),
+        'profiles (R)':
+        vp.profiles_figure(run, {}, {}, '', 'R', pal=pal),
+        'midplane history':
+        vp.history_figure(run, summ, 'n_elc', 'change', np.nan, pal=pal),
+        'targets':
+        vp.targets_figure(run, {}, summ, np.nan, pal=pal),
+        'time traces':
+        vp.timetraces_figure(run,
+                             summ,
+                             gv.dt_history(run),
+                             gv.integrated(run),
+                             gv.field_energy(run),
+                             np.nan,
+                             pal=pal),
+        'conservation':
+        vp.conservation_figure(run, B, summ['t'], np.nan, pal=pal)[0],
+        'balance':
+        vp.balance_figure(run, B, np.nan, pal=pal)[0],
+        'diffusivity':
+        vp.diffusivity_figure(run, gv.diffusivity(run), pal=pal),
+    }
+    got = {name: _plotly_blank(f) for name, f in figs.items()}
+    live = [
+        mm.live_plot(f, summ, None, [], pal, name) for name, f in figs.items()
+    ]
+    # (the midplane history, a heat map, has no legend, data or not)
+    check(
+        all(p == 0 and ax and (leg or name == 'midplane history')
+            for name, (p, _, ax, leg) in got.items()) and
+        all(ti for name, (_, ti, _, _) in got.items() if name != 'conservation')
+        and all(not w.live['frames'] and not w.live['shapes'] for w in live),
+        'the empty run\'s charts: panels, axis titles and legend, no data point and nothing following a frame '
+        f'(points, panel titles, axis titles, legend entries: '
+        f'{ {n: (p, len(ti), len(ax), leg) for n, (p, ti, ax, leg) in got.items()} })'
+    )
+    data = mm.movie_data(run, summ, 'n_elc', 'change')
+    fig = vp.map_figure(run, {}, {}, 'n_elc', 'change', pal=pal)
+    # the poloidal plane's meshes (the colour bar has its own)
+    meshes = len(fig.axes[0].collections)
+    labels = [a.get_title(loc='left')
+              for a in fig.axes] + [a.get_xlabel() for a in fig.axes]
+    vp.plt.close(fig)
+    check(
+        data['frames'] == [] and data['ncell'] == 0 and data['strips'] == []
+        and data['boxes'] == {'whole domain': None}
+        and [len(s['x']) for s in data['prof']['sides']] == [0, 0]
+        and meshes == 0 and 'poloidal plane' in labels and 'R (m)' in labels,
+        f'the empty run\'s movie: no frame, no cell, no strip, no view to frame, both midplanes empty; its map: '
+        f'{meshes} meshes, the axes {[x for x in labels if x]}')
+    part_schema(tmp)
+    if chrome is None:
+      return
+    # the charts each tab draws (the midplane history, a heat map, has no legend with data or without)
+    want = {
+        'Midplane profiles': 2,
+        'Targets': 1,
+        'Time traces': 1,
+        'Balance & power': 2,
+        'Diffusivity': 1
+    }
+    for k, (case, d) in enumerate(dirs.items()):
+      with served(chrome, [], env={'GK_VIEWER_DATA': d}) as (url, dbg):
+        check(url is not None,
+              f'a blank start, {case}: view.sh serves the page')
+        if url is None:
+          continue
+        st = asyncio.run(
+            _drive_blank(url, dbg, tabs, want, shots if k == 0 else None))
+      charts = {t: v['charts'] for t, v in st['tabs'].items()}
+      not_blank = [(t, c['title'], c['lines'], c['images'], len(c['axes']),
+                    c['legend']) for t, v in charts.items() for c in v
+                   if c['lines'] or c['images'] or not c['axes']
+                   or not (c['legend'] or 'over time' in c['title'])]
+      check(
+          st['note'] and st['movie']
+          and st['movie']['time'] == 'no frames (no run)'
+          and st['movie']['canvases'] == 4 and st['movie']['idle']
+          and all(len(charts.get(t, [])) == n
+                  for t, n in want.items()) and not not_blank
+          and st['tabs']['Static figure']['images'] >= 1 and not st['errors'],
+          f'a blank start in the browser, {case}: the note at the top {st["note"]}, the movie {st["movie"]}, every '
+          f'tab opened ({len(st["tabs"])}): charts drawn {({t: len(c) for t, c in charts.items() if c})} of {want}, '
+          f'each with axis titles and a legend and no curve or map in it (but {not_blank}), the static figure an '
+          f'image ({st["tabs"]["Static figure"]["images"]}); error text: {st["errors"][:3]}'
+      )
+
+
+async def _drive_blank(url, dbg, tabs, want, shots):
+  """The blank page: the note at the top, the movie, each tab opened (want: tab -> the charts it should draw, waited
+  for; each chart scrolled into view and drawn: its title, axis titles, legend, drawn lines and images), the page's
+  error text; screenshots (dark, then light) in shots."""
+  panel = (
+      "__deep('[role=tabpanel]').filter(p => p.getAttribute('data-state') === 'active' && "
+      "p.getBoundingClientRect().height > 0)")
+  inside = (
+      "(root, s) => { const o = []; const w = r => { r.querySelectorAll(s).forEach(e => o.push(e)); "
+      "r.querySelectorAll('*').forEach(e => { if (e.shadowRoot) w(e.shadowRoot); }); }; w(root); return o; }"
+  )
+  text = (
+      "(() => { const o = []; const w = r => { for (const n of r.childNodes) { if (n.nodeType === 3) "
+      "o.push(n.textContent); else if (n.nodeType === 1) { if (n.shadowRoot) w(n.shadowRoot); w(n); } } }; "
+      "w(document.body); return o.join(' '); })()")
+  out = {'tabs': {}}
+  async with opened(url, dbg) as c:
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    await c.until("__deep('.gkv-movie').some(e => +(e.dataset.draws || 0) > 0)",
+                  180)
+    await asyncio.sleep(2)
+    out['movie'] = await c.js(
+        "(e => e && {time: e.querySelector('.time').textContent, canvases: e.querySelectorAll('canvas').length, "
+        "idle: ['.play', '.prev', '.next', '.scrub'].every(s => e.querySelector(s).disabled)})"
+        "(__deep('.gkv-movie')[0])")
+    out['note'] = bool(await c.js(f"{text}.includes('No simulation data yet')"))
+    if shots:
+      os.makedirs(shots, exist_ok=True)
+      await c.shot(os.path.join(shots, 'blank_dark_top.png'))
+    for name in tabs:
+      await c.press(f"__tab({json.dumps(name)})")
+      await asyncio.sleep(2)
+      # the panel scrolled to (its outputs mount as they come into view) until the charts it should draw are there
+      count = (
+          f"(p => {{ if (!p) return 0; p.scrollIntoView({{block: 'end'}}); "
+          f"return ({inside})(p, '.gkv-live').length; }})(({panel})[0])")
+      if want.get(name):
+        await c.until(f"{count} >= {want[name]}", 90)
+      await asyncio.sleep(2)
+      n = await c.js(count) or 0
+      charts = []
+      for i in range(n):
+        await c.js(
+            f"({inside})({panel}[0], '.gkv-live')[{i}].scrollIntoView({{block: 'center'}})"
+        )
+        await c.until(
+            f"!!({inside})({panel}[0], '.gkv-live')[{i}].querySelector('svg.main-svg .xtitle, "
+            f"svg.main-svg .g-xtitle text')", 60)
+        await asyncio.sleep(0.5)
+        charts.append(await c.js(
+            f"(e => ({{title: [...e.querySelectorAll('.gtitle, .annotation-text')].map(t => t.textContent)"
+            f".join(' / '), axes: [...e.querySelectorAll('g[class^=g-x][class$=title] text, g[class^=g-y][class$=title] text')]"
+            f".map(t => t.textContent)"
+            f".filter(Boolean), legend: [...e.querySelectorAll('.legendtext')].map(t => t.textContent), "
+            f"lines: [...e.querySelectorAll('.scatterlayer path.js-line')].filter(p => /L/.test(p.getAttribute('d') "
+            f"|| '')).length, images: e.querySelectorAll('.heatmaplayer image, .hm image').length}}))"
+            f"(({inside})({panel}[0], '.gkv-live')[{i}])"))
+      images = await c.js(
+          f"({panel}).length ? ({inside})({panel}[0], 'img').length : 0") or 0
+      out['tabs'][name] = {'charts': charts, 'images': images}
+      if shots and name == 'Midplane profiles':
+        await c.shot(os.path.join(shots, 'blank_dark_profiles.png'))
+    page = await c.js(text) or ''
+    out['errors'] = re.findall(
+        r'\b[A-Z][A-Za-z]*Error\b[^.]{0,60}|Traceback|An internal error occurred',
+        page)
+    if shots:  # the light look: the top, then the profiles tab's charts
+      await c.js("__switch('dark mode').click()")
+      await c.until("!document.body.classList.contains('dark')", 15)
+      await asyncio.sleep(3)
+      await c.shot(os.path.join(shots, 'blank_light_top.png'))
+      await c.press("__tab('Midplane profiles')")
+      await asyncio.sleep(2)
+      await c.until(
+          f"(p => p && ({inside})(p, '.gkv-live').length >= 2)(({panel})[0])",
+          60)
+      await c.js(
+          f"({inside})(({panel})[0], '.gkv-live')[0].scrollIntoView({{block: 'start'}})"
+      )
+      await asyncio.sleep(3)
+      await c.shot(os.path.join(shots, 'blank_light_profiles.png'))
+  return out
+
+
+def part_schema(tmp):
+  """viewer.json's per-simulation and per-device settings (gkview.load_config): this data directory's own file reads
+  as it did before them (the old reading, written out here); a simulation's own device names its runs and picks
+  its picture over the top-level one, which stays the default device's; its geqdsk serves a run whose files name
+  none (shot, time, wall), the run's own winning where both name one (the disagreement said); a device's wall where
+  the geqdsk's limiter has fewer than 3 points, never its shot; entries that do not parse left out with a note."""
+  import gkview as gv
+  cfg = json.load(open(gv.CONFIG_FILE))
+  old_base = os.path.normpath(os.path.join(gv.DATA, cfg.get('base', '.')))
+  d = cfg.get('device_image')
+  old_image = d and (os.path.normpath(os.path.join(old_base, d['file'])),
+                     tuple(float(v)
+                           for v in d['extent']), float(d.get('opacity', 1.0)))
+  lab, simdir, dflt, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+  sim2 = gv.open_run(os.path.join(gv.runs_root(simdir), dflt), lab)
+  check(
+      gv.SIMS == [tuple(s) for s in cfg['sims']] and gv.BASE == old_base
+      and gv.DEVICE == cfg.get('device', '') and not gv.CONFIG_PROBLEMS
+      and all(v == gv.SimSettings(gv.DEVICE, None)
+              for v in gv.SIM_SETTINGS.values())
+      and gv.device_image(gv.DEVICE) == old_image and sim2.device == gv.DEVICE
+      and sim2.title == f'{gv.DEVICE} #203899 @ 325 ms'
+      and gv.geqdsk_disagreement(sim2) is None,
+      f'this data directory\'s viewer.json (no per-simulation settings) reads as before: the simulations, base, '
+      f'device {gv.DEVICE!r}, its picture, Sim 2\'s title {sim2.title!r}')
+  geq = gv.geqdsk_path(sim2)
+  # a run that names no geqdsk: Sim 2's files but its options and command, under a stem naming no shot
+  farm = os.path.join(tmp, 'farm', 'runs', 'run')
+  os.makedirs(farm)
+  k0 = sim2.frames()[0]
+  for pat in (f'{sim2.stem}-block_topo.gkyl',
+              f'{sim2.stem}_b*-geo_corn_nodes.gkyl',
+              f'{sim2.stem}_b0-field_[0-9]*.gkyl',
+              f'{sim2.stem}_b0-*_M0_{k0}.gkyl'):
+    for f in glob.glob(os.path.join(sim2.path, pat)):
+      os.symlink(
+          f, os.path.join(farm,
+                          os.path.basename(f).replace(sim2.stem, 'farm')))
+  # a geqdsk with no shot in its header and a 1-point limiter (as STEP's)
+  lines = open(geq).read().split('\n')
+  i = next(i for i, ln in enumerate(lines)
+           if i > 5 and re.fullmatch(r'\s*\d+\s+\d+\s*', ln))
+  lines[0] = re.sub(r'#\s*\d+\s+\d+\s*ms', 'no shot here', lines[0])
+  lines[i] = f'{lines[i].split()[0]:>5} {1:>4}'
+  one = os.path.join(tmp, 'one_point_limiter.geqdsk')
+  open(one, 'w').write('\n'.join(lines))
+  pic = os.path.join(tmp, 'test_picture.png')
+  from PIL import Image
+  Image.new('RGB', (40, 80), (0, 0, 255)).save(pic)
+  image = {'file': pic, 'extent': [0.1, 2.1, -2.0, 2.0], 'opacity': 0.5}
+  test = dict(cfg,
+              base=old_base,
+              sims=[[
+                  'Sim 2 as Test', simdir, dflt, 'Sim 2, of device Test', {
+                      'device': 'Test',
+                      'geqdsk': one
+                  }
+              ],
+                    [
+                        'Farm',
+                        os.path.join(tmp, 'farm'), 'run',
+                        'Sim 2 naming no geqdsk', {
+                            'geqdsk': geq
+                        }
+                    ],
+                    [
+                        'Farm, one point',
+                        os.path.join(tmp, 'farm'), 'run', 'the same', {
+                            'device': 'Walled',
+                            'geqdsk': one
+                        }
+                    ],
+                    [
+                        'Other', simdir, dflt,
+                        'a device with nothing of its own', {
+                            'device': 'Other'
+                        }
+                    ], ['bad', 'x', 'y'],
+                    ['bad too', 'x', 'y', 'z', {
+                        'geqdks': 'typo'
+                    }]],
+              devices={
+                  'Test': {
+                      'device_image': image
+                  },
+                  'Walled': {
+                      'wall': geq
+                  }
+              })
+  path = os.path.join(tmp, 'schema', 'viewer.json')
+  os.makedirs(os.path.dirname(path))
+  json.dump(test, open(path, 'w'))
+  with config_file(path):
+    a = gv.open_run(os.path.join(gv.runs_root(simdir), dflt), 'Sim 2 as Test')
+    b = gv.open_run(farm, 'Farm')
+    c = gv.open_run(farm, 'Farm, one point')
+    o = gv.open_run(os.path.join(gv.runs_root(simdir), dflt), 'Other')
+    got = dict(labels=[s[0] for s in gv.SIMS],
+               problems=len(gv.CONFIG_PROBLEMS),
+               test_image=gv.device_image('Test'),
+               default_image=gv.device_image(gv.DEVICE),
+               other_image=gv.device_image('Other'),
+               a=(a.device, a.title, gv.geqdsk_path(a) == geq,
+                  gv.geqdsk_disagreement(a) == (geq, one)),
+               b=(b.device, b.title, gv.geqdsk_path(b) == geq,
+                  np.array_equal(gv.wall(b), gv.limiter(geq))),
+               c=(c.title == c.name, gv.limiter(one)
+                  is None, np.array_equal(gv.wall(c), gv.limiter(geq))),
+               o=(o.device, o.title))
+  check(
+      got['labels'] == ['Sim 2 as Test', 'Farm', 'Farm, one point', 'Other']
+      and got['problems'] == 2
+      and got['test_image'] == (pic, (0.1, 2.1, -2.0, 2.0), 0.5)
+      and got['default_image'] == old_image and got['other_image'] is None
+      and got['a'] == ('Test', 'Test #203899 @ 325 ms', True, True)
+      and got['b'] == (cfg.get('device', ''),
+                       f'{cfg.get("device", "")} #203899 @ 325 ms', True, True)
+      and got['c'] == (True, True, True)
+      and got['o'] == ('Other', 'Other #203899 @ 325 ms'),
+      'viewer.json per simulation and per device: a simulation\'s own device names its runs and gets its own picture '
+      '(the top-level one stays the default device\'s; a device with none gets none); a run naming its geqdsk keeps it '
+      'over the simulation\'s (the disagreement said); one naming none takes the simulation\'s (shot, time, wall); a '
+      '1-point limiter gives way to the device\'s wall, which gives no shot; 2 malformed entries left out with notes: '
+      f'{ {k: v for k, v in got.items() if k not in ("test_image", "default_image")} }'
   )
 
 
@@ -1589,8 +3145,10 @@ async def drive(url, dbg, shots):
         f'line within {r3(same_p)} / {r3(same_f)} px; {mine_p and mine_p["n"]} curves; the two frames '
         f'{r3(moved)} px apart)')
     # a click on the strips (first strip, its leftmost column: the strip's last cell, reflected; top SOL row) probes it
+    # scrolled into view first: a click outside the viewport (the page scrolled past the strips) reaches nothing
     box = await c.js(
-        f"(r => [r.left, r.top, r.width])({W}.querySelector('canvas.strips').getBoundingClientRect())"
+        f"(e => {{ e.scrollIntoView({{block: 'center'}}); const r = e.getBoundingClientRect(); "
+        f"return [r.left, r.top, r.width]; }})({W}.querySelector('canvas.strips'))"
     )
     x, y = box[0] + 82 + 2, box[1] + 42 + 3
     for kind in ('mousePressed', 'mouseReleased'):
@@ -1610,8 +3168,8 @@ async def drive(url, dbg, shots):
     async def click(
     ):  # where the strips are now: a re-run may have moved or re-made the movie
       b = await c.js(
-          f"(r => [r.left, r.top])({W}.querySelector('canvas.strips').getBoundingClientRect())"
-      )
+          f"(e => {{ e.scrollIntoView({{block: 'center'}}); const r = e.getBoundingClientRect(); "
+          f"return [r.left, r.top]; }})({W}.querySelector('canvas.strips'))")
       boxes.append([round(v) for v in b])
       for kind in ('mousePressed', 'mouseReleased'):
         await c.call('Input.dispatchMouseEvent',
@@ -1898,21 +3456,37 @@ if __name__ == '__main__':
                   help='a Chrome / Chromium binary: also drive the page in it')
   ap.add_argument('--shots',
                   help='a directory for screenshots of the browser check')
+  ap.add_argument(
+      '--parts',
+      help=
+      'only these parts, comma-separated (e.g. blank,poloidal; default: every part)'
+  )
   a = ap.parse_args()
   signal.signal(signal.SIGTERM, lambda *_:
                 (_ for _ in ()).throw(KeyboardInterrupt()))
-  part_headless()
-  part_thomson()
-  part_exports()
-  part_labels()
-  part_pgkyl()
-  part_themes()
-  part_fonts()
-  part_sync()
-  part_poloidal(a.browser)
-  if a.browser:
-    part_browser(a.browser, a.shots)
-    part_layout(a.browser, a.shots)
-    part_liveplot(a.browser)
+  parts = {
+      'headless': part_headless,
+      'thomson': part_thomson,
+      'measured': part_measured,
+      'exports': part_exports,
+      'labels': part_labels,
+      'pgkyl': part_pgkyl,
+      'themes': part_themes,
+      'fonts': part_fonts,
+      'sync': part_sync,
+      'poloidal': lambda: part_poloidal(a.browser),
+      'lines': lambda: part_lines(a.browser, a.shots),
+      'grid': lambda: part_grid(a.browser, a.shots),
+      'blank': lambda: part_blank(a.browser, a.shots),
+      'browser': lambda: a.browser and part_browser(a.browser, a.shots),
+      'layout': lambda: a.browser and part_layout(a.browser, a.shots),
+      'liveplot': lambda: a.browser and part_liveplot(a.browser),
+  }
+  chosen = a.parts.split(',') if a.parts else list(parts)
+  unknown = [p for p in chosen if p not in parts]
+  if unknown:
+    ap.error(f'no part {unknown}: the parts are {", ".join(parts)}')
+  for p in chosen:
+    parts[p]()
   print(f'\n{len(fails)} failed' if fails else '\nall passed')
   sys.exit(len(fails))

@@ -3,8 +3,17 @@
   "device": "my-tokamak",
   "sims": [
     ["Sim 1", "sims/sim1", "prod", "one line on what this simulation is"],
-    ["Sim 2", "/absolute/path/to/another/simulation", "prod", "absolute paths work too"]
+    ["Sim 2", "/absolute/path/to/another/simulation", "prod", "absolute paths work too"],
+    ["Sim 3", "sims/sim3", "rt_2x2v_p1", "another device's run, whose files name no geqdsk",
+     {"device": "other-tokamak", "geqdsk": "equilibria/other.geqdsk"}]
   ],
+  "device_image": {"file": "pictures/my_tokamak_section.png", "extent": [0.0, 2.5, -2.7, 2.7], "opacity": 1.0},
+  "devices": {
+    "other-tokamak": {
+      "device_image": {"file": "pictures/other_section.png", "extent": [0.6, 2.4, -1.4, 1.4], "opacity": 0.8},
+      "wall": "equilibria/other_with_limiter.geqdsk"
+    }
+  },
   "pgkyl": "../tools/postgkyl/.venv/bin/pgkyl",
   "thomson_fallback": "measurements/h5_slim",
   "theme_files": {"NSTX-U": "poster/aps_dpp_2025_poster_jjosephyzack.pptx"}

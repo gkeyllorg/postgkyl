@@ -389,7 +389,9 @@ check(
 # 15. the cache predates these changes (CACHE_VERSION unchanged): a frame recomputed now equals its cached row
 k = runs['sim2_prod'].frames()[-1]
 row = list(S2['frames']).index(k)
-fresh = gv._summary_one(sim2, k, gv.frame(sim2, sim2.frames()[0]))
+fresh = gv._summary_one(sim2, gv.frame(sim2, k), sim2.time(k),
+                        gv.frame(sim2,
+                                 sim2.frames()[0]))
 bad = [
     key for key in fresh
     if not np.array_equal(np.asarray(fresh[key], dtype=S2[key].dtype),

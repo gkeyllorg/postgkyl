@@ -26,13 +26,24 @@ KEYS = {
     'zoom': ("the poloidal view ('whole domain', 'lower divertor', ...)",
              "'lower divertor'"),
     'background':
-    ('the device\'s picture behind the poloidal plane (viewer.json "device_image")',
+    ('the picture of the run\'s device behind the poloidal plane (viewer.json "devices" / "device_image")',
      'true'),
     'opacity': ("that picture's opacity, 0.05 to 1 (blank: viewer.json's)",
                 '0.6'),
     'mirror':
     ('a half domain shown whole on the poloidal plane (its mirror image across Z = 0 too)',
      'true'),
+    'quantity':
+    ("the quantity's cells drawn on the poloidal plane (false: the grid and lines alone)",
+     'false'),
+    'grid': ('every cell edge drawn on the poloidal plane (the grid)', 'true'),
+    'separatrix': ('the separatrix drawn on the poloidal plane (dashed)',
+                   'false'),
+    'wall': ("the wall drawn on the poloidal plane (the geqdsk's limiter)",
+             'false'),
+    'outlines':
+    ("the block boundaries drawn on the poloidal plane (every block's outline)",
+     'false'),
     'x': ('profile x axis: distance | R', 'distance'),
     'theme':
     ("the look: NSTX-U (the DPP 2025 poster) | PPPL (the lab's slide template)",
@@ -117,6 +128,11 @@ DEFAULTS = {
     'background': False,
     'opacity': '',
     'mirror': False,
+    'quantity': True,
+    'grid': False,
+    'separatrix': True,
+    'wall': True,
+    'outlines': True,
     'x': 'distance',
     'theme': 'NSTX-U',
     'dark': True,

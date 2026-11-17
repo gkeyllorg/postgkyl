@@ -15,23 +15,36 @@ import postgkyl (it reads the `.gkyl` files itself, `gkyl_read.py`); the pgkyl c
 cp viewer.example.json viewer.json     # then name your simulations in it (and flux.env from flux.env.example)
 ./view.sh                              # the first run makes .venv from requirements.lock.txt (Python 3.12+; ~30 s)
 ```
+Without `viewer.json` (a fresh clone: `./view.sh` alone) the page opens anyway, every panel empty (A blank start,
+below).
 `.venv` can also be a link to an existing venv with these packages, or `GK_VIEWER_VENV` names one.
 **The data directory** (`GK_VIEWER_DATA`; default: this directory, where git ignores `viewer.json`, `flux.env`,
 `runs/` and `.venv`) holds what the viewer reads and writes:
-- `viewer.json` (start from `viewer.example.json`): paths relative to `base`, itself relative to the data directory
-  (or absolute).
+- `viewer.json` (start from `viewer.example.json`): every path in it relative to `base` (`devices` too), itself
+  relative to the data directory (or absolute). Read in one place, `gkview.load_config` (`gkview.reload()` reads it
+  again: for a form that writes it); an entry that does not parse is left out with a note on the page.
   - `base`: what the simulation directories (and the cache's file names) are relative to;
-  - `sims`: `[label, simulation directory, default run, one-line description]` each; a simulation's runs are the run
-    directories (a topology file, or a single-block run's files, and a frame) in its `runs/`, else in it;
-  - `device` (optional): the device the runs simulate, named in a run's title before its shot (`NSTX-U #203899 @ 325
-    ms`; none: `#203899 @ 325 ms`);
+  - `sims`: `[label, simulation directory, default run, one-line description]` each, optionally followed by an object
+    of the simulation's own settings, `{"device": <name>, "geqdsk": <file>}` (both optional): `device` the device
+    its runs simulate (else the top-level `device`); `geqdsk` the equilibrium file its runs read, used only where a
+    run's own files (options_used.txt, command.txt) name none: it gives the run's shot and time and its wall as the
+    run's own does (the header says which was used, and when the two disagree: the run's own wins). A simulation's
+    runs are the run directories (a topology file, or a single-block run's files, and a frame) in its `runs/`, else
+    in it;
+  - `device` (optional): the device runs simulate unless their simulation names its own, named in a run's title
+    before its shot (`NSTX-U #203899 @ 325 ms`; none: `#203899 @ 325 ms`);
+  - `devices` (optional): per device (by the name `device` gives), `{"device_image": <as below>, "wall": <a
+    geqdsk>}`: its picture (it wins over the top-level `device_image`), and a geqdsk whose limiter is drawn as its
+    wall where a run's own geqdsk gives none (no geqdsk, or a limiter of fewer than 3 points: STEP's `step.geqdsk`
+    has 1); the wall only, never the shot and time (`gkview.wall`). Paths relative to `base` like every other
+    (`../pictures/...` reaches beside it);
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
   - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
-  - `device_image` (optional): a picture of the device's poloidal cross-section, drawn behind the poloidal plane when
-    the sidebar's **include device background** is on: `{"file": <relative to base>, "extent": [R_left, R_right,
-    Z_bottom, Z_top], "opacity": 0.0-1.0}`; extent = where the picture's edges lie in metres (Device background,
-    below);
+  - `device_image` (optional): a picture of the default device's poloidal cross-section (the top-level `device`'s:
+    runs of another device get only their own, from `devices`), drawn behind the poloidal plane when the sidebar's
+    **include device background** is on: `{"file": <relative to base>, "extent": [R_left, R_right, Z_bottom,
+    Z_top], "opacity": 0.0-1.0}`; extent = where the picture's edges lie in metres (Device background, below);
   - `remote` (optional): `{"host": <ssh host name>, "base": <the path there of base>, "data": <the viewer's data
     directory there>}`, the machine that holds the runs, for a mirror here (Run it anywhere, below).
 - `flux.env` (from `flux.env.example`): Fetch from Flux's login and paths (`fetch_flux.sh`).
@@ -58,9 +71,10 @@ Keys (`viewer_state.KEYS`): `shot`, `sim`, `run`, `frame` (negative: from the la
 (value / change / step), `log`, `zoom`, `x`, `dark`, `tab`, `frames` (the movie's frames, `pgkyl load --frame`
 syntax), `probe` (block,i,j), `blocks` (the blocks drawn: `1-3,10`), `cmp` (a run drawn over this one: `<simulation>/<run>` or a
 directory), `path` (a run directory to open), `background`, `opacity` (the device picture), `mirror` (a half domain
-shown whole). A view opens from the defaults, then a saved view, then the command line, then the
-page's address, each overriding the one before; the page writes the current view into its address, so a reload or
-a bookmark comes back to it (the address carries the access token too: do not share it while the server runs). A
+shown whole), `quantity`, `grid`, `separatrix`, `wall`, `outlines` (what the poloidal plane draws). A view opens from
+the defaults, then a saved view, then the command line, then the page's address, each overriding the one before; the
+page writes the current view into its address, so a reload or a bookmark comes back to it (the address carries the
+access token too: do not share it while the server runs). A
 value that no longer fits (a run removed, a frame past the last) falls back to the default with a note at the top.
 Save & export shows the `./view.sh` line for the current view.
 
@@ -74,12 +88,28 @@ prints the URL. The access token stays on: anyone on a shared login node can rea
 stops the server. Python: the venv of Setup (marimo 0.25.2, plotly 7.1.0, anywidget 0.11.0, imageio-ffmpeg 0.6.0,
 h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.txt`).
 
-## Device background (2026-11-14)
-`viewer.json`'s `device_image` puts a picture of the device's poloidal cross-section (a CAD drawing, a photo, any
-PNG or JPEG) behind the poloidal plane: in the movie and in every map figure (the Static figure tab, figure and
+## A blank start (2026-11-16)
+With nothing to show (no `viewer.json`, `"sims": []`, or simulations whose directories are missing or hold no run
+that can be read) the page opens whole: the sidebar (simulation and run lists empty and idle, the frame slider idle,
+every other control there), the header (its tiles '—'), the movie (its canvases, titles, axis titles and colour bar,
+its controls idle, "no frames (no run)") and every tab, each chart with its panels, axis titles and legend and no data
+in it; the tabs that describe a run's files (Options, Run) say what they show. A note at the top says that there is
+no data yet and how to add some (`viewer.example.json`, or `./view.sh --path DIR`), and why each simulation named
+was left out. For showing the page's layout before there are runs (or before `viewer.json` is filled in).
+
+The page shows `gkview.empty_run()`: a `Run` with no directory, no block and no frame (electrons and ions, their
+masses unknown; an outboard and an inboard midplane holding no block), threaded through the notebook as any run is,
+so the cells and charts are the same code with nothing in them: no fake values (the time cursor, the separatrix line
+in R and the axis values of the poloidal plane are left out rather than placed anywhere). Its summary has every
+entry with no row; the shown frame is None.
+
+## Device background (2026-11-14; per device 2026-11-16)
+`viewer.json` puts a picture of a device's poloidal cross-section (a CAD drawing, a photo, any PNG or JPEG) behind
+the poloidal plane, the shown run's device's (`Run.device`: its simulation's `device`, else the top-level one): its
+`devices` entry's `device_image`, else the top-level `device_image` for the default device: in the movie and in every map figure (the Static figure tab, figure and
 movie exports, the diffusivity maps), under the cells, the wall and the separatrix, clipped to the view. The sidebar's
 **include device background** turns it on and off (launch key `--background true`; off by default; the switch is
-there only when a picture is named) and **background opacity** sets how strongly it shows, 0.05 to 1 (launch key
+there only when the shown run's device has a picture) and **background opacity** sets how strongly it shows, 0.05 to 1 (launch key
 `--opacity 0.6`; it starts at `viewer.json`'s `opacity`): the movie redraws at once, without being made again. `extent` places it: the R of its left and right edges and the Z of its bottom
 and top, in metres, so that its vessel lies on the run's wall (the geqdsk's limiter, drawn over it). The picture is
 read once, at most 2000 px on its longest side (`viewer_plots.BACKGROUND_PX`), and sent to the page once
@@ -104,6 +134,96 @@ eight arrow-key steps of the slider take it to 0.6 and the movie, not made again
 with the surface at 0.6 outside the wall; switched off it leaves no trace. The half domain shown whole: each cell's
 colour at its mirror image, judged on cell insides only (both pixels inside one colour, in the drawn box), on the map
 (whole domain and both midplane views: 167 of 167; without the switch 0 of 153) and on the page.
+
+## The lines over the cells (2026-11-16)
+The poloidal plane draws three lines over its cells, each on a sidebar switch of its own, on by default: **show the
+separatrix** (dashed: the inner edge of each SOL block with an aligned block under it; launch key `--separatrix
+false`), **show the wall (limiter)** (the geqdsk's limiter; `--wall false`) and **show the block boundaries** (every
+block's outline, so the interfaces between blocks too; `--outlines false`; not `blocks`, which chooses the blocks
+drawn). A switch is there only when the run has its line (a run with no separatrix in its layout or no limiter in its
+geqdsk has none to show). They act in the movie, which redraws at once without being made again (`Movie.layers`,
+read where the page draws the plane), and in every map figure (the Static figure tab, figure and movie exports, the
+diffusivity maps: `viewer_plots.Layers`, one value passed to `map_figure`). The outlines and the separatrix follow the
+cell edges as curves where the run writes them (The grid and the quantity, below). A half domain shown whole: the mirrored
+separatrix and outlines follow their switches. The view keeps them (a saved view, the `./view.sh` line, the page's
+address). The unrolled strips keep their lines whatever the switches: there the dashed line is the band edge their y
+axis labels 'separatrix' and the vertical lines part the segments named above them, so without them the strips'
+labels would point at nothing; the switches are the poloidal plane's, as the device picture and the mirror are.
+
+Checked (`check_viewer.py` part_lines, on Sim 2): the map (matplotlib, at 150 dpi, the whole domain shown whole and
+the lower divertor) and, with `--browser`, the movie (the whole domain shown whole over the device picture, the
+sidebar's switches clicked through all eight states), judged on pixels: each switch alone, against all three off,
+changes pixels along its own line (every 3 px along it, in each half of a mirrored view) and nowhere else; taken away
+from all three, the same; all off, the map equals itself with its lines removed; the movie is not made again; the
+address carries the switches. The Static figure and Diffusivity tabs (the notebook launched with two switches off) and
+the movie export draw with the switches given. Run alone with `--browser`: 5 of 5 pass (share of the points along a
+line that changed: 0.85-1.0 on the map, 0.69-1.0 on the page, where the block outlines are 0.4 px over the picture; 0
+pixels changed elsewhere). Each wiring fault tried fails it: the separatrix and wall switches swapped in `map_figure`
+(both map views: 0.004-0.07 along the lines, 1,858-3,767 pixels changed elsewhere); the mirror image's outlines drawn
+whatever their switch (the map shown whole: 0.27 along the mirrored half, 2,997 pixels left with all off); the movie's
+separatrix following the wall's switch (0.0 along it, 560 pixels elsewhere); the switches handed to the movie when it
+is made (made again at every click: renders 1 to 8).
+
+## The grid and the quantity (2026-11-16)
+Two more sidebar switches for the poloidal plane: **show the grid (every cell edge)** (launch key `--grid true`; off by
+default) and **show the plotted quantity** (`--quantity false`; on by default). Off, the quantity's cells go, and its x
+marks; what stays is the grid, the lines and the device picture, on the same axes and view, so the grid can be seen
+alone or over the picture. The colour bar stays where the strips use it (the page's layout and a full-width slide: the
+strips keep their cells) and goes with the quantity where it is the plane's alone (a half-width slide). In the movie
+both switches redraw it at once (`Movie.layers`); the grid's lines are built once per run (`movie_data`), one path,
+stroked under the outlines, thin and in the theme's secondary ink at 45 %.
+
+A Gkeyll cell edge is a curve: from a corner through the two Gauss-Legendre nodes of the edge (t = (1 ∓ 1/√3)/2) to the
+next corner. `gkview.cell_edges` reads the nodes from each block's `geo_surf0_mc2p_nodal_fd` (constant-psi edges,
+[npsi + 1, 2 ntheta]) and `geo_surf1_mc2p_nodal_fd` (constant-theta edges, [2 npsi, ntheta + 1]) files, the first three
+of their 39 components (the rest are a finite-difference stencil), R = hypot(X, Y) for a mapc2p geometry as for the
+corners, and draws each edge as the cubic through its corners and its two nodes. Every line along cell edges (grid,
+outlines, separatrix) and every cell's fill, in the movie and the maps, follows these curves: on a coarse grid
+(ASDEX Upgrade's 8 cells around, DIII-D's 12) a cell filled as its corners' quadrilateral fell well inside the curved
+grid. Before trusting the files it checks that every Gauss node lies by its edge, within one chord length of the
+chord's middle (a curved edge bends away by up to 0.88 of its chord, at STEP's X point); where a block lacks the files
+or fails that, every edge of the run is drawn as its chord and the plane says so ("cell edges drawn as chords: ...").
+Sim 1's and Sim 2's surface node files hold zeros (their builds did not fill them): chords there; the 2025 re-run and
+the four device runs have them.
+
+Checked (`check_viewer.py` part_grid): on ASDEX Upgrade's device run (by path, curved) and Sim 2 (shown whole,
+chords), the map at 150 dpi: the grid alone, against the bare plane, changes pixels along every cell edge (each half
+of a mirrored view) and nowhere else, and so does taking it away over the quantity; the quantity changes nearly every
+cell's inside and nothing outside the cells; with both off and no line the plane is its bare surface; the grid passes
+through the Gauss nodes (1308 of 1308) and not along the chords where they bend 4 px or more away (0 of 50 such
+points); a half-width slide has its colour bar with the quantity only; Sim 2's plane carries the chords note. With
+`--browser`, the movie of TCV's and DIII-D's runs at their first frame, the two switches clicked through their four
+states: the same pixel tests, the movie never made again. Run alone with `--browser`: 5 of 5 pass. Wiring faults
+tried fail it: the map's grid drawn along the chords (ASDEX: 40 of 48 chord points drawn); the movie filling its
+cells whatever the quantity's switch (TCV and DIII-D: 0 of the cell insides changed).
+
+## Other devices' runs (2026-11-16)
+The four regression runs of `research/tokamak/regr_devices_20261116` (ASDEX Upgrade, STEP, TCV, DIII-D) open with
+every tab. What changed, each derived from the run's own files:
+- **A mapc2p geometry's nodes** (DIII-D's inner-wall-limited test): `geo_corn_nodes` holds Cartesian X, Y, Z when the
+  file's `geometry_type` is Gkeyll's `GKYL_GEOMETRY_MAPC2P` (3), not R, Z, phi (the tokamak geometry's): R =
+  hypot(X, Y) (`gkview.physical_rz`), for the surface nodes too.
+- **A species' source is not a species**: Gkeyll writes a source's moments as `<species>_source_<moment>_<frame>`
+  (`gk_species_source.c`); a name `X_source` beside a species `X` is that source (DIII-D's sources wrote M0 at frame
+  0 only, and counted as species broke every later frame).
+- **The psi direction, block by block**: a block whose topology entry names, across a psi face, a block whose psi
+  faces lie against its other psi face (nearer it, by the median distance of the face's nodes) runs against its
+  topology: it is read reversed (`gkview.contrary_blocks`, `Run.reversed(b)`), so that its rows run as the topology
+  says, before the run's own direction is decided as before. TCV x21's blocks 0-4 are such blocks (their topology
+  joins faces 0.1 m apart: a Gkeyll-side problem, not fixed here; the header and the Run tab say so); in every other
+  run here the named face lies 1e-10 cells from its partner and the other 1-300 cells away. TCV's midplane profiles
+  now run outward on both sides, its separatrix at R 1.0971 / 0.6826 m.
+- **A limited single block** (DIII-D): its rows split where the sheath begins, read from the range its sheath boundary
+  condition's own files cover (`<species>_bc_zlower_vcutsq`: rows 5-7 of 8); its rows below close on themselves
+  (core), its rows from there (`Layout.lcfs`) end on the sheath at its theta ends: two targets (lower and upper inner,
+  the plate the open rows only), the outboard and inboard midplane stacks through core and SOL with the LCFS as their
+  separatrix (the inboard one across the block's theta seam), one strip with core under the LCFS and SOL over it,
+  regions by row (core and SOL means, the cell table, the probe), the separatrix line on its LCFS row. Gkeyll's
+  parallel boundary flux of such a run covers the SOL rows only, so the targets' power is read as for any plate.
+Checked, by hand (targeted, 2026-11-16): every tab builds headless on the four runs and on Sim 2; ASDEX Upgrade's and
+STEP's layouts, profiles, target fluxes and volumes are identical to the snapshot's, and Sim 1's, Sim 2's and the 2025
+re-run's; the DIII-D plate's pgkyl command gives the viewer's q_par (25.94, 6.14, 1.61 MW/m²); the four runs' movies
+drawn in Chrome. Left: TCV's topology; a run's geqdsk when its files name only a basename (viewer.json's `geqdsk`).
 
 ## Run it anywhere: a mirror (2026-11-13)
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
@@ -139,8 +259,10 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   (block,i,j, or a click on the movie), quantity, value / change since the first frame / change since the previous
   frame (the last shows fronts moving), log scale, poloidal view (whole domain, lower/upper divertor,
   outboard/inboard midplane), **show the full domain** (a half domain: its mirror image too), **include device
-  background** and **background opacity** (when `viewer.json` names a `device_image`: the device's picture behind
-  the poloidal plane, in the movie and every map figure), **blocks drawn** (none chosen:
+  background** and **background opacity** (when `viewer.json` names a picture of the shown run's device: behind
+  the poloidal plane, in the movie and every map figure), **show the plotted quantity**, **show the grid (every
+  cell edge)**, **show the separatrix**, **show the wall (limiter)** and **show the block boundaries** (what the
+  poloidal plane draws; above), **blocks drawn** (none chosen:
   every block; see below), **draw another run over it**
   (the overlay, see below), profile x axis (distance from the separatrix or R), **theme** (NSTX-U, PPPL or DIII-D;
   see Look) and **dark mode** (on by default; off = the theme's white look, page and figures together, no reload).
@@ -159,7 +281,8 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   Quantities: n, T, T_par, T_perp, u_par per species, ion Mach number, φ, q_par (total) and q_perp, the part of
   q_par carried by perpendicular energy.
 - **Tabs:**
-  - *Midplane profiles*: outboard and inboard (n, T, u_par, Mach, φ; shown frame against the first) and the selected
+  - *Midplane profiles*: outboard and inboard (n, T, u_par, Mach, φ; shown frame against the first), the shot's
+    measured profiles over them (Thomson n_e and T_e, CHERS T_i, TRANSP T_i and n_D; below), and the selected
     quantity at the midplane over (radius, time).
   - *Targets*: q_par against midplane distance, λq and peak q_par over time, every target.
   - *Time traces*: dt, cells with n ≤ 0, particle content, field energy, the volume-mean n_e and T_e change in
@@ -209,10 +332,11 @@ Simulations offered: `viewer.json`'s `sims` (`gkview.SIMS`). Shot and equilibriu
 | `pgkyl_cmd.py` | the pgkyl command equivalent to each curve, cell and map the page draws (click it) |
 | `viewer_state.py` | where the viewer opens: the view keys, state files, the `./view.sh` line, the blocks syntax |
 | `run_options.py` | the Options tab: the driver's options read from its source, the run's values, its jobs, its start-up report |
-| `thomson.py` | measured n_e: Thomson (MPTS) of the run's shot from `runs/flux/<shot>.h5`, the beam flattop, the averaging window, channel placement |
+| `thomson.py` | measured profiles of the run's shot from `runs/flux/<shot>.h5`: Thomson (MPTS) n_e and T_e, CHERS T_i, TRANSP T_i and n_D; the beam flattop, the averaging window, the placement |
+| `flux_transp.py` | run on Flux by `fetch_flux.sh`: chooses the shot's TRANSP run and adds its T_i, n_D and midplane radii to the shot's file (numpy + h5py; reads TRANSP's netCDF-3 itself) |
 | `sync.py` | the mirror: copies runs, caches, geqdsks and Thomson files from viewer.json's `remote` (Run it anywhere) |
 | `fonts/make_symbols.py` | builds Viewer Symbols, the symbols the theme fonts lack (fonts/README.md) |
-| `fetch_flux.sh` | everything about reaching PPPL Flux: copies a shot's Thomson / EFIT01 / CHERS / beam power to `runs/flux/`, through the laptop's forwarded socket (or from the laptop); the login `view.sh --flux` keeps |
+| `fetch_flux.sh` | everything about reaching PPPL Flux: copies a shot's Thomson / EFIT01 / CHERS / beam power / TRANSP run to `runs/flux/`, through the laptop's forwarded socket (or from the laptop); the login `view.sh --flux` keeps |
 | `gkyl_read.py` | the `.gkyl` reader (2D fields, topology files, their MessagePack metadata; numpy only) |
 | `check_gkview.py` | data checks, against the poster and movie scripts (`sims_20261022/` under `base`; with a postgkyl venv: they need postgkyl and scipy) |
 | `check_viewer.py` | viewer checks: headless, exports, pgkyl commands run, and with `--browser <chrome>` the page itself (with the viewer's venv) |
@@ -400,10 +524,16 @@ simulations (to 1e-16, 7e-8 for the float32 cache). 2026-11-12: ported to pgkyl 
 
 **The output path**: the header gives the run's directory in full (and the overlay's), with the file name pattern.
 
-## Measured profiles: Thomson n_e (2026-11-03; NSTX-U shots, through PPPL Flux)
-The Midplane profiles tab overlays the shot's Thomson n_e (open circles, electron colour) on the density row, above
-a strip of the shot's beam power and Thomson line density with the averaging window shaded. A switch hides it; a
-range slider picks the frames (it snaps to Thomson frames in the beam flattop).
+## Measured profiles: Thomson, CHERS, TRANSP (2026-11-03, T_e / T_i / n_D 2026-11-16; NSTX-U shots, through PPPL Flux)
+The Midplane profiles tab overlays the shot's measured profiles on the run's, each on the row and species it
+compares with, above a strip of the shot's beam power and Thomson line density with the averaging window shaded:
+- density row: Thomson n_e (open circles, electron colour) and TRANSP's thermal deuterium density n_D (a wide pale
+  line, ion colour);
+- temperature row: Thomson T_e (open circles, electron colour), CHERS T_i (open diamonds, ion colour) and TRANSP's
+  T_i (wide pale line, ion colour; dotted where TRANSP predicts it, see below).
+One switch (**measured profiles**) hides them all; a range slider picks the Thomson frames (it snaps to Thomson
+frames in the beam flattop). The note under the chart says, per source, what was averaged (how many samples), how it
+is placed, and why a source is missing or empty.
 
 **Getting the data.** Perlmutter has no route to PPPL (`flux.pppl.gov` does not resolve here; `portal.pppl.gov:22`
 does not answer); the laptop has one. Its ssh connection to Perlmutter forwards Flux's ssh port to a socket on the login
@@ -420,9 +550,16 @@ RemoteForward /tmp/<your Perlmutter user name>-flux.sock flux.pppl.gov:22
   203899` (`FLUX=`, `PM=`: the laptop's ssh names; the data directory's `flux.env` is read over ssh).
 
 `fetch_flux.sh` runs the sim-init workflow's `tools/extract_slim_h5.py` on Flux in a temporary directory, adding
-`WF:\PNB`, and delivers `runs/flux/<shot>.h5` (~10 MB). Flux's login prints a banner and module lines, so the files
+`WF:\PNB`, then this directory's `flux_transp.py`, which adds the shot's TRANSP run (`/<shot>/TRANSP`), and delivers
+`runs/flux/<shot>.h5` (~10 MB, ~1 MB more with TRANSP). Flux's login prints a banner and module lines, so the files
 come back base64-encoded between marker lines. The data directory's `flux.env` sets `FLUX_HOST` (your Flux
-user@host), `FLUX_PY` (a Flux python with h5py; python3 if it is not there) and `FLUX_TOOL` (where that tool is). The socket only exists on the login node the laptop's connection landed on: run `./view.sh --flux` in a
+user@host), `FLUX_PY` (a Flux python with numpy and h5py; python3 if it is not there) and `FLUX_TOOL` (where that
+tool is); optional (`flux.env.example`): `FLUX_TRANSP_CSV` (the sim-init workflow's candidate CSV, default: the one
+of `FLUX_TOOL`'s workflow, `code/elong_tri_scan_pre_shape_candidates_latest.csv`), `FLUX_TRANSP_TOOL` (this
+directory's `flux_transp.py` on Perlmutter; needed only for a fetch run on the laptop), `FLUX_TRANSP_ROOT` (TRANSP's
+archive on Flux, default `/p/transparch/result/NSTU`), `FLUX_H5_ROOT` (the MDSplus dumps' directory, instead of the
+extraction tool's two: a stand-in Flux). A shot file fetched before TRANSP was added (the 203655 copy here) shows
+the Fetch button again. The socket only exists on the login node the laptop's connection landed on: run `./view.sh --flux` in a
 terminal of that connection. sshd leaves the socket behind when the laptop disconnects, and a later connection landing
 on the same node cannot make it again while the file is there (socat: "Connection refused"): `fetch_flux.sh` tests
 that the socket answers, removes a dead one of yours and asks for a new connection. A VS Code window reload keeps the
@@ -434,17 +571,59 @@ archive): through view.sh's login (BatchMode), through the socket, a closed logi
 route (exit 4 with the fix); each delivered file equals the source dataset for dataset; `./view.sh --flux` exports the
 login to marimo and logs out and removes its directory when stopped; the tab shows the button, "restart" or "start
 with --flux" in the three login states. The forward itself was tested by the user (password + Duo, `hostname` =
-flux-login2). Not yet run: a real fetch from Flux.
+flux-login2). Not yet run: a real fetch from Flux. 2026-11-16, TRANSP added: `check_viewer.py`'s `part_measured`
+fetches 203655 and 203899 through a stand-in Flux (the same stand-in ssh, a banner on stdout; the dumps and a
+TRANSP archive in a temporary directory: a synthetic run made from the real slim 203899S18 CDF with a made-up ND and
+RMAJM, and runs that each step of the rule passes over: predictive, no CDF, no ND, a fatal TR.MSG).
 
-**Definitions** (`thomson.py`, following `nstxu_sim_init_workflow` docs/02 and docs/08):
-- MPTS branch TS3, then TS2, then BEST (the first with every node); per-channel fits `FIT_NE` ± `FIT_NE_ERR` on
-  `FIT_RADII`, only where `VALID == 1`. Units asserted.
+**Definitions** (`thomson.py`, following `nstxu_sim_init_workflow` docs/02, docs/03 and docs/08):
+- MPTS branch TS3, then TS2, then BEST (the first with every node); per-channel fits `FIT_NE` ± `FIT_NE_ERR` and
+  `FIT_TE` ± `FIT_TE_ERR` on `FIT_RADII`, only where `VALID == 1`. Units asserted (cm⁻³, keV).
+- CHERS (`\NSTX::TOP.ACTIVESPEC.CHERS.ANALYSIS.{CT1,CT2}`): `TI` ± `DTI` (keV) on `RADIUS` (cm) at `TIME` (s),
+  stored (sample, channel), the axes told apart by the dims' values; a point counts where `VALID == 1`, `TI > 0`
+  and `DTI ≥ 0` (the workflow's audit). CT1 and CT2 are two analyses of the same views, not independent
+  measurements: a window uses the one with more valid points in it, CT2 on a tie (the audit's rule at its one time).
+  An impurity temperature, taken as the deuterium one (T_D = T_CHERS, as the workflow does). Every CHERS product of
+  the workflow's 16 shots reports `QUALITY=TEST` and the warning "Bay B window Transmission factor= 0.715" (docs/03).
+- TRANSP (`/<shot>/TRANSP`, `flux_transp.VARIABLES`): `TI` (eV) and `ND` (cm⁻³, thermal deuterium) on the zone
+  centres `X` at `TIME3` (s); `RMAJM` (cm), the midplane major radius of the zone boundaries `XB` on both sides,
+  inboard edge to outboard edge through the axis (2 N + 1 points). Units and dimensions asserted; a RMAJM that is
+  not increasing inboard to outboard, or an `XB` that does not end at 1, is refused with the reason in the note.
+  **TRANSP covers the core only**: it models the plasma inside its boundary, so its profiles stop at the last zone
+  centre inside the separatrix and it has nothing in the SOL.
+- **TRANSP's run** (`flux_transp.choose`, on Flux, among `<root>/{16,15}/<shot><letter><2 digits>`):
+  1. the sim-init workflow's choice where its candidate CSV lists the shot (`TRANSP_RUN_ID`: 203899 → 203899S18);
+  2. else the newest run interpretive throughout (its namelist sets `lpredict_te`, `_ti`, `_ne` false in every
+     block, `~update_time` blocks included);
+  3. else the newest run that sets none of them, taken as TRANSP's default, interpretive. **UNVERIFIED**: that the
+     default is interpretive is an assumption, not checked against TRANSP's documentation; the workflow's own rule
+     requires the flags set and so found no run for 203655, whose five runs (A01-A04, F01) set none. This is the
+     step that picks 203655's run; read its namelist (stored in the file, attribute `namelist`) before trusting it.
+
+  Newest = the TR.DAT's time, A01 first on a tie (the workflow's order). The first that qualifies is taken: its CDF
+  holds every variable above with those dimensions and units, and the last 200 kB of its TR.MSG holds no fatal
+  marker. The group's attributes say which run (`run`), why (`why`), every run of the shot and what became of it
+  (`considered`), the source CDF and its time, the namelist, and which profiles the run predicts from when
+  (`predicts`, `predicts_from`).
+- **203899S18 predicts T_e and T_i** from 128 ms (`lpredict_te = lpredict_ti = 1` in a `~update_time = 0.128287`
+  block; the workflow's `reference_run/transp_effective_mode_audit.csv` says PREDICTIVE_AT_TARGET_TIME): in Sim 2's
+  window its T_i is TRANSP's transport model, not a fit to CHERS. It is drawn dotted, its legend says "predicted by
+  its model", and the note says from when. Its n_D is data-based (`lpredict_ne = 0` throughout: from the measured
+  n_e). The run is kept because it is the one the workflow took its edge T_i (TIEDG) from.
+- Window: the Thomson frames chosen (above); CHERS and TRANSP average their own samples within the span those frames
+  stand for, half a Thomson frame interval past each end frame (`thomson.band`, the shaded band of the timeline).
+  CHERS samples every 10 ms, TRANSP's profiles every ~1 ms. A window with no CHERS sample draws no CHERS and says
+  where its samples are (203655: CHERS only from 126 to 216 ms).
+- Placement of TRANSP: each zone centre's midplane radius is interpolated in `X` between its boundaries' (`RMAJM`),
+  at each TRANSP time; its distance from TRANSP's own boundary (RMAJM's ends, same equilibrium, same time) is
+  averaged over the window, and TRANSP's boundary is put on the run's separatrix. Both x modes (distance from the
+  separatrix, R) use that distance. CHERS is placed as Thomson (below), each view's radius taken at the midplane.
 - Beam flattop: the elongation/triangularity scan's rule on `WF:\PNB` (within 0.2 MW of the maximum, steady over 15
   samples each side). Its smallest-|DRSEP| EFIT01 time must be the run's equilibrium time; the note says if not.
 - Window, opening default: the later half of the flattop after the run's time, i.e. from the midpoint of (run's
   time, flattop end) to the flattop's last frame. Point = mean over the window's frames; bars = spread over the
   frames (fit error where a channel has one valid frame).
-- Placement: each frame's channels measured from the run's own midplane separatrix, moved by EFIT01's separatrix
+- Placement of Thomson and CHERS: each sample's channels measured from the run's own midplane separatrix, moved by EFIT01's separatrix
   shift (RMIDOUT / RMIDIN) from the run's time to that frame. EFIT01 is used only for the shift: at 325 ms it puts
   203899's separatrix +7.1 mm (outboard) and +2.5 mm (inboard) from the run's (h1a) one, a third of the run's
   outboard SOL. 203899 moves 2-3 cm outboard and ~4 cm inboard between 0.3 and 0.9 s, so a plain R overlay would
@@ -455,12 +634,47 @@ flux-login2). Not yet run: a real fetch from Flux.
 Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame n_e = 0.90-1.08 on 6 of 7 channels
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
-## Checks (2026-11-14: all pass, the browser part too: `check_viewer.py --browser` 52, `check_gkview.py` 64)
+## Checks (2026-11-16: all pass, the browser part too: `check_viewer.py --browser` 98, `check_gkview.py` 64)
 Run from this directory with no environment set (its own `viewer.json`, `.venv`):
 ```sh
-.venv/bin/python check_viewer.py [--browser <chrome>]
+.venv/bin/python check_viewer.py [--browser <chrome>] [--parts blank,poloidal]   # --parts: some parts only
 <a postgkyl venv>/bin/python check_gkview.py
 ```
+2026-11-16, all four changes together (measured profiles, a blank start, the lines and the grid, other devices' runs)
+and the 11-14 layout fixes, formatted by the repo's hooks: both suites in full, all pass (`check_viewer.py
+--browser` 98, `check_gkview.py` 64). Fixed on the way: two checks (the opacity slider's value is now read where it
+shows, marimo's `aria-valuenow` being an index into `steps=`; the strips are scrolled into view before a click probes
+them, the longer sidebar having left them above the window) and two faults of the merge itself (the empty run's
+movie built curved cells from no block; opening a run read each block's field file before looking for its sheath
+file, which a run without that block's field file lacks: the sheath file is now looked up first).
+2026-11-16 (measured T_e / T_i / n_D; only these parts run, not the whole suite): `part_thomson` 3/3 (the reader ==
+the workflow's 203899 channel export for n_e and T_e, max rel 0; Thomson points on the n and T rows, both sides) and
+the new `part_measured` 13/13, which needs a postgkyl venv's python (viewer.json's `pgkyl`) for scipy: flux_transp's
+netCDF-3 reader == scipy on 61 variables (2 fixture files); the stand-in fetch delivers both shots, Thomson / EFIT01
+/ CHERS / beam power equal to the dumps dataset for dataset; the run choice (203899 → 203899S18 from the CSV, its
+prediction from 128.287 ms recorded; 203655 → A01 past S05 no CDF, A03 fatal, A02 no ND; without the CSV 203899 gets
+none); the delivered TRANSP == the fixture (6 variables, units, dims) and its midplane geometry; CHERS == the
+workflow's 42 direct points at 325 ms (max rel 0) and its VALID masking (3410 of 4437 points per analysis); wrong
+units / axes refused with the reason, Thomson still read (5 cases); window means == plain loops (Thomson T_e, CHERS
+T_i, TRANSP T_i and n_D); the profiles figure's rows, colours and dashes, 9 measured traces the same points in both x
+modes; the notes for 4 missing / empty sources; the notebook on the fetched files (Sim 2) and on the copy without
+TRANSP (Sim 1), every tab (11 + 11). Run: `.venv/bin/python -c 'import check_viewer as c; c.part_thomson();
+c.part_measured()'`.
+2026-11-16: `part_lines` (The lines over the cells, above) and `part_grid` (The grid and the quantity), run alone
+with `--browser`: all pass.
+2026-11-16: `check_viewer.py` part blank (A blank start): on three data directories (no `viewer.json`, `"sims": []`,
+a simulation whose directory is missing) the notebook opens on the empty run with every tab built; the empty run's
+charts have their panel titles, axis titles and legend and no data point, its movie no frame, cell or strip and no
+view to frame, its map no mesh; with `--browser` each served by view.sh: the note at the top, the movie's four
+canvases with its controls idle, every tab opened and its charts drawn (axis titles, legend, no curve or map), no
+error text; screenshots dark and light. And the per-simulation and per-device settings (part_schema): this
+directory's own `viewer.json` reads as before (the simulations, base, device, picture, Sim 2's title); a
+simulation's own device names its runs and gets its own picture, the top-level picture staying the default
+device's; a run naming its geqdsk keeps it over the simulation's (the disagreement said), one naming none takes
+the simulation's (shot, time, wall); a 1-point limiter gives way to the device's wall, which gives no shot;
+malformed entries left out with a note. Every figure of the three simulations built with the code before and after
+this change: 102 of 102 identical (figure JSON, map pixels, movie payloads, live specs); recomputed summary rows equal
+the cached ones (458 of 458 entries).
 2026-11-14, later: the code reformatted to the repo's style (YAPF: 2-space indent, 80 columns; ruff's pyflakes
 rules: 4 unused imports / an f-string without placeholders removed) with the repo's pre-commit hooks, all passing;
 both suites then run from here as above, all pass.

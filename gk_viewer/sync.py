@@ -7,7 +7,8 @@ viewer's data directory there>}. For each run <simulation>/runs/<run> it copies,
 here:
 - the run's files the viewer reads: all but distribution-function and source frames and restart files (most of a
   run's bytes);
-- the geqdsk it read (the vessel outline, the shot), when that is under the remote base;
+- the geqdsk it read (the vessel outline, the shot), when that is under the remote base; and the geqdsk and the
+  device wall viewer.json names for its simulation, when they are under the base;
 - its shot's Thomson file from the sim-init workflow (viewer.json "thomson_fallback"), when there is one;
 and from the data directory there to the one here (runs/): the run's summary cache (runs/cache), so the viewer opens
 it without reading every frame, and its shot's Flux copy (runs/flux). Without "data", a data directory under the
@@ -201,14 +202,25 @@ def main(argv=None):
           f'  {lab} / {run}: its geqdsk {g} is not under the base: not synced',
           file=sys.stderr)
     geq += [g_rel] if g_rel else []
+  # and the ones viewer.json names (relative to the base: the same place there): a simulation's geqdsk, for runs
+  # whose own files name none, and its device's wall
+  for lab, _, _, _ in sims:
+    own = gv.SIM_SETTINGS[lab]
+    wall = gv.device_settings(own.device).get('wall')
+    for g in (own.geqdsk, os.path.join(gv.BASE, wall) if wall else None):
+      g_rel = g and under(os.path.normpath(g), gv.BASE)
+      if g and not g_rel:
+        print(f'  {lab}: {g} (viewer.json) is not under the base: not synced',
+              file=sys.stderr)
+      geq += [g_rel] if g_rel else []
   copy('geqdsks', sorted(set(geq)))
   # their shots' Thomson files: the sim-init workflow's (under the base), the Flux copies (the data directory)
   shots = sorted({gv.open_run(path, lab).shot for lab, _, path in local} - {0})
-  wf = thomson.WORKFLOW and under(thomson.WORKFLOW, gv.BASE)
+  wf = thomson.fallback_dir() and under(thomson.fallback_dir(), gv.BASE)
   if wf:
     copy('Thomson files (sim-init workflow)', [f'{wf}/{s}.h5' for s in shots])
   if rdata is not None:
-    flux = os.path.relpath(thomson.CACHE, gv.DATA)
+    flux = os.path.relpath(thomson.flux_dir(), gv.DATA)
     copy('Flux copies', [f'{flux}/{s}.h5' for s in shots], rdata, gv.DATA)
   return 0
 
