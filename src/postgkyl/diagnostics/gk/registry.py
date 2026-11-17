@@ -234,14 +234,17 @@ _Tperp = GkQuantity(
 gk_quant_registry.register(_Tperp)
 
 # ------------------------------------------- combined plasma moments (per-sp)
-_temp = GkQuantity(
-    name="temp",
-    description='Isotropic temperature: (Tpar + 2 Tperp)/3.',
-    source=[["MaxwellianMoments"], [_Tpar, _Tperp]],
-    fetch_func=[ff.fetch_temp_from_Max, ff.fetch_temp_from_Tpar_Tperp],
-    label=r"$T_{%(species)s}$ (J)",
-    is_time_dep=True,
-    is_species_dep=True)
+_temp = GkQuantity(name="temp",
+                   description='Isotropic temperature: (Tpar + 2 Tperp)/3.',
+                   source=[["MaxwellianMoments"], ["LTEMoments"],
+                           [_Tpar, _Tperp]],
+                   fetch_func=[
+                       ff.fetch_temp_from_Max, ff.fetch_temp_from_LTE,
+                       ff.fetch_temp_from_Tpar_Tperp
+                   ],
+                   label=r"$T_{%(species)s}$ (J)",
+                   is_time_dep=True,
+                   is_species_dep=True)
 gk_quant_registry.register(_temp)
 
 _press = GkQuantity(name="press",

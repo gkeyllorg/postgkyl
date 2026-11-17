@@ -163,6 +163,54 @@ def test_recursive_loader_returns_modal_temperature(tmp_path):
   np.testing.assert_allclose(out.values, _project(2 * (m2 - m1**2 / n) / n))
 
 
+@pytest.mark.parametrize("num_fields", [3, 5])
+@pytest.mark.parametrize("mass_override", [None, 3.0])
+def test_lte_temperature_uses_last_field_and_species_mass(
+    tmp_path, moments, num_fields, mass_override):
+  from generate_test_data import write_gkyl_field
+  fields = moments.values.reshape(2, 4, 2)
+  thermal_speed_sq = fields[:, 2:3, :] * 0.25 + np.array([[[1.0, 0.0]]])
+  packed = np.concatenate((fields[:, :num_fields - 1, :], thermal_speed_sq),
+                          axis=1).reshape(2, 2 * num_fields)
+  write_gkyl_field(tmp_path / "sim-D0_LTEMoments_0.gkyl", [2], [0.], [2.],
+                   packed,
+                   1,
+                   "serendipity",
+                   metadata={"mass": 2.0})
+
+  out, = load_quantity("temp",
+                       "D0",
+                       "sim",
+                       "0",
+                       path=str(tmp_path),
+                       mass=mass_override)
+  expected = thermal_speed_sq.reshape(2, 2) * (mass_override or 2.0)
+  assert out.backend == "gkyl"
+  assert out.ctx["value_form"] == "modal"
+  np.testing.assert_allclose(out.values, expected, rtol=0, atol=0)
+
+
+def test_maxwellian_temperature_precedes_lte_temperature(tmp_path, moments):
+  from generate_test_data import write_gkyl_field
+  fields = moments.values.reshape(2, 4, 2)
+  write_gkyl_field(tmp_path / "sim-D0_MaxwellianMoments_0.gkyl", [2], [0.],
+                   [2.],
+                   moments.values,
+                   1,
+                   "serendipity",
+                   metadata={"mass": 2.0})
+  lte_values = np.concatenate((fields[:, :2, :], fields[:, 3:4, :]),
+                              axis=1).reshape(2, 6)
+  write_gkyl_field(tmp_path / "sim-D0_LTEMoments_0.gkyl", [2], [0.], [2.],
+                   lte_values,
+                   1,
+                   "serendipity",
+                   metadata={"mass": 2.0})
+
+  out, = load_quantity("temp", "D0", "sim", "0", path=str(tmp_path))
+  np.testing.assert_allclose(out.values, fields[:, 2, :] * 2.0, rtol=0, atol=0)
+
+
 @pytest.mark.parametrize("fetch", [
     ff.fetch_ExB_vel_contra, ff.fetch_gradB_vel_contra,
     ff.fetch_diamag_vel_contra
