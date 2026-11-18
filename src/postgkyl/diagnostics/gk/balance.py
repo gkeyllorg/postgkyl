@@ -353,11 +353,10 @@ def _balance_file_traces(files: dict[str, str],
 
 def _plot(traces: BalanceTraces, quantity: _Quantity, relative_error: bool,
           logy: bool, absy: bool, xlabel: str, ylabel: str | None,
-          title: str | None, indent_left: float,
-          add_width: float) -> plt.Figure:
+          title: str | None) -> plt.Figure:
   """Plot every balance term and the residual, or the relative residual."""
-  fig = plt.figure(figsize=(7.5, 4.5))
-  ax = fig.add_axes([0.11 + indent_left, 0.15, 0.87 + add_width, 0.78])
+  # The constrained layout keeps the labels inside the figure.
+  fig, ax = plt.subplots(figsize=(7.5, 4.5), layout="constrained")
   ax.plot([-1.0, 1.0], [0.0, 0.0], color="grey", linestyle=":", linewidth=1)
 
   absy_func = np.abs if absy else (lambda v: v)
@@ -472,8 +471,6 @@ def balance(
     xlabel: str = "Time (s)",
     ylabel: str | None = None,
     title: str | None = None,
-    indent_left: float = 0.0,
-    add_width: float = 0.0,
     show: bool = False,
     saveas: str | None = None,
 ) -> tuple[plt.Figure, BalanceTraces]:
@@ -540,8 +537,6 @@ def balance(
     xlabel: Horizontal-axis label.
     ylabel: Vertical-axis label; use the derived formula when ``None``.
     title: Figure title; use the balance description when ``None``.
-    indent_left: Horizontal axes-position adjustment in figure units.
-    add_width: Axes-width adjustment in figure units.
     show: Call ``plt.show()`` before returning.
     saveas: If given, save the figure to this path.
 
@@ -606,8 +601,7 @@ def balance(
   if traces.time.size == 0:
     raise ValueError("No time step was taken: the balance is only defined "
                      "after t=0.")
-  fig = _plot(traces, spec, relative_error, logy, absy, xlabel, ylabel, title,
-              indent_left, add_width)
+  fig = _plot(traces, spec, relative_error, logy, absy, xlabel, ylabel, title)
   if saveas:
     fig.savefig(saveas)
   if show:

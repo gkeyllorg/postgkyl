@@ -778,8 +778,6 @@ class PostgkylSession:
                  xlabel: str = 'Time (s)',
                  ylabel: str | None = None,
                  title: str | None = None,
-                 indent_left: float = 0.0,
-                 add_width: float = 0.0,
                  show: bool = False,
                  saveas: str | None = None) -> PostgkylSession:
     r"""Plot (and compute) the particle or energy balance of a gyrokinetic run.
@@ -845,8 +843,6 @@ class PostgkylSession:
           xlabel: Horizontal-axis label.
           ylabel: Vertical-axis label; use the derived formula when ``None``.
           title: Figure title; use the balance description when ``None``.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
           show: Call ``plt.show()`` before returning.
           saveas: If given, save the figure to this path.
 
@@ -1077,8 +1073,7 @@ class PostgkylSession:
                ylabel: str = 'Z (m)',
                zlabel: str = '$\\psi$',
                title: str | None = None,
-               shift_axis: tuple[float, float] = (0.0, 0.0),
-               stretch_axis: tuple[float, float] = (1.0, 1.0),
+               aspect: float = 1.0,
                multib_unicolor: bool = False,
                no_show: bool = False,
                saveas: str | None = None) -> PostgkylSession:
@@ -1113,10 +1108,8 @@ class PostgkylSession:
           ylabel: Vertical-axis label.
           zlabel: Poloidal-flux colorbar label.
           title: Figure title.
-          shift_axis: Horizontal and vertical shifts of the displayed axes, as fractions
-            of the figure width and height.
-          stretch_axis: Factors for displayed axes width and height. Values other than
-            ``(1, 1)`` intentionally change the displayed R/Z scaling.
+          aspect: Displayed length of a unit of Z relative to a unit of R; ``1``
+            draws the geometry to scale.
           multib_unicolor: Use one color for every block instead of cycling.
           no_show: Return without opening a plot window.
           saveas: If given, save the figure to this path.
