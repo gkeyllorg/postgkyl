@@ -43,6 +43,7 @@ from typing import Annotated
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    FlagValue,
     InfoOption,
     KeyValue,
     ResultPolicy,
@@ -69,6 +70,8 @@ command(
                       )))(load_quantity)
 balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                    KeyValue()]
+# A bare -m/--multib reads every block.
+balance.__annotations__["multib"] = Annotated[str, FlagValue("-1")]
 for _function in (balance, nodes):
   command(_REPORT_SPEC)(_function)
 

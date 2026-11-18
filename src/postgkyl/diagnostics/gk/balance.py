@@ -40,6 +40,7 @@ _XY_LABEL_FONT_SIZE = 17
 _TITLE_FONT_SIZE = 17
 _TICK_FONT_SIZE = 14
 _LEGEND_FONT_SIZE = 14
+_PARTS_LEGEND_FONT_SIZE = 10
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,12 @@ class BalanceTraces:
       none were found (balance file: if it is zero throughout).
     mom_err: The balance residual (``None`` when ``relative_error``).
     mom_err_norm: The *relative* balance residual (only set when
-      ``relative_error=True``; ``None`` otherwise).
+      ``relative_error=True``; ``None`` otherwise, and when it is only
+      available per block/species, see ``mom_err_norm_parts``).
+    mom_err_norm_parts: The relative residual of each balance file, keyed by
+      the block and/or species it holds, when several are read
+      (``relative_error=True`` only): each is normalized by its own block's
+      or species' content, so they do not combine into ``mom_err_norm``.
     src_bgk: Rate of change from the BGK sources, or ``None`` if none was
       found (balance file: if it is zero throughout, or the file predates
       the ``src_bgk_mom`` column and includes it in ``src``).
@@ -107,6 +113,7 @@ class BalanceTraces:
   bflux_tot: np.ndarray | None
   mom_err: np.ndarray | None
   mom_err_norm: np.ndarray | None = None
+  mom_err_norm_parts: dict[str, np.ndarray] | None = None
   src_bgk: np.ndarray | None = None
   field_dot: np.ndarray | None = None
   apar_dot: np.ndarray | None = None
@@ -303,18 +310,28 @@ def _moment_file_traces(
                        apar_dot=apar_dot)
 
 
-def _balance_file_traces(file_names: list[str], quantity: _Quantity,
+def _file_label(block: int | None, species: str | None) -> str:
+  """Label of a balance file by the block and/or species it holds."""
+  return " ".join(part for part in (None if block is None else f"block {block}",
+                                    species) if part is not None)
+
+
+def _balance_file_traces(files: dict[str, str],
                          relative_error: bool) -> BalanceTraces:
-  """Balance traces from Gkeyll's balance files, one per block (and, for
-  per-species files, species)."""
-  time, col = utils.read_balance_files(file_names)
-  if relative_error and "mom_err_norm" not in col:
-    raise ValueError(
-        f"The relative {quantity.noun} error of several blocks or species "
-        "needs the moment files: each balance file normalizes by its own "
-        f"{quantity.noun} content.")
+  """Balance traces from Gkeyll's balance files, keyed by the block and/or
+  species each holds, summed over them. Each file normalizes its relative
+  residual by its own content: with several files, those stay separate."""
+  time, col = utils.read_balance_files(list(files.values()))
   # Rates are only defined once a step has been taken: skip t=0.
   col = {key: values[1:] for key, values in col.items()}
+  mom_err_norm = mom_err_norm_parts = None
+  if relative_error and "mom_err_norm" in col:
+    mom_err_norm = col["mom_err_norm"]
+  elif relative_error:
+    mom_err_norm_parts = {
+        label: utils.read_balance_files([file_name])[1]["mom_err_norm"][1:]
+        for label, file_name in files.items()
+    }
 
   def nonzero(column: str) -> np.ndarray | None:
     """The column, or ``None`` if it is absent or zero throughout."""
@@ -322,16 +339,16 @@ def _balance_file_traces(file_names: list[str], quantity: _Quantity,
     return values if values is not None and np.any(values) else None
 
   # Older balance files have no src_bgk_mom: their src_mom includes it.
-  return BalanceTraces(
-      time=time[1:],
-      fdot=col["mom_dot"],
-      src=nonzero("src_mom"),
-      bflux_tot=nonzero("bflux_tot_mom"),
-      mom_err=None if relative_error else col["mom_err"],
-      mom_err_norm=col["mom_err_norm"] if relative_error else None,
-      src_bgk=nonzero("src_bgk_mom"),
-      field_dot=col.get("field_dot"),
-      bg_dot=nonzero("bg_dot"))
+  return BalanceTraces(time=time[1:],
+                       fdot=col["mom_dot"],
+                       src=nonzero("src_mom"),
+                       bflux_tot=nonzero("bflux_tot_mom"),
+                       mom_err=None if relative_error else col["mom_err"],
+                       mom_err_norm=mom_err_norm,
+                       mom_err_norm_parts=mom_err_norm_parts,
+                       src_bgk=nonzero("src_bgk_mom"),
+                       field_dot=col.get("field_dot"),
+                       bg_dot=nonzero("bg_dot"))
 
 
 def _plot(traces: BalanceTraces, quantity: _Quantity, relative_error: bool,
@@ -399,8 +416,23 @@ def _plot(traces: BalanceTraces, quantity: _Quantity, relative_error: bool,
 
     ylabel_string = ylabel or ""
     title_string = title or f"{quantity.noun.capitalize()} balance"
-  else:
+  elif traces.mom_err_norm is not None:
     ax.plot(time, absy_func(traces.mom_err_norm))
+
+    ylabel_string = ylabel or f"${err_symbol}~\\Delta t/{quantity.symbol}$"
+    title_string = title or f"Relative error in {quantity.noun} conservation"
+  else:
+    # Normalized by each block's/species' own content: one curve each.
+    parts = traces.mom_err_norm_parts
+    for i, (label, values) in enumerate(parts.items()):
+      # Matplotlib cycles 10 colors: change the line style after each cycle.
+      ax.plot(time,
+              absy_func(values),
+              label=label,
+              linestyle=_LINE_STYLES[i // 10 % len(_LINE_STYLES)])
+    ax.legend(fontsize=_PARTS_LEGEND_FONT_SIZE,
+              frameon=False,
+              ncol=1 + (len(parts) - 1) // 4)
 
     ylabel_string = ylabel or f"${err_symbol}~\\Delta t/{quantity.symbol}$"
     title_string = title or f"Relative error in {quantity.noun} conservation"
@@ -467,7 +499,9 @@ def balance(
   summed over the species, and ``<name>-balance_energy.gkyl``, which already
   sums over every species (``species`` is not used) and adds the
   background-charge term ``bg_dot`` of adiabatic species to the residual.
-  Their relative error is only available for a single file. Older balance
+  Each file normalizes its relative error by its own block's or species'
+  content, so with several files (blocks or species) these are returned and
+  plotted separately (``mom_err_norm_parts``). Older balance
   files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
   source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
   summed over species, is read.
@@ -481,8 +515,8 @@ def balance(
     quantity: The conserved quantity whose balance is computed.
     path: Directory holding the simulation output.
     relative_error: Plot the relative error instead of every balance term.
-    multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-      every block; otherwise a comma list or ``'start:stop[:step]'`` slice
+    multib: ``"-10"`` (default) for a single block; ``"-1"`` (a bare
+      ``--multib`` on the command line) to discover every block; otherwise a comma list or ``'start:stop[:step]'`` slice
       of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
       get_block_indices`).
     fdot_file: Explicit distribution derivative moments path override.
@@ -516,10 +550,9 @@ def balance(
 
   Raises:
     FileNotFoundError: if a required file family is missing.
-    ValueError: if the relative error of several blocks or species is
-      requested from balance files, a path override is given without
-      ``species``, a field-energy override is given for the particle
-      balance, or no step was taken.
+    ValueError: if a path override is given without ``species``, a
+      field-energy override is given for the particle balance, or no step was
+      taken.
   """
   spec = _QUANTITIES[quantity]
   path = path.rstrip("/") + "/"
@@ -535,13 +568,15 @@ def balance(
     raise ValueError("Path overrides select the moment files, which need the "
                      "species.")
 
-  # The per-species balance files lack the field terms of the energy balance.
+  # Balance files by the species they hold (None: summed over species). The
+  # per-species ones lack the field terms of the energy balance.
   if species and not spec.has_field:
-    balance_names = [
-        f"{file_prefix}{sp}_balance_{quantity}.gkyl" for sp in species
-    ]
+    balance_names = {
+        sp: f"{file_prefix}{sp}_balance_{quantity}.gkyl"
+        for sp in species
+    }
   else:
-    balance_names = [f"{file_prefix}balance_{quantity}.gkyl"]
+    balance_names = {None: f"{file_prefix}balance_{quantity}.gkyl"}
   # The rate files the balance is computed from when they are all present.
   moment_files = [
       _moment_file(file_prefix + sp + "_fdot_", spec) for sp in species or []
@@ -549,15 +584,18 @@ def balance(
   if species and spec.has_field:
     moment_files.append(file_prefix + "field_energy_dot.gkyl")
   blocks = [] if any(overrides) else utils.balance_file_blocks(
-      multib, balance_names, moment_files)
+      multib, list(balance_names.values()), moment_files)
 
   if blocks:
-    traces = _balance_file_traces([
-        file_name.replace("*", str(b)) for b in blocks
-        for file_name in balance_names
-    ], spec, relative_error)
+    traces = _balance_file_traces(
+        {
+            _file_label(None if multib == "-10" else b, sp):
+            file_name.replace("*", str(b))
+            for b in blocks
+            for sp, file_name in balance_names.items()
+        }, relative_error)
   elif not species:
-    raise FileNotFoundError(f"Required file not found: {balance_names[0]}")
+    raise FileNotFoundError(f"Required file not found: {balance_names[None]}")
   else:
     traces = _moment_file_traces(path, file_prefix, species, spec, multib,
                                  relative_error, fdot_file, source_file,

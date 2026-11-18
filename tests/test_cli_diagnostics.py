@@ -167,6 +167,12 @@ def test_balance_without_species_reads_species_sum(quantity):
   assert result.exit_code == 0, result.output
 
 
+def test_gk_balance_bare_multib_reads_every_block():
+  option = next(option for option in COMMAND_BY_NAME["gk_balance"].params
+                if option.name == "multib")
+  assert option.bare_value == "-1"
+
+
 def test_bparrotate_is_compiled_directly_from_the_script_callable():
   array = _make([[1.0, 0.0, 0.0]], tag="array")
   field = _make([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]], tag="field")

@@ -954,19 +954,34 @@ class TestEnergyFromBalanceFiles:
     finally:
       plt.close(fig)
 
-  def test_multiblock_relative_error_raises(self, stub, tmp_path):
-    """Each block normalizes by its own energy: the sum is not defined."""
+  def test_multiblock_relative_error_per_block(self, stub, tmp_path):
+    """Each block normalizes by its own energy: one curve per block, with
+    block 1's errors 3 times block 0's."""
     path = str(tmp_path) + "/"
     time = np.linspace(0.0, 1.0, 5)
-    for block in (0, 1):
-      stub.add_balance(f"{path}sim_b{block}-balance_energy.gkyl", time,
-                       _energy_balance_columns(time))
-    with pytest.raises(ValueError, match="several blocks"):
-      bal.balance("sim", ["ion"],
-                  quantity="energy",
-                  path=path,
-                  multib="-1",
-                  relative_error=True)
+    block0 = _energy_balance_columns(time)
+    stub.add_balance(f"{path}sim_b0-balance_energy.gkyl", time, block0)
+    stub.add_balance(f"{path}sim_b1-balance_energy.gkyl", time, {
+        key: 3.0 * values
+        for key, values in block0.items()
+    })
+
+    fig, traces = bal.balance("sim", ["ion"],
+                              quantity="energy",
+                              path=path,
+                              multib="-1",
+                              relative_error=True)
+    try:
+      assert traces.mom_err is None
+      assert traces.mom_err_norm is None
+      assert list(traces.mom_err_norm_parts) == ["block 0", "block 1"]
+      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 0"],
+                                    block0["mom_err_norm"][1:])
+      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 1"],
+                                    3.0 * block0["mom_err_norm"][1:])
+      assert _legend_texts(fig) == ["block 0", "block 1"]
+    finally:
+      plt.close(fig)
 
   def test_no_species_reads_balance_file(self, stub, tmp_path):
     """Without species the moment files cannot be read, even if present."""
@@ -1081,11 +1096,20 @@ class TestParticleFromBalanceFiles:
                                  atol=1e-14)
     finally:
       plt.close(fig)
-    with pytest.raises(ValueError, match="several blocks or species"):
-      bal.balance("sim", ["ion", "elc"],
-                  quantity="particle",
-                  path=path,
-                  relative_error=True)
+
+    fig, traces = bal.balance("sim", ["ion", "elc"],
+                              quantity="particle",
+                              path=path,
+                              relative_error=True)
+    try:
+      assert traces.mom_err_norm is None
+      assert list(traces.mom_err_norm_parts) == ["ion", "elc"]
+      np.testing.assert_array_equal(traces.mom_err_norm_parts["ion"],
+                                    columns["mom_err_norm"][1:])
+      np.testing.assert_array_equal(traces.mom_err_norm_parts["elc"],
+                                    2.0 * columns["mom_err_norm"][1:])
+    finally:
+      plt.close(fig)
 
   def test_species_sum_is_not_a_species_balance(self, stub, tmp_path):
     """``<name>-balance_particle.gkyl`` sums over species: no fallback."""
@@ -1138,12 +1162,40 @@ class TestParticleFromBalanceFiles:
                                  atol=1e-14)
     finally:
       plt.close(fig)
-    with pytest.raises(ValueError, match="several blocks"):
-      bal.balance("sim", ["ion"],
-                  quantity="particle",
-                  path=path,
-                  multib="0,1",
-                  relative_error=True)
+
+    fig, traces = bal.balance("sim", ["ion"],
+                              quantity="particle",
+                              path=path,
+                              multib="0,1",
+                              relative_error=True)
+    try:
+      assert list(traces.mom_err_norm_parts) == ["block 0 ion", "block 1 ion"]
+      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 1 ion"],
+                                    block1["mom_err_norm"][1:])
+    finally:
+      plt.close(fig)
+
+  def test_twelve_parts_change_line_style_after_ten_colors(
+      self, stub, tmp_path):
+    """Matplotlib cycles 10 colors: blocks 10 and 11 are dashed."""
+    path = str(tmp_path) + "/"
+    time = np.linspace(0.0, 1.0, 5)
+    for block in range(12):
+      stub.add_balance(f"{path}sim_b{block}-balance_particle.gkyl", time,
+                       _particle_balance_columns(time))
+
+    fig, traces = bal.balance("sim",
+                              quantity="particle",
+                              path=path,
+                              multib="-1",
+                              relative_error=True)
+    try:
+      assert len(traces.mom_err_norm_parts) == 12
+      # The first line is the zero reference.
+      styles = [line.get_linestyle() for line in fig.axes[0].get_lines()[1:]]
+      assert styles == ["-"] * 10 + ["--"] * 2
+    finally:
+      plt.close(fig)
 
   def test_no_species_reads_species_sum(self, stub, tmp_path):
     """Without species, ``<name>-balance_particle.gkyl`` is read even if the

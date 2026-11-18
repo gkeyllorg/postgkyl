@@ -804,7 +804,9 @@ class PostgkylSession:
         summed over the species, and ``<name>-balance_energy.gkyl``, which already
         sums over every species (``species`` is not used) and adds the
         background-charge term ``bg_dot`` of adiabatic species to the residual.
-        Their relative error is only available for a single file. Older balance
+        Each file normalizes its relative error by its own block's or species'
+        content, so with several files (blocks or species) these are returned and
+        plotted separately (``mom_err_norm_parts``). Older balance
         files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
         source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
         summed over species, is read.
@@ -818,8 +820,8 @@ class PostgkylSession:
           quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
-          multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
+          multib: ``"-10"`` (default) for a single block; ``"-1"`` (a bare
+            ``--multib`` on the command line) to discover every block; otherwise a comma list or ``'start:stop[:step]'`` slice
             of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
             get_block_indices`).
           fdot_file: Explicit distribution derivative moments path override.
@@ -853,10 +855,9 @@ class PostgkylSession:
 
         Raises:
           FileNotFoundError: if a required file family is missing.
-          ValueError: if the relative error of several blocks or species is
-            requested from balance files, a path override is given without
-            ``species``, a field-energy override is given for the particle
-            balance, or no step was taken.
+          ValueError: if a path override is given without ``species``, a
+            field-energy override is given for the particle balance, or no step was
+            taken.
         """
 
   def gk_load_distf(self,
