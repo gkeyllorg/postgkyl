@@ -756,68 +756,72 @@ class PostgkylSession:
           label: Optional label for the returned dataset.
         """
 
-  def gk_energy_balance(self,
-                        name: str,
-                        species: list[str] | tuple[str, ...] | None = None,
-                        *,
-                        path: str = './',
-                        relative_error: bool = False,
-                        multib: str = '-10',
-                        field_dot_file: str | None = None,
-                        apar_dot_file: str | None = None,
-                        fdot_file: str | None = None,
-                        source_file: str | None = None,
-                        bflux_files: Mapping[str, str] | None = None,
-                        f_file: str | None = None,
-                        field_file: str | None = None,
-                        apar_file: str | None = None,
-                        dt_file: str | None = None,
-                        logy: bool = False,
-                        absy: bool = False,
-                        xlabel: str = 'Time (s)',
-                        ylabel: str | None = None,
-                        title: str | None = None,
-                        indent_left: float = 0.0,
-                        add_width: float = 0.0,
-                        show: bool = False,
-                        saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
+  def gk_balance(self,
+                 name: str,
+                 species: list[str] | tuple[str, ...] | None = None,
+                 *,
+                 quantity: Literal['particle', 'energy'] = 'particle',
+                 path: str = './',
+                 relative_error: bool = False,
+                 multib: str = '-10',
+                 fdot_file: str | None = None,
+                 source_file: str | None = None,
+                 bflux_files: Mapping[str, str] | None = None,
+                 f_file: str | None = None,
+                 dt_file: str | None = None,
+                 field_dot_file: str | None = None,
+                 apar_dot_file: str | None = None,
+                 field_file: str | None = None,
+                 apar_file: str | None = None,
+                 logy: bool = False,
+                 absy: bool = False,
+                 xlabel: str = 'Time (s)',
+                 ylabel: str | None = None,
+                 title: str | None = None,
+                 indent_left: float = 0.0,
+                 add_width: float = 0.0,
+                 show: bool = False,
+                 saveas: str | None = None) -> PostgkylSession:
+    r"""Plot (and compute) the particle or energy balance of a gyrokinetic run.
 
-        Reads, per species, the Hamiltonian moments
-        ``<name>-<species>_<kind>integrated_HamiltonianMoments.gkyl`` (or the older
-        ``<kind>integrated_moms.gkyl``): ``<kind>`` is ``fdot_`` (required) and,
-        only if the run had sources or non-periodic boundaries, ``source_``,
-        ``source_bgk_`` and ``bflux_<direction><side>_``. A
-        ``<name>-field_energy_dot.gkyl`` file is required; ``<name>-apar_energy_dot
-        .gkyl`` is read if present (electromagnetic simulations). If
-        ``relative_error`` is requested, the moments of ``f`` (no ``<kind>``),
-        ``field_energy.gkyl``, ``apar_energy.gkyl`` (if present) and
-        ``<name>-dt.gkyl`` are also required.
+        Reads, per species, the integrated moments
+        ``<name>-<species>_<kind>integrated_<moment>.gkyl`` of the first
+        ``<moment>`` holding the balanced quantity (or the older
+        ``<kind>integrated_moms.gkyl``): the density is the first component of
+        ``M0``, ``M0M1M2``, ``M0M1M2parM2perp`` and ``HamiltonianMoments``, the
+        energy the third component of ``HamiltonianMoments``. ``<kind>`` is
+        ``fdot_`` (required) and, only if the run had sources or non-periodic
+        boundaries, ``source_``, ``source_bgk_`` and ``bflux_<direction><side>_``.
+        The energy balance also requires ``<name>-field_energy_dot.gkyl`` and reads
+        ``<name>-apar_energy_dot.gkyl`` if present (electromagnetic simulations).
+        If ``relative_error`` is requested, the moments of ``f`` (no ``<kind>``)
+        and ``<name>-dt.gkyl`` are also required, and for the energy
+        ``field_energy.gkyl`` (and ``apar_energy.gkyl`` if present).
 
-        If no path override is given and an ``fdot_`` or ``field_energy_dot.gkyl``
-        file is missing, the terms are instead read from
-        ``<name>-balance_energy.gkyl``, which Gkeyll writes when the app requests
-        the energy balance. That file already sums over every species (``species``
-        is not used) and adds the background-charge term ``bg_dot`` of adiabatic
-        species to the residual. Its relative error is only available for a
-        single block. Older balance files have no ``src_bgk_mom`` column: their
-        ``src_mom`` includes the BGK source. Without ``species``, only that file
-        is read.
+        If no path override is given and one of these rate files is missing, the
+        terms are instead read from the balance files Gkeyll writes when a species
+        or the app requests the balance: ``<name>-<species>_balance_particle.gkyl``
+        summed over the species, and ``<name>-balance_energy.gkyl``, which already
+        sums over every species (``species`` is not used) and adds the
+        background-charge term ``bg_dot`` of adiabatic species to the residual.
+        Their relative error is only available for a single file. Older balance
+        files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
+        source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
+        summed over species, is read.
 
         The rates are only defined once a step has been taken, so t=0 is skipped.
 
         Args:
           name: Simulation name (also the file prefix).
-          species: Species names to sum over; if omitted, only the balance file
-            is read.
+          species: Species names to sum over; if omitted, only the app's balance
+            file (summed over species) is read.
+          quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
           multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
             every block; otherwise a comma list or ``'start:stop[:step]'`` slice
             of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
             get_block_indices`).
-          field_dot_file: Explicit field-energy derivative path override.
-          apar_dot_file: Explicit parallel-vector-potential energy derivative path.
           fdot_file: Explicit distribution derivative moments path override.
           source_file: Explicit source moments path override (not of the BGK
             source).
@@ -825,10 +829,15 @@ class PostgkylSession:
             ``"<direction><side>"`` (e.g. ``"xlower"``); unlisted boundaries use
             the naming convention.
           f_file: Explicit integrated distribution moments path override.
-          field_file: Explicit field-energy path override.
-          apar_file: Explicit parallel-vector-potential energy path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for block index and, for per-species files, species name.
+          dt_file: Explicit time-step history path override.
+          field_dot_file: Explicit field-energy derivative path override (energy
+            balance only).
+          apar_dot_file: Explicit parallel-vector-potential energy derivative path
+            (energy balance only).
+          field_file: Explicit field-energy path override (energy balance only).
+          apar_file: Explicit parallel-vector-potential energy path override
+            (energy balance only). In path overrides, ``*`` stands for block index
+            and, for per-species files, species name.
           logy: Log-scale the y axis.
           absy: Take the absolute value of every trace before plotting.
           xlabel: Horizontal-axis label.
@@ -844,9 +853,10 @@ class PostgkylSession:
 
         Raises:
           FileNotFoundError: if a required file family is missing.
-          ValueError: if the relative error of several blocks is requested from
-            balance files, a path override is given without ``species``, or no
-            step was taken.
+          ValueError: if the relative error of several blocks or species is
+            requested from balance files, a path override is given without
+            ``species``, a field-energy override is given for the particle
+            balance, or no step was taken.
         """
 
   def gk_load_distf(self,
@@ -1112,87 +1122,6 @@ class PostgkylSession:
 
         Returns:
           The populated Figure.
-        """
-
-  def gk_particle_balance(self,
-                          name: str,
-                          species: str | None = None,
-                          *,
-                          path: str = './',
-                          relative_error: bool = False,
-                          multib: str = '-10',
-                          fdot_file: str | None = None,
-                          source_file: str | None = None,
-                          bflux_files: Mapping[str, str] | None = None,
-                          f_file: str | None = None,
-                          dt_file: str | None = None,
-                          logy: bool = False,
-                          absy: bool = False,
-                          xlabel: str = 'Time (s)',
-                          ylabel: str | None = None,
-                          title: str | None = None,
-                          indent_left: float = 0.0,
-                          add_width: float = 0.0,
-                          show: bool = False,
-                          saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the particle balance of a species, or of all of them.
-
-        Reads the integrated moments ``<name>-<species>_<kind>integrated_<moment>
-        .gkyl`` of the first ``<moment>`` found among ``M0``, ``M0M1M2``,
-        ``M0M1M2parM2perp`` and ``HamiltonianMoments`` (the density is their first
-        component), or the older ``<kind>integrated_moms.gkyl``. ``<kind>`` is
-        ``fdot_`` (required) and, only if the run had sources or non-periodic
-        boundaries, ``source_``, ``source_bgk_`` and ``bflux_<direction><side>_``.
-        If ``relative_error`` is requested, the moments of ``f`` (no ``<kind>``)
-        and ``<name>-dt.gkyl`` are also required.
-
-        If no path override is given and the ``fdot_`` file is missing, the terms
-        are instead read from ``<name>-<species>_balance_particle.gkyl``, which
-        Gkeyll writes when the species requests the particle balance. Its relative
-        error is only available for a single block. Older balance files have no
-        ``src_bgk_mom`` column: their ``src_mom`` includes the BGK source.
-
-        Without ``species``, the balance summed over species is read from
-        ``<name>-balance_particle.gkyl``, which Gkeyll writes when the app
-        requests the particle balance.
-
-        The rates are only defined once a step has been taken, so t=0 is skipped.
-
-        Args:
-          name: Simulation name (also the file prefix).
-          species: Species name; if omitted, the sum over species.
-          path: Directory holding the simulation output.
-          relative_error: Plot the relative error instead of every balance term.
-          multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices.
-          fdot_file: Explicit distribution derivative moments path override.
-          source_file: Explicit source moments path override (not of the BGK
-            source).
-          bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"``; unlisted boundaries use the naming
-            convention.
-          f_file: Explicit integrated distribution moments path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for the block index.
-          logy: Log-scale the y axis.
-          absy: Take the absolute value of every trace before plotting.
-          xlabel: Horizontal-axis label.
-          ylabel: Vertical-axis label.
-          title: Figure title.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
-          show: Call ``plt.show()`` before returning.
-          saveas: If given, save the figure to this path.
-
-        Returns:
-          ``(figure, traces)``.
-
-        Raises:
-          FileNotFoundError: if a required file family is missing.
-          ValueError: if the relative error of several blocks is requested from
-            balance files, a path override is given without ``species``, or no
-            step was taken.
         """
 
   def grid(self,

@@ -8,10 +8,9 @@ Ported from ``src_bak/postgkyl/gk/gk_utils.py``. ``read_gfile``/
 (``ctx`` was never a parameter of that function in ``src_bak`` -- an existing
 bug -- and printing belongs to the CLI, not a loader) in favor of returning a
 plain ``found`` flag. ``read_time_trace_if_present`` and
-``set_tick_font_size`` are shared by the three program-scale diagnostics that
-build figures directly with matplotlib (``energy_balance``,
-``particle_balance``, ``nodes``) rather than each keeping its own private
-copy.
+``set_tick_font_size`` are shared by the program-scale diagnostics that build
+figures directly with matplotlib (``balance``, ``nodes``) rather than each
+keeping its own private copy.
 """
 
 from __future__ import annotations
@@ -74,9 +73,7 @@ def read_time_trace_if_present(
   per-dimension arrays (``GDataState.grid`` never hands back a bare
   ``ndarray``, only a list of one for 1-D data) -- this unwraps that single
   entry into the plain time array every trace in
-  :mod:`~postgkyl.diagnostics.gk.energy_balance`/
-  :mod:`~postgkyl.diagnostics.gk.particle_balance` is indexed
-  against.
+  :mod:`~postgkyl.diagnostics.gk.balance` is indexed against.
   """
   found, grid, values, gdata = read_gfile_if_present(file_name)
   time = grid[0] if found else None
@@ -149,19 +146,20 @@ def read_balance_files(
   return time, columns
 
 
-def balance_file_blocks(multib: str, balance_file: str,
+def balance_file_blocks(multib: str, balance_files: list[str],
                         moment_files: list[str]) -> list[int]:
   """Return the blocks to read from balance files instead of moment files.
 
   Args:
     multib: Block selection, as in :func:`get_block_indices`.
-    balance_file: Balance-file path, with ``*`` for the block index.
+    balance_files: Balance-file paths (e.g. one per species), with ``*`` for
+      the block index.
     moment_files: Paths of the files the balance is otherwise computed from,
       with ``*`` for the block index; empty if there are none.
 
   Returns:
-    The selected blocks if every one has ``balance_file`` but some lack one
-    of ``moment_files``; otherwise ``[]`` (read the moment files).
+    The selected blocks if every one has all ``balance_files`` but some lack
+    one of ``moment_files``; otherwise ``[]`` (read the moment files).
   """
 
   def _present(file_name: str, blocks: list[int]) -> bool:
@@ -172,8 +170,8 @@ def balance_file_blocks(multib: str, balance_file: str,
     moment_blocks = get_block_indices(multib, moment_files[0])
     if all(_present(f, moment_blocks) for f in moment_files):
       return []
-  blocks = get_block_indices(multib, balance_file)
-  return blocks if _present(balance_file, blocks) else []
+  blocks = get_block_indices(multib, balance_files[0])
+  return blocks if all(_present(f, blocks) for f in balance_files) else []
 
 
 def read_interpolated_gfile(

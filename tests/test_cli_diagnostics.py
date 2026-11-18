@@ -48,16 +48,14 @@ def test_diagnostics_follow_gkeyll_model_families():
 
 def test_gyrokinetic_diagnostics_use_concise_python_names():
   functions = (
-      diagnostics.gk.energy_balance,
+      diagnostics.gk.balance,
       diagnostics.gk.nodes,
-      diagnostics.gk.particle_balance,
       diagnostics.gk.load_distf,
       diagnostics.gk.load_quantity,
   )
   assert tuple(function.__name__ for function in functions) == (
-      "energy_balance",
+      "balance",
       "nodes",
-      "particle_balance",
       "load_distf",
       "load_quantity",
   )
@@ -66,9 +64,12 @@ def test_gyrokinetic_diagnostics_use_concise_python_names():
   for bare_name in ("load_distf", "load_quantity", "available_gk_quantities"):
     assert not hasattr(pg, bare_name)
   for old_name in (
+      "gk_balance",
       "gk_energy_balance",
       "gk_nodes",
       "gk_particle_balance",
+      "energy_balance",
+      "particle_balance",
       "load_gk_distf",
       "load_gk_quantity",
   ):
@@ -84,9 +85,8 @@ def test_only_canonical_diagnostic_names_are_registered():
   assert "vm_kinetic_transform_frame" in COMMAND_BY_NAME
   assert "pkpm_laguerre_compose" in COMMAND_BY_NAME
   for name in (
-      "gk_energy_balance",
+      "gk_balance",
       "gk_nodes",
-      "gk_particle_balance",
       "gk_load_distf",
       "gk_load_quantity",
       "compare_sims",
@@ -101,6 +101,8 @@ def test_only_canonical_diagnostic_names_are_registered():
       "mhd",
       "transform_frame",
       "laguerre_compose",
+      "gk_energy_balance",
+      "gk_particle_balance",
       "gyrokinetics-energy-balance",
       "gyrokinetics-nodes",
       "gyrokinetics-particle-balance",
@@ -155,13 +157,13 @@ def test_load_distf_frame_is_text_and_cli_accepts_all_frames(
   assert calls == [0, 2]
 
 
-@pytest.mark.parametrize("command",
-                         ["gk_energy_balance", "gk_particle_balance"])
-def test_balance_without_species_reads_species_sum(command):
+@pytest.mark.parametrize("quantity", ["particle", "energy"])
+def test_balance_without_species_reads_species_sum(quantity):
   path = Path(__file__).parent / "test_data" / "generated" / "gk_programs"
-  result = CliRunner().invoke(cli,
-                              [command, "--name", "bal", "--path",
-                               str(path)])
+  result = CliRunner().invoke(cli, [
+      "gk_balance", "--name", "bal", "--quantity", quantity, "--path",
+      str(path)
+  ])
   assert result.exit_code == 0, result.output
 
 
