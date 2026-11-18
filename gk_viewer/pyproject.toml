@@ -1,3 +1,4 @@
-# marimo reads [tool.marimo] from the nearest pyproject.toml: the viewer always opens in the dark theme.
+# marimo reads [tool.marimo] from the nearest pyproject.toml: the viewer opens light (marimo's first paint; the
+# notebook then sets the mode: light unless --dark true or the dark mode switch).
 [tool.marimo.display]
-theme = "dark"
+theme = "light"

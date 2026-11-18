@@ -14,7 +14,7 @@
    exports: a state file round-trips and a foreign one is refused; the figure saves as png / pdf / svg (the svg names
    the theme font first); a 10-frame movie is H.264 with 10 frames;
 3. --browser: ./view.sh with launch keys (OPEN=0, a fixed port) driven over the DevTools protocol: the launch frame
-   and quantity, the view in the address, dark by default and the switch, the movie playing with the notebook
+   and quantity, the view in the address, light by default and the switch, the movie playing with the notebook
    untouched and the open tab's charts following it at full speed, the frame synced on pause, the page drawing a
    frame as plotly does, a click on the movie probing a cell, Save figure writing its file, a reload coming back to
    the view; then a LivePlot alone in a page (no marimo): a lambda_q line hiding where lambda_q is undefined, and
@@ -58,8 +58,16 @@
 13. (2026-11-17) the whole machine view (part_machine): every simulation's poloidal plane offers 'whole machine'
     where the wall or the device picture reaches out of the whole domain's frame, framing all of both; the map at it
     shows them whole; the layout audit (--browser) opens it too.
---parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, fonts, sync, machine,
-poloidal, lines, grid, blank, species, browser, layout, liveplot).
+14. (2026-11-17) themes by device (part_headless, part_themes, part_devices): every simulation opens in its device's
+    theme (TCV, ASDEX Upgrade, STEP and DIII-D runs in theirs, NSTX-U's in NSTX-U's); the brand themes (TCV, ASDEX
+    Upgrade, STEP: no PowerPoint file) == their cited JSON files, colours and fonts, and open light and dark with every
+    tab built; a theme asked for wins and only it goes into the view; a device without a theme opens in the default
+    device's; a fresh launch is light, on Sim 1, in NSTX-U's theme, after a session dark on TCV in another theme;
+    --browser: the page fresh, then TCV by its address, the theme radio clicked, the simulation changed in the
+    sidebar, a reload. The browser parts that were written for the dark default ask for it (layout, blank), and the
+    layout audit adds each device's first view light.
+--parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, devices, fonts, sync,
+machine, poloidal, lines, grid, blank, species, browser, layout, liveplot).
 Exit status: the number of failures.
 """
 import argparse
@@ -93,14 +101,11 @@ def check(ok, what):
 
 
 # --------------------------------------------------------------------------------------------------- headless
-def headless(cli, sims_first=None, texts=None):
+def headless(cli, texts=None):
   """Run the notebook with launch keys `cli`; returns (defs, {tab: 'ok' | 'failed'}); texts: a dict to fill with each
   tab's HTML."""
   import marimo as mo
   from marimo._runtime.params import CLIArgs
-  import gkview as gv
-  if sims_first is not None:
-    gv.SIMS.insert(0, gv.SIMS.pop(sims_first))
   saved = mo.cli_args, mo.ui.tabs
   built = {}
 
@@ -125,21 +130,34 @@ def headless(cli, sims_first=None, texts=None):
     _, defs = m.app.run()
   finally:
     mo.cli_args, mo.ui.tabs = saved
-    if sims_first is not None:
-      gv.SIMS.insert(sims_first, gv.SIMS.pop(0))
   return defs, built
+
+
+# the theme each device's runs open in (2026-11-17): the theme of its name; a device without one: the default
+# device's (viewer.json's "device", NSTX-U here)
+DEVICE_THEMES = {
+    'NSTX-U': 'NSTX-U',
+    'TCV': 'TCV',
+    'ASDEX Upgrade': 'ASDEX Upgrade',
+    'DIII-D': 'DIII-D',
+    'STEP': 'STEP'
+}
 
 
 def part_headless():
   import gkview as gv
-  for i, (lab, _, dflt, _) in enumerate(gv.SIMS):
+  for lab, _, dflt, _ in gv.SIMS:
     t = time.time()
-    d, built = headless({}, sims_first=i)
+    d, built = headless({'sim': lab})
     bad = [n for n, v in built.items() if v != 'ok']
+    device = gv.sim_settings(lab).device
+    theme = DEVICE_THEMES.get(device, DEVICE_THEMES.get(gv.DEVICE, 'NSTX-U'))
     check(
         d['run'].sim == lab and d['run'].name == dflt and not bad
-        and len(built) == len(d['TABS']),
-        f'{lab}: opens on {dflt}, its last frame {d["k"]}, every tab builds ({time.time() - t:.1f} s){bad or ""}'
+        and len(built) == len(d['TABS']) and d['pal'].theme == theme
+        and d['view']['theme'] == '',
+        f'{lab}: opens on {dflt}, its last frame {d["k"]}, every tab builds, in {device}\'s theme '
+        f'{d["pal"].theme} (light: {not d["pal"].dark}; the view names none) ({time.time() - t:.1f} s){bad or ""}'
     )
   want = {
       'shot': 203899,
@@ -1241,10 +1259,11 @@ def part_themes():
       f'--theme PPPL --dark false / --theme diii-d open those looks, every tab builds: {got}'
   )
   files = {t: f for t, f in (gv.CONFIG.get('theme_files') or {}).items()}
-  read = {
-      t: vp.read_theme(os.path.join(gv.BASE, f))
+  paths = {
+      t: os.path.join(gv.BASE, f)
       for t, f in files.items() if os.path.exists(os.path.join(gv.BASE, f))
   }
+  read = {t: vp.read_theme_file(p) for t, p in paths.items()}
   navy = dict(vp.SCHEMES['DIII-D'][0])
   navy.pop('navy')
   kept = {
@@ -1254,17 +1273,54 @@ def part_themes():
   check(
       set(files) <= set(vp.SCHEMES) and kept == read and all(
           os.path.basename(f) == vp.THEME_SOURCES[t] for t, f in files.items()),
-      f'the themes kept in viewer_plots == their PowerPoint files ({", ".join(sorted(read)) or "none here"})'
-  )
+      f'the themes kept in viewer_plots == their source files, PowerPoint or a brand theme\'s cited JSON '
+      f'({", ".join(sorted(read)) or "none here"})')
+  # 2026-11-17: the brand themes (no PowerPoint file): each colour cites its source, and the fonts are the file's
+  brand = {
+      t: json.load(open(p))
+      for t, p in paths.items() if p.endswith('.json')
+  }
+  check(
+      all(
+          len(b['colours']) == 12 and all(
+              c.get('source')
+              for c in b['colours'].values()) and vp.theme_fonts(t) ==
+          (b['fonts']['text']['typeface'], b['fonts']['titles']['typeface'])
+          for t, b in brand.items()),
+      f'the brand themes\' files: twelve scheme colours, each with its source; text and title fonts == viewer_plots\' '
+      f'({ {t: vp.theme_fonts(t) for t in brand} })')
   css = {t: vp.page_css(t) for t in vp.THEME_LOOKS}
   check(
-      set(css) == {'NSTX-U', 'PPPL', 'DIII-D'}
+      set(css) == {'NSTX-U', 'PPPL', 'DIII-D', 'TCV', 'ASDEX Upgrade', 'STEP'}
       and 'Roboto Condensed' in css['PPPL']
-      and 'Century Gothic' in css['DIII-D']
-      and vp.LOOKS['pppl-dark'].surf in css['PPPL']
-      and vp.LOOKS['diii-d-dark'].surf in css['DIII-D']
-      and all('--background' in c for c in css.values()),
-      'each theme\'s page CSS: its fonts (PPPL Roboto Condensed titles, DIII-D Century Gothic) and dark surface'
+      and 'Century Gothic' in css['DIII-D'] and "'Arial'" in css['TCV']
+      and "--marimo-heading-font: 'Merriweather'" in css['ASDEX Upgrade']
+      and "--marimo-text-font: 'Roboto'" in css['ASDEX Upgrade']
+      and "'Neue Haas Grotesk Display', 'Liberation Sans'" in css['STEP']
+      and 'uppercase' in css['STEP'] and all(
+          vp.look(t, True).surf in c and '--background' in c
+          for t, c in css.items()),
+      'each theme\'s page CSS: its fonts (PPPL Roboto Condensed titles, DIII-D Century Gothic, TCV Arial, ASDEX '
+      'Upgrade Roboto with Merriweather titles, STEP Neue Haas Grotesk standing in as Liberation Sans, capitals) '
+      'and dark surface')
+  # the brand themes open in both modes with every tab built, each on its device's first run (its own theme)
+  runs = {}
+  for lab, *_ in gv.SIMS:
+    runs.setdefault(gv.sim_settings(lab).device, lab)
+  got = {}
+  for theme in ('TCV', 'ASDEX Upgrade', 'STEP'):
+    if theme not in runs:
+      print(
+          f'SKIP the {theme} theme on its device: no simulation of {theme} offered',
+          flush=True)
+      continue
+    for dark in ('false', 'true'):
+      d, built = headless({'sim': runs[theme], 'dark': dark})
+      got[theme, dark] = (d['pal'].theme, d['pal'].dark,
+                          sorted(n for n, v in built.items() if v != 'ok'))
+  check(
+      all(g == (t, dark == 'true', []) for (t, dark), g in got.items()),
+      f'TCV, ASDEX Upgrade and STEP, light and dark: each device\'s run opens in that look, every tab builds: {got}'
   )
   pal = vp.LOOKS['pppl-dark']
   rows = [
@@ -1286,6 +1342,250 @@ def part_themes():
       ok,
       'options side by side: every cell of a row tinted by its compare value (differs / same), either order'
   )
+
+
+# ----------------------------------------------------------------------------------- the device's theme (11-17)
+def part_devices(chrome=None, shots=None):
+  """The theme follows the shown simulation's device (each simulation in its device's theme: part_headless): a
+  theme asked for wins (a launch key; the address and a saved view are the same prefs) and only a theme asked for goes
+  into the view; a name of no theme is none; a device without a theme of its own opens in the default device's; a
+  fresh launch opens light (marimo's first paint too), on the default device's first simulation, in its theme, also
+  in a process whose last session ended dark on another simulation and another theme. --browser: the page (_drive_devices)."""
+  import tomllib
+  import gkview as gv
+  import viewer_plots as vp
+  import viewer_state as vs
+  got = {}
+  for name, cli in (('TCV, --theme asdex upgrade', {
+      'sim': 'TCV',
+      'theme': 'asdex upgrade'
+  }), ('STEP, --theme pppl, dark', {
+      'sim': 'STEP',
+      'theme': 'pppl',
+      'dark': 'true'
+  }), ('TCV, --theme nonesuch', {
+      'sim': 'TCV',
+      'theme': 'nonesuch'
+  })):
+    d, _ = headless(cli)
+    got[name] = (d['run'].sim, d['pal'].name, d['view']['theme'])
+  check(
+      got == {
+          'TCV, --theme asdex upgrade': ('TCV', 'aug-light', 'ASDEX Upgrade'),
+          'STEP, --theme pppl, dark': ('STEP', 'pppl-dark', 'PPPL'),
+          'TCV, --theme nonesuch': ('TCV', 'tcv-light', '')
+      },
+      f'a theme asked for wins over the device\'s and the view keeps it; a name of no theme is none: {got}'
+  )
+  # a device without a theme: Sim 2's runs offered once more as another device's
+  lab, simdir, run_name, _ = next(s for s in gv.SIMS if s[0] == 'Sim 2')
+  with tempfile.TemporaryDirectory() as tmp:
+    cfg = dict(gv.CONFIG,
+               base=gv.BASE,
+               sims=[[lab, simdir, run_name, 'Sim 2'],
+                     [
+                         'Elsewhere', simdir, run_name, 'Sim 2 as JET\'s', {
+                             'device': 'JET'
+                         }
+                     ]])
+    json.dump(cfg, open(os.path.join(tmp, 'viewer.json'), 'w'))
+    with config_file(os.path.join(tmp, 'viewer.json')):
+      d, built = headless({'sim': 'Elsewhere'})
+  check(
+      d['run'].sim == 'Elsewhere' and d['run'].device == 'JET'
+      and d['pal'].theme == vp.device_theme('JET', 'NSTX-U') == 'NSTX-U'
+      and vp.device_theme('JET', 'my-tokamak') == vp.DEFAULT_THEME
+      and all(v == 'ok' for v in built.values()),
+      f'a device without a theme (JET) opens in the default device\'s ({d["pal"].theme}); with no default device\'s '
+      f'theme either, in {vp.DEFAULT_THEME}')
+  # a fresh launch after a session that ended dark, on another simulation, in a theme asked for
+  headless({'sim': 'TCV', 'dark': 'true', 'theme': 'STEP'})
+  d, _ = headless({})
+  first = next(lab for lab, *_ in gv.SIMS
+               if gv.sim_settings(lab).device == gv.DEVICE)
+  with open(os.path.join(HERE, 'pyproject.toml'), 'rb') as f:
+    paint = tomllib.load(f)['tool']['marimo']['display']['theme']
+  check(
+      d['run'].sim == first == 'Sim 1' and d['pal'] is vp.LOOKS['light']
+      and d['theme_pick'].value == 'NSTX-U' and not d['dark_pick'].value
+      and (d['view']['dark'], d['view']['theme']) == (False, '')
+      and vs.DEFAULTS['dark'] is False and paint == 'light',
+      f'a fresh launch, after a session dark on TCV in STEP\'s theme: {d["run"].sim} (the default device '
+      f'{gv.DEVICE}\'s first), {d["pal"].name} ({d["theme_pick"].value}), dark {d["view"]["dark"]}; marimo\'s '
+      f'first paint {paint}')
+  if chrome is None:
+    return
+  with served(chrome, []) as (url, dbg):
+    check(url is not None, 'the device\'s theme: view.sh serves the page')
+    if url is None:
+      return
+    try:
+      st = asyncio.run(_drive_devices(url, dbg, shots))
+    except RuntimeError as e:
+      check(False, f'the device\'s theme, the page: {e}')
+      return
+  heads = st.get('headings') or {}
+  low = {
+      f'{t} {"dark" if d else "light"}':
+      (round(min(contrast(h['text'], b)
+                 for b in h['bg']), 1), h['case']) if h else None
+      for (t, d), h in heads.items()
+  }
+  check(
+      len(low) == 2 * len(vp.THEME_LOOKS)
+      and all(v is not None and v[0] >= 3 and
+              (v[1] == 'uppercase') == k.startswith('STEP ')
+              for k, v in low.items()),
+      'every theme, light and dark: the run\'s title against what it sits on (a title bar\'s every stop), WCAG '
+      'contrast 3:1 or more (large text), in capitals in STEP\'s only (the first paint\'s sheet, NSTX-U\'s, '
+      f'stays in the page): {low}')
+  fresh, tcv, tcv_dark, chosen, moved, reloaded = (st.get(k)
+                                                   for k in ('fresh', 'tcv',
+                                                             'tcv_dark',
+                                                             'chosen', 'moved',
+                                                             'reloaded'))
+  surf = ','.join(
+      str(int(vp.LOOKS['tcv-dark'].surf[i:i + 2], 16)) for i in (1, 3, 5))
+  check(
+      fresh and (fresh['checked'], fresh['style'], fresh['dark'],
+                 fresh['bg']) == ('NSTX-U', 'NSTX-U', False, '255,255,255')
+      and 'sim=Sim' in fresh['search'] and 'theme=' not in fresh['search']
+      and 'dark=false' in fresh['search'] and tcv
+      and (tcv['checked'], tcv['style'],
+           tcv['primary'].upper()) == ('TCV', 'TCV', '#FF0000')
+      and 'theme=' not in tcv['search'] and tcv_dark
+      and (tcv_dark['style'], tcv_dark['bg']) == ('TCV', surf) and chosen and
+      (chosen['checked'], chosen['style']) == ('ASDEX Upgrade', 'ASDEX Upgrade')
+      and 'theme=ASDEX' in chosen['search'] and moved and
+      (moved['checked'], moved['style']) == ('ASDEX Upgrade', 'ASDEX Upgrade')
+      and 'sim=STEP' in moved['search'] and reloaded
+      and (reloaded['checked'], reloaded['style']) == ('ASDEX Upgrade',
+                                                       'ASDEX Upgrade'),
+      'the page: a fresh launch light, on Sim 1, in NSTX-U\'s theme, the address naming no theme; TCV (the '
+      'address) in TCV\'s, red controls, and dark on its Taupe; the theme radio clicked (ASDEX Upgrade) re-themes the page, the address keeps '
+      f'it, and it stays when the simulation changes (STEP) and on a reload: '
+      f'{ {k: [(v or {}).get(f) for f in ("checked", "style", "dark", "bg", "primary")] for k, v in st.items()} }; '
+      f'the addresses: { {k: (v or {}).get("search", "")[:40] for k, v in st.items()} }'
+  )
+
+
+# a CSS colour as 'r,g,b' (through a canvas: whatever form the browser computes it in)
+CSS_RGB = (
+    "(c => { const k = document.createElement('canvas').getContext('2d'); k.fillStyle = c; k.fillRect(0, 0, 1, 1); "
+    "return [...k.getImageData(0, 0, 1, 1).data].slice(0, 3).join(','); })")
+THEME_STATE = (
+    "(names => { const r = __deep('[role=radio]').map(b => [((b.parentElement || {}).textContent || '').trim(), "
+    "b.getAttribute('aria-checked') === 'true' || b.dataset.state === 'checked']).filter(([t]) => names.includes(t)); "
+    "const st = document.getElementById('gkv-theme'); return {checked: (r.find(([, c]) => c) || [null])[0], "
+    "n: r.length, style: st ? ((st.textContent.match(/viewer, (.*?) theme \\(/) || [])[1] || null) : null, "
+    "dark: document.body.classList.contains('dark'), bg: " + CSS_RGB +
+    "(getComputedStyle(document.body).backgroundColor), "
+    "primary: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(), "
+    "search: decodeURIComponent(location.search.replace(/\\+/g, ' ')).replace(/ /g, '+') }; })"
+)
+# the run's title (the page's first level-2 heading): its text colour and what it sits on, the stops of its own
+# background image (a theme's title bar) or the first background colour up its ancestors ('r,g,b' each)
+HEADING_STATE = (
+    "(() => { const h = __deep('.markdown h2')[0]; if (!h) return null; const cs = getComputedStyle(h); "
+    "let bg = cs.backgroundImage.match(/rgba?\\([^)]*\\)/g) || []; "
+    "for (let e = h; !bg.length && e; e = e.parentElement || (e.getRootNode() || {}).host) { "
+    "const b = getComputedStyle(e).backgroundColor; if (!/^(transparent|rgba\\(0, 0, 0, 0\\))$/.test(b)) bg = [b]; } "
+    "if (!bg.length) bg = [getComputedStyle(document.body).backgroundColor]; "
+    "const rgb = " + CSS_RGB +
+    "; return {text: rgb(cs.color), bg: bg.map(rgb), case: cs.textTransform, "
+    "title: h.textContent.trim().slice(0, 30)}; })()")
+
+
+def contrast(a, b):
+  """WCAG 2 contrast ratio of two 'r,g,b' colours."""
+
+  def lum(c):
+    v = [int(x) / 255 for x in c.split(',')]
+    v = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055)**2.4 for x in v]
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]
+
+  hi, lo = sorted((lum(a), lum(b)), reverse=True)
+  return (hi + 0.05) / (lo + 0.05)
+
+
+async def _drive_devices(url, dbg, shots):
+  """The page fresh (no launch key); on TCV by its address; the theme radio's ASDEX Upgrade clicked; the simulation
+  changed to STEP in the sidebar's list; reloaded: {step: THEME_STATE}; screenshots in shots."""
+  from urllib.parse import urlencode
+  import viewer_plots as vp
+  state = THEME_STATE + f'({json.dumps(list(vp.THEME_LOOKS))})'
+  out = {}
+
+  async def settle(cond, timeout=120):
+    await c.js(DEEP)
+    await c.until(  # the helpers installed again if a navigation replaced the page since
+        f'(window.__frame || eval({json.dumps(DEEP)})) && __frame() !== null && (s => s.n > 0 && ({cond}))({state})',
+        timeout)
+    await asyncio.sleep(1)
+    return await c.js(state)
+
+  async def shot(name):
+    """A screenshot once the movie has drawn (the page's main column comes after the sidebar)."""
+    if shots:
+      await c.until(
+          "(e => e && +(e.dataset.draws || 0) > 0)(__deep('.gkv-movie')[0])",
+          60)
+      await asyncio.sleep(1)
+      await c.shot(os.path.join(shots, f'devices_{name}.png'))
+
+  async with opened(url, dbg) as c:
+    await asyncio.sleep(3)
+    out['fresh'] = await settle("s.style !== null && s.checked !== null")
+    await shot('fresh')
+    await c.call('Page.navigate', url=url + '&' + urlencode({'sim': 'TCV'}))
+    await asyncio.sleep(3)
+    out['tcv'] = await settle("s.checked === 'TCV' && s.style === 'TCV'")
+    await shot('tcv')
+    await c.js("__switch('dark mode').click()"
+               )  # and dark: the page on the theme's own dark surface
+    out['tcv_dark'] = await settle("s.dark")
+    await shot('tcv_dark')
+    await c.js("__switch('dark mode').click()")
+    await settle("!s.dark")
+    radio = (
+        "__deep('[role=radio]').find(b => ((b.parentElement || {}).textContent || '').trim() === "
+        "'ASDEX Upgrade')")
+    await c.press(radio)
+    out['chosen'] = await settle(
+        "s.style === 'ASDEX Upgrade' && s.search.includes('theme=')")
+    await shot('chosen')
+    # the sidebar's simulation list (a searchable dropdown): opened, 'STEP' typed, its option taken
+    combo = (
+        "(d => d && d.querySelector('button'))(__deep('[data-testid=marimo-plugin-searchable-dropdown]')"
+        ".find(e => / · TCV$/.test((e.textContent || '').trim())))")
+    await c.press(combo)
+    await asyncio.sleep(1)
+    option = (
+        "__deep('[role=option]').find(o => / · STEP$/.test((o.textContent || '').trim()))"
+    )
+    await c.until(f'!!({option})', 20)
+    await c.press(option)
+    out['moved'] = await settle("s.search.includes('sim=STEP')", 180)
+    await c.call('Page.reload')
+    await asyncio.sleep(3)
+    out['reloaded'] = await settle("s.style !== null && s.checked !== null")
+    # every theme by its radio, light and dark: the run's title as drawn (HEADING_STATE)
+    out['headings'] = {}
+    for name in vp.THEME_LOOKS:
+      await c.press(
+          "__deep('[role=radio]').find(b => ((b.parentElement || {}).textContent || '').trim() === "
+          f"{json.dumps(name)})")
+      for dark in (False, True):
+        if dark:
+          await c.js("__switch('dark mode').click()")
+        await settle(
+            f"s.style === {json.dumps(name)} && s.dark === {json.dumps(dark)}")
+        out['headings'][name, dark] = await c.js(HEADING_STATE)
+        await shot(
+            f'heading_{name.replace(" ", "_")}_{"dark" if dark else "light"}')
+      await c.js("__switch('dark mode').click()")
+      await settle("!s.dark")
+  return out
 
 
 # ------------------------------------------------------------------------------------------------- fonts (11-13)
@@ -2512,7 +2812,8 @@ def vs_bool(v):
 def canvas_states(full=False):
   """Views of the movie's poloidal plane to open: each simulation in its views (full: every one; else the whole
   domain, the whole machine where it has one, and a divertor), a half domain mirrored too, with the device picture
-  where viewer.json names one; and the light theme."""
+  where viewer.json names one, dark, each in its device's theme; and light (the default since 2026-11-17): a half
+  domain's divertor, and each other device's first view in its own theme."""
   import gkview as gv
   import viewer_plots as vp
   out = []
@@ -2529,12 +2830,19 @@ def canvas_states(full=False):
                zoom=v,
                mirror=str(mirror).lower(),
                background=pic,
-               opacity='0.6') for v in views
+               opacity='0.6',
+               dark='true') for v in views
       ]
   half = next((st for st in out
                if st['mirror'] == 'false' and st['zoom'] == 'lower divertor'),
               out[0])
   out.append(dict(half, dark='false'))
+  firsts = {}
+  for st in out:
+    firsts.setdefault(gv.sim_settings(st['sim']).device, st)
+  out += [
+      dict(st, dark='false') for dev, st in firsts.items() if dev != gv.DEVICE
+  ]
   return out
 
 
@@ -2577,7 +2885,7 @@ def part_layout(chrome, shots=None, full=False):
       len(got) == len(states) and not bad,
       f"the movie's margins: nothing of the poloidal plane past its plot area in {len(got)} views "
       f"(simulations x views, mirrored, the device picture, light and dark); stray pixels: "
-      f"{[(st['sim'], st['zoom'], st['mirror'], st.get('dark', 'true'), n) for st, n in bad][:6]}"
+      f"{[(st['sim'], st['zoom'], st['mirror'], st['dark'], n) for st, n in bad][:6]}"
   )
 
 
@@ -2739,7 +3047,9 @@ def part_blank(chrome=None, shots=None):
         'Diffusivity': 1
     }
     for k, (case, d) in enumerate(dirs.items()):
-      with served(chrome, [], env={'GK_VIEWER_DATA': d}) as (url, dbg):
+      with served(chrome, ['--dark', 'true'],
+                  env={'GK_VIEWER_DATA':
+                       d}) as (url, dbg):  # dark, then light (shots)
         check(url is not None,
               f'a blank start, {case}: view.sh serves the page')
         if url is None:
@@ -3533,19 +3843,21 @@ async def drive(url, dbg, shots):
         k == 20 and 'qty=T_elc' in qs and 'frame=20' in qs,
         f'launch keys open frame {k}, T_e; the address '
         f'holds the view ({qs[:120]}...)')
-    dark = await c.js(
-        "document.body.classList.contains('dark') && getComputedStyle(document.body).backgroundColor"
+    page = await c.js(
+        f"[document.body.classList.contains('dark'), {CSS_RGB}(getComputedStyle(document.body).backgroundColor)]"
     )
-    check(
-        bool(dark) and '0.105882' in str(dark),
-        f'dark by default on the theme slate ({dark})')
+    check(page == [False, '255,255,255'],
+          f'light by default (2026-11-17; was dark), a white page ({page})')
     await c.js("__switch('dark mode').click()")
-    light = await c.until("!document.body.classList.contains('dark')", 15)
+    dark = await c.until(
+        f"document.body.classList.contains('dark') && {CSS_RGB}(getComputedStyle(document.body).backgroundColor)",
+        15)
     await c.js("__switch('dark mode').click()")
-    back = await c.until("document.body.classList.contains('dark')", 15)
+    back = await c.until("!document.body.classList.contains('dark')", 15)
     check(
-        bool(light) and bool(back),
-        'the dark-mode switch goes light and back, live')
+        dark == '27,38,43' and bool(back),
+        f'the dark-mode switch goes dark (the theme slate {dark}) and back, live'
+    )
     W = "__deep('.gkv-movie')[0]"
     await c.js(
         f"(s => {{ s.value = '30'; s.dispatchEvent(new Event('change')); }})({W}.querySelector('.fps'))"
@@ -3684,7 +3996,7 @@ async def drive(url, dbg, shots):
         f'the probed cell lets go on a second click and on Esc, and comes back on a third click (second click: '
         f'{bool(again)}, Esc: {bool(esc)}, third click: {back} for {probe}; the strips at {box[:2]}, then {boxes})'
     )
-    # an option changed re-runs the tabs' cell (the look: dark mode off, then on): the open tab stays. It used to
+    # an option changed re-runs the tabs' cell (the look: dark mode on, then off): the open tab stays. It used to
     # fall back to the first: the tabs element had no name, marimo dropped it, and a click never reached the
     # notebook. The tab: Balance & power, whose live charts each re-run draws anew (proof that one happened); the
     # conservation chart among them (its log y axis)
@@ -3712,7 +4024,7 @@ async def drive(url, dbg, shots):
         kept == [(True, 'Balance & power')] * 2
         and 'tab=Balance' in await c.js('location.search')
         and 'log' in (axes or []),
-        f'an option changed (dark mode off, then on) redraws the tab\'s charts and the open tab stays: {kept}; '
+        f'an option changed (dark mode on, then off) redraws the tab\'s charts and the open tab stays: {kept}; '
         f'its charts\' y axes {axes} (the conservation chart: log)')
     # Save figure from the Save & export tab writes its file
     import gkview as gv
@@ -3960,6 +4272,7 @@ if __name__ == '__main__':
       'labels': part_labels,
       'pgkyl': part_pgkyl,
       'themes': part_themes,
+      'devices': lambda: part_devices(a.browser, a.shots),
       'fonts': part_fonts,
       'sync': part_sync,
       'machine': part_machine,

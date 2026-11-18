@@ -926,7 +926,7 @@ class FontLoader(anywidget.AnyWidget):
   """The tracked stand-in fonts (fonts/, viewer_plots.FONT_FILES; upright faces) for the page: registered with
     FontFace, so the page and its charts draw a theme's fonts where the real ones are not installed, and kept as
     @font-face rules (window.__gkvFontCSS) for the charts' slide downloads, which draw in an image that sees no font
-    of the page. Hidden; ~1.6 MB, sent once per page load."""
+    of the page. Hidden; ~2.9 MB (Merriweather 1.2 MB of it), sent once per page load."""
   faces = traitlets.List().tag(sync=True)
   _esm = r"""
 async function render({ model, el }) {

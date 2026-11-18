@@ -67,21 +67,33 @@ def _(mo, vs):
 
 
 @app.cell
-def _(mo, prefs, vp, vs):
-  dark_pick = mo.ui.switch(value=vs.as_bool(prefs.get('dark', True)),
+def _(mo, prefs, vs):
+  dark_pick = mo.ui.switch(value=vs.as_bool(
+      prefs.get('dark', vs.DEFAULTS['dark'])),
                            label='dark mode',
                            on_change=lambda v: prefs.update(dark=v))
-  # the look: a theme (viewer_plots.THEME_LOOKS: each a PowerPoint theme) in its light or dark mode
+  return (dark_pick, )
+
+
+@app.cell
+def _(gv, mo, prefs, sim_pick, vp, vs):
+  # the look: a theme (viewer_plots.THEME_LOOKS: each a PowerPoint theme, or a device's brand) in its light or dark
+  # mode. The theme chosen (a launch key, the address, a saved view, a click here: prefs) wins; else the shown
+  # simulation's device's theme (viewer_plots.device_theme), so another simulation re-runs this cell
   _themes = list(vp.THEME_LOOKS)
-  _t = next((x for x in _themes
-             if vs.norm_label(x) == vs.norm_label(prefs.get('theme') or '')),
-            _themes[0])
+  _chosen = next(
+      (x for x in _themes
+       if vs.norm_label(x) == vs.norm_label(prefs.get('theme') or '')), None)
+  if _chosen is None:
+    prefs.pop('theme', None)  # a name of no theme: none chosen
+  _device = gv.sim_settings(
+      sim_pick.value[0]).device if sim_pick.value else gv.DEVICE
+  # a list, not a row: six names do not fit the sidebar's width side by side
   theme_pick = mo.ui.radio(_themes,
-                           value=_t,
+                           value=_chosen or vp.device_theme(_device, gv.DEVICE),
                            label='theme',
-                           inline=True,
                            on_change=lambda v: prefs.update(theme=v))
-  return dark_pick, theme_pick
+  return (theme_pick, )
 
 
 @app.cell
@@ -89,14 +101,16 @@ def _(dark_pick, json, mo, theme_pick, vp):
   pal = vp.look(theme_pick.value, dark_pick.value)
   # marimo takes its theme from <body data-vscode-theme-kind> before its own setting (useTheme.js, watched by a
   # MutationObserver), so setting it from this same-origin iframe re-themes the page live, without a reload; the
-  # theme's CSS (fonts, surfaces) goes into one <style> of the page's head, replaced on every change
+  # theme's CSS (fonts, surfaces) goes into one <style>, replaced on every change and kept the body's last element:
+  # marimo puts runs/viewer.css (the first paint's, the same rules in DEFAULT_THEME) in the body, and of equal rules
+  # the later wins (in the head, this style lost to it: every theme's page accents and dark surfaces were NSTX-U's)
   _kind = 'vscode-dark' if dark_pick.value else 'vscode-light'
   _css = json.dumps(vp.page_css(theme_pick.value))
   mo.iframe(
       "<script>const d = parent.document; d.body.dataset.vscodeThemeKind = '" +
       _kind + "'; "
-      "let s = d.getElementById('gkv-theme'); if (!s) { s = d.createElement('style'); s.id = 'gkv-theme'; "
-      "d.head.appendChild(s); } s.textContent = " + _css + ";</script>",
+      "let s = d.getElementById('gkv-theme'); if (!s) { s = d.createElement('style'); s.id = 'gkv-theme'; } "
+      "d.body.appendChild(s); s.textContent = " + _css + ";</script>",
       height='0px')
   return (pal, )
 
@@ -148,7 +162,10 @@ def _(HERE, boot, gv, mo, os, prefs, vs):
     if _pick is None:
       boot['notes'].append(f"no simulation of shot {prefs['shot']}")
   if _keys:
-    _pick = _pick or _keys[0]
+    # none asked for: the first simulation of viewer.json's default device (else the first offered)
+    _pick = _pick or next(
+        (_k for _k in _keys
+         if gv.sim_settings(sim_info[_k][0]).device == gv.DEVICE), _keys[0])
     prefs['sim'] = sim_info[_pick][0]
   # another simulation: its default run, from its last frame
   sim_pick = mo.ui.dropdown(
@@ -1103,7 +1120,8 @@ def _(
       log=bool(log_pick.value),
       zoom=zoom_pick.value,
       x=x_pick.value,
-      theme=theme_pick.value,
+      theme=theme_pick.value
+      if prefs.get('theme') else '',  # only a theme chosen: else the device's
       dark=bool(dark_pick.value),
       background=bool(bg_pick.value) if bg_pick is not None else None,
       opacity=float(bg_opacity.value) if bg_opacity is not None else None,

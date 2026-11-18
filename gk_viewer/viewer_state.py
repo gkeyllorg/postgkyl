@@ -56,9 +56,9 @@ KEYS = {
      'false'),
     'x': ('profile x axis: distance | R', 'distance'),
     'theme':
-    ("the look: NSTX-U (the DPP 2025 poster) | PPPL (the lab's slide template)",
+    ("the look: a theme of the sidebar's (NSTX-U, PPPL, ...); left out, the shown simulation's device's",
      'PPPL'),
-    'dark': ('dark mode', 'true'),
+    'dark': ('dark mode (left out: light)', 'true'),
     'tab': ("the open tab ('Probe', 'Balance & power', ...)", "'Time traces'"),
     'frames':
     ("the frames the movie plays ('pgkyl load --frame' syntax: ':', '::2', '-50:', '0:60')",
@@ -148,8 +148,9 @@ DEFAULTS = {
     'simulation': True,
     'experiment': True,
     'x': 'distance',
-    'theme': 'NSTX-U',
-    'dark': True,
+    'theme':
+    '',  # the shown simulation's device's theme (viewer_plots.device_theme)
+    'dark': False,
     'tab': 'Midplane profiles',
     'frames': '',
     'probe': '',

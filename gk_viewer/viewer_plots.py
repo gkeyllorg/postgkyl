@@ -19,6 +19,7 @@ Validated with the data-viz validator on each look's surface (white; #1B262B):
 import colorsys
 import functools
 import itertools
+import json
 import os
 import re
 import zipfile
@@ -58,15 +59,40 @@ def read_theme(pptx):
                             xml).group(1)
 
 
+def read_theme_json(path):
+  """Colour scheme {slot: hex} and text font of a theme built from an institution's brand guidelines and website,
+    where no PowerPoint template is public: a JSON file of the same slots, each colour with its source (document and
+    page, or stylesheet and selector)."""
+  with open(path) as f:
+    d = json.load(f)
+  return {
+      slot: c['hex']
+      for slot, c in d['colours'].items()
+  }, d['fonts']['text']['typeface']
+
+
+def read_theme_file(path):
+  """The colour scheme and text font a theme's source file holds: a PowerPoint file (read_theme) or a brand
+    theme's JSON (read_theme_json)."""
+  return (read_theme_json if path.endswith('.json') else read_theme)(path)
+
+
 # the page's themes: each a PowerPoint file's slide-master theme (colour scheme and body font, as read_theme reads it),
-# kept here so the viewer needs none of the files; check_viewer.py re-reads those viewer.json's "theme_files" names.
+# or for a device whose institution publishes no template, the same form built from its brand guidelines and website
+# (a JSON file citing each colour's source, read_theme_json); kept here so the viewer needs none of the files;
+# check_viewer.py re-reads those viewer.json's "theme_files" names.
 # NSTX-U: the DPP 2025 poster; PPPL: the lab's 2025 slide template; DIII-D: the DIII-D talks (negD_CEDA_aug28.pptx;
 # bernard_poster_aps25.pdf, the same Office scheme), plus 'navy': their title bar's colour, which the slides set
-# directly, not a scheme slot.
+# directly, not a scheme slot. TCV: EPFL's brand guidelines and www.epfl.ch; ASDEX Upgrade: the Max Planck Society's
+# logo guide and the stylesheet of www.mpg.de / www.ipp.mpg.de; STEP: stepfusion.com's stylesheet (research
+# tokamak/viewer_themes_20261117: the sources, their terms, why no template).
 THEME_SOURCES = {
     'NSTX-U': 'aps_dpp_2025_poster_jjosephyzack.pptx',
     'PPPL': 'PPPL Powerpoint Slide Template.pptx',
-    'DIII-D': 'negD_CEDA_aug28.pptx'
+    'DIII-D': 'negD_CEDA_aug28.pptx',
+    'TCV': 'tcv_epfl.json',
+    'ASDEX Upgrade': 'asdex_upgrade_mpg.json',
+    'STEP': 'step_ukifs.json'
 }
 SCHEMES = {
     'NSTX-U': (dict(dk1='000000',
@@ -106,13 +132,58 @@ SCHEMES = {
                     hlink='0000FF',
                     folHlink='800080',
                     navy='00217B'), 'Century Gothic'),
+    # EPFL: Taupe, Perle and the four corporate hues (Rouge, Groseille, Canard, Leman); the site's text, greys, links
+    'TCV': (dict(dk1='212121',
+                 lt1='FFFFFF',
+                 dk2='413D3A',
+                 lt2='E6E6E6',
+                 accent1='FF0000',
+                 accent2='B51F1F',
+                 accent3='007480',
+                 accent4='00A79F',
+                 accent5='707070',
+                 accent6='CAC7C7',
+                 hlink='212121',
+                 folHlink='212121'), 'Arial'),
+    # MPG: MPG_green, the site's palette (orange, warm blue, purple, warm green, deep blue), its header grey and
+    # side-menu slate
+    'ASDEX Upgrade': (dict(dk1='000000',
+                           lt1='FFFFFF',
+                           dk2='263238',
+                           lt2='EEEEEE',
+                           accent1='006C66',
+                           accent2='BF5300',
+                           accent3='00819D',
+                           accent4='873B8F',
+                           accent5='96BE2D',
+                           accent6='00445F',
+                           hlink='006C66',
+                           folHlink='455A64'), 'Roboto'),
+    # STEP: the site's space blues, plasma lavenders and fusion pinks, its text and page, and its one amber
+    'STEP': (dict(dk1='0F172A',
+                  lt1='F8FAFC',
+                  dk2='040740',
+                  lt2='D7DBFF',
+                  accent1='F246D2',
+                  accent2='003991',
+                  accent3='F5A800',
+                  accent4='A0A9FF',
+                  accent5='FF72E0',
+                  accent6='022566',
+                  hlink='FFADED',
+                  folHlink='BCC2FF'), 'Neue Haas Grotesk Display'),
 }
 THEME = SCHEMES['NSTX-U'][0]
+# the viewer's own theme: an unknown theme's, and the theme of a device that has none while the default device has
+# none either (device_theme)
+DEFAULT_THEME = 'NSTX-U'
 
 # Each theme's fonts: text in its slide master's body font (SCHEMES), titles too except PPPL's (Roboto Condensed, the
-# template's 'Fonts in Use'). Arial and Century Gothic are proprietary: where one is not installed it is drawn in a
-# free stand-in tracked in fonts/ (README there: Liberation Sans = Arial's metrics; TeX Gyre Adventor, a Century
-# Gothic look-alike), registered with matplotlib here and with the page by movie_widget.FontLoader.
+# template's 'Fonts in Use') and ASDEX Upgrade's (Merriweather, the MPG site's headings). Arial, Century Gothic and
+# Neue Haas Grotesk are proprietary: where one is not installed it is drawn in a free stand-in tracked in fonts/
+# (README there: Liberation Sans = Arial's metrics, and Helvetica's design for Neue Haas Grotesk; TeX Gyre Adventor,
+# a Century Gothic look-alike); Roboto and Merriweather are free and tracked themselves. All are registered with
+# matplotlib here and with the page by movie_widget.FontLoader.
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
 FONT_FILES = sorted(
     os.path.join(FONT_DIR, f) for f in os.listdir(FONT_DIR)
@@ -131,17 +202,18 @@ for _path in FONT_FILES:
 STANDIN = {
     'Arial': 'Liberation Sans',
     'Helvetica': 'Liberation Sans',
+    'Neue Haas Grotesk Display': 'Liberation Sans',
     'Century Gothic': 'TeX Gyre Adventor'
 }
-TITLE_FONT = {'PPPL': 'Roboto Condensed'}
+TITLE_FONT = {'PPPL': 'Roboto Condensed', 'ASDEX Upgrade': 'Merriweather'}
 FALLBACK = 'DejaVu Sans'  # matplotlib: the glyphs a theme font lacks (fonts/README.md)
 SYMBOLS = 'Viewer Symbols'  # the page and its charts: the same, a few symbols cut from DejaVu Sans (fonts/)
 _INSTALLED = {f.name for f in font_manager.fontManager.ttflist}
 
 
 def theme_fonts(theme):
-  """(text, titles): a theme's fonts by name (an unknown theme: NSTX-U's)."""
-  text = SCHEMES.get(theme, SCHEMES['NSTX-U'])[1]
+  """(text, titles): a theme's fonts by name (an unknown theme: DEFAULT_THEME's)."""
+  text = SCHEMES.get(theme, SCHEMES[DEFAULT_THEME])[1]
   return text, TITLE_FONT.get(theme, text)
 
 
@@ -336,104 +408,304 @@ if 'DIII-D' in SCHEMES:
       theme='DIII-D',
       mode='dark',
       accent=_d('accent6'))
+
+
+# The brand themes (no PowerPoint file: SCHEMES' comments), with the poster looks' roles: targets warm outer / cool
+# inner, electrons and private flux the cool hue, ions and core the warm one, SOL a third hue; diverging cool <-> warm
+# about a gray. Validated with the data-viz validator (all pairs; protan / deutan dE, normal vision, contrast against
+# each look's own surface; tone steps where a brand colour fails): every set CVD >= 10.0, normal >= 19.3, every mark
+# >= 3:1.
+def _e(slot, step=''):
+  return tone(slot, step, 'TCV')
+
+
+# TCV (EPFL): the site's white page and near-black text, Swiss red for emphasis (the logo). Targets red (outer) / Canard
+# (inner), ions and core Groseille, SOL Leman D10, private flux Canard D50 (EPFL has no third hue: its two teals apart
+# in lightness); light 14.2 / 14.5 / 10.2, normal >= 27.3. Dark on Taupe D50: targets Rouge L10 / Leman, ions and core
+# Rouge L20, SOL Leman L40, private flux Canard L20; 16.2 / 15.2 / 19.1, normal >= 19.3. Diverging Canard <-> red.
+LOOKS['tcv-light'] = Look('tcv-light',
+                          surf=_e('lt1'),
+                          ink=_e('dk1'),
+                          ink2=_e('dk2'),
+                          muted=_e('accent5'),
+                          grid=_e('lt2'),
+                          axis=_e('accent6'),
+                          outer=_e('accent1'),
+                          inner=_e('accent3'),
+                          elc=_e('accent3'),
+                          ion=_e('accent2'),
+                          core=_e('accent2'),
+                          sol=_e('accent4', 'D10'),
+                          pf=_e('accent3', 'D50'),
+                          div=(_e('accent3',
+                                  'D50'), _e('accent3'), _e('accent4',
+                                                            'L60'), _e('lt2'),
+                               _e('accent1',
+                                  'L60'), _e('accent1'), _e('accent2', 'D25')),
+                          theme='TCV',
+                          mode='light',
+                          accent=_e('accent1'))
+LOOKS['tcv-dark'] = Look('tcv-dark',
+                         surf=_e('dk2', 'D50'),
+                         ink=_e('lt1'),
+                         ink2=_e('accent6'),
+                         muted=_e('accent5', 'L20'),
+                         grid=_e('dk2'),
+                         axis=_e('dk2', 'L20'),
+                         outer=_e('accent1', 'L10'),
+                         inner=_e('accent4'),
+                         elc=_e('accent4'),
+                         ion=_e('accent1', 'L20'),
+                         core=_e('accent1', 'L20'),
+                         sol=_e('accent4', 'L40'),
+                         pf=_e('accent3', 'L20'),
+                         div=(_e('accent4',
+                                 'L60'), _e('accent4'), _e('accent3',
+                                                           'D50'), _e('dk2'),
+                              _e('accent2',
+                                 'D25'), _e('accent1'), _e('accent1', 'L60')),
+                         theme='TCV',
+                         mode='dark',
+                         accent=_e('accent1'))
+
+
+def _a(slot, step=''):
+  return tone(slot, step, 'ASDEX Upgrade')
+
+
+# ASDEX Upgrade (MPG): white page, black text, MPG green headings and controls. Targets orange (outer) / MPG green
+# (inner), ions and core orange, SOL purple L20, private flux green; light 10.5 / 10.5 / 10.5, normal >= 22.3. Dark on
+# the site's dark slate (dk2) D25: the same hues lighter (orange L20, green L40, purple L40); 25.1 / 25.1 / 21.6,
+# normal >= 22.5. Diverging green <-> orange.
+LOOKS['aug-light'] = Look('aug-light',
+                          surf=_a('lt1'),
+                          ink=_a('dk1'),
+                          ink2=_a('dk2'),
+                          muted=_a('lt2', 'D50'),
+                          grid=_a('lt2'),
+                          axis=_a('lt2', 'D25'),
+                          outer=_a('accent2'),
+                          inner=_a('accent1'),
+                          elc=_a('accent1'),
+                          ion=_a('accent2'),
+                          core=_a('accent2'),
+                          sol=_a('accent4', 'L20'),
+                          pf=_a('accent1'),
+                          div=(_a('accent1',
+                                  'D50'), _a('accent1'), _a('accent1',
+                                                            'L60'), _a('lt2'),
+                               _a('accent2',
+                                  'L60'), _a('accent2'), _a('accent2', 'D50')),
+                          theme='ASDEX Upgrade',
+                          mode='light',
+                          accent=_a('accent1'))
+LOOKS['aug-dark'] = Look('aug-dark',
+                         surf=_a('dk2', 'D25'),
+                         ink=_a('lt1'),
+                         ink2=_a('lt2'),
+                         muted=_a('lt2', 'D40'),
+                         grid=_a('dk2'),
+                         axis=_a('folHlink'),
+                         outer=_a('accent2', 'L20'),
+                         inner=_a('accent1', 'L40'),
+                         elc=_a('accent1', 'L40'),
+                         ion=_a('accent2', 'L20'),
+                         core=_a('accent2', 'L20'),
+                         sol=_a('accent4', 'L40'),
+                         pf=_a('accent1', 'L40'),
+                         div=(_a('accent1', 'L60'), _a('accent1', 'L20'),
+                              _a('accent1',
+                                 'D25'), _a('lt2', 'D75'), _a('accent2', 'D25'),
+                              _a('accent2', 'L20'), _a('accent2', 'L60')),
+                         theme='ASDEX Upgrade',
+                         mode='dark',
+                         accent=_a('accent1', 'L40'))
+
+
+def _s(slot, step=''):
+  return tone(slot, step, 'STEP')
+
+
+# STEP: the site's pale page (base-3) and deep-space text, pink for emphasis. Targets pink D10 (outer) / space blue
+# (inner), ions and core pink D25, SOL amber D40, private flux blue; light 16.1 / 10.7 / 10.7, normal >= 30.6. Dark on
+# the site's header navy (dk2): inner lavender (plasma-02: the brand's pink and darker lavender meet under CVD, dE 7.6),
+# pink D10, amber; 16.0 / 16.0 / 16.0, normal >= 25.0. Diverging blue <-> pink.
+LOOKS['step-light'] = Look('step-light',
+                           surf=_s('lt1'),
+                           ink=_s('dk2'),
+                           ink2=_s('dk1', 'L40'),
+                           muted=_s('dk1', 'L60'),
+                           grid=_s('lt2'),
+                           axis=_s('accent4'),
+                           outer=_s('accent1', 'D10'),
+                           inner=_s('accent2'),
+                           elc=_s('accent2'),
+                           ion=_s('accent1', 'D25'),
+                           core=_s('accent1', 'D25'),
+                           sol=_s('accent3', 'D40'),
+                           pf=_s('accent2'),
+                           div=(_s('accent6'), _s('accent2'), _s('accent4'),
+                                _s('lt1', 'D10'), _s('hlink'), _s('accent1'),
+                                _s('accent1', 'D50')),
+                           theme='STEP',
+                           mode='light',
+                           accent=_s('accent1', 'D25'))
+LOOKS['step-dark'] = Look('step-dark',
+                          surf=_s('dk2'),
+                          ink=_s('lt1'),
+                          ink2=_s('lt2'),
+                          muted=_s('folHlink', 'D25'),
+                          grid=_s('accent6'),
+                          axis=_s('accent2'),
+                          outer=_s('accent1', 'D10'),
+                          inner=_s('folHlink'),
+                          elc=_s('folHlink'),
+                          ion=_s('accent1', 'D10'),
+                          core=_s('accent1', 'D10'),
+                          sol=_s('accent3'),
+                          pf=_s('folHlink'),
+                          div=(_s('lt2'), _s('accent4'), _s('accent2'),
+                               _s('dk1'), _s('accent1', 'D50'), _s('accent1'),
+                               _s('hlink')),
+                          theme='STEP',
+                          mode='dark',
+                          accent=_s('accent1'))
 THEME_LOOKS = {
     name: {
         'light': LOOKS[f'{key}-light' if key else 'light'],
         'dark': LOOKS[f'{key}-dark' if key else 'dark']
     }
-    for name, key in (('NSTX-U', ''), ('PPPL', 'pppl'), ('DIII-D', 'diii-d'))
+    for name, key in (('NSTX-U', ''), ('PPPL', 'pppl'), ('DIII-D', 'diii-d'),
+                      ('TCV', 'tcv'), ('ASDEX Upgrade', 'aug'), ('STEP',
+                                                                 'step'))
     if name in SCHEMES
 }
 
 
-def look(theme='NSTX-U', dark=True):
-  """The look of a theme (THEME_LOOKS; an unknown one: NSTX-U), light or dark."""
-  return THEME_LOOKS.get(theme,
-                         THEME_LOOKS['NSTX-U'])['dark' if dark else 'light']
+def look(theme=DEFAULT_THEME, dark=True):
+  """The look of a theme (THEME_LOOKS; an unknown one: DEFAULT_THEME's), light or dark."""
+  return THEME_LOOKS.get(
+      theme, THEME_LOOKS[DEFAULT_THEME])['dark' if dark else 'light']
+
+
+def device_theme(device, default_device):
+  """The theme a device's runs open in: the theme of the device's own name, else the default device's (viewer.json's
+    "device"), else DEFAULT_THEME."""
+  return next((d for d in (device, default_device) if d in THEME_LOOKS),
+              DEFAULT_THEME)
 
 
 SEQ = 'inferno'
 REGION_NAME = {'core': 'core', 'sol': 'SOL', 'pf': 'private flux'}
 
 
+def _dark_page(d, card, muted, border, input, accent, link):
+  """The dark mode's marimo surfaces of a theme whose dark look is d: its surface, ink and accent, and the rest."""
+  return dict(background=d.surf,
+              card=card,
+              popover=card,
+              muted=muted,
+              border=border,
+              input=input,
+              foreground=d.ink,
+              muted_foreground=d.ink2,
+              primary=d.accent,
+              accent=accent,
+              link=link)
+
+
+# Each theme's page beyond its fonts: the light mode's accents (primary: the controls; link), the headings' style in
+# each mode (h2: a level-2 heading's own, '' = as the others), and the dark mode's surfaces (marimo's CSS variables).
+PAGES = {
+    'NSTX-U':
+    dict(light=dict(primary=tone('hlink', 'D25'), link=tone('hlink', 'D25')),
+         h_light='color: inherit;',
+         h_dark='color: inherit;',
+         h2='',
+         dark=dict(_dark_page(LOOKS['dark'], tone('dk2', 'D25'),
+                              tone('dk2', 'D50'), tone('dk2'),
+                              tone('accent5', 'D25'), tone('dk2'),
+                              tone('hlink', 'L20')),
+                   primary=tone('hlink'))),
+    # PPPL: titles in its orange
+    'PPPL':
+    dict(light=dict(primary=LOOKS['pppl-light'].accent,
+                    link=LOOKS['pppl-light'].inner),
+         h_light=f"color: {LOOKS['pppl-light'].accent};",
+         h_dark=f"color: {LOOKS['pppl-dark'].accent};",
+         h2='',
+         dark=_dark_page(LOOKS['pppl-dark'], LOOKS['pppl-dark'].grid,
+                         LOOKS['pppl-dark'].surf, LOOKS['pppl-dark'].axis,
+                         tone('dk2', 'L10', 'PPPL'), LOOKS['pppl-dark'].grid,
+                         tone('hlink', '', 'PPPL'))),
+    # DIII-D: a level-2 heading as the slides' title bar: the navy gradient of the rendered deck (darker at its ends)
+    'DIII-D':
+    dict(
+        light=dict(primary=LOOKS['diii-d-light'].accent, link='#0070C0'),
+        h_light='color: inherit;',
+        h_dark='color: inherit;',
+        h2=
+        ('background: linear-gradient(90deg, #172250, #21409A 50%, #172250); '
+         f'color: {tone("lt1", "", "DIII-D")}; padding: 0.2em 0.6em; border-radius: 2px;'
+         ),
+        dark=_dark_page(LOOKS['diii-d-dark'], tone('navy', 'D25', 'DIII-D'),
+                        LOOKS['diii-d-dark'].surf, LOOKS['diii-d-dark'].axis,
+                        tone('navy', '',
+                             'DIII-D'), tone('navy', 'D25', 'DIII-D'),
+                        LOOKS['diii-d-dark'].ink2)),
+    # TCV: as www.epfl.ch, black headings, the controls in Swiss red, links in Groseille
+    'TCV':
+    dict(light=dict(primary=LOOKS['tcv-light'].accent, link=_e('accent2')),
+         h_light='color: inherit;',
+         h_dark='color: inherit;',
+         h2='',
+         dark=_dark_page(LOOKS['tcv-dark'], _e('dk2', 'D25'),
+                         LOOKS['tcv-dark'].surf, _e('dk2'), _e('dk2', 'L10'),
+                         _e('dk2', 'D25'), _e('accent1', 'L40'))),
+    # ASDEX Upgrade: as www.ipp.mpg.de, headings (Merriweather) and controls in MPG green, the side menu's slate
+    'ASDEX Upgrade':
+    dict(light=dict(primary=LOOKS['aug-light'].accent, link=_a('hlink')),
+         h_light=f'color: {_a("accent1")};',
+         h_dark=f"color: {LOOKS['aug-dark'].accent};",
+         h2='',
+         dark=_dark_page(LOOKS['aug-dark'], _a('dk2'), LOOKS['aug-dark'].surf,
+                         _a('folHlink'), _a('dk2', 'L10'), _a('dk2'),
+                         _a('accent1', 'L60'))),
+    # STEP: as stepfusion.com, headings in capitals; a level-2 heading as its header bar (space-03 navy)
+    'STEP':
+    dict(
+        light=dict(primary=LOOKS['step-light'].accent, link=_s('accent2')),
+        h_light='color: inherit; text-transform: uppercase;',
+        h_dark='color: inherit; text-transform: uppercase;',
+        h2=(f'background: {_s("dk2")}; color: {_s("lt1")}; padding: 0.2em 0.6em; '
+            'border-radius: 2px; text-transform: uppercase;'),
+        dark=_dark_page(LOOKS['step-dark'], _s('accent6'),
+                        LOOKS['step-dark'].surf, _s('accent2'), _s('accent2'),
+                        _s('accent6'), _s('accent4'))),
+}
+
+
 def _page(theme):
-  """The page's look in a theme: fonts (text, headings: theme_fonts), heading styles, the light mode's accents
-    and the dark mode's surfaces (marimo's CSS variables)."""
+  """The page's look in a theme: its source, fonts (text, headings: theme_fonts) and PAGES entry."""
   text, head = (css_font(f) for f in theme_fonts(theme))
-  if theme == 'PPPL':
-    d, li = LOOKS['pppl-dark'], LOOKS['pppl-light']
-    return dict(src=THEME_SOURCES['PPPL'],
-                text=text,
-                head=head,
-                light=dict(primary=li.accent, link=li.inner),
-                h_light=f'color: {li.accent};',
-                h_dark=f'color: {d.accent};',
-                h2='',
-                dark=dict(background=d.surf,
-                          card=d.grid,
-                          popover=d.grid,
-                          muted=d.surf,
-                          border=d.axis,
-                          input=tone('dk2', 'L10', 'PPPL'),
-                          foreground=d.ink,
-                          muted_foreground=d.ink2,
-                          primary=d.accent,
-                          accent=d.grid,
-                          link=tone('hlink', '', 'PPPL')))
-  if theme == 'DIII-D':
-    d, li = LOOKS['diii-d-dark'], LOOKS['diii-d-light']
-    # a level-2 heading as the slides' title bar: the navy gradient of the rendered deck (darker at its ends)
-    bar = (
-        f'background: linear-gradient(90deg, #172250, #21409A 50%, #172250); color: {tone("lt1", "", "DIII-D")}; '
-        'padding: 0.2em 0.6em; border-radius: 2px;')
-    return dict(src=THEME_SOURCES['DIII-D'],
-                text=text,
-                head=head,
-                light=dict(primary=li.accent, link='#0070C0'),
-                h_light='color: inherit;',
-                h_dark='color: inherit;',
-                h2=bar,
-                dark=dict(background=d.surf,
-                          card=tone('navy', 'D25', 'DIII-D'),
-                          popover=tone('navy', 'D25', 'DIII-D'),
-                          muted=d.surf,
-                          border=d.axis,
-                          input=tone('navy', '', 'DIII-D'),
-                          foreground=d.ink,
-                          muted_foreground=d.ink2,
-                          primary=d.accent,
-                          accent=tone('navy', 'D25', 'DIII-D'),
-                          link=d.ink2))
-  d = LOOKS['dark']
-  return dict(src=THEME_SOURCES['NSTX-U'],
-              text=text,
-              head=head,
-              light=dict(primary=tone('hlink', 'D25'),
-                         link=tone('hlink', 'D25')),
-              h_light='color: inherit;',
-              h_dark='color: inherit;',
-              h2='',
-              dark=dict(background=d.surf,
-                        card=tone('dk2', 'D25'),
-                        popover=tone('dk2', 'D25'),
-                        muted=tone('dk2', 'D50'),
-                        border=tone('dk2'),
-                        input=tone('accent5', 'D25'),
-                        foreground=tone('lt2'),
-                        muted_foreground=tone('lt2', 'D25'),
-                        primary=tone('hlink'),
-                        accent=tone('dk2'),
-                        link=tone('hlink', 'L20')))
+  return dict(src=THEME_SOURCES[theme], text=text, head=head, **PAGES[theme])
 
 
-def page_css(theme='NSTX-U'):
+# Every property PAGES' heading styles (h_light, h_dark, h2) set, at its plain value: each heading rule of page_css
+# starts from these, so a heading property of another theme's sheet cannot outlive it under the same rule.
+HEADING_RESET = 'color: inherit; background: none; padding: 0; border-radius: 0; text-transform: none;'
+
+
+def page_css(theme=DEFAULT_THEME):
   """CSS for the marimo page in a theme (_page): its fonts and headings, its light-mode accents, and in dark mode
     its surfaces (body.dark is marimo's). The page puts the chosen theme's into the document at run time
-    (gk_viewer.py); view.sh writes the NSTX-U one to runs/viewer.css, the first paint. Every theme sets every
-    rule, so switching from one to another leaves nothing behind."""
-  t = _page(theme if theme in SCHEMES else 'NSTX-U')
+    (gk_viewer.py); view.sh writes DEFAULT_THEME's to runs/viewer.css, the first paint, which stays in the page.
+    Every theme sets every rule, and every heading rule every heading property (HEADING_RESET), so neither that
+    sheet nor a theme switched from leaves anything behind."""
+  t = _page(theme if theme in SCHEMES else DEFAULT_THEME)
   var = lambda d: '\n'.join(f'  --{k.replace("_", "-")}: {v};'
                             for k, v in d.items())  # noqa: E731
+  head = lambda style: f'{HEADING_RESET} {style}'  # noqa: E731
   dark = dict(t['dark'])
   dark['card_foreground'] = dark['popover_foreground'] = dark['foreground']
   return f"""/* Gkeyll run viewer, {theme} theme ({os.path.basename(t['src'])}), written by viewer_plots.page_css */
@@ -442,17 +714,16 @@ def page_css(theme='NSTX-U'):
   --marimo-heading-font: {t['head']};
 }}
 .markdown :is(h1, h2, h3, h4) {{ font-family: {t['head']}; }}
-.markdown h2 {{ {t['h2'] or 'background: none; padding: 0; color: inherit;'} }}
 :root:has(body:not(.dark)) {{
 {var(t['light'])}
 }}
-:root:has(body:not(.dark)) .markdown :is(h1, h3) {{ {t['h_light']} }}
-:root:has(body:not(.dark)) .markdown h2 {{ {'' if t['h2'] else t['h_light']} }}
+:root:has(body:not(.dark)) .markdown :is(h1, h3) {{ {head(t['h_light'])} }}
+:root:has(body:not(.dark)) .markdown h2 {{ {head(t['h2'] or t['h_light'])} }}
 :root:has(body.dark) {{
 {var(dark)}
 }}
-:root:has(body.dark) .markdown :is(h1, h3) {{ {t['h_dark']} }}
-:root:has(body.dark) .markdown h2 {{ {'' if t['h2'] else t['h_dark']} }}
+:root:has(body.dark) .markdown :is(h1, h3) {{ {head(t['h_dark'])} }}
+:root:has(body.dark) .markdown h2 {{ {head(t['h2'] or t['h_dark'])} }}
 """
 
 

@@ -888,11 +888,16 @@ def magnetic_axis_R(run):
   return floats[13] if len(floats) >= 14 else None
 
 
+def sim_settings(sim):
+  """The SimSettings of the simulation labelled sim: its own, or for a simulation viewer.json does not offer (a
+    --path run's) the default device and no geqdsk."""
+  return SIM_SETTINGS.get(sim) or SimSettings(DEVICE)
+
+
 def open_run(path, sim=''):
-  """The run in directory path, of the simulation labelled sim (its SimSettings: the device, the geqdsk; a run of
-    no simulation offered, as --path's: viewer.json's default device)."""
+  """The run in directory path, of the simulation labelled sim (its sim_settings: the device, the geqdsk)."""
   path = os.path.abspath(path)
-  own = SIM_SETTINGS.get(sim) or SimSettings(DEVICE)
+  own = sim_settings(sim)
   r = Run(path, sim, device=own.device, geqdsk=own.geqdsk)
   r.stem, r.single = find_stem(path)
   frames = r.frames()

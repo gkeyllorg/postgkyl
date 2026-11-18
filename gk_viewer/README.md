@@ -1,8 +1,8 @@
 # Gkeyll run viewer (2026-11-02; until 2026-11-14 the NSTX-U run viewer)
 
 A marimo notebook for looking through Gkeyll gyrokinetic runs frame by frame (multiblock tokamak runs of any
-device, and single-block ones), in a slide theme (the NSTX-U DPP 2025 poster's by default; dark by
-default, light on a switch): open it on a shot, a run and a frame, or play the run as a movie, probe any cell over
+device, and single-block ones), in a slide theme (the shown simulation's device's: NSTX-U's DPP 2025 poster, DIII-D's
+talks, TCV's, ASDEX Upgrade's and STEP's brands; light by default, dark on a switch): open it on a shot, a run and a frame, or play the run as a movie, probe any cell over
 time, read the particle and energy budgets and the power to each target, and save the view, the figure or a movie.
 Nothing here writes into a run directory; the outputs go to the data directory's `runs/` (Setup): the per-frame
 cache `runs/cache/`, saved views `runs/states/`, exported figures and movies `runs/exports/`, Flux copies
@@ -40,7 +40,9 @@ below).
     (`../pictures/...` reaches beside it);
   - `pgkyl` (optional): the pgkyl executable the commands name (else `pgkyl` from PATH);
   - `thomson_fallback` (optional): a directory of slim HDF5 shot files (the sim-init workflow's `data/h5_slim`);
-  - `theme_files` (optional): the themes' PowerPoint files, which `check_viewer.py` compares the kept colours with;
+  - `theme_files` (optional): the themes' source files, which `check_viewer.py` compares the kept colours and fonts
+    with: PowerPoint files (NSTX-U, PPPL, DIII-D), or for a theme without a public template (TCV, ASDEX Upgrade,
+    STEP) the JSON of its brand colours, each with its source (Device themes, below);
   - `device_image` (optional): a picture of the default device's poloidal cross-section (the top-level `device`'s:
     runs of another device get only their own, from `devices`), drawn behind the poloidal plane when the sidebar's
     **include device background** is on: `{"file": <relative to base>, "extent": [R_left, R_right, Z_bottom,
@@ -68,7 +70,8 @@ forwards here.
 OPEN=0 ./view.sh                                          # print the URL only
 ```
 Keys (`viewer_state.KEYS`): `shot`, `sim`, `run`, `frame` (negative: from the last), `qty`, `mode`
-(value / change / step), `log`, `zoom`, `x`, `dark`, `tab`, `frames` (the movie's frames, `pgkyl load --frame`
+(value / change / step), `log`, `zoom`, `x`, `dark` (left out: light), `theme` (left out: the shown simulation's
+device's), `tab`, `frames` (the movie's frames, `pgkyl load --frame`
 syntax), `probe` (block,i,j), `blocks` (the blocks drawn: `1-3,10`), `cmp` (a run drawn over this one: `<simulation>/<run>` or a
 directory), `path` (a run directory to open), `background`, `opacity` (the device picture), `mirror` (a half domain
 shown whole), `quantity`, `grid`, `separatrix`, `wall`, `outlines` (what the poloidal plane draws), `electrons`, `ions`,
@@ -77,7 +80,8 @@ the defaults, then a saved view, then the command line, then the page's address,
 page writes the current view into its address, so a reload or a bookmark comes back to it (the address carries the
 access token too: do not share it while the server runs). A
 value that no longer fits (a run removed, a frame past the last) falls back to the default with a note at the top.
-Save & export shows the `./view.sh` line for the current view.
+Save & export shows the `./view.sh` line for the current view. With no key the page opens light, on the default
+device's first simulation (viewer.json's `device`; here Sim 1, NSTX-U), in that device's theme (2026-11-17).
 
 In a VS Code terminal the page opens on your own machine (`$BROWSER` is VS Code's opener; it forwards the port), in
 Chrome: a workspace's `.vscode/settings.json` can set `"workbench.externalBrowser": "chrome"` (it applies to every
@@ -276,6 +280,34 @@ STEP's layouts, profiles, target fluxes and volumes are identical to the snapsho
 re-run's; the DIII-D plate's pgkyl command gives the viewer's q_par (25.94, 6.14, 1.61 MW/m²); the four runs' movies
 drawn in Chrome. Left: TCV's topology; a run's geqdsk when its files name only a basename (viewer.json's `geqdsk`).
 
+## Device themes, light by default (2026-11-17)
+The theme follows the shown simulation's device. A device's theme is the theme of the same name (NSTX-U, TCV, ASDEX
+Upgrade, DIII-D, STEP; `viewer_plots.device_theme`, names compared as written). A device without one opens in the
+default device's (viewer.json's `device`), and with none there either in NSTX-U's. Picking another simulation in the
+sidebar re-themes the page. A theme asked for wins: `--theme`, the page's address, a saved view, or a click on the
+sidebar's radio, which then holds for every simulation of the session. Only such a theme goes into the view (the
+address, a saved view, the `./view.sh` line), so a reload of a device-themed page follows the device again.
+
+TCV, ASDEX Upgrade and STEP have no public PowerPoint template. EPFL's and the Max Planck Society's are behind their
+intranets' logins; STEP's is not linked publicly, and its communications page is password-protected. Each theme is
+built from the brand guidelines and the website's stylesheet, in a PowerPoint scheme's twelve slots, and kept in
+`viewer_plots.SCHEMES` like the others. The research study `tokamak/viewer_themes_20261117` holds the sources, their
+terms of use, the files' SHA-256, and one JSON file per theme (each colour with its document and page, or stylesheet
+and selector). `viewer.json`'s `theme_files` names the JSON files, and `check_viewer.py` compares the kept colours and
+fonts with them. No logo or picture of the institutions is used. Roboto and Merriweather (ASDEX Upgrade) are free and
+tracked in `fonts/`. Merriweather lacks Greek, so Viewer Symbols now carries the Greek letters too (fonts/README.md).
+
+**Launch defaults.** A fresh launch opens light, on the default device's first simulation (Sim 1 here), in its theme,
+whatever the session before ended on. Nothing persists between launches but what is given. The view comes from the
+defaults, then a saved view (`--state`), the command line and the page's address, all read once when the page starts
+(`viewer_state.merge`). There is no preferences file, and each launch has a new access token, so an address from an
+earlier server does not open the new one. A reload of an open page keeps its address's view (dark, the simulation, a
+theme chosen). What changed:
+- `viewer_state.DEFAULTS`: dark is False (was True; the dark switch now reads it); theme is '' (was 'NSTX-U'), meaning
+  the device's.
+- `pyproject.toml`: marimo's first paint is light (was dark).
+- With no `sim` asked, the page opens the default device's first simulation (was the first listed).
+
 ## Run it anywhere: a mirror (2026-11-13)
 On another machine (a laptop) the viewer runs on a mirror of the runs, so it keeps working while the machine that
 holds them is down. Set up there: a checkout of this branch (Setup), and its `viewer.json`: the remote's `sims`, a
@@ -317,8 +349,9 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   every block; see below), **draw another run over it**
   (the overlay, see below), **curves on the line charts** (four switches, Electrons, Ions, Simulation and
   Experiment, all on by default; The curves shown, below), profile x axis (distance from the separatrix or R),
-  **theme** (NSTX-U, PPPL or DIII-D;
-  see Look) and **dark mode** (on by default; off = the theme's white look, page and figures together, no reload).
+  **theme** (NSTX-U, PPPL, DIII-D, TCV, ASDEX Upgrade or STEP: the shown simulation's device's until one is
+  clicked; see Look and Device themes) and **dark mode** (off by default since 2026-11-17; on = the theme's dark look,
+  page and figures together, no reload).
 - **Header:** run, domain, cell count, frame span, key options; the full path of the simulation output (and the
   overlay's) with its file names; tiles for t, time step, λq and peak heat flux at each target, cells with n ≤ 0.
 - **Movie** (`movie_widget.py`): poloidal plane (wall, separatrix dashed, x = n ≤ 0), every cell unrolled (the
@@ -396,7 +429,7 @@ Simulations offered: `viewer.json`'s `sims` (`gkview.SIMS`). Shot and equilibriu
 | `view.sh` | launcher: writes `runs/viewer.css` next to the notebook, starts marimo with the view keys, opens the page |
 | `requirements.lock.txt` | the viewer venv's packages, pinned |
 | `viewer.example.json`, `flux.env.example` | a data directory's settings, to copy |
-| `pyproject.toml` | `[tool.marimo.display] theme = "dark"` (marimo reads the nearest pyproject.toml) |
+| `pyproject.toml` | `[tool.marimo.display] theme = "light"` (marimo reads the nearest pyproject.toml: the first paint, before the notebook sets the mode) |
 
 ## Look
 The theme of the DPP 2025 poster (`aps_dpp_2025_poster_jjosephyzack.pptx`), read from the .pptx with
@@ -413,10 +446,16 @@ dash-dot, residual ink dotted (clear of the targets' hues). Charts are SVG (no W
 
 The dark/light switch sets `body[data-vscode-theme-kind]`, which marimo 0.25.2 reads before its own theme setting
 (its VS Code hook), from a zero-height iframe: a marimo upgrade may need this checked. The same iframe puts the chosen
-theme's page CSS (`viewer_plots.page_css`) into one `<style id="gkv-theme">` of the page's head.
+theme's page CSS (`viewer_plots.page_css`) into one `<style id="gkv-theme">`, kept the body's last element. Marimo
+puts its copy of `runs/viewer.css` (the first paint: the same rules in NSTX-U's theme) in the body, and of equal rules
+the later wins. Until 2026-11-17 the style sat in the head and lost: every theme's page accents and dark surfaces were
+NSTX-U's, while its fonts, headings and charts were its own. That sheet stays in the page under the chosen theme's, so
+a rule of it that the chosen theme leaves empty still applies: until 2026-11-18 its light-mode heading colour
+(`color: inherit`, more specific than a title bar's own rule) put dark text on DIII-D's and STEP's navy title bars.
+Every heading rule now sets every heading property a theme sets (`viewer_plots.HEADING_RESET`), then the theme's own.
 
-**Three themes** (`--theme`, the sidebar's radio; `viewer_plots.THEME_LOOKS`), each a PowerPoint theme read at
-start-up, each light and dark, the same roles throughout (targets orange outer / blue-teal inner; electrons and PF the
+**Six themes** (`--theme`, the sidebar's radio; `viewer_plots.THEME_LOOKS`), each a PowerPoint theme, or a device's
+brand where no template is public (Device themes, below), each light and dark, the same roles throughout (targets orange outer / blue-teal inner; electrons and PF the
 inner hue; ions and core red; SOL a third hue), every role group checked with the data-viz palette validator (all
 pairs under protan / deutan, normal vision, 3:1 against its own surface):
 - *NSTX-U*: the DPP 2025 poster, as above.
@@ -430,7 +469,24 @@ pairs under protan / deutan, normal vision, 3:1 against its own surface):
   orange for emphasis). Dark charts on the title bar's navy #00217B darker 50 % (#00103E). Diverging blue ↔ red.
   Page text in Century Gothic (geometric look-alikes where it is not installed); a level-2 heading is the slides'
   navy title bar (its gradient as rendered: #172250 at the ends, #21409A in the middle).
-Charts keep Arial in every theme (the PPPL template's own theme font; the label spacing is sized with its metrics).
+- *TCV*: EPFL's brand guidelines and www.epfl.ch: white page, text #212121, the corporate colours (Rouge #FF0000 =
+  the logo's Swiss red, Groseille #B51F1F, Canard #007480, Léman #00A79F, Taupe, Perle), Arial (the guidelines' font
+  for office materials; Suisse Int'l is licensed). Targets red / Canard; ions and core Groseille; SOL Léman, private
+  flux Canard darker (EPFL has no third hue: its two teals apart in lightness). Dark on Taupe darker 50 % (#211F1D).
+  Diverging Canard ↔ red. Page controls red, links Groseille, headings black as on the site.
+- *ASDEX Upgrade*: the Max Planck Society's logo guide and the stylesheet of www.mpg.de / www.ipp.mpg.de: white page,
+  MPG green #006C66, the site's palette (orange #BF5300, purple #873B8F, warm blue, warm green, deep blue), the light
+  grey header #EEEEEE and the slate side menu #455A64; Roboto text and Merriweather titles (the sites' fonts, both
+  free and tracked). Targets orange / green; ions and core orange; SOL purple; private flux green. Dark on the site's
+  dark slate #263238 darker 25 %. Diverging green ↔ orange. Headings in Merriweather and MPG green, as on the site.
+- *STEP*: stepfusion.com's stylesheet: its pale page #F8FAFC, deep-space text #040740, space blues, plasma lavenders,
+  fusion pinks, and the amber of its close icon (its one warm hue). Targets pink / space blue; ions and core pink;
+  SOL amber; private flux blue. Dark on the site's header navy #040740, the cool hue a lavender (#BCC2FF: the brand's
+  pink and its darker lavender meet under colour-vision deficiency). Diverging blue ↔ pink. Its fonts (Neue Haas
+  Grotesk, STEPSans) are commercial: Liberation Sans stands in, headings in capitals as on the site, a level-2
+  heading the site's navy header bar.
+Charts take each theme's text font and their titles its title font (`viewer_plots.theme_fonts`: in matplotlib the
+tracked file or stand-in, on the page the CSS stack), the label spacing measured in the font drawn (`text_px`).
 
 ## Definitions
 Same as `sims_20261022/poster_progress.py` and `movie_density.py`: cell averages (c0 / 2); masses and charges from
@@ -688,12 +744,46 @@ RMAJM, and runs that each step of the rule passes over: predictive, no CDF, no N
 Sanity check, Sim 2 at the frame nearest 325 ms: Thomson / the run's first-frame n_e = 0.90-1.08 on 6 of 7 channels
 (0.68 at +12 mm in the far SOL, where the initial profile is the workflow's spline, extrapolated).
 
-## Checks (2026-11-17: all pass, the browser part too: `check_viewer.py --browser` 112, `check_gkview.py` 64)
+## Checks (2026-11-18: all pass, the browser part too: `check_viewer.py --browser` 120, `check_gkview.py` 64)
 Run from this directory with no environment set (its own `viewer.json`, `.venv`):
 ```sh
 .venv/bin/python check_viewer.py [--browser <chrome>] [--parts blank,poloidal]   # --parts: some parts only
 <a postgkyl venv>/bin/python check_gkview.py
 ```
+2026-11-17, device themes and the light default (Device themes, above). `part_headless` now opens every simulation by
+its label (each had been moved to the head of the list, which with the new default opens the default device's first
+simulation instead) and checks that each opens in its device's theme, the view naming none.
+
+`part_themes` checks:
+- the brand themes' colours and fonts against their cited JSON files, each colour with a source;
+- every theme's page CSS;
+- TCV, ASDEX Upgrade and STEP light and dark, every tab built.
+
+The new `part_devices` (`--parts devices`) checks:
+- a theme asked for wins and is the only one the view keeps;
+- a name of no theme counts as none;
+- a device without a theme (Sim 2 offered as JET's) opens in the default device's;
+- a fresh launch after a session dark on TCV in STEP's theme opens light, on Sim 1, in NSTX-U's theme, and marimo's
+  first paint is light;
+- with `--browser`, one page: the fresh launch; TCV by its address (red controls); the theme radio's ASDEX Upgrade
+  clicked (the address keeps it); the simulation changed to STEP in the sidebar's list (the theme stays); a reload;
+  then (2026-11-18) every theme by its radio, light and dark: the run's title against what it sits on (every stop of a
+  title bar), WCAG contrast 3:1 or more (large text), in capitals in STEP's only. Before the `HEADING_RESET` fix it
+  failed on exactly the two the visual test found: DIII-D light 1.2:1, STEP light 1.1:1 (now 9.3 and 18.1; the
+  lowest of the twelve is PPPL light, 4.1, its orange titles on white).
+
+The browser part checks light by default and the switch to dark and back. The layout audit asks for dark where it
+meant the old default, and adds each other device's first view light, in its theme. The blank pages open dark, as
+their screenshots expect.
+
+The page check found a bug: the theme's `<style>` sat in the head, below marimo's copy of `runs/viewer.css` in the
+body, so `--primary` stayed NSTX-U's #007382 in every theme (Look). Both suites ran in full, formatted by the hooks
+first, while a 450-shot grid sweep held five cores of this login node:
+- `check_viewer.py --browser`: 119 of 119 in one run (30 min, no part rerun). The seven new checks: 2 in part_themes,
+  5 in part_devices. The layout audit covered 35 views.
+- `check_gkview.py`: 64 of 64.
+- After that, the page check's screenshots were made to wait for the movie; `--parts devices --browser` passed alone.
+
 2026-11-17, on this data directory as it now is (the five device runs in `viewer.json`, the Flux copies of 203655
 and 203899 fetched that morning, 203655's with TRANSP run 203655A04): 106 of 112 in one full `--browser` run while a
 450-shot grid sweep held five cores of the same login node; the other six pass on their parts' reruns. Four of those
@@ -824,7 +914,8 @@ profiles carry Thomson points on both sides. 11-03 run without --browser: 14/14 
   that does not fit falls back with a note per key; state files round-trip, a foreign file is refused; figures save
   as png / pdf / svg (the svg naming Arial first); a 10-frame movie is H.264 with 10 frames;
 - in headless Chrome driving `./view.sh --sim 'Sim 1' --frame 20 --qty T_elc`: the page opens there and its address
-  holds the view; dark by default (#1B262B) and the switch goes light and back; the movie at 30 frames/s draws 60
+  holds the view; light by default (a white page; 2026-11-17, dark before) and the switch goes dark (#1B262B) and
+  back; the movie at 30 frames/s draws 60
   times a second (90 frames in 3 s) with the notebook's header frame untouched while the open tab's two charts follow
   it (0.1 ms a frame); on pause the notebook takes the movie's frame and the movie stays there; the page draws a
   frame as plotly does (the notebook's redraw at the paused frame and at another: every curve vertex, marker and
