@@ -443,6 +443,10 @@ NONE = {
     'no pgkyl equivalent: CHERS T_i from Flux (thomson.py), not simulation output',
     'transp':
     'no pgkyl equivalent: TRANSP T_i / n_D from Flux (thomson.py, flux_transp.py), not simulation output',
+    'sheath':
+    'no pgkyl equivalent: the plate-face moments and the sheath cutoff of the run\'s files (gkview.sheath_profiles)',
+    'dtlim':
+    'no pgkyl equivalent: rebuilt from the frames as the library takes its step (gkview.dt_limits)',
     'lambda':
     'λq has no pgkyl command (gkview.target_heat_flux: 63 % of the plate\'s q_par); click a point for '
     'the plate\'s q_par at that frame',

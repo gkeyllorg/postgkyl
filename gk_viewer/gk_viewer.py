@@ -9,6 +9,7 @@ app = marimo.App(width="full",
 
 @app.cell
 def _():
+  import dataclasses
   import glob
   import html
   import json
@@ -30,7 +31,7 @@ def _():
   import thomson
   import viewer_plots as vp
   import viewer_state as vs
-  return HERE, glob, gv, html, json, mm, mo, np, os, pc, ro, subprocess, sync, sys, thomson, traceback, vp, vs
+  return HERE, dataclasses, glob, gv, html, json, mm, mo, np, os, pc, ro, subprocess, sync, sys, thomson, traceback, vp, vs
 
 
 @app.cell
@@ -521,10 +522,6 @@ def _(mo, prefs, run, vp, vs):
     background = vp.device_background(run.device)
   except (OSError, ValueError) as _e:
     bg_note = mo.callout(mo.md(f'No device background: {_e}'), kind='warn')
-  bg_pick = mo.ui.switch(value=vs.as_bool(prefs.get('background', False)),
-                         label='include device background',
-                         on_change=lambda v: prefs.update(background=v)
-                         ) if background is not None else None
   _op = vs.as_float(prefs.get('opacity'),
                     background[2] if background is not None else 1.0)
   # steps at two decimals: a step of 0.05 added up showed 0.6000000000000001, too wide for the sidebar
@@ -535,21 +532,64 @@ def _(mo, prefs, run, vp, vs):
                             show_value=True,
                             on_change=lambda v: prefs.update(opacity=v)
                             ) if background is not None else None
-  return background, bg_note, bg_opacity, bg_pick
+  return background, bg_note, bg_opacity
 
 
 @app.cell
-def _(background, bg_opacity, bg_pick):
-  # what the poloidal views draw behind the cells: the picture at the slider's opacity, or nothing (switched off)
-  bg_shown = ((background[0], background[1], float(bg_opacity.value))
-              if bg_pick is not None and bg_pick.value else None)
-  return (bg_shown, )
+def _(background, dataclasses, gv, mo, prefs, run, vp, vs):
+  # what the poloidal plane draws (viewer_plots.Layers, its defaults; view keys of the same names), one dropdown: the
+  # quantity's cells, the grid, the block boundaries, and where the run has them, the separatrix, the wall and the
+  # device picture behind the cells (off by default). Its choices start from prefs and write each key back there.
+  # A half domain shown whole stays a switch of its own (mirror_pick): it remakes the movie, and every cell reading
+  # this dropdown re-runs at each choice
+  _offer = {
+      'quantity': 'the plotted quantity',
+      'grid': 'the grid (every cell edge)'
+  }
+  if vp.separatrix_rows(run):
+    _offer['separatrix'] = 'the separatrix'
+  if gv.wall(run) is not None:
+    _offer['wall'] = 'the wall (limiter)'
+  _offer['outlines'] = 'the block boundaries'
+  if background is not None:
+    _offer['background'] = 'the device background'
+  _dflt = dict(dataclasses.asdict(vp.Layers()), background=False)
+  layers_offer = tuple(_offer)
+  layers_pick = mo.ui.multiselect(
+      {
+          _lab: _k
+          for _k, _lab in _offer.items()
+      },
+      value=[
+          _lab for _k, _lab in _offer.items()
+          if vs.as_bool(prefs.get(_k, _dflt[_k]))
+      ],
+      label='drawn on the poloidal plane',
+      full_width=True,
+      on_change=lambda v: prefs.update({_k: _k in v
+                                        for _k in layers_offer}))
+  return layers_offer, layers_pick
+
+
+@app.cell
+def _(background, bg_opacity, layers_offer, layers_pick, vp):
+  # what the poloidal views draw (a line the run lacks is not offered: there is nothing to draw), the picture behind
+  # the cells at the slider's opacity (or nothing)
+  _on = set(layers_pick.value)
+  layers_shown = vp.Layers(
+      **{
+          _k: _k in _on or _k not in layers_offer
+          for _k in vp.Layers.__dataclass_fields__
+      })
+  bg_shown = ((background[0], background[1],
+               float(bg_opacity.value)) if 'background' in _on else None)
+  return bg_shown, layers_shown
 
 
 @app.cell
 def _(mo, prefs, run, vs):
   # a half domain (a reflecting midplane) can be shown whole on the poloidal plane, its mirror image across Z = 0
-  # drawn too (the data are up-down symmetric); the strips stay one half
+  # drawn too (the data are up-down symmetric); the strips stay one half. A switch: it remakes the movie
   mirror_pick = mo.ui.switch(
       value=vs.as_bool(prefs.get('mirror', False)),
       label='show the full domain (mirror the half domain)',
@@ -564,60 +604,32 @@ def _(mirror_pick):
 
 
 @app.cell
-def _(gv, mo, prefs, run, vp, vs):
-  # what the poloidal plane draws, each on a switch (viewer_plots.Layers, its defaults): the quantity's cells, the
-  # grid, the block boundaries, and the separatrix and the wall where the run has them
-  def _switch(key, label):
-    return mo.ui.switch(value=vs.as_bool(
-        prefs.get(key, getattr(vp.Layers(), key))),
-                        label=label,
-                        on_change=lambda v: prefs.update({key: v}))
-
-  quantity_pick = _switch('quantity', 'show the plotted quantity')
-  grid_pick = _switch('grid', 'show the grid (every cell edge)')
-  sep_pick = _switch('separatrix',
-                     'show the separatrix') if vp.separatrix_rows(run) else None
-  wall_pick = _switch(
-      'wall', 'show the wall (limiter)') if gv.wall(run) is not None else None
-  outlines_pick = _switch('outlines', 'show the block boundaries')
-  return grid_pick, outlines_pick, quantity_pick, sep_pick, wall_pick
-
-
-@app.cell
-def _(grid_pick, outlines_pick, quantity_pick, sep_pick, vp, wall_pick):
-  # what the poloidal views draw (a line the run lacks has no switch: there is nothing to draw)
-  layers_shown = vp.Layers(quantity=bool(quantity_pick.value),
-                           grid=bool(grid_pick.value),
-                           separatrix=sep_pick is None or bool(sep_pick.value),
-                           wall=wall_pick is None or bool(wall_pick.value),
-                           outlines=bool(outlines_pick.value))
-  return (layers_shown, )
-
-
-@app.cell
 def _(mo, prefs, vp, vs):
-  # which curves the line charts draw (viewer_plots.Curves, its defaults; view keys of the same names): one control
-  # of four switches, the electrons' and the ions' curves (a species by its charge's sign), the simulated ones and
-  # the experiment's (measured and analysis profiles); each starts from prefs and writes itself back there
-  curves_pick = mo.ui.dictionary(
-      {
-          _k:
-          mo.ui.switch(value=vs.as_bool(prefs.get(_k, getattr(vp.Curves(),
-                                                              _k))),
-                       label=_k.capitalize())
-          for _k in vp.CURVE_SWITCHES
-      },
-      on_change=prefs.update)
+  # which curves the line charts draw (viewer_plots.Curves, its defaults; view keys of the same names): one dropdown
+  # of four choices, the electrons' and the ions' curves (a species by its charge's sign), the simulated ones and the
+  # experiment's (measured and analysis profiles), all chosen by default; it starts from prefs and writes each key
+  # back there
+  _names = {_k.capitalize(): _k for _k in vp.CURVE_SWITCHES}
+  curves_pick = mo.ui.multiselect(
+      _names,
+      value=[
+          _n for _n, _k in _names.items()
+          if vs.as_bool(prefs.get(_k, getattr(vp.Curves(), _k)))
+      ],
+      label='curves on the line charts',
+      full_width=True,
+      on_change=lambda v: prefs.update(
+          {_k: _k in v
+           for _k in vp.CURVE_SWITCHES}))
   return (curves_pick, )
 
 
 @app.cell
 def _(curves_pick, vp):
-  # the curves the line charts draw (viewer_plots.shown_curves)
-  curves_shown = vp.Curves(**{
-      _k: bool(_v)
-      for _k, _v in curves_pick.value.items()
-  })
+  # the curves the line charts draw (viewer_plots.shown_curves): a key is on when chosen
+  curves_shown = vp.Curves(
+      **{_k: _k in curves_pick.value
+         for _k in vp.CURVE_SWITCHES})
   return (curves_shown, )
 
 
@@ -741,7 +753,6 @@ def _(frames, frames_text, gv, mo):
 def _(
     bg_note,
     bg_opacity,
-    bg_pick,
     blocks_pick,
     cmp_err,
     cmp_pick,
@@ -750,23 +761,19 @@ def _(
     frame_pick,
     frames_msg,
     frames_text,
-    grid_pick,
+    layers_pick,
     log_pick,
     mirror_pick,
     mo,
     mode_pick,
-    outlines_pick,
     probe_text,
     qty_pick,
-    quantity_pick,
     reload_btn,
     run_pick,
-    sep_pick,
     sim_pick,
     sync_btn,
     sync_note,
     theme_pick,
-    wall_pick,
     x_pick,
     zoom_pick,
 ):
@@ -780,21 +787,13 @@ def _(
              'pauses)</small>'), frames_text, frames_msg or mo.md(''),
           probe_text,
           mo.md('---'), qty_pick, mode_pick, log_pick, zoom_pick,
-          mirror_pick if mirror_pick is not None else mo.md(''),
-          bg_pick if bg_pick is not None else mo.md(''),
+          mirror_pick if mirror_pick is not None else mo.md(''), layers_pick,
           bg_opacity if bg_opacity is not None else mo.md(''), bg_note,
-          quantity_pick, grid_pick,
-          sep_pick if sep_pick is not None else mo.md(''), wall_pick
-          if wall_pick is not None else mo.md(''), outlines_pick, blocks_pick,
+          blocks_pick,
           mo.md('---'), cmp_pick,
           mo.callout(mo.md(f'Not drawn: {cmp_err}'), kind='warn')
           if cmp_err else mo.md(''),
-          mo.md('---'),
-          mo.md('curves on the line charts'), *[
-              mo.hstack([curves_pick.elements[_k] for _k in _row],
-                        widths='equal')
-              for _row in (('electrons', 'ions'), ('simulation', 'experiment'))
-          ], x_pick,
+          mo.md('---'), curves_pick, x_pick,
           mo.md('---'), theme_pick, dark_pick
       ],
       footer=mo.
@@ -1063,6 +1062,22 @@ def _(frames, gv, mo, run):
 
 
 @app.cell
+def _(frames, gv, mo, run):
+  _ = frames  # new frames only on reload
+  try:  # what sets the time step (gkview.dt_limits): a failure is a note in the Time traces tab, not a broken page
+    dtlim = gv.dt_limits(run,
+                         progress=lambda it, n: mo.status.progress_bar(
+                             it,
+                             total=n,
+                             title='Rebuilding what sets the time step',
+                             subtitle=f'{n} frames not cached yet',
+                             remove_on_exit=True))
+  except Exception as _e:
+    dtlim = {'why': f'{type(_e).__name__}: {_e}', 'setup': None}
+  return (dtlim, )
+
+
+@app.cell
 def _(mo, prefs):
   TABS = [
       'Midplane profiles', 'Targets', 'Time traces', 'Probe', 'Balance & power',
@@ -1079,33 +1094,32 @@ def _(mo, prefs):
 @app.cell
 def _(
     bg_opacity,
-    bg_pick,
+    bg_shown,
     blocks,
     cmp_pick,
-    curves_pick,
+    curves_shown,
     dark_pick,
+    dataclasses,
     frames_text,
     get_probe,
     get_tab,
-    grid_pick,
     k,
+    layers_offer,
+    layers_shown,
     log_pick,
+    mirror_on,
     mirror_pick,
     mo,
     mode_pick,
     os,
-    outlines_pick,
     prefs,
     qty_pick,
-    quantity_pick,
     run,
     run_pick,
-    sep_pick,
     sim_pick,
     theme_pick,
     vp,
     vs,
-    wall_pick,
     x_pick,
     zoom_pick,
 ):
@@ -1123,18 +1137,15 @@ def _(
       theme=theme_pick.value
       if prefs.get('theme') else '',  # only a theme chosen: else the device's
       dark=bool(dark_pick.value),
-      background=bool(bg_pick.value) if bg_pick is not None else None,
       opacity=float(bg_opacity.value) if bg_opacity is not None else None,
-      mirror=bool(mirror_pick.value) if mirror_pick is not None else None,
-      quantity=bool(quantity_pick.value),
-      grid=bool(grid_pick.value),
-      separatrix=bool(sep_pick.value) if sep_pick is not None else None,
-      wall=bool(wall_pick.value) if wall_pick is not None else None,
-      outlines=bool(outlines_pick.value),
+      # what the poloidal plane draws: a key the run is not offered is None (nothing to draw)
       **{
-          _k: bool(_v)
-          for _k, _v in curves_pick.value.items()
+          _k: _v if _k in layers_offer else None
+          for _k, _v in dict(dataclasses.asdict(layers_shown),
+                             background=bg_shown is not None).items()
       },
+      mirror=mirror_on if mirror_pick is not None else None,
+      **dataclasses.asdict(curves_shown),
       tab=get_tab(),
       frames=frames_text.value.strip(),
       probe=','.join(map(str,
@@ -1395,6 +1406,7 @@ def _(
     cmp,
     curves_shown,
     dt_hist,
+    dtlim,
     export_size,
     fenergy,
     fetch_btn,
@@ -1486,7 +1498,7 @@ def _(
     _shown = vp.shown_curves(fig, curves_shown)
     if _shown is None:
       return mo.callout(mo.md(
-          f'Nothing to draw here: {vp.hidden_note(fig, curves_shown)} in the sidebar.'
+          f'Nothing to draw here: {vp.hidden_note(fig, curves_shown)} among the sidebar curves.'
       ),
                         kind='neutral')
     _name = f"{run.sim.replace(' ', '').lower()}_{run.name}_{chart}_frame{k}"
@@ -1562,6 +1574,15 @@ def _(
     ])
 
   def _targets():
+    _sh = gv.sheath_profiles(
+        run,
+        k)  # the sheath entrance at the plates (Churchill 2017, Figs. 5 and 6)
+    _sheath = [
+        _live(vp.sheath_figure(run, _sh, pal=pal, blocks=blocks), 'sheath'),
+        mo.md(vp.sheath_note(run, _sh))
+    ] if _sh['frame'] is not None else [
+        mo.callout(mo.md(vp.sheath_note(run, _sh)), kind='neutral')
+    ]
     return mo.vstack([
         _live(
             vp.targets_figure(run,
@@ -1579,6 +1600,8 @@ def _(
            (' Where a leg\'s SOL never reaches Z = 0, its surfaces sit at their distance along the plate from '
             'its inner corner (no λq there).' if vp.
             targets_along(run, blocks) else '') + '</small>'),
+        mo.md('#### The sheath entrance'),
+        *_sheath,
     ])
 
   def _traces():
@@ -1596,6 +1619,13 @@ def _(
         mo.
         md('<small>Region changes: the Jacobian-weighted (volume) mean over the region\'s cells, relative to '
            'the first frame.</small>'),
+        mo.md('#### What sets the time step'),
+        *([
+            _live(vp.dtlimits_figure(run, dtlim, dt_hist, t_now, pal=pal),
+                  'dt_limits'),
+            mo.md(vp.dtlimits_note(run, dtlim, k))
+        ] if not dtlim['why'] else
+          [mo.callout(mo.md(f'Not rebuilt: {dtlim["why"]}.'), kind='neutral')]),
     ])
 
   def _probe():

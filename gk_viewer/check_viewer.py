@@ -66,8 +66,12 @@
     --browser: the page fresh, then TCV by its address, the theme radio clicked, the simulation changed in the
     sidebar, a reload. The browser parts that were written for the dark default ask for it (layout, blank), and the
     layout audit adds each device's first view light.
+15. (2026-11-19) what sets the time step (part_dtlimits): the CFL and omega_H limits rebuilt from Sim 1's and Sim
+    2's frames reproduce every step they took (Sim 1 set by the electrons' parallel streaming, Sim 2 by their mirror
+    force); the 2025 re-run, which they do not reproduce, says so; the Time traces tab draws the chart and the note.
+    The curves shown (12.) are a dropdown of four choices since, its notes '<choice> not chosen'.
 --parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, devices, fonts, sync,
-machine, poloidal, lines, grid, blank, species, browser, layout, liveplot).
+machine, poloidal, lines, grid, blank, species, dtlimits, fluxsheath, browser, layout, liveplot).
 Exit status: the number of failures.
 """
 import argparse
@@ -982,6 +986,12 @@ def _charts(run, summ, cmp=None):
                       t,
                       cmp=cmp)  # block 1, or a single block's
   }
+  lim = gv.dt_limits(run)
+  if not lim['why']:
+    out['dt limits'] = vp.dtlimits_figure(run, lim, gv.dt_history(run), t)
+  sh = gv.sheath_profiles(run, k)
+  if sh['frame'] is not None:
+    out['sheath'] = vp.sheath_figure(run, sh)
   B = gv.balance(run)
   if B is not None:
     Bc = gv.balance(cmp.run) if cmp else None
@@ -1921,7 +1931,7 @@ async def _drive_poloidal(url, dbg, wall, centres):
     await rebuilt('show the full domain')
     await shot('mirror')
     # the picture off: the same movie redraws without it (a property of the widget, not a new movie)
-    await c.strict("__switch('include device background').click()")
+    await c.strict_choose(LAYERS_DROPDOWN, 'the device background')
     await asyncio.sleep(4)
     await shot('off')
   return out
@@ -2133,10 +2143,10 @@ def part_poloidal(chrome=None):
 # ------------------------------------------------------------------------------ the lines over the cells (11-16)
 # viewer_plots.Layers' fields for the lines over the cells, the view keys, the switches
 LINES = ('separatrix', 'wall', 'outlines')
-LINE_LABELS = {
-    'separatrix': 'show the separatrix',
-    'wall': 'show the wall (limiter)',
-    'outlines': 'show the block boundaries'
+LINE_LABELS = {  # their choices in the sidebar's LAYERS_DROPDOWN (until 2026-11-19 switches, 'show ...')
+    'separatrix': 'the separatrix',
+    'wall': 'the wall (limiter)',
+    'outlines': 'the block boundaries'
 }
 
 
@@ -2275,7 +2285,7 @@ async def _drive_lines(url, dbg, paths, shots):
           f"(e => [+e.dataset.render, +e.dataset.draws])({latest})")
       for name, a, b in zip(LINES, now, state):
         if a != b:
-          await c.strict(f"__switch({json.dumps(LINE_LABELS[name])}).click()")
+          await c.strict_choose(LAYERS_DROPDOWN, LINE_LABELS[name])
       if state != now:
         kinds = sorted(
             ['quantity'] +
@@ -2575,10 +2585,10 @@ async def _drive_grid(url, dbg, cases, shots):
       for st in ((False, True), (True, True), (True, False), (False, False)):
         render, draws = await c.strict(
             f"(e => [+e.dataset.render, +e.dataset.draws])({latest})")
-        for lab, a, b in zip(('show the plotted quantity', 'show the grid'),
-                             now, st):
+        for lab, a, b in zip(
+            ('the plotted quantity', 'the grid (every cell edge)'), now, st):
           if a != b:
-            await c.strict(f"__switch({json.dumps(lab)}).click()")
+            await c.strict_choose(LAYERS_DROPDOWN, lab)
         if st != now:  # the movie drawn again with the quantity and the grid as clicked (a line the run lacks: on)
           if not await c.until(
               f"(e => e && (+e.dataset.render !== {render} || +e.dataset.draws > {draws}) && "
@@ -3295,6 +3305,13 @@ def part_schema(tmp):
   )
 
 
+# a marimo multiselect (its text holds the given label): its trigger, and one of its options once it is open
+DROPDOWN_TRIGGER = (
+    "(m => m && (m.shadowRoot || m).querySelector('[role=combobox], button'))(__deep('marimo-multiselect').find(e => "
+    "((e.shadowRoot || e).textContent || '').includes(%s)))")
+DROPDOWN_OPTION = "__deep('[role=option]').find(o => (o.textContent || '').trim() === %s)"
+LAYERS_DROPDOWN = 'drawn on the poloidal plane'  # the sidebar's choices of what the poloidal plane draws (11-19)
+
 # ----------------------------------------------------------------------------------------- the curves shown (11-17)
 MEASURED_GROUPS = {'thomson', 'chers',
                    'transp'}  # measured_trace's legend groups, one per source
@@ -3356,7 +3373,7 @@ def _one_off(f, k):
   """Switch k alone off on a _numbered chart: (the problems, the traces it should take away, whether it empties the
   chart). It should take away exactly the traces _said makes its own; leave the rest as they were (a legend entry may
   move to a trace of its group: name and showlegend aside), each group left with its legend entry; put the note
-  '<k> switched off' in each panel it empties and nowhere else; leave no label (an annotation in a panel's data
+  '<k> not chosen' in each panel it empties and nowhere else; leave no label (an annotation in a panel's data
   coordinates) in such a panel; and where it takes every curve, leave none and give hidden_note's words."""
   from plotly.utils import PlotlyJSONEncoder
   import viewer_plots as vp
@@ -3365,9 +3382,9 @@ def _one_off(f, k):
   gone = {i for i, said in enumerate(_said(f)) if k in said}
   data = [i for i, tr in enumerate(f.data) if tr.legendgroup != 'key']
   if all(i in gone for i in data):
-    return ([] if shown is None
-            and vp.hidden_note(f, curves) == f'{k} switched off' else
-            ['not emptied, or a wrong note']), gone, True
+    return ([]
+            if shown is None and vp.hidden_note(f, curves) == f'{k} not chosen'
+            else ['not emptied, or a wrong note']), gone, True
   if shown is None:
     return ['emptied'], gone, False
   bad, kept = [], {int(tr.uid): tr for tr in shown.data}
@@ -3394,11 +3411,10 @@ def _one_off(f, k):
              for tr in f.data if tr.legendgroup != 'key'
              } - {where(tr)
                   for tr in shown.data if tr.legendgroup != 'key'}
-  notes = {
-      (a.xref.split(' ')[0], a.yref.split(' ')[0])
-      for a in shown.layout.annotations
-      if (a.xref or '').endswith(' domain') and a.text == f'{k} switched off'
-  }
+  notes = {(a.xref.split(' ')[0], a.yref.split(' ')[0])
+           for a in shown.layout.annotations
+           if (a.xref or '').endswith(' domain') and a.text == f'{k} not chosen'
+           }
   if notes != emptied:
     bad.append(f'notes in panels {sorted(notes)}, emptied {sorted(emptied)}')
   stray = [
@@ -3409,13 +3425,18 @@ def _one_off(f, k):
   return bad, gone, False
 
 
+ROLE_CHARTS = (
+    'sheath',
+)  # a panel per role (the electrons', the ions': gkview.sheath_profiles by charge), not a curve per species
 KEPT_CHARTS = (
     'history', 'thomson'
 )  # the midplane over time (a map of one quantity), the shot's timeline
-SWITCH_IS = """window.__switchIs = t => __deep('button[role=switch]').find(s => { let n = s;
-  for (let i = 0; i < 4 && n; i++) { n = n.parentElement || (n.getRootNode() && n.getRootNode().host);
-  if (n && (n.textContent || '').trim() === t) return true; } return false; }); 'ok'"""
 CURVE_LABELS = ['Electrons', 'Ions', 'Simulation', 'Experiment']
+CURVES_DROPDOWN = 'curves on the line charts'  # the sidebar's dropdown of them (CDP.choose)
+CURVES_TRIGGER = DROPDOWN_TRIGGER % json.dumps(CURVES_DROPDOWN)
+# the four curves choices' states as the page's address carries them (the view writes each key)
+CURVE_STATES = ("(q => " + json.dumps([k.lower() for k in CURVE_LABELS]) +
+                ".map(k => q.get(k)))(new URLSearchParams(location.search))")
 # the Midplane profiles chart drawn (its plotly div), and what it draws: its traces, those tagged ions, the name its
 # slide downloads go by
 PROFILES_CHART = (
@@ -3428,27 +3449,25 @@ PROFILES_READ = (
 
 
 async def _drive_species(url, dbg, shots):
-  """Sim 2's page: the four switches' states, the profiles chart, Ions clicked off (the chart drawn again, its slide
-  figure, the address), then the page reloaded. Returns those readings."""
+  """Sim 2's page: the four curves choices' states, the profiles chart, Ions taken off in the dropdown (the chart drawn
+  again, its slide figure, the address), then the page reloaded. Returns those readings."""
   out = {}
 
   async def ready():
     await asyncio.sleep(3)
     await c.js(DEEP)
-    await c.js(SWITCH_IS)
     await c.until("__deep('[role=tablist]').length > 0", 180)
     await c.js(
         "(__deep('[role=tablist]')[0] || document.body).scrollIntoView({block: 'start'})"
     )
     return await c.until(PROFILES_READ, 180)
 
-  states = ("[" + ', '.join(
-      f"(s => s ? s.getAttribute('aria-checked') : null)(__switchIs({json.dumps(t)}))"
-      for t in CURVE_LABELS) + "]")
+  states = CURVE_STATES
   async with opened(url, dbg) as c:
     out['before'] = await ready()
-    out['states'] = await c.js(states)
-    await c.strict("__switchIs('Ions').click()")
+    out['states'] = await c.until(
+        f"(s => s.every(v => v) ? s : null)({states})", 60)
+    await c.strict_choose(CURVES_DROPDOWN, 'Ions')
     out['off'] = await c.until(
         f"(r => r && r.ions === 0 ? r : null)({PROFILES_READ})", 120)
     out['search'] = await c.js('location.search')
@@ -3458,8 +3477,8 @@ async def _drive_species(url, dbg, shots):
           f".includes('ions')).length}}))(window.__gkvSlides[{json.dumps(out['off']['name'])}]('full', true))"
       )
     if shots:  # the control, then the profiles chart without the ions
-      for what, el in (('control', "__switchIs('Ions')"), ('profiles',
-                                                           PROFILES_CHART)):
+      for what, el in (('control', CURVES_TRIGGER), ('profiles',
+                                                     PROFILES_CHART)):
         await c.js(f"(e => e && e.scrollIntoView({{block: 'center'}}))({el})")
         await asyncio.sleep(1)
         await c.shot(os.path.join(shots, f'species_ions_off_{what}.png'))
@@ -3547,13 +3566,20 @@ def part_species(chrome=None, shots=None):
   neutral = dataclasses.replace(run, charge=dict(run.charge, **{e: 0.0}))
   off = {k: vp.Curves(**{k: False}) for k in ('electrons', 'ions')}
   wrong, nsw = [], 0
-  for (name, a), b, c in zip(
-      charts(run, summ).items(),
-      charts(swapped, summ).values(),
-      charts(neutral, summ).values()):
-    a, b, c = _numbered(a), _numbered(b), _numbered(c)
+  B, C = charts(swapped, summ), charts(
+      neutral, summ)  # paired by name: a chart may need both species
+  for name, a in charts(run, summ).items():
+    a, b = _numbered(a), _numbered(B[name])
     ra = {k: _removed(a, v) for k, v in off.items()}
     nsw += len(ra['electrons'] or ()) + len(ra['ions'] or ())
+    if name in ROLE_CHARTS:  # its panels are the electrons' and the ions' (by charge): swapped, the roles stay put
+      if (_removed(b, off['electrons']),
+          _removed(b, off['ions'])) != (ra['electrons'], ra['ions']):
+        wrong.append(f'{name}: swapped charges')
+      if name in C:
+        wrong.append(f'{name}: drawn with no electrons ({e} neutral)')
+      continue
+    c = _numbered(C[name])
     if (_removed(b, off['electrons']),
         _removed(b, off['ions'])) != (ra['ions'], ra['electrons']):
       wrong.append(f'{name}: swapped charges')
@@ -3617,12 +3643,12 @@ def part_species(chrome=None, shots=None):
           'probe': '6,200,7',
           'simulation': 'false'
       }, texts=texts)
-  note = 'Nothing to draw here: simulation switched off in the sidebar.'
+  note = 'Nothing to draw here: simulation not chosen among the sidebar curves.'
   count = {t: texts[t].count(note) for t in texts if note in texts[t]}
   check(
       count == {
-          'Targets': 1,
-          'Time traces': 1,
+          'Targets': 2,
+          'Time traces': 2,
           'Probe': 1,
           'Balance & power': 2,
           'Diffusivity': 1
@@ -3645,10 +3671,179 @@ def part_species(chrome=None, shots=None):
           'ions': 0
       } and r.get('states_reloaded') == ['true', 'false', 'true', 'true'] and a
       and a['ions'] == 0 and a['n'] == o['n'],
-      f'the page (Sim 2): the switches {CURVE_LABELS} on by default ({r.get("states")}); Ions clicked off, the '
+      f'the page (Sim 2): the curves {CURVE_LABELS} chosen by default ({r.get("states")}); Ions taken off in the dropdown, the '
       f'profiles chart drawn again without its {b and b["ions"]} ion curves ({b and b["n"]} -> {o and o["n"]} '
       f'traces; its slide figure {r.get("slide")}), the address saying so; reloaded, still off '
       f'({r.get("states_reloaded")}, {a and a["n"]} traces)')
+
+
+# --------------------------------------------------------------------------------------- the time step (11-19)
+DT_FRAME_TOL = 0.05  # every frame after the first: the step taken within 5 % of the rebuilt one (a transient's)
+
+
+def part_dtlimits():
+  """What sets the time step (2026-11-19): gkview.dt_limits rebuilds each frame's CFL and omega_H limits from the
+  files the way the library takes its step. On Sim 1 (drifts) and Sim 2 (none) it reproduces the steps taken: their
+  median within gkview's margin (twice the library's 1 % keep-the-step rule) of the rebuilt one, every frame after
+  the first within DT_FRAME_TOL; Sim 1's step is set by the electrons' parallel streaming, Sim 2's by their mirror
+  force (the larger share of the CFL rate, at most of their frames); omega_H binds at none; the polarization weight is the
+  same in every block. The 2025 re-run (an older library) is not reproduced, and its chart and note say so. A run
+  whose frames are all cached opens with no setup built (no geometry read: Sim 1's took 10 s). A frame rebuilt again
+  equals its cached row; the chart and the note build at the first and last frames; the empty run has
+  none and says why."""
+  import gkview as gv
+  import viewer_plots as vp
+  runs = {
+      lab: gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+      for lab, d, dflt, _ in gv.SIMS if lab in ('Sim 1', 'Sim 2', '2025 re-run')
+  }
+  lead = {'Sim 1': 'streaming', 'Sim 2': 'mirror'}
+  for lab, run in runs.items():
+    gv.dt_limits(run)  # every frame cached, and the settings file beside them
+    gv._DT_SETUP.pop(run.path, None)
+    t0 = time.time()
+    lim = gv.dt_limits(run)
+    lazy = (run.path not in gv._DT_SETUP, time.time() - t0)
+    if lim['why']:
+      check(False, f'{lab}: no time-step limits ({lim["why"]})')
+      continue
+    check(
+        lazy[0],
+        f'{lab}: its limits all cached, opening them again reads no geometry (no setup built; {lazy[1]:.2f} s)'
+    )
+    st = gv.dt_setup(run)[0]  # to rebuild a frame again
+    med, lo, hi = gv.dt_agreement(lim)
+    r = lim['taken'][1:] / np.fmin(lim['dt_cfl'][1:], lim['dt_H'][1:])
+    r = r[np.isfinite(r)]
+    k = int(lim['frames'][len(lim['frames']) // 2])
+    again = gv._dt_one(run, st, k)
+    row = int(np.where(lim['frames'] == k)[0][0])
+    same = all(
+        np.allclose(
+            np.asarray(again[key], float), lim[key][row], rtol=1e-12, atol=0)
+        for key in again)
+    notes = [vp.dtlimits_note(run, lim, int(f)) for f in lim['frames'][[0, -1]]]
+    fig = vp.dtlimits_figure(run, lim, gv.dt_history(run), lim['t'][-1])
+    warned = any('not reproduced' in (a.text or '')
+                 for a in fig.layout.annotations)
+    W = re.search(r'blocks agree to (\S+)\)', ' '.join(lim['notes']))
+    if lab in lead:
+      n = lead[lab]
+      top = [
+          max(gv.DT_TERMS, key=lambda m: lim[f'share|{m}'][i])
+          for i in range(len(lim['t']))
+      ]
+      H = int((lim['dt_H'] < lim['dt_cfl']).sum())
+      check(
+          gv.dt_reproduced(lim) and np.all(np.abs(r - 1) <= DT_FRAME_TOL)
+          and top.count(n) > len(top) / 2 and H == 0 and same and not warned
+          and W and float(W.group(1)) < 1e-12
+          and all('reproduces' in x and 'CFL limit' in x for x in notes),
+          f'{lab}: the step rebuilt at its {len(lim["t"])} frames: taken / rebuilt median {med:.4f} '
+          f'({lo:.4f}-{hi:.4f}, every frame after the first within {DT_FRAME_TOL:.0%}); set by the CFL limit, '
+          f'{vp.DT_TERM_NAME[n]} the larger share at {top.count(n)} of them (the others: '
+          f'{ {m: top.count(m) for m in set(top) - {n}} }), omega_H binding at '
+          f'{H} frames; W the same in every block ({W and W.group(1)}); frame {k} rebuilt again == its cached row '
+          f'({same}); the chart and the notes say it reproduces')
+    else:
+      check(
+          not gv.dt_reproduced(lim) and warned and same
+          and all('does not reproduce' in x for x in notes),
+          f'{lab}: the rebuild does not reproduce its steps (taken / rebuilt median {med:.3f}, {lo:.3f}-{hi:.3f}): '
+          f'the chart says "not reproduced" ({warned}), the notes say so; frame {k} rebuilt again == its cached '
+          f'row ({same})')
+  e = gv.dt_limits(gv.empty_run())
+  check(e == {'why': 'no frames'},
+        f'the empty run: no time-step limits, and why ({e["why"]!r})')
+
+
+# --------------------------------------------------------------------- flux coordinates, the sheath entrance (11-19)
+def part_fluxsheath():
+  """psi_N, L_theta and the sheath entrance (2026-11-19; Churchill et al. 2017's coordinates and Figs. 5 and 6).
+  psi_N (the geqdsk's normalization): each SOL block's separatrix row within 1e-3 of 1 on the three NSTX-U
+  simulations, rising outward row by row in every block. L_theta along each open chain: rising along every cell row;
+  Sim 1's full-domain outboard surfaces twice the 2025 re-run's half-domain ones (the same equilibrium and radial
+  grid; Sim 1's edges chords, the 2025 run's curves) to 1 %; the outboard midplane mark of the half domain at its end.
+  The sheath: the drop the boundary condition applied (its cutoff) equals phi at the plate face to 1e-9 on every
+  target of Sim 1 (the wall at 0); the chart builds with a trace per target and panel; the note names the frame; the
+  empty run and a run with no sheath files say why."""
+  import gkview as gv
+  import viewer_plots as vp
+  from gkyl_read import read_gkyl
+  runs = {
+      lab: gv.open_run(os.path.join(gv.runs_root(d), dflt), lab)
+      for lab, d, dflt, _ in gv.SIMS if lab in ('Sim 1', 'Sim 2', '2025 re-run')
+  }
+  bad = []
+  for lab, run in runs.items():
+    fc = gv.flux_coords(run)
+    if fc['why']:
+      bad.append(f'{lab}: no psi_N ({fc["why"]})')
+      continue
+    off = {b: v - 1 for b, v in fc['sep'].items() if abs(v - 1) > 1e-3}
+    rise = [
+        b for b, n in fc['node'].items()
+        if run.layout.region[b] == 'sol' and not np.all(np.diff(n) > 0)
+    ]
+    flat = [
+        b for b in fc['node']
+        if np.ptp(gv.psi_nodes(run, b), axis=1).max() > 1e-9 *
+        np.ptp(gv.psi_nodes(run, b))
+    ]  # psi constant along each node row (span-relative)
+    mono = [
+        c['start'] for c in fc['chains'] for L in c['cells'].values()
+        if not np.all(np.diff(L, axis=1) > 0) and not np.all(
+            np.diff(L, axis=1) < 0)
+    ]
+    if off or rise or flat or mono:
+      bad.append(
+          f'{lab}: separatrix off 1 {off}, psi_N not rising {rise}, psi not constant along rows {flat}, '
+          f'L_theta not monotonic {mono}')
+  full = next(c for c in gv.flux_coords(runs['Sim 1'])['chains']
+              if c['kind'] == 'sol' and c['start'] == 'lower outer target')
+  half = next(c for c in gv.flux_coords(runs['2025 re-run'])['chains']
+              if c['kind'] == 'sol' and c['start'] == 'lower outer target')
+  ratio = full['total'] / (2 * half['total'])
+  mid_end = abs(half['marks'][-1][1] -
+                half['total']).max() if half['marks'] else np.inf
+  check(
+      not bad and np.all(np.abs(ratio - 1) < 0.01)
+      and mid_end < 1e-6 * half['total'].max(),
+      f'psi_N and L_theta: separatrix rows at 1, psi_N rising outward and constant along rows, L_theta monotonic '
+      f'along every row ({bad or "all three simulations"}); Sim 1\'s outboard surfaces / twice the 2025 '
+      f'half-domain ones: {np.round(ratio, 4)}; the half domain\'s midplane mark at its end ({mid_end:.1e} m)'
+  )
+  run = runs['Sim 1']
+  sh = gv.sheath_profiles(run, run.frames()[-1])
+  gaps = []
+  for tg in run.layout.targets:
+    face, ez = ('lower', -1) if tg.j == 0 else ('upper', 1)
+    e = next(s for s in run.species if run.charge[s] < 0)
+    v = np.asarray(
+        read_gkyl(run.f(tg.leg, f'{e}_bc_z{face}_vcutsq',
+                        sh['frame']))['data'])[..., 0].mean(1) / 2
+    phi = np.asarray(read_gkyl(run.f(tg.leg, 'field',
+                                     sh['frame']))['data'])[:, tg.j]
+    phif = 0.5 * phi[:, 0] + np.sqrt(3) / 2 * phi[:, 2] * ez
+    gaps.append(
+        float(
+            np.max(
+                np.abs(run.mass[e] * v / 2 / run.e - phif[:len(v)]) /
+                np.abs(phif[:len(v)]).max())))
+  fig = vp.sheath_figure(run, sh)
+  per = {
+      tg.name: sum(tr.name == tg.name for tr in fig.data)
+      for tg in run.layout.targets
+  }
+  note = vp.sheath_note(run, sh)
+  e0 = gv.sheath_profiles(gv.empty_run(), 0)
+  check(
+      max(gaps) < 1e-9 and all(n == 3 for n in per.values())
+      and f'At frame {sh["frame"]}' in note and e0['frame'] is None
+      and e0['why'],
+      f'the sheath entrance (Sim 1, frame {sh["frame"]}): the boundary condition\'s drop == phi at the plate face '
+      f'(largest gap {max(gaps):.1e} of the largest phi), the chart with 3 traces per target ({per}), the note naming '
+      f'its frame; the empty run: {e0["why"]!r}')
 
 
 # ---------------------------------------------------------------------------------------------------- browser
@@ -3779,6 +3974,27 @@ class CDP:
         return v
       await asyncio.sleep(0.5)
     return None
+
+  async def choose(self, dropdown, option):
+    """Takes option of the marimo multiselect whose text holds dropdown on or off: a real click on its trigger,
+        then on the option, the list closed again with Escape. False when either is not on the page."""
+    if not await self.press(DROPDOWN_TRIGGER % json.dumps(dropdown)):
+      return False
+    opt = DROPDOWN_OPTION % json.dumps(option)
+    if not await self.until(f'!!({opt})', 20) or await self.press(opt) is False:
+      return False
+    await self.call('Input.dispatchKeyEvent',
+                    type='keyDown',
+                    key='Escape',
+                    code='Escape',
+                    windowsVirtualKeyCode=27)
+    await asyncio.sleep(0.3)
+    return True
+
+  async def strict_choose(self, dropdown, option):
+    """choose, raising when the dropdown or its option is not on the page."""
+    if not await self.choose(dropdown, option):
+      raise RuntimeError(f'no {option!r} in the dropdown {dropdown!r}')
 
   async def press(self, expr):
     """A real mouse click (press + release) at the centre of the element expr finds: Radix tabs activate on the
@@ -4281,6 +4497,8 @@ if __name__ == '__main__':
       'grid': lambda: part_grid(a.browser, a.shots),
       'blank': lambda: part_blank(a.browser, a.shots),
       'species': lambda: part_species(a.browser, a.shots),
+      'dtlimits': part_dtlimits,
+      'fluxsheath': part_fluxsheath,
       'browser': lambda: a.browser and part_browser(a.browser, a.shots),
       'layout': lambda: a.browser and part_layout(a.browser, a.shots),
       'liveplot': lambda: a.browser and part_liveplot(a.browser),

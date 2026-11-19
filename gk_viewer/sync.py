@@ -185,8 +185,8 @@ def main(argv=None):
           ('' if n else f' (no run {rbase}/{rel} on {host}?)'))
   if rdata is not None and not a.no_cache:
     copy('caches', [
-        os.path.relpath(gv.cache_path(os.path.join(gv.BASE, rel)), gv.DATA)
-        for _, _, rel in runs
+        os.path.relpath(f, gv.DATA) for _, _, rel in runs
+        for f in gv.cache_files(os.path.join(gv.BASE, rel))
     ], rdata, gv.DATA)
   if a.dry_run:
     return 0

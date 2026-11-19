@@ -1562,7 +1562,7 @@ def _layout(fig, height, pal, t=60, b=50, l=60, r=20, gap=LEGEND_GAP, **kw):
 # ------------------------------------------------------------------------------------- the curves shown (11-17)
 @dataclass(frozen=True)
 class Curves:
-  """Which curves the line charts draw, each on a switch of the sidebar's (view keys of the same names): the
+  """Which curves the line charts draw, each a choice of the sidebar's curves dropdown (view keys of the same names): the
   electrons' and the ions' (a species by the sign of its charge, curve_tag), the simulated ones (the run's and the
   overlay's) and the experiment's (the measured and analysis profiles: Thomson, CHERS, TRANSP). The maps (the
   poloidal plane, the midplane over time, the diffusivity's) show one quantity each and keep it."""
@@ -1608,14 +1608,14 @@ def _drawn(tag, curves):
 
 
 def _off(tags, curves):
-  """'<switch> and <switch> switched off': the switches the tags name that are off ('' when none is)."""
+  """'<choice> and <choice> not chosen': the curves choices the tags name that are off ('' when none is)."""
   named = {k for t in tags if t for k in t}
   off = [k for k in CURVE_SWITCHES if k in named and not getattr(curves, k)]
-  return ' and '.join(off) + ' switched off' if off else ''
+  return ' and '.join(off) + ' not chosen' if off else ''
 
 
 def hidden_note(fig, curves):
-  """What hides a chart's curves: its switches that are off ('electrons and ions switched off'; '' when none)."""
+  """What hides a chart's curves: its choices that are off ('electrons and ions not chosen'; '' when none)."""
   return _off([_tag(tr) for tr in fig.data], curves)
 
 
@@ -2027,64 +2027,80 @@ def subplot_refs(fig):
   return ['x' + k[5:] for k in sorted(xs, key=place)]
 
 
+_TEMPLATES = {
+}  # a chart's template (its JSON) -> the default template with it merged in
+
+
+def _merged_template(t):
+  """The default template with template t merged into it, as update_layout(template=t) on a new figure merges it:
+    once per template (the merge takes ~0.2 s)."""
+  key = json.dumps(t, sort_keys=True, default=str)
+  if key not in _TEMPLATES:
+    _TEMPLATES[key] = go.Figure().update_layout(
+        template=t).layout.template.to_plotly_json()
+  return _TEMPLATES[key]
+
+
 def panel_figure(fig, x):
   """One subplot of a chart (x: its x axis ref) as a chart of its own: its traces, the legend keys, its lines, its
-    end labels, its axes, its title. Returns (figure, the traces' indices in the chart, its shapes' indices)."""
-  lay = fig.layout
+    end labels, its axes, its title. Returns (figure, the traces' indices in the chart, its shapes' indices). Built
+    from the layout's JSON, taken once, and the panel's traces' (the figure's own JSON would hold the arrays as
+    base64), with the chart's template merged into the default once per template (_merged_template: it was ~0.2 of
+    the ~0.25 s a panel took)."""
+  lay, data = fig.layout.to_plotly_json(), fig.data
   xn = 'xaxis' + x[1:]
-  yn = 'yaxis' + (
-      (lay[xn].anchor or 'y')[1:] if xn in lay.to_plotly_json() else '')
+  yn = 'yaxis' + ((
+      (lay.get(xn) or {}).get('anchor') or 'y')[1:] if xn in lay else '')
   y = 'y' + yn[5:]
   idx = [
-      i for i, tr in enumerate(fig.data)
+      i for i, tr in enumerate(data)
       if (tr.xaxis or 'x') == x or tr.legendgroup == 'key'
   ]
-  f = go.Figure()
-  seen = set()
+  traces, seen = [], set()
   for i in idx:
-    tr = fig.data[i].to_plotly_json()
-    tr.update(xaxis='x', yaxis='y')
+    tr = dict(data[i].to_plotly_json(), xaxis='x', yaxis='y')
     g = tr.get('legendgroup') or tr.get('name')
     if g != 'key':  # each legend group once (on the page its entry sits on the first column's trace)
       tr['showlegend'] = bool(tr.get('name')) and g not in seen
       seen.add(g)
-    f.add_trace(tr)
-  keep = {
+    traces.append(tr)
+  out = {
       k: v
-      for k, v in lay.to_plotly_json().items()
-      if not re.fullmatch(r'[xy]axis\d*|annotations|shapes', k)
+      for k, v in lay.items()
+      if not re.fullmatch(r'[xy]axis\d*|annotations|shapes|template', k)
   }
-  f.update_layout(**keep)
   strip = lambda d: {
       k: v
-      for k, v in d.items()
+      for k, v in (d or {}).items()
       if k not in ('domain', 'anchor', 'matches', 'overlaying')
   }  # noqa
-  f.update_layout(xaxis=strip(lay[xn].to_plotly_json()),
-                  yaxis=strip(lay[yn].to_plotly_json()))
-  ref = lambda r, a: (
+  out.update(xaxis=strip(lay.get(xn)), yaxis=strip(lay.get(yn)))
+  ref = lambda r: (
       r.replace(x, 'x', 1) if r and r.split(' ')[0] == x else  # noqa: E731
       r.replace(y, 'y', 1) if r and r.split(' ')[0] == y else None)
-  sidx = []
-  for i, sh in enumerate(lay.shapes):
-    xr, yr = ref(sh.xref or 'x', 'x'), ref(sh.yref or 'y', 'y')
+  sidx, shapes = [], []
+  for i, sh in enumerate(lay.get('shapes', ())):
+    xr, yr = ref(sh.get('xref') or 'x'), ref(sh.get('yref') or 'y')
     if xr and yr:
-      d = sh.to_plotly_json()
-      d.update(xref=xr, yref=yr)
-      f.add_shape(d)
+      shapes.append(dict(sh, xref=xr, yref=yr))
       sidx.append(i)
-  dom_x = lay[xn].domain if lay[xn].domain is not None else (0, 1)
-  dom_y = lay[yn].domain if lay[yn].domain is not None else (0, 1)
-  for a in lay.annotations:
-    xr, yr = ref(a.xref, 'x'), ref(a.yref, 'y')
+  dom_x = (lay.get(xn) or {}).get('domain') or (0, 1)
+  dom_y = (lay.get(yn) or {}).get('domain') or (0, 1)
+  anns = []
+  for a in lay.get('annotations', ()):
+    xr, yr = ref(a.get('xref')), ref(a.get('yref'))
     if xr and yr:  # in the panel's coordinates (its data, or its domain: the note of a panel left with no curve)
-      d = a.to_plotly_json()
-      d.update(xref=xr, yref=yr)
-      f.add_annotation(d)
-    elif a.xref == 'paper' and a.yref == 'paper' and dom_x[0] - 1e-6 <= a.x <= dom_x[1] + 1e-6 and \
-            abs(a.y - dom_y[1]) < 0.02:   # its subplot title: the chart's title
-      f.update_layout(title=dict(text=a.text, x=0, xanchor='left'))
-  return f, idx, sidx
+      anns.append(dict(a, xref=xr, yref=yr))
+    elif a.get('xref') == 'paper' and a.get('yref') == 'paper' and \
+            dom_x[0] - 1e-6 <= a.get('x', 0) <= dom_x[1] + 1e-6 and \
+            abs(a.get('y', 0) - dom_y[1]) < 0.02:   # its subplot title: the chart's title
+      out['title'] = dict(
+          out.get('title') or {}, text=a.get('text'), x=0,
+          xanchor='left')  # into the chart's title, as update_layout merges
+  out.update(shapes=shapes, annotations=anns)
+  if 'template' in lay:
+    out['template'] = _merged_template(lay['template'])
+  return go.Figure(dict(data=traces, layout=out)), idx, sidx
 
 
 def _no_arrays(d):
@@ -3180,9 +3196,307 @@ def timetraces_figure(run,
   return _layout(fig, 900, pal, hovermode='x unified')
 
 
+# ------------------------------------------------------------------------------------------------ time-step limits
+DT_TERM_NAME = {
+    'streaming': 'parallel streaming',
+    'exb': 'E×B drift',
+    'magnetic': 'magnetic drifts',
+    'epar': 'E∥ acceleration',
+    'mirror': 'mirror force',
+    'collisions': 'collisions',
+    'diffusion': 'diffusion'
+}
+# each term's colour, by gkview.DT_TERMS order: the dataviz reference categorical palette's slots 1-7, its light and
+# dark steps (fixed order, validated for adjacent pairs: the stacked shares sit in that order)
+DT_TERM_COLOUR = dict(
+    zip(('streaming', 'exb', 'magnetic', 'epar', 'mirror', 'collisions',
+         'diffusion'),
+        zip(('#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300',
+             '#6250d6'), ('#3987e5', '#d95926', '#199e70', '#c98500', '#d55181',
+                          '#0ca30c', '#9085e9'))))
+DT_SHARE_FLOOR = 0.005  # a term whose share of the CFL rate never reaches this is left out of the shares panel
+
+
+def dt_term_colour(pal, n):
+  return DT_TERM_COLOUR[n][1 if pal.dark else 0]
+
+
+def dtlimits_figure(run, lim, dt, t_now, pal=LOOKS['dark']):
+  """What sets the time step (gkview.dt_limits): above, the step the run took (every step) with the two limits rebuilt
+    at its frames, the CFL condition's and omega_H's (the step is the smaller), and each term of the CFL rate alone;
+    below, each term's share of the CFL rate in the phase-space cell that sets it. A rebuild that does not reproduce
+    the steps taken (gkview.dt_reproduced) says so over the chart."""
+  t = lim['t']
+  ts, tu = time_unit(t)
+  fig = subplots(rows=2,
+                 cols=1,
+                 shared_xaxes=True,
+                 row_heights=[0.62, 0.38],
+                 vertical_spacing=0.1,
+                 subplot_titles=[
+                     'time step: the step taken and its limits',
+                     'the CFL rate where it sets its limit: each term\'s share'
+                 ])
+  tag = curve_tag(run)
+  td, vd = envelope(*dt)
+  fig.add_trace(go.Scatter(x=td * ts,
+                           y=vd,
+                           mode='lines',
+                           line=dict(color=pal.muted, width=6),
+                           opacity=0.6,
+                           name='step taken',
+                           hovertemplate='taken: %{y:.4g} s<extra></extra>',
+                           meta=dict(pgkyl=pc.dt(run), curve=tag)),
+                row=1,
+                col=1)
+  none = dict(pgkyl=pc.NONE['dtlim'], curve=tag)
+  fig.add_trace(go.Scatter(x=t * ts,
+                           y=lim['dt_cfl'],
+                           mode='lines',
+                           line=dict(color=pal.ink, width=1.5),
+                           name='CFL limit',
+                           hovertemplate='CFL limit: %{y:.4g} s<extra></extra>',
+                           meta=none),
+                row=1,
+                col=1)
+  if np.isfinite(lim['dt_H']).any():
+    fig.add_trace(go.Scatter(
+        x=t * ts,
+        y=lim['dt_H'],
+        mode='lines',
+        line=dict(color=pal.ink, width=1.5, dash='dash'),
+        name='ω<sub>H</sub> limit',
+        hovertemplate='ω<sub>H</sub> limit: %{y:.4g} s<extra></extra>',
+        meta=none),
+                  row=1,
+                  col=1)
+  top = [vd, lim['dt_cfl']]
+  for n in gv.DT_TERMS:
+    alone, share = lim[f'alone|{n}'], lim[f'share|{n}']
+    if not np.isfinite(alone).any():
+      continue  # not in this run
+    col = dt_term_colour(pal, n)
+    fig.add_trace(go.Scatter(
+        x=t * ts,
+        y=alone,
+        mode='lines',
+        line=dict(color=col, width=1.5),
+        name=DT_TERM_NAME[n],
+        legendgroup=n,
+        hovertemplate=f'{DT_TERM_NAME[n]} alone: %{{y:.4g}} s<extra></extra>',
+        meta=none),
+                  row=1,
+                  col=1)
+    if np.nanmax(share) >= DT_SHARE_FLOOR:
+      fig.add_trace(go.Scatter(
+          x=t * ts,
+          y=share * 100,
+          mode='lines',
+          stackgroup='share',
+          line=dict(color=col, width=0.5),
+          fillcolor=col,
+          name=DT_TERM_NAME[n],
+          legendgroup=n,
+          showlegend=False,
+          hovertemplate=f'{DT_TERM_NAME[n]}: %{{y:.1f}} %<extra></extra>',
+          meta=none),
+                    row=2,
+                    col=1)
+  lo = np.nanmin([np.nanmin(v) for v in top if np.isfinite(v).any()])
+  hi = np.nanmax([np.nanmax(v) for v in top if np.isfinite(v).any()])
+  fig.update_yaxes(type='log',
+                   exponentformat='power',
+                   range=[np.log10(lo) - 0.3,
+                          np.log10(hi) + 2],
+                   title_text=tl.html(r'$\Delta t$ (s)'),
+                   row=1,
+                   col=1)
+  fig.update_yaxes(range=[0, 100], title_text='share (%)', row=2, col=1)
+  fig.update_xaxes(title_text=tl.html(f'$t$ ({tu})'), row=2, col=1)
+  if not gv.dt_reproduced(lim):
+    med, a, b = gv.dt_agreement(lim)
+    fig.add_annotation(
+        text=
+        f'not reproduced: the step taken is {med:.3g} of the rebuilt one ({a:.3g}–{b:.3g}); the run has a '
+        'term or setting the rebuild lacks',
+        x=0.5,
+        y=0.98,
+        xref='x domain',
+        yref='y domain',
+        showarrow=False,
+        bgcolor=pal.surf,
+        font=dict(color=pal.ink, size=12))
+  _cursor(fig, t_now, ts, [(1, 1), (2, 1)], pal)
+  return _layout(fig, 620, pal, hovermode='x unified')
+
+
+def dtlimits_note(run, lim, k):
+  """What sets the step at frame k (its row of lim, gkview.dt_limits; the last frame before it where k has none):
+    the limit that binds, the cell (block, region, R, Z, the velocity cell) and the terms' shares there; how well
+    the rebuild reproduces the steps taken; the settings it read (markdown)."""
+  i = max(int(np.searchsorted(lim['frames'], k, side='right')) - 1, 0)
+  b, si, ix, iz, iv, im = (int(v) for v in lim['cfl_at'][i])
+  s = lim['species'][si]
+  dc, dh, taken = lim['dt_cfl'][i], lim['dt_H'][i], lim['taken'][i]
+  nd = run.nodes[b]
+  r = run.file_row(b, ix)
+  R, Z = nd[r:r + 2, iz:iz + 2].reshape(-1, 2).mean(0)
+  nv, nm = lim['vel_cells'][f'{b}|{s}']
+  vpar, mu = lim['v_at'][i]
+  shares = sorted(((lim[f'share|{n}'][i], n) for n in gv.DT_TERMS),
+                  reverse=True)
+  parts = ', '.join(f'{100 * v:.0f} % {DT_TERM_NAME[n]}' for v, n in shares
+                    if v >= DT_SHARE_FLOOR)
+  if np.isfinite(dh) and dh < dc:
+    hb, hsi = (int(v) for v in lim['H_at'][i])
+    hs = gv.species_tag(lim['species'][hsi])[0]
+    sets = (
+        f'the **ω<sub>H</sub> limit** ({dh:.4g} s, the {hs}s in block {hb}; the CFL '
+        f'limit is {dc / dh:.2g}× longer)')
+  else:
+    other = (f'the ω<sub>H</sub> limit is {dh / dc:.2g}× longer'
+             if np.isfinite(dh) else 'no ω<sub>H</sub> limit'
+             if np.isinf(dh) else 'ω<sub>H</sub> not rebuilt')
+    sets = f'the **CFL limit** ({dc:.4g} s; {other})'
+  where = (
+      f'the {gv.species_tag(s)[0]}s\' cell in block {b} ({REGION_NAME[run.layout.region[b]]}, R = {R:.3f} m, Z = '
+      f'{Z:.3f} m), v∥ cell {iv + 1} of {nv} (v∥ = {vpar:.3g} m/s at its centre), μ cell {im + 1} of {nm}'
+  )
+  med, a, c = gv.dt_agreement(lim)
+  verdict = ('reproduces'
+             if gv.dt_reproduced(lim) else '**does not reproduce**')
+  return '\n\n'.join([
+      f'**Frame {lim["frames"][i]}:** the step taken, {taken:.4g} s, is set by {sets}. The CFL rate peaks in {where}: '
+      f'{parts}.',
+      f'The rebuild {verdict} this run\'s steps: taken / rebuilt {med:.4f} (from {a:.4f} to {c:.4f}) over its '
+      'frames after the first.' +
+      ('' if gv.dt_reproduced(lim) else
+       ' A term the files do not record (an LBO collision operator, a diffusion with no D on record) or a CFL '
+       'fraction set inside the input file would do this: read the limits as indicative.'
+       ),
+      '<small>Rebuilt from the frames as the library takes its step (gkview.dt_limits): each term\'s rate from '
+      'the potential, the densities, ν and D at that frame and the written geometry and velocity grid. '
+      'Settings: ' + '; '.join(lim['notes']) + '.</small>'
+  ])
+
+
+def sheath_figure(run, sh, pal=LOOKS['dark'], blocks=None):
+  """The sheath entrance at the plates (gkview.sheath_profiles), against psi_N (each open SOL row; the row's number
+    where the run has no geqdsk): above, the electrons' sheath drop e dPhi / T_e that the boundary condition applied,
+    with the textbook floating sheath's (dotted, Stangeby: -1/2 ln[2 pi (m_e / m_i) (1 + T_i / T_e)]); below, the ions'
+    parallel Mach number toward the plate, with the Bohm criterion's 1. Each target in its style (target_style); the
+    targets whose leg is among the chosen blocks (shown_targets)."""
+  fig = subplots(
+      rows=2,
+      cols=1,
+      shared_xaxes=True,
+      vertical_spacing=0.12,
+      subplot_titles=[
+          'electrons: sheath potential drop at the plates, eΔΦ/T<sub>e</sub>',
+          'ions: parallel Mach number at the sheath entrance, toward the plate'
+      ])
+  e = next((s for s in run.species if run.charge[s] < 0), None)
+  i = next((s for s in run.species if run.charge[s] > 0), None)
+  none = pc.NONE['sheath']
+  psi = any(np.isfinite(t['psin']).any() for t in sh['targets'].values())
+  for tg in shown_targets(run, blocks):
+    t = sh['targets'].get(tg.name)
+    if t is None:
+      continue
+    st = target_style(pal, tg)
+    x = t['psin'] if psi else np.arange(len(t['dphi_Te']))
+    mk = dict(size=8,
+              symbol=st['symbol'],
+              line=dict(color=pal.surf, width=1.5),
+              maxdisplayed=12)
+    xs = 'ψ<sub>N</sub> = %{x:.4f}' if psi else 'row %{x}'
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=t['dphi_Te'],
+        mode='lines+markers',
+        marker=mk,
+        line=dict(color=st['color'], width=2, dash=st['dash']),
+        name=tg.name,
+        legendgroup=tg.name,
+        hovertemplate=f'{tg.name}: %{{y:.3g}} at {xs}<extra></extra>',
+        meta=dict(pgkyl=none, curve=curve_tag(run, e))),
+                  row=1,
+                  col=1)
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=t['expected'],
+        mode='lines',
+        line=dict(color=st['color'], width=1.4, dash='dot'),
+        name=tg.name,
+        legendgroup=tg.name,
+        showlegend=False,
+        hovertemplate=f'{tg.name}, textbook: %{{y:.3g}} at {xs}<extra></extra>',
+        meta=dict(pgkyl=none, curve=curve_tag(run, e))),
+                  row=1,
+                  col=1)
+    fig.add_trace(go.Scatter(
+        x=x,
+        y=t['mach'],
+        mode='lines+markers',
+        marker=mk,
+        line=dict(color=st['color'], width=2, dash=st['dash']),
+        name=tg.name,
+        legendgroup=tg.name,
+        showlegend=False,
+        hovertemplate=f'{tg.name}: M = %{{y:.3g}} at {xs}<extra></extra>',
+        meta=dict(pgkyl=none, curve=curve_tag(run, i))),
+                  row=2,
+                  col=1)
+  legend_key(fig,
+             'Gkeyll',
+             line=dict(color=pal.ink2, width=2),
+             curve=curve_tag(run))
+  legend_key(fig,
+             'textbook floating sheath',
+             line=dict(color=pal.ink2, width=1.4, dash='dot'),
+             curve=curve_tag(run))
+  legend_key(fig,
+             'Bohm criterion (M = 1)',
+             line=dict(color=pal.muted, width=1.2, dash='dash'))
+  fig.add_hline(y=1,
+                line=dict(color=pal.muted, width=1.2, dash='dash'),
+                row=2,
+                col=1)
+  fig.update_yaxes(title_text='eΔΦ/T<sub>e</sub>',
+                   rangemode='tozero',
+                   row=1,
+                   col=1)
+  fig.update_yaxes(title_text='M<sub>∥</sub>', rangemode='tozero', row=2, col=1)
+  fig.update_xaxes(title_text='ψ<sub>N</sub>'
+                   if psi else 'open SOL row (from the separatrix)',
+                   row=2,
+                   col=1)
+  return _layout(fig, 560, pal, hovermode='closest')
+
+
+def sheath_note(run, sh):
+  """Which frame the sheath chart shows and what it is (markdown)."""
+  if sh['frame'] is None:
+    return f'No sheath entrance to show: {sh["why"]}.'
+  fc = gv.flux_coords(run)
+  return (
+      '<small>At frame ' +
+      f'{sh["frame"]} (t = {run.time(sh["frame"]) * 1e6:.4g} µs), the latest at or before '
+      'the one shown with the sheath boundary condition\'s own files (the run writes them with its phase-space '
+      'output). The plate-face average of each moment (its p = 1 expansion at the face), T from those. '
+      'eΔΦ: the potential drop by which the sheath reflects electrons, from the cutoff the boundary condition '
+      'used (m<sub>e</sub>v<sub>cut</sub><sup>2</sup>/2: the files\' <species>_bc_z*_vcutsq). The dotted '
+      'curves: the textbook floating sheath, −½ ln[2π (m<sub>e</sub>/m<sub>i</sub>)(1 + T<sub>i</sub>/'
+      'T<sub>e</sub>)] (Stangeby), from the same T<sub>i</sub>/T<sub>e</sub>. M: the ions\' u<sub>∥</sub>/c<sub>s'
+      '</sub> toward the plate, c<sub>s</sub> = √((T<sub>e</sub> + T<sub>i</sub>)/m<sub>i</sub>); the E×B term '
+      'of the Bohm–Chodura criterion is not included.' +
+      (f' No ψ<sub>N</sub>: {fc["why"]}.' if fc['why'] else '') + '</small>')
+
+
 def cell_rows(run, fr, fr0, qty, blocks=None):
-  """One row per cell for the table view: block, region, psi and theta index (the file's), R, Z, value, first frame,
-    change; the chosen blocks only (None: all)."""
+  """One row per cell for the table view: block, region, psi and theta index (the file's), R, Z, psi_N and L_theta
+    (gkview.flux_coords; empty where there are none), value, first frame, change; the chosen blocks only (None:
+    all)."""
   label, sym, unit, scale, kind = gv.quantities(run)[qty]
   sym, u = tl.plain(f'${sym}$'), tl.plain(
       f' (${unit}$)') if unit else ''  # a table's headers: plain text
@@ -3193,6 +3507,9 @@ def cell_rows(run, fr, fr0, qty, blocks=None):
       'j (theta)': [],
       'R (m)': [],
       'Z (m)': [],
+      'psi_N': [],
+      'L_theta (m)': [],
+      'L_theta from': [],
       f'{sym}{u}': [],
       f'{sym}, first frame{u}': [],
       'change': []
@@ -3207,6 +3524,10 @@ def cell_rows(run, fr, fr0, qty, blocks=None):
       cols['j (theta)'].append(j)
       cols['R (m)'].append(round(float(c[i, j, 0]), 5))
       cols['Z (m)'].append(round(float(c[i, j, 1]), 5))
+      psin, lth, start = gv.cell_flux_coords(run, b, i, j)
+      cols['psi_N'].append(round(psin, 6) if np.isfinite(psin) else None)
+      cols['L_theta (m)'].append(round(lth, 5) if np.isfinite(lth) else None)
+      cols['L_theta from'].append(start)
       cols[f'{sym}{u}'].append(float(f'{x:.5g}'))
       cols[f'{sym}, first frame{u}'].append(float(f'{v0[i, j]:.5g}'))
       if kind == 'pos':
@@ -3781,7 +4102,11 @@ def probe_figure(run, summ, c, t_now, pal=LOOKS['dark'], cmp=None):
 def probe_note(run, c, cmp=None):
   """The probed cell, and the overlay's cell nearest it (markdown, for the page above the probe chart)."""
   b, i, j, reg, R, Z = probe_cell(run, c)
-  txt = f'**Cell:** block {b}, i = {i} (psi), j = {j} (theta): {REGION_NAME[reg]}, R = {R:.4f} m, Z = {Z:.4f} m.'
+  txt = f'**Cell:** block {b}, i = {i} (psi), j = {j} (theta): {REGION_NAME[reg]}, R = {R:.4f} m, Z = {Z:.4f} m'
+  psin, lth, start = gv.cell_flux_coords(run, b, run.file_row(b, i), j)
+  txt += (f', ψ<sub>N</sub> = {psin:.5f}' if np.isfinite(psin) else
+          '') + (f', L<sub>θ</sub> = {lth:.4f} m from the {start}'
+                 if np.isfinite(lth) else '') + '.'
   if cmp is not None:
     cb, cd = gv.nearest_cell(cmp.run, R, Z, reg)
     if cb >= 0:

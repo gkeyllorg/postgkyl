@@ -212,11 +212,12 @@ states: the same pixel tests, the movie never made again. Run alone with `--brow
 tried fail it: the map's grid drawn along the chords (ASDEX: 40 of 48 chord points drawn); the movie filling its
 cells whatever the quantity's switch (TCV and DIII-D: 0 of the cell insides changed).
 
-## The curves shown (2026-11-17)
-The sidebar's **curves on the line charts** is one control of four switches, all on by default: **Electrons**,
-**Ions**, **Simulation** and **Experiment** (launch keys `--electrons false`, `--ions false`, `--simulation false`,
-`--experiment false`; the view keeps them: a saved view, the `./view.sh` line, the page's address). A curve is drawn
-when every switch it answers to is on (`viewer_plots.Curves`; each trace's tag, `curve_tag`; `shown_curves`):
+## The curves shown (2026-11-17; a dropdown since 2026-11-19)
+The sidebar's **curves on the line charts** is one dropdown of four choices, all chosen by default: **Electrons**,
+**Ions**, **Simulation** and **Experiment** (until 2026-11-19 four switches; the launch keys and the view are the same:
+`--electrons false`, `--ions false`, `--simulation false`, `--experiment false`; the view keeps them: a saved view, the
+`./view.sh` line, the page's address). Below, a "switch" is one of these choices. A curve is drawn when every switch it
+answers to is on (`viewer_plots.Curves`; each trace's tag, `curve_tag`; `shown_curves`):
 - **Simulation**: every simulated curve, the shown run's and the overlay's. **Experiment**: every measured or analysis
   profile, Thomson n_e and T_e, CHERS T_i, TRANSP n_D and T_i (its predicted part dotted).
 - **Electrons** / **Ions**: the curves of one species, told by the sign of its charge in the run's files (the overlay's
@@ -231,9 +232,9 @@ when every switch it answers to is on (`viewer_plots.Curves`; each trace's tag, 
 Every line chart follows them, on the page and in its downloads (the toolbar's slide buttons and plotly's own: the
 page's curves): Midplane profiles, Targets, Time traces, Probe, both charts of Balance & power, Diffusivity, the
 overlay's curves in each. A label goes with its curves (the time traces' region names); a legend entry whose curve
-goes moves to the next curve of its group. A panel left with no curve says which switches emptied it ('ions switched
-off'); a chart left with none is a note in its place ('Nothing to draw here: simulation switched off in the
-sidebar.'). Unchanged: the maps, each showing one chosen quantity (the movie's poloidal plane, strips and midplane
+goes moves to the next curve of its group. A panel left with no curve says which choices emptied it ('ions not
+chosen'); a chart left with none is a note in its place ('Nothing to draw here: simulation not chosen among the
+sidebar curves.'). Unchanged: the maps, each showing one chosen quantity (the movie's poloidal plane, strips and midplane
 profiles; the midplane over time; the diffusivity map; the Static figure and Save figure), the shot's timeline (beam
 power and Thomson line density, where the averaging window is chosen), and the notes under the charts.
 
@@ -251,6 +252,99 @@ six simulated charts of Sim 2's tabs are the note. With `--browser`, Sim 2's pag
 off, the profiles chart drawn again with 22 of its 44 traces (none an ion's; its slide figure the same), the address
 saying `ions=false`; reloaded, still off. By hand (2026-11-17): the 60 charts of the three simulations (with and
 without an overlay, both x axes) built by this code equal those of a4005d95, before the switches, but for the tags.
+
+## What the poloidal plane draws: one dropdown (2026-11-19)
+Six sidebar switches of what the poloidal plane draws are one dropdown, **drawn on the poloidal plane**, its choices
+those of the switches, by the same view keys and launch keys: **the plotted quantity** (`quantity`, on by default; was
+"show the plotted quantity"), **the grid (every cell edge)** (`grid`, off), **the separatrix** (`separatrix`, on),
+**the wall (limiter)** (`wall`, on), **the block boundaries** (`outlines`, on) and **the device background**
+(`background`, off; was "include device background"). A choice is offered only where the run has it, as each switch
+was: a separatrix, a wall, a picture of its device; the view then keeps None for it. **show the full domain (mirror
+the half domain)** stays a switch: showing a half domain whole remakes the movie, and marimo re-runs every cell that
+reads the dropdown at each choice (in the dropdown, every choice remade the movie: the browser checks caught it). The
+background opacity slider stays a slider; log scale and dark mode stay switches. Checked: the browser parts that
+clicked the switches (lines, grid, poloidal) take the dropdown's choices on and off (`CDP.choose`, also the curves
+dropdown's), each redrawing the movie without making it again.
+
+## Flux coordinates and the sheath entrance (2026-11-19; after Churchill et al., NME 12 (2017) 978)
+`gkview.flux_coords`: **psi_N** of every node and cell row, (psi - simag) / (sibry - simag) with the geqdsk's (EFIT's)
+normalization, psi from the run's position map (`geo_corn_mc2nu_pos`, at the cells' corners); the separatrix row of
+each SOL block sits at 0.99982 (Sim 1, the 2025 re-run), 1.00001 (Sim 2), 1.0001 (STEP), 0.9999 (TCV) and 1.0101
+(ASDEX: the regression test's separatrix is not its geqdsk's boundary). **L_theta**, the poloidal length along each
+flux surface (in R, Z) through its chain of blocks, from its target end (an outer target before an inner, a lower
+before an upper, as the paper's runs from the outer divertor), along the cell-centre line of each cell row (the mean
+of its node rows' edges: curves, or chords where the run lacks the surface nodes), with landmarks: the X-point, the
+outboard and inboard midplanes (Z = 0, by R against the axis), the top (inside a SOL chain only). Sim 1's outboard
+SOL runs 3.84-4.00 m from the lower to the upper outer target (X-points at 0.50 and 3.40 m, midplane 1.95 m); ASDEX's
+over the top 4.14-4.66 m. The Cells table has both (columns psi_N, L_theta (m), L_theta from) and the probe note
+gives them. No geqdsk (the DIII-D regression run): no psi_N, and says why.
+
+`gkview.sheath_profiles` and the Targets tab's **The sheath entrance** (the paper's Figs. 5 and 6): at every target,
+against psi_N, the electrons' sheath drop eΔΦ/T<sub>e</sub> the boundary condition applied (its cutoff, m<sub>e</sub>
+v<sub>cut</sub><sup>2</sup>/2 from the `<species>_bc_z*_vcutsq` files: equal to φ at the plate face to 1e-15, the
+wall at 0), with the textbook floating sheath, −½ ln[2π (m<sub>e</sub>/m<sub>i</sub>)(1 + T<sub>i</sub>/T<sub>e</sub>)],
+dotted; and the ions' parallel Mach number toward the plate, with the Bohm criterion's 1. The plate-face average of
+each moment (its p = 1 expansion at the face). At the latest frame at or before the one shown with the sheath files
+(they come with the phase-space output: Sim 1's every 20th frame); the E×B term of Bohm–Chodura is not included. Found
+(2026-11-19): Sim 1's drop 0.13-2.1 T<sub>e</sub> against the textbook 2.6-3.1, its ions 0.64-1.49 toward the plates;
+Sim 2's outer plate 1.4 rising to 2.6 mid-SOL then falling, its ions supersonic (1.1-2.1). Checked: part_fluxsheath.
+
+## Faster redraws and loads (2026-11-19)
+Measured on Sim 1 (a quiet login node): a sidebar frame change on Time traces took ~4 s of Python, 2.6 s of it the
+half-width slide specs (one per subplot); opening a run, ~5 s listing directories (9 calls to `runs_in`, Sim 1's run
+directory holding ~250,000 files, globbed 3 times per call). Now: `viewer_plots.panel_figure` builds a panel from the
+chart's layout JSON and its traces' (the same figures as before, 276 panels of 8 simulations compared), the chart's
+template merged into plotly's default once per template (`_merged_template`: that merge was 0.23 s of a panel's
+0.25 s): 61 s -> 3.6 s over those 276 panels. `gkview.dir_index`: one listing per directory, kept while its mtime is
+unchanged, for the topology files, the single-block geometry, the frames, the species (M0 files) and the job logs
+(`find_stem`, `is_run_dir`, `Run.frames`, `open_run`, `run_logs`). `read_dynvec` keeps each file's last read while its
+size and mtime are unchanged (copies handed out); the device picture is encoded once per picture.
+
+## What sets the time step (2026-11-19)
+The Time traces tab ends with **what sets the time step**. Above: the step the run took (every step, its `-dt` file,
+grey), the two limits the library takes it from, rebuilt at each frame, the **CFL limit** (cfl_frac over the largest
+CFL rate in phase space) and the **ω<sub>H</sub> limit** (dashed); the step is the smaller. Each term of the CFL rate
+alone is a coloured line: parallel streaming, E×B drift, magnetic drifts (curvature and ∇B, and their energy
+exchange), E∥ acceleration, mirror force, collisions (BGK), diffusion. Below: each term's share of the CFL rate in the
+phase-space cell where it peaks, the cell that sets the CFL limit. The note under it says, for the sidebar's frame,
+which limit binds and by how much, the cell (species, block and region, R and Z, the v∥ and μ cells) and the shares
+there, how well the rebuild reproduces the steps taken, and where each setting came from.
+
+How (`gkview.dt_limits`; the formulas and their library sources are in the comment over that section): per block
+and species, the library takes min(cfl_frac / max cflrate, cfl_frac_omegaH / ω<sub>H</sub>), the step the smallest of
+all. The rebuild follows its kernels term by term (gk_collisionless_flux surface kernels: 3 / dx max |ẋ| over a face's
+Gauss nodes, 5 / Δv∥ max |v̇∥| on the v∥ faces; BGK's cell-average ν; the anomalous diffusion's 2 c₀(D gˣˣJ)(2/dx)²)
+from what each frame wrote (φ, n, ν) and the static files (the geometry, the velocity map, D). ω<sub>H</sub> needs the
+polarization weight W = Σ n_pol m / B_ref², which no file holds: it is each block's field energy over
+½ ∫ gˣˣJ (∂ₓφ)² (the field energy integrates ½ W gˣˣJ (∂ₓφ)²); every block gives the same W to 1e-15. cfl_frac and
+cfl_frac_omegaH come from the run's options, else the library's defaults (1.0, 1.7); the drifts from its `drifts`
+option, else whichever choice rebuilds its second frame's step. Every frame is rebuilt once and cached in runs/cache
+(`<run>__dt__v1.npz`, and the note's settings in `<run>__dt__v1.json`, both copied by `sync.py` with the summary):
+the first open of a run reads its frames again (Sim 1, 357 frames: 114 s; Sim 2, 31 frames: 26 s; the 2025 re-run,
+401 frames: 61 s), with a progress bar; once they are all cached, opening the run reads neither the frames nor the
+geometry (Sim 1: 10 s of geometry before 2026-11-19's fix).
+
+What it finds (2026-11-19):
+- **Sim 1** (prod_D1_coll): the rebuild reproduces every step (taken / rebuilt: median 0.9997, 0.9659 to 1.0013 over
+  frames 1-356). The CFL limit binds throughout, ω<sub>H</sub>'s is 12× longer. At 356 of 357 frames the electrons'
+  **parallel streaming** sets it (89-92 % of the rate), in block 10's outermost v∥ cell (diffusion 5 %, collisions
+  2 %); at 20 µs the electrons' E∥ acceleration in block 9 (51 %).
+- **Sim 2** (prod_th02q4_coll): median 0.9990, 0.9977 to 1.0183. The CFL limit binds throughout (ω<sub>H</sub>'s
+  4.7× longer, with cfl_frac_omegaH 3.4). At 26 of 31 frames the electrons' **mirror force** sets it (65-98 %), in
+  block 5 (private flux) at the largest μ and the fine v∥ cells near zero; at 4 frames diffusion in block 6, nearly
+  tied (6.71e-10 s against 6.5-6.7e-10 s); at **90 µs, inside the heat burst, the E∥ acceleration (87 %) in block 5
+  halves the CFL limit** (3.1e-10 s). The burst's deepest steps (2e-10 s) fall between frames: the rebuild sees only
+  the frames, the grey line every step.
+- **Not reproduced** (the chart and the note say so, and no limiter is named as fact): the 2025 re-run (median 0.57,
+  0.39 to 0.59; library mm-59e6654d8-gpufix, whose time-step code is the same; cause not found: not the surface
+  geometry, not ω<sub>H</sub> added to the rate); the devices' regression runs (ASDEX 0.20, DIII-D 0.48, STEP 0.69,
+  TCV 1.10 and 0.58): their inputs use LBO collisions, whose ν no file holds, a diffusion with no D on record and,
+  DIII-D, cfl_frac_omegaH = 1.0 set inside the input file.
+
+Limits: the limits exist at frames only; overlays are not drawn; a neutral species' own limit and LBO collisions are
+not rebuilt; ω<sub>H</sub> needs the field energy at a frame's time. Checked (`check_viewer.py` part_dtlimits): Sim 1
+and Sim 2 reproduced (each frame after the first within 5 %), their leading terms, ω<sub>H</sub> binding at none, one
+W per run, a frame rebuilt again equal to its cached row, the 2025 re-run flagged, the empty run's reason.
 
 ## Other devices' runs (2026-11-16)
 The four regression runs of `research/tokamak/regr_devices_20261116` (ASDEX Upgrade, STEP, TCV, DIII-D) open with
@@ -341,14 +435,13 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
   movie frames (a frame range for the movie and the exported movie: `:`, `::2`, `-50:`, `0:60`), probe cell
   (block,i,j, or a click on the movie), quantity, value / change since the first frame / change since the previous
   frame (the last shows fronts moving), log scale, poloidal view (whole domain, whole machine, lower/upper divertor,
-  outboard/inboard midplane), **show the full domain** (a half domain: its mirror image too), **include device
-  background** and **background opacity** (when `viewer.json` names a picture of the shown run's device: behind
-  the poloidal plane, in the movie and every map figure), **show the plotted quantity**, **show the grid (every
-  cell edge)**, **show the separatrix**, **show the wall (limiter)** and **show the block boundaries** (what the
-  poloidal plane draws; above), **blocks drawn** (none chosen:
+  outboard/inboard midplane), **drawn on the poloidal plane** (one dropdown since 2026-11-19, below: the plotted
+  quantity, the grid, the separatrix, the wall, the block boundaries, the device background, the full domain of a
+  half domain), **background opacity** (when `viewer.json` names a picture of the shown run's device: behind the
+  poloidal plane, in the movie and every map figure), **blocks drawn** (none chosen:
   every block; see below), **draw another run over it**
-  (the overlay, see below), **curves on the line charts** (four switches, Electrons, Ions, Simulation and
-  Experiment, all on by default; The curves shown, below), profile x axis (distance from the separatrix or R),
+  (the overlay, see below), **curves on the line charts** (a dropdown of four choices, Electrons, Ions, Simulation
+  and Experiment, all chosen by default; The curves shown, below), profile x axis (distance from the separatrix or R),
   **theme** (NSTX-U, PPPL, DIII-D, TCV, ASDEX Upgrade or STEP: the shown simulation's device's until one is
   clicked; see Look and Device themes) and **dark mode** (off by default since 2026-11-17; on = the theme's dark look,
   page and figures together, no reload).
@@ -372,7 +465,8 @@ Fetch from Flux on a laptop still delivers to Perlmutter's data directory (`fetc
     quantity at the midplane over (radius, time).
   - *Targets*: q_par against midplane distance, λq and peak q_par over time, every target.
   - *Time traces*: dt, cells with n ≤ 0, particle content, field energy, the volume-mean n_e and T_e change in
-    core / SOL / PF.
+    core / SOL / PF; then **what sets the time step** (the step taken, its CFL and ω_H limits and each term's, the
+    terms' shares where the CFL rate peaks; below).
   - *Probe*: every quantity at the probed cell over time (both species), with its region's volume mean dotted; q_perp
     dashed on the q_par panel.
   - *Balance & power*: first, **conservation**: each budget's imbalance over each interval between output frames

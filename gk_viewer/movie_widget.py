@@ -886,14 +886,19 @@ def _background_key(bg):
   return hashlib.sha1(np.ascontiguousarray(bg[0]).tobytes()).hexdigest()[:16]
 
 
+_PNG = {}  # picture key -> its data URL (encoding the PNG takes ~1.4 s)
+
+
 def background_loader(bg):
-  """A BackgroundLoader with viewer_plots.device_background()'s picture bg, as a PNG."""
-  from PIL import Image
-  buf = io.BytesIO()
-  Image.fromarray(bg[0]).save(buf, 'PNG', optimize=True)
-  return BackgroundLoader(key=_background_key(bg),
-                          src='data:image/png;base64,' +
-                          base64.b64encode(buf.getvalue()).decode())
+  """A BackgroundLoader with viewer_plots.device_background()'s picture bg, as a PNG (encoded once per picture)."""
+  key = _background_key(bg)
+  if key not in _PNG:
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.fromarray(bg[0]).save(buf, 'PNG', optimize=True)
+    _PNG[key] = 'data:image/png;base64,' + base64.b64encode(
+        buf.getvalue()).decode()
+  return BackgroundLoader(key=key, src=_PNG[key])
 
 
 def background_ref(bg):

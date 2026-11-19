@@ -19,7 +19,6 @@ Definitions follow sims_20261022/poster_progress.py and movie_density.py:
   midplane profiles: per cell row, linear in theta between the two cells whose centres bracket Z = 0 (at a reflecting
   midplane: the cell next to it), at the row's Z = 0 radius.
 """
-import glob
 import os
 import re
 import struct
@@ -178,8 +177,21 @@ def meta(path):
   return read_gkyl(path)['meta']
 
 
+_DYNVEC = {}  # path -> (size, mtime_ns, t, d): the last read of each file
+
+
 def read_dynvec(path):
-  """(time, data[n, ncomp]) of a gkyl dynvector file (file_type 2): every appended chunk repeats the full header."""
+  """(time, data[n, ncomp]) of a gkyl dynvector file (file_type 2): every appended chunk repeats the full header.
+    Copies of the last read while the file's size and mtime are unchanged (a run appends to its files)."""
+  st = os.stat(path)
+  hit = _DYNVEC.get(path)
+  if hit is None or hit[:2] != (st.st_size, st.st_mtime_ns):
+    hit = (st.st_size, st.st_mtime_ns) + _read_dynvec(path)
+    _DYNVEC[path] = hit
+  return hit[2].copy(), hit[3].copy()
+
+
+def _read_dynvec(path):
   buf = open(path, 'rb').read()
   off, ts, ds = 0, [], []
   while off < len(buf):
@@ -729,6 +741,7 @@ class Run:
   flip: bool = False  # its psi index grows inward: every block's rows are reversed on reading (rows())
   device: str = ''  # the device it simulates (its simulation's SimSettings; '': none)
   geqdsk: object = None  # its simulation's equilibrium file (SimSettings), for when its own files name none
+  conn: object = None  # its block topology [nb, 2, 2, 3] as the layout reads it (rows flipped with flip; None: no run)
 
   @property
   def name(self):
@@ -740,13 +753,10 @@ class Run:
         f'{self.path}/{self.stem}_b{b}-{what}{tail}.gkyl'
 
   def frames(self):
-    """Frame numbers written so far (from block 0's potential files)."""
-    out = []
-    for p in glob.glob(self.f(0, 'field_*')):
-      m = re.search(r'-field_(\d+)\.gkyl$', p)
-      if m:
-        out.append(int(m.group(1)))
-    return sorted(out)
+    """Frame numbers written so far (from block 0's potential files; dir_index)."""
+    return list(
+        dir_index(self.path)['frames'].get(
+            self.stem if self.single else f'{self.stem}_b0', ()))
 
   def time(self, k):
     return float(
@@ -781,18 +791,71 @@ class Run:
             if self.device else '') + f'#{self.shot} @ {self.eq_ms} ms'
 
 
+_DIRS = {}  # path -> (mtime_ns, dir_index)
+_FIELD_FILE = re.compile(r'(.+)-field_(\d+)\.gkyl$')
+_M0_FILE = re.compile(r'(\w+?)_M0_(\d+)\.gkyl$')
+
+
+def dir_index(path):
+  """What run discovery reads of a directory, from one listing, kept while its mtime is unchanged (a file added or
+    removed changes it): 'topo' the stems of its block-topology files, 'geo' those of its single-block geometry
+    (<stem>-geo_corn_nodes.gkyl), 'frames' {prefix: sorted frame numbers} of its <prefix>-field_<k>.gkyl files
+    (prefix <stem>_b0 for a multiblock run's block 0, <stem> for a single-block run), 'm0' {'<file prefix>-': {frame:
+    the names <name> of its <file prefix>-<name>_M0_<frame>.gkyl files}} (the species, and their sources), 'logs' its
+    job logs' names (slurm-*.out, *.log, stdout*). Names starting with '.' are left out, as glob leaves them."""
+  if not os.path.isdir(
+      path
+  ):  # no such directory (the empty run's ''): nothing in it, as glob finds nothing
+    return dict(topo=[], geo=[], frames={}, m0={}, logs=[])
+  mt = os.stat(path).st_mtime_ns
+  hit = _DIRS.get(path)
+  if hit is not None and hit[0] == mt:
+    return hit[1]
+  topo, geo, frames, m0, logs = [], [], {}, {}, []
+  with os.scandir(path) as it:
+    for e in it:
+      n = e.name
+      if n.startswith('.'):
+        continue
+      if (n.startswith('slurm-') and
+          n.endswith('.out')) or n.endswith('.log') or n.startswith('stdout'):
+        logs.append(n)
+      elif n.endswith('-block_topo.gkyl'):
+        topo.append(n[:-len('-block_topo.gkyl')])
+      elif n.endswith('-geo_corn_nodes.gkyl'):
+        geo.append(n[:-len('-geo_corn_nodes.gkyl')])
+      elif '-field_' in n:
+        m = _FIELD_FILE.match(n)
+        if m:
+          frames.setdefault(m.group(1), []).append(int(m.group(2)))
+      elif '_M0_' in n:
+        head, _, tail = n.rpartition('-')
+        m = _M0_FILE.fullmatch(tail)
+        if head and m:
+          m0.setdefault(head + '-', {}).setdefault(int(m.group(2)),
+                                                   []).append(m.group(1))
+  out = dict(topo=sorted(topo),
+             geo=sorted(geo),
+             frames={
+                 k: sorted(v)
+                 for k, v in frames.items()
+             },
+             m0=m0,
+             logs=sorted(logs))
+  _DIRS[path] = (mt, out)
+  return out
+
+
 def find_stem(path):
   """(stem, single) of the run in a directory: the multiblock app's topology file, else the single-block app's
     geometry nodes (<stem>-geo_corn_nodes.gkyl, the stem not ending in _b<k>)."""
-  topo = glob.glob(f'{path}/*-block_topo.gkyl')
+  idx = dir_index(path)
+  topo = idx['topo']
   if len(topo) == 1:
-    return os.path.basename(topo[0])[:-len('-block_topo.gkyl')], False
+    return topo[0], False
   if len(topo) > 1:
     raise FileNotFoundError(f'{path}: {len(topo)} block-topology files')
-  stems = [
-      os.path.basename(p)[:-len('-geo_corn_nodes.gkyl')]
-      for p in glob.glob(f'{path}/*-geo_corn_nodes.gkyl')
-  ]
+  stems = idx['geo']
   single = [s for s in stems if not re.search(r'_b\d+$', s)]
   if len(single) == 1:
     return single[0], True
@@ -878,14 +941,28 @@ def magnetic_axis_R(run):
   """R of the magnetic axis from the run's geqdsk header (rmaxis on line 4: its line-3 copy is transposed in some
     files), or None."""
   path = geqdsk_path(run)
-  if path is None:
-    return None
-  fre = re.compile(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?')
-  floats = [
-      float(x) for line in open(path).read().split('\n')[1:6]
-      for x in fre.findall(line)
-  ]
-  return floats[13] if len(floats) >= 14 else None
+  return geqdsk_header(path)['rmaxis'] if path else None
+
+
+_GEQDSK = {}
+
+
+def geqdsk_header(path):
+  """The magnetic axis and the flux at it and at the boundary from a geqdsk's header: dict(rmaxis, zmaxis, simag,
+    sibry), from the copies on lines 4 and 5 (line 3 is transposed in some files, step.geqdsk's; the library reads the
+    later copies too); nan where the header is short."""
+  if path not in _GEQDSK:
+    fre = re.compile(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?')
+    f = [
+        float(x) for line in open(path).read().split('\n')[1:6]
+        for x in fre.findall(line)
+    ]
+    get = lambda i: f[i] if len(f) > i else np.nan  # noqa: E731
+    _GEQDSK[path] = dict(rmaxis=get(13),
+                         zmaxis=get(15),
+                         simag=get(11),
+                         sibry=get(17))
+  return _GEQDSK[path]
 
 
 def sim_settings(sim):
@@ -905,10 +982,7 @@ def open_run(path, sim=''):
     raise FileNotFoundError(f'{path}: no frames')
   k0 = frames[0]
   pre = f'{r.stem}-' if r.single else f'{r.stem}_b0-'
-  names = {
-      re.search(rf'{re.escape(pre)}(\w+?)_M0_{k0}\.gkyl$', p).group(1)
-      for p in glob.glob(f'{path}/{pre}*_M0_{k0}.gkyl')
-  }
+  names = set(dir_index(path)['m0'].get(pre, {}).get(k0, ()))
   # a species' source writes its moments as <species>_source_<moment> (gk_species_source.c): not a species
   r.species = sorted(
       n for n in names
@@ -952,6 +1026,7 @@ def open_run(path, sim=''):
       if 0 < rows[0] and rows == list(range(rows[0], nr)):
         lcfs[b] = rows[0]
   r.layout = derive_layout(conn, r.nodes, r_axis, lcfs)
+  r.conn = conn
   r.layout.flip = r.flip
   # shot and equilibrium time: the header of the geqdsk the run read, else its file stem
   g = geqdsk_path(r)
@@ -988,9 +1063,7 @@ def is_run_dir(p):
     stem, single = find_stem(p)
   except FileNotFoundError:
     return False
-  return bool(
-      glob.glob(f'{p}/{stem}-field_*.gkyl'
-                if single else f'{p}/{stem}_b0-field_*.gkyl'))
+  return bool(dir_index(p)['frames'].get(stem if single else f'{stem}_b0'))
 
 
 def runs_root(simdir):
@@ -1274,10 +1347,59 @@ def _summary_one(run, fr, t, fr0):
   return out
 
 
-def cache_path(run_path):
-  """The summary cache file of the run at run_path (named by its place under base: the same on a mirror)."""
+CACHES = {
+    'summary': ('', CACHE_VERSION),
+    'dt': ('dt__', 1
+           )  # bump when a time-step limit's definition changes (dt_limits_one)
+}  # per-frame cache files of a run: kind -> (name part, version)
+
+
+def cache_path(run_path, kind='summary', ext='npz'):
+  """The per-frame cache file of one kind (CACHES) of the run at run_path (named by its place under base: the same
+    on a mirror); ext 'json': the settings file kept beside it (dt_limits)."""
   rel = os.path.relpath(run_path, BASE).replace(os.sep, '__')
-  return os.path.join(CACHE_DIR, f'{rel}__v{CACHE_VERSION}.npz')
+  part, version = CACHES[kind]
+  return os.path.join(CACHE_DIR, f'{rel}__{part}v{version}.{ext}')
+
+
+def cache_files(run_path):
+  """Every cache file the run at run_path may have: each kind's per-frame file, and the time-step limits' settings."""
+  return [cache_path(run_path, k)
+          for k in CACHES] + [cache_path(run_path, 'dt', 'json')]
+
+
+def frame_cache(run, path, one, progress=None):
+  """Per-frame arrays (key -> [n_frames, ...]) over every frame written, kept in the file at path: only the frames
+    new or rewritten since it was written (their stamps) are computed, one(k) -> {key: value} each, and the file is
+    then rewritten. progress(iterable, total) wraps the loop over them (a progress bar). 'fld|' keys are float32."""
+  frames = run.frames()
+  stamps = np.array([run.stamp(k) for k in frames], dtype=np.int64)
+  old = {}
+  if os.path.exists(path):
+    with np.load(path) as z:
+      old = {key: z[key] for key in z.files}
+  have = {
+      int(k): (int(s), i)
+      for i, (k,
+              s) in enumerate(zip(old.get('frames', ()), old.get('stamp', ())))
+  }
+  todo = [k for k, s in zip(frames, stamps) if have.get(k, (None, ))[0] != s]
+  it = progress(todo, len(todo)) if (progress and todo) else todo
+  new = {k: one(k) for k in it}
+  keys = sorted(set(new[todo[0]]) if todo else set(old) - {'frames', 'stamp'})
+  out = {'frames': np.array(frames), 'stamp': stamps}
+  for key in keys:
+    out[key] = np.array([
+        np.asarray(new[k][key],
+                   dtype=np.float32 if key.startswith('fld|') else float)
+        if k in new else old[key][have[k][1]] for k in frames
+    ])
+  if todo:
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = path + '.tmp.npz'
+    np.savez(tmp, **out)
+    os.replace(tmp, path)
+  return out
 
 
 _SUMMARY = {}
@@ -1285,8 +1407,8 @@ _SUMMARY = {}
 
 def summary(run, progress=None):
   """Per-frame summary arrays (key -> [n_frames, ...]) over every frame written, cached on disk in runs/cache (and
-    in memory); only new or rewritten frames are read. progress(iterable, total) wraps the loop over them (a progress
-    bar). 'fld|<qty>' holds every cell's value (float32, cell_offsets order)."""
+    in memory); only new or rewritten frames are read (frame_cache). progress(iterable, total) wraps the loop over
+    them (a progress bar). 'fld|<qty>' holds every cell's value (float32, cell_offsets order)."""
   frames = run.frames()
   if not frames:  # nothing written (the empty run): every entry, no row
     return dict(
@@ -1300,38 +1422,14 @@ def summary(run, progress=None):
   memo = _SUMMARY.get(run.path)
   if memo is not None and np.array_equal(memo['stamp'], stamps):
     return memo
-  path = cache_path(run.path)
-  old = {}
-  if os.path.exists(path):
-    with np.load(path) as z:
-      old = {key: z[key] for key in z.files}
-  have = {}
-  if old:
-    for i, (k, s) in enumerate(zip(old['frames'], old['stamp'])):
-      have[int(k)] = (int(s), i)
-  todo = [k for k, s in zip(frames, stamps) if have.get(k, (None, ))[0] != s]
-  fr0 = frame(run, frames[0])
-  new = {}
-  it = progress(todo, len(todo)) if (progress and todo) else todo
-  for k in it:
-    new[k] = _summary_one(run, frame(run, k), run.time(k), fr0)
-  keys = sorted(set(new[todo[0]]) if todo else set(old) - {'frames', 'stamp'})
-  out = {'frames': np.array(frames), 'stamp': stamps}
-  for key in keys:
-    rows = []
-    for k in frames:
-      if k in new:
-        rows.append(
-            np.asarray(new[k][key],
-                       dtype=np.float32 if key.startswith('fld|') else float))
-      else:
-        rows.append(old[key][have[k][1]])
-    out[key] = np.array(rows)
-  if todo:
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    tmp = path + '.tmp.npz'
-    np.savez(tmp, **out)
-    os.replace(tmp, path)
+  fr0 = {}  # the first frame, read once if any frame is
+
+  def one(k):
+    if not fr0:
+      fr0.update(frame(run, frames[0]))
+    return _summary_one(run, frame(run, k), run.time(k), fr0)
+
+  out = frame_cache(run, cache_path(run.path), one, progress)
   _SUMMARY[run.path] = out
   return out
 
@@ -1380,6 +1478,471 @@ def field_energy(run):
       n = min(len(t0), len(t))
       t0, tot = t0[:n], tot[:n] + d[:n, 0]
   return (t0, tot) if tot is not None else None
+
+
+# ------------------------------------------------------------------------------------------------ time-step limits
+# What sets the time step, rebuilt from the frames the way the library takes it (gyrokinetic.c gyrokinetic_rhs,
+# gk_species_kinetic.c): per block and species dt = min(cfl_frac / max cflrate, cfl_frac_omegaH / omega_H), the step
+# the smallest over all of them. cflrate sums, per phase-space cell, each term's rate:
+#   x and z (ker/gk_collisionless_flux surfx, surfy): 3 / dx max |xdot| over the Gauss nodes of the cell's lower face
+#     (v_par at its 3, mu at its 2). z: v_par b.grad z (streaming), with the drifts also (m v_par^2 / q) (curl b / B)^z
+#     (curvature) - (b_y / q J B) mu d_x B (grad B) - (b_y / J B) d_x phi (E x B); x: the drifts with d_z (signs
+#     flipped), no streaming;
+#   v_par (surfvpar, interior faces): 5 / dv_par (the narrower cell of the two) max |v_par dot| at the volume Gauss
+#     nodes: -(b.grad z / m) (q d_z phi (E_par) + mu d_z B (mirror force)); with the drifts also -(v_par / q) (curl b /
+#     B).grad H, their energy exchange, counted with the magnetic drifts;
+#   BGK collisions (vlasov/zero/bgk_collisions.c): the cell average of nu_sum;
+#   anomalous diffusion (ker/gk_anomalous_diffusion vol): 2 c0(D g^xx J) (2 / dx)^2.
+# A direction's rate is split among its terms by their sizes at its fastest node (they add inside one |.|).
+# omega_H = |q| sqrt(n_max / m) gf (gk_species_kinetic_omegaH_dt), n_max the block's largest cell-average density, gf
+# the largest cell average of (cmag J_tot^-1 2 pi / dz) (k_x^2 W g^xx J)^-1/2 (gyrokinetic.c omegaH_init), k_x = pi /
+# the block's x extent, W = sum_s n_pol,s m_s / B_ref^2 the polarization weight. The runs do not write W: it is the
+# block's field energy over 1/2 int g^xx J (d_x phi)^2 (the field energy is 1/2 int W g^xx J (d_x phi)^2,
+# gkyl_array_integrate_op_eps_gradperp_sq).
+DT_TERMS = ('streaming', 'exb', 'magnetic', 'epar', 'mirror', 'collisions',
+            'diffusion')
+LIB_CFL_FRAC, LIB_CFL_FRAC_OMEGAH = 1.0, 1.7  # the library's, for an input of 0 (gyrokinetic.c)
+LIB_DT_STICK = 0.01  # gyrokinetic_rhs keeps the step it was given when the new limit is less than 1 % below it
+GAUSS2 = 1 / np.sqrt(3)
+GAUSS3 = np.sqrt(0.6)
+
+
+@dataclass(frozen=True)
+class DtSetup:
+  """What a run's time step is made of, fixed for the run (dt_setup)."""
+  cfl: float  # cfl_frac
+  cfl_H: float  # cfl_frac_omegaH
+  drifts: bool  # the magnetic and E x B drifts (GKYL_GK_COLLISIONLESS_ES), else none (ES_NO_BY)
+  species: tuple  # the charged species (each one's own limits)
+  geo: dict  # block -> geometry (_dt_geometry)
+  vel: dict  # (block, species) -> (v_par0, v_par1, mu0, mu1): each velocity cell's map, centre + slope x eta
+  D: dict  # (block, species) -> per cell c0 of D g^xx J (the diffusion's rate), or None
+  gf: dict  # block -> the omega_H geometric factor (nan: W unknown)
+  notes: tuple  # where each setting came from
+
+
+def _data(path):
+  return np.asarray(read_gkyl(path)['data'])
+
+
+def _at(c, x, y):
+  """p = 1 modal fields c (..., 4) at (x, y) of each cell."""
+  return c[..., :4] @ ser_phi(x, y)
+
+
+def _ddx(c, y, dx):
+  """d/dx of p = 1 modal fields c at the cells' y (their x derivative is the same at every x)."""
+  return 2 / dx * (np.sqrt(3) / 2 * c[..., 1] + 1.5 * c[..., 3] * y)
+
+
+def _ddz(c, x, dz):
+  return 2 / dz * (np.sqrt(3) / 2 * c[..., 2] + 1.5 * c[..., 3] * x)
+
+
+def _project(f):
+  """The p = 1 expansion of f(x, y) from its values at the 2 x 2 Gauss nodes (as the library projects)."""
+  return sum(
+      np.multiply.outer(f(x, y), ser_phi(x, y)) for x in (-GAUSS2, GAUSS2)
+      for y in (-GAUSS2, GAUSS2))
+
+
+def _weak_mul(a, b):
+  return np.einsum('kij,...i,...j->...k', SER_T, a, b)
+
+
+def _dt_geometry(run, b):
+  """Block b's geometry the rates use: modal fields (nx, nz, 4) by name, b.grad z as 'bz' (B3overB, or B3 / bmag
+    where the run wrote no B3overB), the Hamiltonian's |B| as 'Bh' (geo_corn_bmag, gk_collisionless_flux.c), and its
+    cell sizes dx, dz and x extent Lx."""
+  g = {
+      w: _data(run.f(b, f'geo_int_{w}'))
+      for w in ('gxxj', 'cmag', 'jacobtot_inv', 'bmag', 'dualcurlbhatoverB',
+                'bioverJB')
+  }
+  g['Bh'] = _data(run.f(b, 'geo_corn_bmag'))
+  p = run.f(b, 'geo_int_B3overB')
+  if os.path.exists(p):
+    g['bz'] = _data(p)
+  else:
+    B3 = _data(run.f(b, 'geo_int_B3'))
+    g['bz'] = _project(lambda x, y: _at(B3, x, y) / _at(g['bmag'], x, y))
+  d = read_gkyl(run.f(b, 'geo_int_gxxj'))
+  g['dx'], g['dz'] = (d['upper'] - d['lower']) / np.array(d['cells'])
+  g['Lx'] = d['upper'][0] - d['lower'][0]
+  return g
+
+
+def _dt_velocity(run, b, s):
+  """(v_par centre, v_par slope, mu centre, mu slope) of each velocity cell: v_par = centre + slope eta in the cell
+    (its map, <s>_mapc2p_vel: p = 1 along each velocity direction)."""
+  vm = _data(run.f(b, f'{s}_mapc2p_vel'))
+  return (vm[:, 0, 0] / np.sqrt(2), vm[:, 0, 1] * np.sqrt(1.5),
+          vm[0, :, 2] / np.sqrt(2), vm[0, :, 3] * np.sqrt(1.5))
+
+
+def _energy_over_W(g, phi):
+  """The block's field energy over its polarization weight W: 1/2 int g^xx J (d_x phi)^2 (the library's integral,
+    gkyl_array_integrate_op_eps_gradperp_sq_2x_ser_p1, cell volume dx dz / 4)."""
+  c1, c3, G = phi[..., 1], phi[..., 3], g['gxxj']
+  return float(
+      np.sum(6 / g['dx']**2 * 0.5 *
+             (G[..., 0] * (c1**2 + c3**2) + 2 * G[..., 2] * c1 * c3) * g['dx'] *
+             g['dz'] / 4))
+
+
+def polarization_weight(run, b, geo):
+  """(W, frame) of block b from its field energy at the first frame after the first whose potential gives it (the
+    energy sampled at the frame's time); (nan, None) when none does."""
+  p = run.f(b, 'field_energy')
+  if not os.path.exists(p):
+    return np.nan, None
+  t, E = read_dynvec(p)
+  frames = run.frames()
+  for k in frames[1:4] or frames[:1]:
+    tk = run.time(k)
+    i = np.where(np.isclose(t, tk, rtol=1e-9, atol=0))[0]
+    K = _energy_over_W(geo, _data(run.f(b, 'field', k)))
+    if len(i) and K > 0:
+      return float(E[i[-1], 0] / K), k
+  return np.nan, None
+
+
+def _omegaH_gf(g, W):
+  par = _weak_mul(g['cmag'], g['jacobtot_inv']) * (2 * np.pi / g['dz'])
+  perp = (np.pi / g['Lx'])**2 * W * g['gxxj']
+  with np.errstate(invalid='ignore'):
+    inv = _project(lambda x, y: _at(perp, x, y)**-0.5)
+  return float(np.nanmax(_weak_mul(par, inv)[..., 0] / 2))
+
+
+def _direction(pieces, factor):
+  """One direction's rate per phase-space cell (nx, nz, nv, nmu): factor max |sum of pieces| over the nodes (the
+    last axis), split among the pieces by their sizes at that node: {term: its part}; and {term: factor max |piece|}
+    per cell (the term's own rate in this direction)."""
+  shape = np.broadcast_shapes(*[np.shape(p) for p in pieces.values()])
+  P = {n: np.broadcast_to(p, shape) for n, p in pieces.items()}
+  a = np.abs(sum(P.values()))
+  i = np.argmax(a, -1)[..., None]
+  rate = factor * np.take_along_axis(a, i, -1)[..., 0]
+  size = {n: np.abs(np.take_along_axis(p, i, -1)[..., 0]) for n, p in P.items()}
+  tot = sum(size.values())
+  with np.errstate(invalid='ignore', divide='ignore'):
+    parts = {n: np.where(tot > 0, rate * v / tot, 0.0) for n, v in size.items()}
+  own = {n: factor * np.abs(p).max(-1) for n, p in P.items()}
+  return parts, own
+
+
+def _rates(geo, vel, q, m, phi, drifts):
+  """The CFL rate of the collisionless terms per phase-space cell (nx, nz, nv, nmu): {term: its part of the rate},
+    {term: its own rate}, both summed over the directions."""
+  vp0, vp1, mu0, mu1 = vel
+  VQ = np.stack([vp0 + vp1 * e for e in (-GAUSS3, 0.0, GAUSS3)],
+                -1)[None, None, :, None, :, None]  # (1, 1, nv, 1, 3, 1)
+  MQ = np.stack([mu0 + mu1 * e for e in (-GAUSS2, GAUSS2)],
+                -1)[None, None, None, :, None, :]  # (1, 1, 1, nmu, 1, 2)
+  c = lambda a: a[:, :, None, None, None, None
+                  ]  # noqa: E731  a conf field (nx, nz) against the velocity nodes
+  dx, dz, bz, Bh = geo['dx'], geo['dz'], geo['bz'], geo['Bh']
+  cx, cz = geo['dualcurlbhatoverB'][..., 0:4], geo['dualcurlbhatoverB'][...,
+                                                                        8:12]
+  by = geo['bioverJB'][..., 4:8]
+  flat = lambda a: a.reshape(a.shape[:4] + (-1, )
+                             )  # noqa: E731  (v_par, mu) nodes as one axis
+  dirs = []
+  z = {'streaming': [], 'magnetic': [], 'exb': []}
+  for x in (-GAUSS2, GAUSS2):  # the lower z face
+    z['streaming'].append(flat(VQ * c(_at(bz, x, -1)) + 0 * MQ))
+    if drifts:
+      z['magnetic'].append(
+          flat(m * VQ**2 / q * c(_at(cz, x, -1)) -
+               c(_at(by, x, -1) * _ddx(Bh, -1, dx)) / q * MQ))
+      z['exb'].append(flat(-c(_at(by, x, -1) * _ddx(phi, -1, dx)) +
+                           0 * VQ * MQ))
+  dirs.append(({n: np.concatenate(v, -1) for n, v in z.items() if v}, 3 / dz))
+  if drifts:  # the lower x face
+    xs = {'magnetic': [], 'exb': []}
+    for y in (-GAUSS2, GAUSS2):
+      xs['magnetic'].append(
+          flat(m * VQ**2 / q * c(_at(cx, -1, y)) +
+               c(_at(by, -1, y) * _ddz(Bh, -1, dz)) / q * MQ))
+      xs['exb'].append(
+          flat(c(_at(by, -1, y) * _ddz(phi, -1, dz)) + 0 * VQ * MQ))
+    dirs.append(({n: np.concatenate(v, -1) for n, v in xs.items()}, 3 / dx))
+  # v_par faces: each cell's lower one (none for the first cell), at the volume nodes
+  VS = (vp0 - vp1)[None, None, :, None, None]  # v_par on the face
+  M2 = MQ[..., 0, :]  # (1, 1, 1, nmu, 2)
+  cv = lambda a: a[:, :, None, None, None]  # noqa: E731
+  v = {'epar': [], 'mirror': [], 'magnetic': []}
+  for x in (-GAUSS2, GAUSS2):
+    for y in (-GAUSS2, GAUSS2):
+      b_z = _at(bz, x, y)
+      v['epar'].append(cv(-b_z * q * _ddz(phi, x, dz) / m) + 0 * VS * M2)
+      v['mirror'].append(-cv(b_z * _ddz(Bh, x, dz) / m) * M2 + 0 * VS)
+      if drifts:
+        v['magnetic'].append(
+            -VS / q * (cv(_at(cx, x, y)) *
+                       (cv(q * _ddx(phi, y, dx)) + cv(_ddx(Bh, y, dx)) * M2) +
+                       cv(_at(cz, x, y)) *
+                       (cv(q * _ddz(phi, x, dz)) + cv(_ddz(Bh, x, dz)) * M2)))
+  dv = np.zeros(len(vp0))
+  dv[1:] = 2 * np.minimum(vp1[1:],
+                          vp1[:-1])  # the narrower of the two cells' widths
+  fv = np.divide(5.0, dv, out=np.zeros_like(dv), where=dv > 0)[None, None, :,
+                                                               None]
+  dirs.append(({n: np.concatenate(a, -1) for n, a in v.items() if a}, fv))
+  parts, own = {}, {}
+  for pieces, factor in dirs:
+    p, o = _direction(pieces, factor)
+    for n in p:
+      parts[n] = parts.get(n, 0) + p[n]
+      own[n] = own.get(n, 0) + o[n]
+  return parts, own
+
+
+def _diffusion_rate(run, b, s, geo):
+  """c0 of D g^xx J per cell (nx, nz) of block b, species s: the anom_diff_0 file, else the uniform D the run records
+    times geo_int_gxxj; None without diffusion on record."""
+  p = run.f(b, f'{s}_anom_diff', 0)
+  if os.path.exists(p):
+    return _data(p)[..., 0]
+  D, _ = recorded_uniform_D(run)
+  return D * geo['gxxj'][..., 0] if D is not None else None
+
+
+def _dt_one(run, st, k, drifts=None):
+  """Frame k's limits: {'t', 'dt_cfl', 'dt_H', 'cfl_at' (block, species index, i, j, i_vpar, i_mu of the cell whose
+    rate sets dt_cfl, the files' own indices), 'H_at' (block, species index), 'v_at' (v_par, mu at that cell's
+    centre), 'share|<term>' (each term's part of that cell's rate), 'alone|<term>' (cfl over the term's own largest
+    rate)}. drifts: st's, or the one given (dt_setup's choice)."""
+  drifts = st.drifts if drifts is None else drifts
+  best = (0.0, None)  # (rate, (b, si, idx, parts at idx))
+  own_max = dict.fromkeys(DT_TERMS, 0.0)
+  dtH, H_at = np.inf, (np.nan, np.nan)
+
+  def block(b):
+    phi = _data(run.f(b, 'field', k))
+    res = []
+    for si, s in enumerate(st.species):
+      q, m = run.charge[s], run.mass[s]
+      parts, own = _rates(st.geo[b], st.vel[(b, s)], q, m, phi, drifts)
+      shape = next(iter(parts.values())).shape
+      p = run.f(b, f'{s}_bgk_nu_sum', k)
+      if os.path.exists(p):
+        parts['collisions'] = own['collisions'] = np.broadcast_to(
+            (_data(p)[..., 0] / 2)[:, :, None, None], shape)
+      if st.D[(b, s)] is not None:
+        parts['diffusion'] = own['diffusion'] = np.broadcast_to(
+            (2 * st.D[(b, s)] * (2 / st.geo[b]['dx'])**2)[:, :, None,
+                                                          None], shape)
+      R = sum(parts.values())
+      idx = np.unravel_index(np.argmax(R), R.shape)
+      n_max = float((_data(run.f(b, f'{s}_M0', k))[..., 0] / 2).max())
+      om = abs(q) * np.sqrt(max(n_max, 0.0) / m) * st.gf[b]
+      res.append((si, float(R[idx]), idx, {
+          n: float(v[idx])
+          for n, v in parts.items()
+      }, {
+          n: float(v.max())
+          for n, v in own.items()
+      }, st.cfl_H / om if om > 0 else np.inf))
+    return b, res
+
+  with ThreadPoolExecutor(4) as ex:
+    for b, res in ex.map(block, range(run.nb)):
+      for si, rate, idx, at, own, dth in res:
+        if rate > best[0]:
+          best = (rate, (b, si, idx, at))
+        for n, v in own.items():
+          own_max[n] = max(own_max[n], v)
+        if dth < dtH:
+          dtH, H_at = dth, (b, si)
+  rate, (b, si, idx, at) = best
+  vp0, vp1, mu0, _ = st.vel[(b, st.species[si])]
+  if len(
+      st.species
+  ) < 2:  # an adiabatic or Boltzmann closure: the library applies no omega_H limit
+    dtH = np.inf
+  elif not all(np.isfinite(v)
+               for v in st.gf.values()):  # no polarization weight: not rebuilt
+    dtH = np.nan
+  out = {
+      't': run.time(k),
+      'dt_cfl': st.cfl / rate,
+      'dt_H': dtH,
+      'cfl_at': np.array((b, si) + tuple(idx), float),
+      'H_at': np.array(H_at, float),
+      'v_at': np.array([vp0[idx[2]], mu0[idx[3]]])
+  }
+  for n in DT_TERMS:
+    out[f'share|{n}'] = at.get(n, 0.0) / rate
+    out[f'alone|{n}'] = st.cfl / own_max[n] if own_max[n] > 0 else np.inf
+  return out
+
+
+def taken_after(run, t):
+  """The step the run took from each time t (its -dt file: the first step written after t); nan past its end."""
+  td, vd = dt_history(run)
+  i = np.searchsorted(td, t, side='right')
+  return np.where(i < len(vd), vd[np.minimum(i, len(vd) - 1)], np.nan)
+
+
+_DT_SETUP = {}
+
+
+def dt_setup(run):
+  """The run's DtSetup, or (None, why) when its files cannot give one. cfl_frac and cfl_frac_omegaH: its launch
+    options, else the library's defaults; the drifts: its 'drifts' option, else the choice (with or without) whose
+    rebuilt step at its second frame is the nearer the step it took."""
+  if run.path in _DT_SETUP:
+    return _DT_SETUP[run.path]
+  if not run.nb or not run.frames():
+    return None, 'no frames'
+  opts = launch_options(run)
+  notes = []
+
+  def frac(key, lib):
+    v = float(opts.get(key, 0) or 0)
+    notes.append(f'{key} {v:g} (its options)' if v > 0 else
+                 f'{key} {lib:g} (the library\'s default: none in its options)')
+    return v if v > 0 else lib
+
+  cfl, cfl_H = frac('cfl_frac', LIB_CFL_FRAC), frac('cfl_frac_omegaH',
+                                                    LIB_CFL_FRAC_OMEGAH)
+  species = tuple(s for s in run.species if run.charge[s] != 0)
+  if len(species) < len(run.species):
+    notes.append('the neutral species\' own limit is not rebuilt')
+  try:
+    geo = {b: _dt_geometry(run, b) for b in range(run.nb)}
+    vel = {
+        (b, s): _dt_velocity(run, b, s)
+        for b in range(run.nb)
+        for s in species
+    }
+  except FileNotFoundError as e:
+    out = (None, f'the run wrote no {os.path.basename(e.filename)}')
+    _DT_SETUP[run.path] = out
+    return out
+  D = {
+      (b, s): _diffusion_rate(run, b, s, geo[b])
+      for b in range(run.nb)
+      for s in species
+  }
+  gf, Ws = {}, []
+  for b in range(run.nb):
+    W, kW = polarization_weight(run, b,
+                                geo[b]) if len(species) > 1 else (np.nan, None)
+    gf[b] = _omegaH_gf(geo[b], W) if np.isfinite(W) else np.nan
+    Ws.append(W)
+  if len(species) < 2:
+    notes.append(
+        'one charged species (adiabatic or Boltzmann closure): no omega_H limit'
+    )
+  elif not np.isfinite(Ws).all():
+    notes.append(
+        'omega_H not rebuilt: no field energy at a frame\'s time to give the polarization weight'
+    )
+  else:
+    notes.append(
+        f'polarization weight W = {np.median(Ws):.4g} kg m^-3 T^-2 from the field energy (blocks agree to '
+        f'{(max(Ws) - min(Ws)) / np.median(Ws):.1e})')
+  st = DtSetup(cfl, cfl_H, False, species, geo, vel, D, gf, ())
+  if 'drifts' in opts:
+    drifts = opts['drifts'].lower() in ('1', 'true', 'yes')
+    notes.append(f'drifts {"on" if drifts else "off"} (its options)')
+  else:  # not on record: the choice that rebuilds the step it took
+    frames = run.frames()
+    k = frames[1] if len(frames) > 1 else frames[0]
+    taken = float(taken_after(run, run.time(k)))
+    gap = {}
+    for d in (True, False):
+      r = _dt_one(run, st, k, d)
+      gap[d] = abs(taken / np.nanmin([r['dt_cfl'], r['dt_H']]) - 1)
+    if np.isfinite(taken):
+      drifts = gap[True] <= gap[False]
+      notes.append(
+          f'drifts {"on" if drifts else "off"}: not in its options; the rebuild at frame {k} is '
+          f'{gap[True]:.1%} from the step taken with them, {gap[False]:.1%} without'
+      )
+    else:
+      drifts = True
+      notes.append(
+          'drifts on: neither in its options nor a step taken to choose by')
+  out = (DtSetup(cfl, cfl_H, drifts, species, geo, vel, D, gf,
+                 tuple(notes)), '')
+  _DT_SETUP[run.path] = out
+  return out
+
+
+class _NoLimits(Exception):
+  """dt_setup found no setup (its reason the message)."""
+
+
+def _dt_info(st):
+  """What the note on the limits needs of a DtSetup: the charged species, each '<block>|<species>' velocity grid's
+    cells [n_vpar, n_mu], where each setting came from (JSON)."""
+  return {
+      'species': list(st.species),
+      'vel_cells': {
+          f'{b}|{s}': [len(v[0]), len(v[2])]
+          for (b, s), v in st.vel.items()
+      },
+      'notes': list(st.notes)
+  }
+
+
+def dt_limits(run, progress=None):
+  """Per-frame time-step limits (_dt_one's entries, key -> [n_frames, ...]) over every frame written, cached on disk
+    (frame_cache, cache kind 'dt'), with 'taken' (the step the run took from each frame), _dt_info's entries (kept
+    beside the cache, so that a run whose frames are all cached reads no geometry) and 'why' (why there are none:
+    '' when there are). The setup (dt_setup) is built only for frames to compute or a missing settings file."""
+  if not run.nb or not run.frames():
+    return {'why': 'no frames'}
+  built = {}
+
+  def setup():
+    if 'st' not in built:
+      st, why = dt_setup(run)
+      if st is None:
+        raise _NoLimits(why)
+      built['st'] = st
+    return built['st']
+
+  info_path = cache_path(run.path, 'dt', 'json')
+  try:
+    out = dict(
+        frame_cache(run, cache_path(run.path, 'dt'),
+                    lambda k: _dt_one(run, setup(), k), progress))
+    info = None
+    if not built and os.path.exists(info_path):
+      with open(info_path) as f:
+        info = json.load(f)
+    if info is None:
+      info = _dt_info(setup())
+      os.makedirs(CACHE_DIR, exist_ok=True)
+      with open(info_path + '.tmp', 'w') as f:
+        json.dump(info, f)
+      os.replace(info_path + '.tmp', info_path)
+  except _NoLimits as e:
+    return {'why': str(e)}
+  out.update(info, taken=taken_after(run, out['t']), why='')
+  return out
+
+
+def dt_agreement(lim):
+  """(median, smallest, largest) of the step taken over the rebuilt one, from the second frame on (the first step
+    starts from the initial condition); nans without two such frames."""
+  r = lim['taken'][1:] / np.fmin(
+      lim['dt_cfl'][1:],
+      np.where(np.isnan(lim['dt_H'][1:]), np.inf, lim['dt_H'][1:]))
+  r = r[np.isfinite(r)]
+  return (float(np.median(r)), float(r.min()),
+          float(r.max())) if len(r) else (np.nan, ) * 3
+
+
+def dt_reproduced(lim):
+  """Whether the rebuild reproduces the run's steps: the median ratio (dt_agreement) within twice the library's
+    keep-the-step margin (LIB_DT_STICK) of 1."""
+  return abs(dt_agreement(lim)[0] - 1) <= 2 * LIB_DT_STICK
 
 
 # --------------------------------------------------------------------------------------------------- frame ranges
@@ -1539,6 +2102,255 @@ def cell_polygons(run, b):
 
 
 # ------------------------------------------------------------------------------------- volumes and region means
+# --------------------------------------------------------------------------------- flux coordinates (psi_N, L_theta)
+def psi_nodes(run, b):
+  """psi at block b's nodes [nr + 1, nt + 1], the viewer's rows: the position map's first coordinate
+    (geo_corn_mc2nu_pos, the computational x = psi to its non-uniform value) at the cells' corners (node_values)."""
+  mc = _data(run.f(b, 'geo_corn_mc2nu_pos'))
+  return run.rows(b, node_values(mc[..., 0:4])[0])
+
+
+def flux_coords(run):
+  """psi_N of every block's node rows and cell rows, and L_theta of every cell of the open chains (flux_lengths),
+    kept on the run: dict(node {b: [nr + 1]}, cell {b: [nr]}, sep (psi_N of each SOL block's separatrix row: 1 when the
+    run's separatrix is its geqdsk's boundary), why ('' or why there is none), chains (flux_lengths)). psi_N = (psi -
+    simag) / (sibry - simag), the geqdsk's (EFIT's) normalization, so measurements mapped by the same geqdsk compare."""
+  if getattr(run, '_flux', None) is not None:
+    return run._flux
+  out = dict(node={}, cell={}, sep={}, why='', chains=[])
+  g = geqdsk_path(run) if run.nb else None
+  if g is None:
+    out['why'] = 'no geqdsk (its axis flux normalizes psi)' if run.nb else 'no run'
+  else:
+    h = geqdsk_header(g)
+    try:
+      for b in range(run.nb):
+        P = psi_nodes(run, b)
+        n = (P.mean(axis=1) - h['simag']) / (h['sibry'] - h['simag'])
+        out['node'][b], out['cell'][b] = n, 0.5 * (n[1:] + n[:-1])
+    except (OSError, ValueError) as e:
+      out['why'] = f'no position map ({e})'
+    for st in run.layout.stacks.values():
+      if not out['why'] and st.sol is not None:
+        out['sep'][st.sol] = float(out['node'][st.sol][st.sep_row])
+  if run.nb:
+    out['chains'] = flux_lengths(run)
+  run._flux = out
+  return out
+
+
+def _row_lengths(lines):
+  """Arc length along polylines [n_rows, n_points, 2] from their first point: [n_rows, n_points]."""
+  d = np.hypot(*np.diff(lines, axis=1).transpose(2, 0, 1))
+  return np.concatenate([np.zeros(
+      (len(lines), 1)), np.cumsum(d, axis=1)],
+                        axis=1)
+
+
+def flux_lengths(run):
+  """L_theta, the poloidal length along each flux surface (in R, Z) from one end of its chain of blocks (theta_chains,
+    the open ones: SOL legs and main SOL, PF), measured along the cell-centre line of each cell row (the mean of its
+    two node rows' edges, cell_edges: curves, or chords where the run lacks the surface nodes). From the chain's
+    target end, an outer target before an inner one, a lower before an upper (the paper's L_theta runs from the outer
+    divertor). Per chain: dict(blocks, start, end (a target's name or 'midplane' for a half domain's mirror), cells
+    {b: [nr, nt] L_theta of each cell's centre}, total [nr], marks [(label, [nr] L_theta)] (the X-point: where a
+    SOL chain's block over a PF block meets one over the core, or a PF chain's blocks meet; each Z = 0 crossing:
+    outboard or inboard midplane, by R against the magnetic axis; a SOL chain's highest point when it lies inside the
+    chain: top), kind (its blocks' region), curved). Chains whose blocks' rows do not align are left out."""
+  edges = cell_edges(run)
+  r_axis = magnetic_axis_R(run)
+  if r_axis is None:  # no geqdsk: the core's centre
+    core = [
+        run.nodes[b][..., 0] for b, r in run.layout.region.items()
+        if r == 'core'
+    ]
+    r_axis = float(np.mean([c.mean() for c in core])) if core else 0.0
+  ends = {(t.leg, t.j): t for t in run.layout.targets}
+  ends.update({(t.pf, t.j): t for t in run.layout.targets if t.pf is not None})
+  out = []
+  for ch in theta_chains(run.conn):
+    bs = ch['blocks']
+    if ch['ring'] or len({run.nodes[b].shape[0] for b in bs}) != 1:
+      continue
+    a, z = ends.get((bs[0], 0)), ends.get((bs[-1], -1))
+
+    def rank(t):
+      return (0 if t.side == 'outer' else 1, 0 if t.updown == 'lower' else 1)
+
+    flip = z is not None and (a is None or rank(z) < rank(a))
+    lines, spans = [], []
+    for b in (bs[::-1] if flip else bs):
+      R = edges['rows'][b]
+      R = R[:, ::-1] if flip else R
+      K = (R.shape[1] - 1) // (run.nodes[b].shape[1] - 1)
+      mid = 0.5 * (R[1:] + R[:-1])  # [nr, K nt + 1, 2]
+      lines.append(mid if not lines else mid[:, 1:])
+      spans.append((b, K, mid.shape[1]))
+    line = np.concatenate(lines, axis=1)
+    L = _row_lengths(line)
+    i0, out_cells, joins = 0, {}, []
+    for b, K, n in spans:
+      nt = (n - 1) // K
+      idx = i0 + K * (np.arange(nt) + 0.5
+                      )  # each cell's centre on the line (fractional index)
+      Lc = np.array([np.interp(idx, np.arange(L.shape[1]), row) for row in L])
+      out_cells[b] = Lc[:, ::-1] if flip else Lc
+      joins.append((b, i0))
+      i0 += n - 1
+    marks = []
+    under, region = run.layout.under, run.layout.region
+    kind = region.get(
+        bs[0],
+        '')  # 'sol', 'pf' or 'core' (a half domain's core: mirror to mirror)
+    for (b0, _), (b1, j1) in zip(joins, joins[1:]):
+      if kind == 'pf' or {region.get(under.get(b0)),
+                          region.get(under.get(b1))} == {'pf', 'core'}:
+        marks.append(
+            ('X-point', L[:, j1])
+        )  # PF legs meet under it; a SOL chain's leg meets its main SOL there
+    Z = line[..., 1]
+    side = lambda R: 'outboard' if R >= r_axis else 'inboard'  # noqa: E731
+    cross = [np.where(np.diff(np.sign(Zr)) != 0)[0] for Zr in Z]
+    for c in range(min(len(x) for x in cross)):
+      vals, Rs = [], []
+      for Zr, Lr, Rr, x in zip(Z, L, line[..., 0], cross):
+        k = x[c]
+        w = Zr[k] / (Zr[k] - Zr[k + 1])
+        vals.append(Lr[k] + w * (Lr[k + 1] - Lr[k]))
+        Rs.append(Rr[k])
+      marks.append((f'{side(np.mean(Rs))} midplane', np.array(vals)))
+    top = np.argmax(Z, axis=1)
+    if kind == 'sol' and np.all((top > 0) & (top < Z.shape[1] - 1)):
+      marks.append(('top', L[np.arange(len(L)), top]))
+    first, last = (z, a) if flip else (a, z)
+
+    def name(
+        t, end
+    ):  # a target, else the mirror at that end: the half domain's midplane
+      return t.name if t is not None else f'{side(line[:, end, 0].mean())} midplane'
+
+    out.append(
+        dict(blocks=list(bs[::-1] if flip else bs),
+             kind=kind,
+             start=name(first, 0),
+             end=name(last, -1),
+             cells=out_cells,
+             total=L[:, -1],
+             marks=sorted(marks, key=lambda m: float(np.mean(m[1]))),
+             curved=edges['curved']))
+  return out
+
+
+def cell_flux_coords(run, b, i, j):
+  """(psi_N, L_theta, the chain's start) of block b's cell (i, j), the viewer's indices; nan / '' where there are none
+    (no geqdsk; a core ring)."""
+  fc = flux_coords(run)
+  psin = float(fc['cell'][b][i]) if b in fc['cell'] else np.nan
+  ch = next((c for c in fc['chains'] if b in c['cells']), None)
+  return psin, (float(ch['cells'][b][i, j]) if ch else np.nan), (ch['start']
+                                                                 if ch else '')
+
+
+# ------------------------------------------------------------------------------------------------- sheath entrance
+def sheath_frames(run):
+  """The frames at which the run wrote its sheath boundary condition's files (<species>_bc_z{lower,upper}_vcutsq:
+    with its phase-space output), from its first target's leg block; kept while its frame list is unchanged."""
+  frames = run.frames()
+  memo = getattr(run, '_sheath_frames', None)
+  if memo is not None and memo[0] == len(frames):
+    return memo[1]
+  tg = run.layout.targets[0] if run.layout.targets else None
+  e = next((s for s in run.species if run.charge[s] < 0), None)
+  out = [] if tg is None or e is None else [
+      k for k in frames if os.path.exists(
+          run.f(tg.leg, f'{e}_bc_z{"lower" if tg.j == 0 else "upper"}_vcutsq',
+                k))
+  ]
+  run._sheath_frames = (len(frames), out)
+  return out
+
+
+def _face(M, j, ez):
+  """The plate-face average of modal p = 1 fields M [nr, nt, 4] at theta cell j, its face ez (-1 lower, +1 upper):
+    their x-linear parts average out over the face."""
+  return 0.5 * M[:, j, 0] + np.sqrt(3) / 2 * M[:, j, 2] * ez
+
+
+def sheath_profiles(run, k):
+  """The sheath entrance of every target at the latest frame <= k with the sheath boundary condition's files
+    (sheath_frames): dict(frame (None: none), why, targets {name: dict(psin, dphi_Te, expected, mach, Te, Ti)}), each
+    an array over the target's open SOL rows, the viewer's order. At the plate face (its p = 1 moments averaged over
+    the face, _face; T from those): dphi_Te = e (phi_se - phi_wall) / T_e, the drop the boundary condition reflects
+    electrons by (its cutoff, m_e v_cut^2 / 2, the electrons' <species>_bc_z*_vcutsq cell average); expected = -1/2
+    ln[2 pi (m_e / m_i) (1 + T_i / T_e)] (the textbook floating sheath, Stangeby); mach = u_par,i / c_s toward the plate,
+    c_s = sqrt((T_e + T_i) / m_i). psin: flux_coords' cell rows (nan without a geqdsk)."""
+  e = next((s for s in run.species if run.charge[s] < 0), None)
+  i = next((s for s in run.species if run.charge[s] > 0), None)
+  ks = [f for f in sheath_frames(run) if f <= k]
+  out = dict(frame=ks[-1] if ks else None, why='', targets={})
+  if e is None or i is None:
+    out['why'] = 'no electron and ion species'
+  elif not ks:
+    out['why'] = (
+        'the run wrote no sheath boundary-condition files (<species>_bc_z*_vcutsq)'
+        if not sheath_frames(run) else
+        f'no sheath files at or before frame {k}')
+  if out['why']:
+    return out
+  kf, fc = out['frame'], flux_coords(run)
+  for tg in run.layout.targets:
+    face = 'lower' if tg.j == 0 else 'upper'
+    ez = -1 if tg.j == 0 else 1
+    b = tg.leg
+    path = run.f(b, f'{e}_bc_z{face}_vcutsq', kf)
+    if not os.path.exists(path):
+      continue
+    g = read_gkyl(path)
+    grid = read_gkyl(run.f(b, 'field', kf))
+    lo, dx = grid['lower'][0], (grid['upper'][0] -
+                                grid['lower'][0]) / grid['cells'][0]
+    r0 = int(round(
+        (g['lower'][0] - lo) / dx))  # the file rows the sheath covers: r0 on
+    vc = np.asarray(g['data'])[..., 0].mean(
+        axis=1) / 2  # cell average (it does not vary with mu)
+    mom = {
+        (s, m): _face(_data(run.f(b, f'{s}_{m}', kf)), tg.j,
+                      ez)[r0:r0 + len(vc)]
+        for s in (e, i)
+        for m in ('M0', 'M1', 'M2')
+    }
+    T = {
+        s:
+        run.mass[s] / run.e * (mom[s, 'M2'] - mom[s, 'M1']**2 / mom[s, 'M0']) /
+        (3 * mom[s, 'M0'])
+        for s in (e, i)
+    }
+    with np.errstate(divide='ignore', invalid='ignore'):
+      dphi = run.mass[e] * vc / 2 / run.e  # V
+      ui = mom[i, 'M1'] / mom[i, 'M0']
+      cs = np.sqrt((T[e] + T[i]) * run.e / run.mass[i])
+      rows = dict(dphi_Te=dphi / T[e],
+                  expected=-0.5 * np.log(2 * np.pi * run.mass[e] / run.mass[i] *
+                                         (1 + T[i] / T[e])),
+                  mach=ez * ui / cs,
+                  Te=T[e],
+                  Ti=T[i])
+    nr = run.nodes[b].shape[0] - 1
+    full = {key: np.full(nr, np.nan) for key in rows}
+    for key, v in rows.items():
+      full[key][r0:r0 + len(v)] = v
+    view = {key: run.rows(b, v)[tg.open_row:] for key, v in full.items()}
+    psin = fc['cell'][b][tg.open_row:] if b in fc['cell'] else np.full(
+        nr - tg.open_row, np.nan)
+    ok = np.isfinite(view['dphi_Te'])
+    out['targets'][tg.name] = dict(psin=psin[ok],
+                                   **{
+                                       key: v[ok]
+                                       for key, v in view.items()
+                                   })
+  return out
+
+
 def cell_volumes(run):
   """Volume of every cell (cell_offsets order): the Jacobian's cell average times the logical cell size, per radian
     of toroidal angle like every integrated diagnostic (sum(n V) matches the integrated M0 to ~0.2 %)."""
@@ -1727,19 +2539,22 @@ def conservation(B, t_frames):
 
 
 # ------------------------------------------------------------------------------------------------------ diffusivity
+def ser_phi(x, y):
+  """The 2D p = 1 serendipity basis on [-1, 1]^2 at (x, y) (orthonormal: 1/2, sqrt(3) x/2, sqrt(3) y/2, 3 x y/2), x
+    along psi, y along theta."""
+  return np.array([0.5, np.sqrt(3) / 2 * x, np.sqrt(3) / 2 * y, 1.5 * x * y])
+
+
 def _ser_p1_2d():
-  """The 2D p = 1 serendipity basis on [-1, 1]^2 (orthonormal: 1/2, sqrt(3) x/2, sqrt(3) y/2, 3 x y/2): the
-    triple-product tensor T[k, i, j] = int phi_k phi_i phi_j, and the basis at the four corners (-,-) (+,-) (-,+) (+,+),
-    x along psi, y along theta."""
-  phi = lambda x, y: np.array(
-      [0.5, np.sqrt(3) / 2 * x,
-       np.sqrt(3) / 2 * y, 1.5 * x * y])  # noqa: E731
+  """The triple-product tensor T[k, i, j] = int phi_k phi_i phi_j of ser_phi, and the basis at the four corners (-,-)
+    (+,-) (-,+) (+,+)."""
   g, w = np.polynomial.legendre.leggauss(
       2)  # exact for the product of three p = 1 functions
-  T = sum(wx * wy * np.einsum('k,i,j->kij', phi(x, y), phi(x, y), phi(x, y))
+  T = sum(wx * wy *
+          np.einsum('k,i,j->kij', ser_phi(x, y), ser_phi(x, y), ser_phi(x, y))
           for x, wx in zip(g, w) for y, wy in zip(g, w))
   return T, np.array(
-      [phi(x, y) for x, y in ((-1, -1), (1, -1), (-1, 1), (1, 1))])
+      [ser_phi(x, y) for x, y in ((-1, -1), (1, -1), (-1, 1), (1, 1))])
 
 
 SER_T, SER_CORNERS = _ser_p1_2d()
@@ -1786,11 +2601,9 @@ def launch_options(run):
 
 def run_logs(run):
   """The run's job logs (slurm-*.out, *.log, stdout), the newest first."""
-  pats = ('slurm-*.out', '*.log', 'stdout*')
   found = {
       p
-      for pat in pats
-      for p in glob.glob(os.path.join(run.path, pat))
+      for p in (os.path.join(run.path, n) for n in dir_index(run.path)['logs'])
       if os.path.isfile(p) and os.path.basename(p) != 'restarts.log'
   }  # restarts.log: the job list
   return sorted(found, key=os.path.getmtime, reverse=True)
