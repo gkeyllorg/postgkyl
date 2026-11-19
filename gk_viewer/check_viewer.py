@@ -70,8 +70,10 @@
     2's frames reproduce every step they took (Sim 1 set by the electrons' parallel streaming, Sim 2 by their mirror
     force); the 2025 re-run, which they do not reproduce, says so; the Time traces tab draws the chart and the note.
     The curves shown (12.) are a dropdown of four choices since, its notes '<choice> not chosen'.
+16. (2026-11-19) psi_N, L_theta and the sheath entrance (part_fluxsheath); gk-viewer --path DIR and the sidebar's
+    directory field (part_path; --browser: a directory typed into the field opens it).
 --parts a,b: only those parts (headless, thomson, measured, exports, labels, pgkyl, themes, devices, fonts, sync,
-machine, poloidal, lines, grid, blank, species, dtlimits, fluxsheath, browser, layout, liveplot).
+machine, poloidal, lines, grid, blank, species, dtlimits, fluxsheath, path, browser, layout, liveplot).
 Exit status: the number of failures.
 """
 import argparse
@@ -3757,6 +3759,91 @@ def part_dtlimits():
         f'the empty run: no time-step limits, and why ({e["why"]!r})')
 
 
+# ------------------------------------------------------------------------------- gk-viewer --path DIR (11-19)
+async def _drive_path(url, dbg, other):
+  """The page opened on one directory (--path): its title; the directory field given another (Enter); its title and
+  address then (written by the view's cell, which runs after the new run's: waited for)."""
+  from urllib.parse import urlencode
+  out = {}
+  head = "(h => h ? h.textContent : null)(__deep('.markdown h2')[0])"
+  async with opened(url, dbg) as c:
+    await asyncio.sleep(3)
+    await c.js(DEEP)
+    out['before'] = await c.until(head, 180)
+    out['typed'] = await c.type_into('directory (--path)', other)
+    out['after'] = await c.until(
+        f"(t => t && t !== {json.dumps(out['before'])} ? t : null)({head})",
+        180)
+    want = json.dumps(urlencode({'path': other}))
+    out['search'] = await c.until(
+        f"location.search.includes({want}) ? location.search : null",
+        120) or await c.js('location.search')
+  return out
+
+
+def part_path(chrome=None):
+  """gk-viewer --path DIR (2026-11-19): view.sh through a link (~/.local/bin/gk-viewer) finds its own directory (its
+  help lists every key); a run directory, a directory of runs and a simulation's directory (its runs/) each open as a
+  simulation of their own, named after the simulation (past a runs/ directory), and a missing path or a file says why;
+  the notebook launched with --path opens it, the directory field holding it, the view keeping it; launched with a
+  missing path it says so beside the field and opens the default simulation. With chrome: the page opened on Sim 2's
+  production run, the 2025 re-run's typed into the directory field opens that instead (its title, the address)."""
+  import urllib.parse
+  import gkview as gv
+  sim2 = os.path.join(gv.BASE, 'sims_20261022/sim2_dense_rho09')
+  run2 = os.path.join(sim2, 'runs/prod_th02q4_coll')
+  other = os.path.join(gv.BASE, 'sim203655_20261012/runs/prod')
+  got = {
+      k: gv.path_simulation(p)
+      for k, p in (('run', run2), ('runs', os.path.join(sim2, 'runs')),
+                   ('sim', sim2), ('missing', '/no/such/dir'), ('file',
+                                                                gv.CONFIG_FILE))
+  }
+  with tempfile.TemporaryDirectory() as tmp:
+    link = os.path.join(tmp, 'gk-viewer')
+    os.symlink(os.path.join(HERE, 'view.sh'), link)
+    h = subprocess.run([link, '--help'],
+                       capture_output=True,
+                       text=True,
+                       cwd=tmp,
+                       timeout=120)
+  d, _ = headless({'path': sim2})
+  dm, _ = headless({'path': '/no/such/dir'})
+  check(
+      h.returncode == 0 and '--path' in h.stdout and h.stdout.count('  --') > 20
+      and got['run'][0] == ('sim2_dense_rho09 (--path)',
+                            os.path.join(sim2, 'runs'), 'prod_th02q4_coll',
+                            f'the run directory {run2}')
+      and got['runs'][0][0] == got['sim'][0][0] == 'sim2_dense_rho09 (--path)'
+      and got['sim'][0][1] == os.path.join(sim2, 'runs')
+      and got['missing'][0] is None and 'does not exist' in got['missing'][1]
+      and got['file'][0] is None
+      and d['sim_pick'].value[0] == 'sim2_dense_rho09 (--path)'
+      and d['path_text'].value == sim2 and d['path_note'] is None
+      and d['view']['path'] == sim2 and dm['path_note'] is not None
+      and dm['sim_pick'].value[0] != 'no such dir (--path)',
+      f'gk-viewer --path: view.sh through a link (help rc {h.returncode}, {h.stdout.count("  --")} keys); a run, its '
+      f'runs/ and its simulation\'s directory open as {got["run"][0] and got["run"][0][0]!r} '
+      f'({[g[0] and g[0][2] for g in got.values()][:3]}); a missing path / a file: {got["missing"][1]!r}, '
+      f'{got["file"][1][:60]!r}...; launched with --path: {d["sim_pick"].value[0]!r}, the field and the view keep it; '
+      f'a missing path: the note beside the field, {dm["sim_pick"].value[0]!r} opened'
+  )
+  if chrome is None:
+    return
+  with served(chrome, ['--path', run2]) as (url, dbg):
+    check(url is not None, 'gk-viewer --path: view.sh serves the page')
+    if url is None:
+      return
+    r = asyncio.run(_drive_path(url, dbg, other))
+  q = urllib.parse.parse_qs((r.get('search') or '').lstrip('?'))
+  check(
+      r.get('typed') and '#203899' in (r.get('before') or '')
+      and '#203655' in (r.get('after') or '') and q.get('path') == [other],
+      f'the page: opened on Sim 2\'s production run ({(r.get("before") or "")[:50]!r}); the 2025 re-run typed into '
+      f'the directory field opens it ({(r.get("after") or "")[:50]!r}), the address saying so ({q.get("path")})'
+  )
+
+
 # --------------------------------------------------------------------- flux coordinates, the sheath entrance (11-19)
 def part_fluxsheath():
   """psi_N, L_theta and the sheath entrance (2026-11-19; Churchill et al. 2017's coordinates and Figs. 5 and 6).
@@ -3995,6 +4082,26 @@ class CDP:
     """choose, raising when the dropdown or its option is not on the page."""
     if not await self.choose(dropdown, option):
       raise RuntimeError(f'no {option!r} in the dropdown {dropdown!r}')
+
+  async def type_into(self, label, text):
+    """Types text into the sidebar's text field whose surroundings say label (its value replaced: select all,
+        then the text), then Enter. False when there is no such field."""
+    field = (
+        "__deep('input').find(i => { let n = i; for (let k = 0; k < 6 && n; k++) { n = n.parentElement || "
+        f"(n.getRootNode() && n.getRootNode().host); if (n && (n.textContent || '').includes({json.dumps(label)})) "
+        "return true; } return false; })")
+    if not await self.js(
+        f"(e => {{ if (!e) return false; e.focus(); e.select(); return true; }})({field})"
+    ):
+      return False
+    await self.call('Input.insertText', text=text)
+    for kind in ('keyDown', 'keyUp'):
+      await self.call('Input.dispatchKeyEvent',
+                      type=kind,
+                      key='Enter',
+                      code='Enter',
+                      windowsVirtualKeyCode=13)
+    return True
 
   async def press(self, expr):
     """A real mouse click (press + release) at the centre of the element expr finds: Radix tabs activate on the
@@ -4499,6 +4606,7 @@ if __name__ == '__main__':
       'species': lambda: part_species(a.browser, a.shots),
       'dtlimits': part_dtlimits,
       'fluxsheath': part_fluxsheath,
+      'path': lambda: part_path(a.browser),
       'browser': lambda: a.browser and part_browser(a.browser, a.shots),
       'layout': lambda: a.browser and part_layout(a.browser, a.shots),
       'liveplot': lambda: a.browser and part_liveplot(a.browser),

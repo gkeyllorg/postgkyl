@@ -253,6 +253,21 @@ off, the profiles chart drawn again with 22 of its 44 traces (none an ion's; its
 saying `ions=false`; reloaded, still off. By hand (2026-11-17): the 60 charts of the three simulations (with and
 without an overlay, both x axes) built by this code equal those of a4005d95, before the switches, but for the tags.
 
+## gk-viewer --path DIR, and the directory field (2026-11-19)
+Like postgkyl's `pgkyl-gui --path` (the marimo_gui branch): `gk-viewer --path DIR` opens a directory from anywhere.
+`gk-viewer` is a link to `view.sh`, which finds its own directory through the link (`readlink -f`), so its
+environment, `viewer.json` and `runs/` are the checkout's: `ln -s "$PWD/view.sh" ~/.local/bin/gk-viewer` (done here,
+2026-11-19). Every `view.sh` key and option works through it (`gk-viewer --path DIR --flux`, `gk-viewer --help`). DIR
+may be a run directory (its siblings offered beside it), a directory of runs (its last opened), or a simulation's
+directory with `runs/` in it (`gkview.path_simulation`); it opens as a simulation of its own, first in the shot list,
+named after the simulation (`sim2_dense_rho09 (--path)`, past a `runs/` directory); `viewer.json`'s simulations stay
+offered. The sidebar's **directory (--path)** field, under the shot list, holds it: another directory typed there
+(Enter, or leaving the field) replaces it and opens it; emptied, there is none. A path that is none of these says why
+beside the field and leaves the page as it is, unless the page was on the directory before's simulation: that one
+goes (as when the field is emptied), and the default simulation opens. The view keeps the path (the address, a saved view, the
+`./view.sh` line). Checked: part_path (the link's help, the three kinds of directory and two wrong paths, the notebook
+launched with one; --browser: a directory typed into the field opens it, the address saying so).
+
 ## What the poloidal plane draws: one dropdown (2026-11-19)
 Six sidebar switches of what the poloidal plane draws are one dropdown, **drawn on the poloidal plane**, its choices
 those of the switches, by the same view keys and launch keys: **the plotted quantity** (`quantity`, on by default; was

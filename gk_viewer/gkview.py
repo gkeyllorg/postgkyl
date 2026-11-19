@@ -1080,6 +1080,29 @@ def runs_in(root):
   ]
 
 
+def path_simulation(path):
+  """The simulation a directory makes of its own (--path, the sidebar's directory field): (label, the directory of
+    its runs, the run opened, description), or (None, why). A run directory (its parent's runs offered beside it), a
+    directory of runs (its last opened), or a simulation's directory with runs/ in it (runs_root)."""
+  p = os.path.abspath(os.path.expanduser(str(path)))
+
+  def name(d):  # a simulation's name: its directory's, past a runs/ directory
+    return os.path.basename(
+        os.path.dirname(d) if os.path.basename(d) == 'runs' else d)
+
+  if is_run_dir(p):
+    return (f'{name(os.path.dirname(p))} (--path)', os.path.dirname(p),
+            os.path.basename(p), f'the run directory {p}'), ''
+  for root in (p, os.path.join(p, 'runs')):
+    if os.path.isdir(root) and runs_in(root):
+      return (f'{name(root)} (--path)', root, runs_in(root)[-1],
+              f'the runs in {root}'), ''
+  return None, (
+      f'{p} does not exist' if not os.path.exists(p) else
+      f'{p} is no run directory, directory of runs, or simulation directory with runs/ in it'
+  )
+
+
 def sim_runs(simdir):
   """Run directories of a simulation (runs_in its runs_root)."""
   return runs_in(runs_root(simdir))

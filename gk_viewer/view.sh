@@ -9,6 +9,10 @@
 #   ./view.sh --sim 'Sim 1' --run prod_D1_coll --frames 0:60 --probe 10,0,15 --tab Probe
 #   ./view.sh --state runs/states/my_view.json   a view saved from the page (Save & export)
 #   ./view.sh --path DIR --blocks 1-3 --cmp 'Sim 1/prod_coll'   any run directory, some blocks, another run over it
+#                                                (or a directory of runs, or a simulation's with runs/ in it; the
+#                                                sidebar's directory field changes it)
+#   gk-viewer --path DIR                         the same from anywhere: gk-viewer is a link to this file, e.g.
+#                                                ln -s "$PWD/view.sh" ~/.local/bin/gk-viewer
 #   ./view.sh --flux                             log in to PPPL Flux first (password + Duo): Fetch from Flux works
 #   ./view.sh --sync                             a mirror (viewer.json "remote", sync.py): log in to the machine that
 #                                                holds the runs once, bring the runs here up to date, then the page's
@@ -24,7 +28,7 @@
 # .vscode/settings.json). Elsewhere: forward the port with ssh -L and open the printed URL in Chrome.
 # The access token stays on: anyone on a shared login node can reach 127.0.0.1. Ctrl-C stops the server.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd)
+HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)  # through a link too: gk-viewer -> .../gk_viewer/view.sh
 export GK_VIEWER_DATA=$(cd "${GK_VIEWER_DATA:-$HERE}" && pwd)
 BIN=${GK_VIEWER_VENV:-$HERE/.venv}/bin
 if [ ! -x "$BIN/marimo" ]; then
@@ -45,7 +49,7 @@ fi
 MODE=run
 case "${1:-}" in run|edit) MODE=$1; shift ;; esac
 if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"  # the header comment, all of it
     echo; echo "Keys (also the page's address, and a saved view):"
     cd "$HERE" && "$BIN/python" -c 'import viewer_state as vs
 for k, (what, eg) in vs.KEYS.items(): print(f"  --{k:<7} {what}   e.g. --{k} {eg}")'

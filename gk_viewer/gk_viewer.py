@@ -117,29 +117,47 @@ def _(dark_pick, json, mo, theme_pick, vp):
 
 
 @app.cell
-def _(HERE, boot, gv, mo, os, prefs, vs):
+def _(gv, mo, prefs):
+  # the directory opened as a simulation of its own (--path, or typed here: Enter or leaving the field): a run, a
+  # directory of runs, or a simulation's (its runs/). A directory that is one replaces the one before and opens; a
+  # path that is none (the note beside the field says why) leaves the page as it is, but for the simulation of the
+  # directory before, which goes (as when the field is emptied): the default simulation then
+  def _set_path(v):
+    v = v.strip()
+    _fresh = dict(sim=None, run=None, frame=None, probe=None, blocks=None)
+    if v and gv.path_simulation(v)[0] is not None:
+      prefs.update(path=v, **_fresh)
+    elif str(prefs.get('sim') or '').endswith(' (--path)'):
+      prefs.update(path=v, **_fresh)
+    else:
+      prefs.update(path=v)
+
+  path_text = mo.ui.text(value=str(prefs.get('path') or ''),
+                         placeholder='a run directory, or a directory of runs',
+                         label='directory (--path)',
+                         full_width=True,
+                         on_change=_set_path)
+  return (path_text, )
+
+
+@app.cell
+def _(HERE, boot, gv, mo, os, path_text, prefs, vs):
   # each simulation's default run is opened once at start-up: its own geqdsk names the shot and time
-  # a run directory given with --path (or a directory of runs): one more simulation, its directory's runs offered.
+  # the directory field's (--path): one more simulation, first, its directory's runs offered (path_simulation).
   # None to offer: the page opens anyway, every panel empty (gkview.empty_run), and says how to add one
   sim_info = {}
   boot['notes'] += gv.CONFIG_PROBLEMS
   _sims = [(_lab, gv.runs_root(_dir), _dflt, _desc)
            for _lab, _dir, _dflt, _desc in gv.SIMS]
-  _path = prefs.get('path')
-  if _path:
-    _p = os.path.abspath(os.path.expanduser(str(_path)))
-    if gv.is_run_dir(_p):
-      _sims.insert(0, (f'{os.path.basename(os.path.dirname(_p))} (--path)',
-                       os.path.dirname(_p), os.path.basename(_p),
-                       f'the run directory {_p}'))
-    elif os.path.isdir(_p) and gv.runs_in(_p):
-      _sims.insert(0, (f'{os.path.basename(_p)} (--path)', _p,
-                       gv.runs_in(_p)[-1], f'the runs in {_p}'))
+  path_note = None
+  if path_text.value.strip():
+    _own, _why = gv.path_simulation(path_text.value.strip())
+    if _own is None:
+      path_note = mo.callout(mo.md(f'Not opened: {_why}.'), kind='warn')
     else:
-      boot['notes'].append(
-          f'--path {_path}: not a run directory, nor a directory of runs')
-    if len(_sims) > len(gv.SIMS) and prefs.get('sim') is None:
-      prefs['sim'] = _sims[0][0]
+      _sims.insert(0, _own)
+      if prefs.get('sim') is None:
+        prefs['sim'] = _own[0]
   for _lab, _root, _dflt, _desc in _sims:
     try:
       _r = gv.open_run(os.path.join(_root, _dflt), _lab)
@@ -184,10 +202,10 @@ def _(HERE, boot, gv, mo, os, prefs, vs):
   mo.callout(mo.md(
       f'**No simulation data yet: every panel below is empty** (the page\'s layout, no data). `{gv.CONFIG_FILE}` '
       f'{_cfg}. To add one: copy `{_ex}` to that file, set its `base` and list your simulations in `sims` '
-      '(README: Setup), then restart `./view.sh`; or open one run directory with `./view.sh --path DIR`.'
-  ),
+      '(README: Setup), then restart `./view.sh`; or type a run directory in the directory field above (or launch '
+      'with `gk-viewer --path DIR`).'),
              kind='info') if not _keys else None
-  return (sim_info, sim_pick)
+  return path_note, sim_info, sim_pick
 
 
 @app.cell
@@ -766,6 +784,8 @@ def _(
     mirror_pick,
     mo,
     mode_pick,
+    path_note,
+    path_text,
     probe_text,
     qty_pick,
     reload_btn,
@@ -779,7 +799,8 @@ def _(
 ):
   mo.sidebar(
       [
-          mo.md('### Gkeyll run viewer'), sim_pick, run_pick,
+          mo.md('### Gkeyll run viewer'), sim_pick, path_text, path_note
+          or mo.md(''), run_pick,
           mo.hstack([reload_btn] + ([sync_btn] if sync_btn is not None else []),
                     justify='start'), sync_note, frame_pick,
           mo.
@@ -1112,6 +1133,7 @@ def _(
     mo,
     mode_pick,
     os,
+    path_text,
     prefs,
     qty_pick,
     run,
@@ -1153,7 +1175,7 @@ def _(
       blocks=vs.blocks_text(blocks),
       cmp=f'{cmp_pick.value[0]}/{os.path.basename(cmp_pick.value[1])}'
       if cmp_pick.value else '',
-      path=str(prefs.get('path') or ''))
+      path=path_text.value.strip())
   _qp = mo.query_params()  # a local: writing it re-runs no cell
   for _key, _v in view.items():
     _s = '' if _v is None else str(_v).lower() if isinstance(_v,
