@@ -35,6 +35,7 @@ from scipy import constants
 
 from postgkyl import operations
 from postgkyl.dg import physics
+from postgkyl.gdatastate.layout import require_dg_layout
 
 if TYPE_CHECKING:
   from postgkyl.gdata import GData
@@ -264,6 +265,14 @@ def fetch_temp_from_Max(gdatas: list["GData"], **kwargs):
   temp = fetch_s0c2(gdatas)
   mass = _get_ctx_val(gdatas[0], "mass", **kwargs)
   return temp * mass
+
+
+def fetch_temp_from_LTE(gdatas: list["GData"], **kwargs):
+  """Temperature from LTE moments ``(n, u_1, ..., u_vdim, T/m)``."""
+  lte = gdatas[0]
+  thermal_speed_sq = _component(lte, require_dg_layout(lte).num_fields - 1)
+  mass = _get_ctx_val(lte, "mass", **kwargs)
+  return thermal_speed_sq * mass
 
 
 def fetch_temp_from_Tpar_Tperp(gdatas: list["GData"], **kwargs):
