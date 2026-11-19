@@ -168,21 +168,6 @@ class KeyValue:
 
 
 @dataclass(frozen=True)
-class FlagValue:
-  """Let a scalar option be given alone, as a flag meaning ``value``.
-
-  The token after the option is still read as its value unless it is another
-  option or a command name, so ``-m``, ``-m -1`` and ``-m 0,1`` all parse.
-  """
-
-  value: str
-
-  def __post_init__(self) -> None:
-    if not isinstance(self.value, str) or not self.value:
-      raise ValueError("FlagValue requires non-empty text")
-
-
-@dataclass(frozen=True)
 class CliHidden:
   """Exclude a callable, or an optional keyword parameter, from the CLI.
 

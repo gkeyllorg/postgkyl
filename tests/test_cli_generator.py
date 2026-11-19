@@ -19,7 +19,6 @@ from postgkyl.cli_spec import (
     CliType,
     CommandSpec,
     Execution,
-    FlagValue,
     KeyValue,
     PipelineInput,
     ResultPolicy,
@@ -203,99 +202,6 @@ def test_boolean_options_must_default_to_false():
   with pytest.raises(CommandCompilationError,
                      match="boolean CLI options must default to False"):
     compile_callable(default_true)
-
-
-def test_flag_value_option_may_be_given_alone():
-  calls = []
-
-  @command(
-      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
-  def blocks(*,
-             multib: Annotated[str, FlagValue("-1")] = "-10",
-             enabled: bool = False):
-    """Exercise an option whose value may be omitted.
-
-    Args:
-      multib: Block selection.
-      enabled: Enable the optional behavior.
-    """
-    calls.append((multib, enabled))
-
-  command_obj = build_click_command(compile_callable(blocks))
-  options = {option.name: option for option in command_obj.params}
-  assert options["multib"].opts == ["--multib", "-m"]
-  assert options["multib"].metavar == "[TEXT]"
-
-  runner = CliRunner()
-  for arguments, expected in (
-      ([], ("-10", False)),
-      (["-m"], ("-1", False)),
-      (["--multib"], ("-1", False)),
-      (["-m", "-1"], ("-1", False)),
-      (["-m", "0,1"], ("0,1", False)),
-      (["-m0,1"], ("0,1", False)),
-      (["--multib=2:5"], ("2:5", False)),
-      (["-m", "-e"], ("-1", True)),
-      (["-m", "--enabled"], ("-1", True)),
-      (["-e", "-m"], ("-1", True)),
-  ):
-    result = runner.invoke(command_obj, arguments, obj=DataSpace())
-    assert result.exit_code == 0, result.output
-    assert calls[-1] == expected, arguments
-
-
-def test_flag_value_option_stops_at_the_next_command():
-  calls = []
-
-  @command(
-      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
-  def first(*, multib: Annotated[str, FlagValue("-1")] = "-10"):
-    """Record the block selection.
-
-    Args:
-      multib: Block selection.
-    """
-    calls.append(("first", multib))
-
-  @command(
-      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
-  def second():
-    """Record that the next command ran."""
-    calls.append(("second", ))
-
-  group = click.Group(chain=True)
-  for function in (first, second):
-    group.add_command(build_click_command(compile_callable(function)))
-  result = CliRunner().invoke(group, ["first", "-m", "second"], obj=DataSpace())
-  assert result.exit_code == 0, result.output
-  assert calls == [("first", "-1"), ("second", )]
-
-
-def test_flag_value_requires_a_scalar_non_boolean_option():
-
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
-  def flagged_boolean(*, enabled: Annotated[bool, FlagValue("True")] = False):
-    """Declare an invalid boolean flag value.
-
-    Args:
-      enabled: Invalid flag value.
-    """
-
-  @command(CommandSpec(Section.UTILITY, Execution.LOAD))
-  def flagged_list(*,
-                   names: Annotated[list[str] | None,
-                                    FlagValue("all")] = None):
-    """Declare an invalid sequence flag value.
-
-    Args:
-      names: Invalid flag value.
-    """
-
-  for function in (flagged_boolean, flagged_list):
-    with pytest.raises(CommandCompilationError, match="FlagValue requires"):
-      compile_callable(function)
-  with pytest.raises(ValueError, match="non-empty"):
-    FlagValue("")
 
 
 def test_exact_option_projection_and_help_provenance():

@@ -242,12 +242,12 @@ class TestEnergySynthetic:
     path = _build_energy_sim(stub, tmp_path)
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      assert traces.src is not None
-      assert traces.bflux_tot is not None
-      assert traces.mom_err is not None
+      assert traces["src"] is not None
+      assert traces["bflux_tot"] is not None
+      assert traces["mom_err"] is not None
       # Rates are only defined after the first step: t=0 is skipped.
-      assert traces.time.shape[0] == 4
-      assert traces.mom_err.shape == (4, )
+      assert traces["time"].shape[0] == 4
+      assert traces["mom_err"].shape == (4, )
       assert fig.axes[0].get_title() == "Energy balance"
     finally:
       plt.close(fig)
@@ -266,8 +266,8 @@ class TestEnergySynthetic:
     path = _build_energy_sim(stub, tmp_path, with_src=False, with_bflux=False)
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      assert traces.src is None
-      assert traces.bflux_tot is None
+      assert traces["src"] is None
+      assert traces["bflux_tot"] is None
     finally:
       plt.close(fig)
 
@@ -275,7 +275,27 @@ class TestEnergySynthetic:
     path = _build_energy_sim(stub, tmp_path, with_apar=True)
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      assert traces.apar_dot is not None
+      assert traces["apar_dot"] is not None
+    finally:
+      plt.close(fig)
+
+  def test_plotted_terms_sum_to_the_residual(self, stub, tmp_path):
+    """The legend writes the residual as the sum of the plotted terms: with
+    S=0.1, bflux=0.05, field_dot=0.2, apar_dot=0.15 and fdot=1+t, the curves
+    S, -bflux, +field_dot, +apar_dot, -fdot add up to the residual."""
+    path = _build_energy_sim(stub, tmp_path, with_apar=True)
+    fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
+    try:
+      lines = fig.axes[0].get_lines()[1:]  # Skip the zero line.
+      np.testing.assert_allclose(sum(line.get_ydata() for line in lines[:-1]),
+                                 lines[-1].get_ydata(),
+                                 rtol=0,
+                                 atol=1e-14)
+      np.testing.assert_allclose(lines[-1].get_ydata(),
+                                 0.4 - (1.0 + traces["time"]),
+                                 rtol=0,
+                                 atol=1e-14)
+      assert r"$+\dot{\phi}$$+\dot{A}_{\parallel}$" in _legend_texts(fig)[-1]
     finally:
       plt.close(fig)
 
@@ -292,7 +312,7 @@ class TestEnergySynthetic:
       _, single_traces = bal.balance("sim", ["ion"],
                                      quantity="energy",
                                      path=single_path)
-      np.testing.assert_allclose(traces.fdot, 2 * single_traces.fdot)
+      np.testing.assert_allclose(traces["fdot"], 2 * single_traces["fdot"])
     finally:
       plt.close(fig)
 
@@ -317,10 +337,10 @@ class TestEnergySynthetic:
                               path=path,
                               relative_error=True)
     try:
-      assert traces.mom_err is None
+      assert traces["mom_err"] is None
       # One point is dropped (t=0) relative to the absolute-error path.
       fdot = np.linspace(1.0, 2.0, n)[1:]
-      np.testing.assert_allclose(traces.mom_err_norm,
+      np.testing.assert_allclose(traces["mom_err_norm"],
                                  (0.1 - 0.05 - (fdot - 0.2)) * 0.2 / 7.0,
                                  rtol=0,
                                  atol=1e-15)
@@ -353,7 +373,7 @@ class TestEnergySynthetic:
                               saveas=out_path)
     try:
       fdot = np.linspace(1.0, 2.0, n)[1:]
-      np.testing.assert_allclose(traces.mom_err_norm,
+      np.testing.assert_allclose(traces["mom_err_norm"],
                                  (0.1 - 0.05 - (fdot - 0.2 - 0.15)) * 0.2 / 6.0,
                                  rtol=0,
                                  atol=1e-15)
@@ -383,7 +403,7 @@ class TestEnergySynthetic:
                               relative_error=True)
     try:
       fdot = np.linspace(1.0, 2.0, n)[1:]
-      np.testing.assert_allclose(traces.mom_err_norm,
+      np.testing.assert_allclose(traces["mom_err_norm"],
                                  (0.1 - 0.05 - (fdot - 0.2 - 0.15)) * 0.2 / 7.0,
                                  rtol=0,
                                  atol=1e-15)
@@ -435,8 +455,8 @@ class TestEnergySynthetic:
                               logy=True,
                               show=True)
     try:
-      assert traces.bflux_tot is not None
-      np.testing.assert_allclose(traces.bflux_tot, -0.05)
+      assert traces["bflux_tot"] is not None
+      np.testing.assert_allclose(traces["bflux_tot"], -0.05)
     finally:
       plt.close(fig)
 
@@ -447,11 +467,11 @@ class TestParticleSynthetic:
     path = _build_particle_sim(stub, tmp_path)
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      assert traces.src is not None
-      assert traces.bflux_tot is not None
-      assert traces.mom_err is not None
-      assert traces.field_dot is None
-      assert traces.time.shape[0] == 4  # t=0 is skipped.
+      assert traces["src"] is not None
+      assert traces["bflux_tot"] is not None
+      assert traces["mom_err"] is not None
+      assert traces["field_dot"] is None
+      assert traces["time"].shape[0] == 4  # t=0 is skipped.
       assert fig.axes[0].get_title() == "Particle balance"
       assert _legend_texts(fig)[-1].startswith(r"$E_{\dot{\mathcal{N}}}=$")
     finally:
@@ -461,7 +481,7 @@ class TestParticleSynthetic:
     path = _build_particle_sim(stub, tmp_path)
     fig, traces = bal.balance("sim", ["ion"], path=path)
     try:
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["mom_err"],
                                  0.1 - 0.05 - np.linspace(1.0, 2.0, 5)[1:])
     finally:
       plt.close(fig)
@@ -478,8 +498,8 @@ class TestParticleSynthetic:
     path = _build_particle_sim(stub, tmp_path, with_src=False, with_bflux=False)
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      assert traces.src is None
-      assert traces.bflux_tot is None
+      assert traces["src"] is None
+      assert traces["bflux_tot"] is None
     finally:
       plt.close(fig)
 
@@ -491,8 +511,8 @@ class TestParticleSynthetic:
                               path=path)
     try:
       fdot = np.linspace(1.0, 2.0, 5)[1:]
-      np.testing.assert_allclose(traces.fdot, 2.0 * fdot)
-      np.testing.assert_allclose(traces.mom_err, 2.0 * (0.1 - 0.05 - fdot))
+      np.testing.assert_allclose(traces["fdot"], 2.0 * fdot)
+      np.testing.assert_allclose(traces["mom_err"], 2.0 * (0.1 - 0.05 - fdot))
     finally:
       plt.close(fig)
 
@@ -512,9 +532,9 @@ class TestParticleSynthetic:
                               path=path,
                               relative_error=True)
     try:
-      assert traces.mom_err is None
+      assert traces["mom_err"] is None
       fdot = np.linspace(1.0, 2.0, n)[1:]
-      np.testing.assert_allclose(traces.mom_err_norm,
+      np.testing.assert_allclose(traces["mom_err_norm"],
                                  (0.1 - 0.05 - fdot) * 0.2 / 10.0,
                                  rtol=0,
                                  atol=1e-15)
@@ -544,7 +564,7 @@ class TestParticleSynthetic:
                               show=True,
                               saveas=out_path)
     try:
-      assert traces.mom_err_norm is not None
+      assert traces["mom_err_norm"] is not None
       assert os.path.exists(out_path)
       assert fig.axes[0].get_ylabel() == (
           r"|$E_{\dot{\mathcal{N}}}~\Delta t/\mathcal{N}$|")
@@ -572,8 +592,8 @@ class TestParticleSynthetic:
                               absy=True,
                               logy=True)
     try:
-      assert traces.bflux_tot is not None
-      np.testing.assert_allclose(traces.bflux_tot, -0.05)
+      assert traces["bflux_tot"] is not None
+      np.testing.assert_allclose(traces["bflux_tot"], -0.05)
     finally:
       plt.close(fig)
 
@@ -592,7 +612,7 @@ class TestParticleSynthetic:
                               multib="0,1")
     try:
       # Two blocks, each contributing fdot=1.0, sum to 2.0 everywhere.
-      np.testing.assert_allclose(traces.fdot, 2.0)
+      np.testing.assert_allclose(traces["fdot"], 2.0)
     finally:
       plt.close(fig)
 
@@ -612,9 +632,9 @@ class TestEnergyMomentFileNames:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      np.testing.assert_allclose(traces.src, 0.1, rtol=0, atol=1e-15)
-      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["src"], 0.1, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces["src_bgk"], 0.02, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces["mom_err"],
                                  0.27 - (1.0 + time[1:]),
                                  rtol=0,
                                  atol=1e-14)
@@ -640,8 +660,8 @@ class TestEnergyMomentFileNames:
                               quantity="energy",
                               path=path)
     try:
-      assert traces.src is None
-      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
+      assert traces["src"] is None
+      np.testing.assert_allclose(traces["src_bgk"], 0.02, rtol=0, atol=1e-15)
     finally:
       plt.close(fig)
 
@@ -657,8 +677,8 @@ class TestEnergyMomentFileNames:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, 1.0 + time[1:])
-      np.testing.assert_allclose(traces.src, 0.1)
+      np.testing.assert_array_equal(traces["fdot"], 1.0 + time[1:])
+      np.testing.assert_allclose(traces["src"], 0.1)
     finally:
       plt.close(fig)
 
@@ -685,9 +705,9 @@ class TestParticleMomentFileNames:
       try:
         mom_err = -0.05 - (1.0 + time[1:])
         if relative:
-          np.testing.assert_allclose(traces.mom_err_norm, mom_err * 0.025)
+          np.testing.assert_allclose(traces["mom_err_norm"], mom_err * 0.025)
         else:
-          np.testing.assert_allclose(traces.mom_err, mom_err)
+          np.testing.assert_allclose(traces["mom_err"], mom_err)
       finally:
         plt.close(fig)
 
@@ -702,9 +722,9 @@ class TestParticleMomentFileNames:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      np.testing.assert_allclose(traces.src, 0.1, rtol=0, atol=1e-15)
-      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["src"], 0.1, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces["src_bgk"], 0.02, rtol=0, atol=1e-15)
+      np.testing.assert_allclose(traces["mom_err"],
                                  0.07 - (1.0 + time[1:]),
                                  rtol=0,
                                  atol=1e-14)
@@ -720,8 +740,8 @@ class TestParticleMomentFileNames:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      assert traces.src is None
-      np.testing.assert_allclose(traces.src_bgk, 0.02, rtol=0, atol=1e-15)
+      assert traces["src"] is None
+      np.testing.assert_allclose(traces["src_bgk"], 0.02, rtol=0, atol=1e-15)
     finally:
       plt.close(fig)
 
@@ -734,7 +754,7 @@ class TestParticleMomentFileNames:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, 1.0 + time[1:])
+      np.testing.assert_array_equal(traces["fdot"], 1.0 + time[1:])
     finally:
       plt.close(fig)
 
@@ -798,17 +818,18 @@ class TestEnergyFromBalanceFiles:
                               path=path)
     try:
       # Rates are only defined after the first step: t=0 is skipped.
-      np.testing.assert_array_equal(traces.time, time[1:])
-      for trace, column in ((traces.fdot, "mom_dot"), (traces.src, "src_mom"),
-                            (traces.bflux_tot,
-                             "bflux_tot_mom"), (traces.field_dot, "field_dot"),
-                            (traces.bg_dot, "bg_dot"), (traces.mom_err,
-                                                        "mom_err")):
+      np.testing.assert_array_equal(traces["time"], time[1:])
+      for trace, column in ((traces["fdot"], "mom_dot"),
+                            (traces["src"], "src_mom"), (traces["bflux_tot"],
+                                                         "bflux_tot_mom"),
+                            (traces["field_dot"], "field_dot"),
+                            (traces["bg_dot"], "bg_dot"), (traces["mom_err"],
+                                                           "mom_err")):
         np.testing.assert_array_equal(trace, columns[column][1:])
-      assert traces.apar_dot is None
-      assert traces.mom_err_norm is None
+      assert traces["apar_dot"] is None
+      assert traces["mom_err_norm"] is None
       # An older file: no src_bgk_mom column.
-      assert traces.src_bgk is None
+      assert traces["src_bgk"] is None
       assert any(r"\rho_{bg}" in text for text in _legend_texts(fig))
     finally:
       plt.close(fig)
@@ -827,9 +848,9 @@ class TestEnergyFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
-      np.testing.assert_array_equal(traces.src_bgk, src_bgk[1:])
-      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+      np.testing.assert_array_equal(traces["src"], columns["src_mom"][1:])
+      np.testing.assert_array_equal(traces["src_bgk"], src_bgk[1:])
+      np.testing.assert_array_equal(traces["mom_err"], columns["mom_err"][1:])
       legend = _legend_texts(fig)
       assert r"$\mathcal{S}_{\mathrm{BGK}}$" in legend
       assert legend[-1].startswith(r"$E_{\dot{\mathcal{E}}}=$$\mathcal{S}$"
@@ -841,7 +862,7 @@ class TestEnergyFromBalanceFiles:
     stub.add_balance(f"{path}sim-balance_energy.gkyl", time, columns)
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      assert traces.src_bgk is None
+      assert traces["src_bgk"] is None
     finally:
       plt.close(fig)
 
@@ -856,11 +877,11 @@ class TestEnergyFromBalanceFiles:
                               path=path,
                               relative_error=True)
     try:
-      np.testing.assert_array_equal(traces.time, time[1:])
-      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
-      np.testing.assert_array_equal(traces.mom_err_norm,
+      np.testing.assert_array_equal(traces["time"], time[1:])
+      np.testing.assert_array_equal(traces["fdot"], columns["mom_dot"][1:])
+      np.testing.assert_array_equal(traces["mom_err_norm"],
                                     columns["mom_err_norm"][1:])
-      assert traces.mom_err is None
+      assert traces["mom_err"] is None
     finally:
       plt.close(fig)
 
@@ -874,9 +895,9 @@ class TestEnergyFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      assert traces.src is None
-      assert traces.bflux_tot is None
-      assert traces.bg_dot is None
+      assert traces["src"] is None
+      assert traces["bflux_tot"] is None
+      assert traces["bg_dot"] is None
       # Field, fdot and residual curves only.
       assert len(_legend_texts(fig)) == 3
     finally:
@@ -890,8 +911,9 @@ class TestEnergyFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, np.linspace(1.0, 2.0, 5)[1:])
-      assert traces.bg_dot is None
+      np.testing.assert_array_equal(traces["fdot"],
+                                    np.linspace(1.0, 2.0, 5)[1:])
+      assert traces["bg_dot"] is None
     finally:
       plt.close(fig)
 
@@ -905,7 +927,7 @@ class TestEnergyFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="energy", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
+      np.testing.assert_array_equal(traces["fdot"], columns["mom_dot"][1:])
     finally:
       plt.close(fig)
 
@@ -943,11 +965,11 @@ class TestEnergyFromBalanceFiles:
                               path=path,
                               multib="-1")
     try:
-      np.testing.assert_allclose(traces.fdot,
+      np.testing.assert_allclose(traces["fdot"],
                                  4.0 * block0["mom_dot"][1:],
                                  rtol=0,
                                  atol=1e-14)
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["mom_err"],
                                  4.0 * block0["mom_err"][1:],
                                  rtol=0,
                                  atol=1e-14)
@@ -972,12 +994,12 @@ class TestEnergyFromBalanceFiles:
                               multib="-1",
                               relative_error=True)
     try:
-      assert traces.mom_err is None
-      assert traces.mom_err_norm is None
-      assert list(traces.mom_err_norm_parts) == ["block 0", "block 1"]
-      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 0"],
+      assert traces["mom_err"] is None
+      assert traces["mom_err_norm"] is None
+      assert list(traces["mom_err_norm_parts"]) == ["block 0", "block 1"]
+      np.testing.assert_array_equal(traces["mom_err_norm_parts"]["block 0"],
                                     block0["mom_err_norm"][1:])
-      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 1"],
+      np.testing.assert_array_equal(traces["mom_err_norm_parts"]["block 1"],
                                     3.0 * block0["mom_err_norm"][1:])
       assert _legend_texts(fig) == ["block 0", "block 1"]
     finally:
@@ -992,8 +1014,8 @@ class TestEnergyFromBalanceFiles:
 
     fig, traces = bal.balance("sim", quantity="energy", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
-      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+      np.testing.assert_array_equal(traces["fdot"], columns["mom_dot"][1:])
+      np.testing.assert_array_equal(traces["mom_err"], columns["mom_err"][1:])
     finally:
       plt.close(fig)
 
@@ -1029,21 +1051,22 @@ class TestParticleFromBalanceFiles:
                                 path=path,
                                 relative_error=relative)
       try:
-        np.testing.assert_array_equal(traces.time, time[1:])
-        np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
-        np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
-        np.testing.assert_array_equal(traces.bflux_tot,
+        np.testing.assert_array_equal(traces["time"], time[1:])
+        np.testing.assert_array_equal(traces["fdot"], columns["mom_dot"][1:])
+        np.testing.assert_array_equal(traces["src"], columns["src_mom"][1:])
+        np.testing.assert_array_equal(traces["bflux_tot"],
                                       columns["bflux_tot_mom"][1:])
         # An older file: no src_bgk_mom column.
-        assert traces.src_bgk is None
-        assert traces.field_dot is None
+        assert traces["src_bgk"] is None
+        assert traces["field_dot"] is None
         if relative:
-          np.testing.assert_array_equal(traces.mom_err_norm,
+          np.testing.assert_array_equal(traces["mom_err_norm"],
                                         columns["mom_err_norm"][1:])
-          assert traces.mom_err is None
+          assert traces["mom_err"] is None
         else:
-          np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
-          assert traces.mom_err_norm is None
+          np.testing.assert_array_equal(traces["mom_err"],
+                                        columns["mom_err"][1:])
+          assert traces["mom_err_norm"] is None
       finally:
         plt.close(fig)
 
@@ -1060,9 +1083,9 @@ class TestParticleFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      np.testing.assert_array_equal(traces.src, columns["src_mom"][1:])
-      np.testing.assert_array_equal(traces.src_bgk, src_bgk[1:])
-      np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+      np.testing.assert_array_equal(traces["src"], columns["src_mom"][1:])
+      np.testing.assert_array_equal(traces["src_bgk"], src_bgk[1:])
+      np.testing.assert_array_equal(traces["mom_err"], columns["mom_err"][1:])
     finally:
       plt.close(fig)
 
@@ -1070,7 +1093,7 @@ class TestParticleFromBalanceFiles:
     stub.add_balance(f"{path}sim-ion_balance_particle.gkyl", time, columns)
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      assert traces.src_bgk is None
+      assert traces["src_bgk"] is None
     finally:
       plt.close(fig)
 
@@ -1090,7 +1113,7 @@ class TestParticleFromBalanceFiles:
                               quantity="particle",
                               path=path)
     try:
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["mom_err"],
                                  3.0 * columns["mom_err"][1:],
                                  rtol=0,
                                  atol=1e-14)
@@ -1102,11 +1125,11 @@ class TestParticleFromBalanceFiles:
                               path=path,
                               relative_error=True)
     try:
-      assert traces.mom_err_norm is None
-      assert list(traces.mom_err_norm_parts) == ["ion", "elc"]
-      np.testing.assert_array_equal(traces.mom_err_norm_parts["ion"],
+      assert traces["mom_err_norm"] is None
+      assert list(traces["mom_err_norm_parts"]) == ["ion", "elc"]
+      np.testing.assert_array_equal(traces["mom_err_norm_parts"]["ion"],
                                     columns["mom_err_norm"][1:])
-      np.testing.assert_array_equal(traces.mom_err_norm_parts["elc"],
+      np.testing.assert_array_equal(traces["mom_err_norm_parts"]["elc"],
                                     2.0 * columns["mom_err_norm"][1:])
     finally:
       plt.close(fig)
@@ -1128,7 +1151,8 @@ class TestParticleFromBalanceFiles:
 
     fig, traces = bal.balance("sim", ["ion"], quantity="particle", path=path)
     try:
-      np.testing.assert_array_equal(traces.fdot, np.linspace(1.0, 2.0, 5)[1:])
+      np.testing.assert_array_equal(traces["fdot"],
+                                    np.linspace(1.0, 2.0, 5)[1:])
     finally:
       plt.close(fig)
 
@@ -1156,7 +1180,7 @@ class TestParticleFromBalanceFiles:
                               path=path,
                               multib="0,1")
     try:
-      np.testing.assert_allclose(traces.mom_err,
+      np.testing.assert_allclose(traces["mom_err"],
                                  4.0 * block0["mom_err"][1:],
                                  rtol=0,
                                  atol=1e-14)
@@ -1169,8 +1193,9 @@ class TestParticleFromBalanceFiles:
                               multib="0,1",
                               relative_error=True)
     try:
-      assert list(traces.mom_err_norm_parts) == ["block 0 ion", "block 1 ion"]
-      np.testing.assert_array_equal(traces.mom_err_norm_parts["block 1 ion"],
+      assert list(
+          traces["mom_err_norm_parts"]) == ["block 0 ion", "block 1 ion"]
+      np.testing.assert_array_equal(traces["mom_err_norm_parts"]["block 1 ion"],
                                     block1["mom_err_norm"][1:])
     finally:
       plt.close(fig)
@@ -1190,7 +1215,7 @@ class TestParticleFromBalanceFiles:
                               multib="-1",
                               relative_error=True)
     try:
-      assert len(traces.mom_err_norm_parts) == 12
+      assert len(traces["mom_err_norm_parts"]) == 12
       # The first line is the zero reference.
       styles = [line.get_linestyle() for line in fig.axes[0].get_lines()[1:]]
       assert styles == ["-"] * 10 + ["--"] * 2
@@ -1216,11 +1241,12 @@ class TestParticleFromBalanceFiles:
                                 relative_error=relative)
       try:
         if relative:
-          np.testing.assert_array_equal(traces.mom_err_norm,
+          np.testing.assert_array_equal(traces["mom_err_norm"],
                                         columns["mom_err_norm"][1:])
         else:
-          np.testing.assert_array_equal(traces.fdot, columns["mom_dot"][1:])
-          np.testing.assert_array_equal(traces.mom_err, columns["mom_err"][1:])
+          np.testing.assert_array_equal(traces["fdot"], columns["mom_dot"][1:])
+          np.testing.assert_array_equal(traces["mom_err"],
+                                        columns["mom_err"][1:])
       finally:
         plt.close(fig)
 
@@ -1249,7 +1275,7 @@ class TestReadBalanceFiles:
     name = str(tmp_path / "one-balance_particle.gkyl")
     stub.add(name, np.array([0.0]), np.zeros((1, 2)),
              {"Columns": "mom_err, mom_err_norm"})
-    time, columns = gk_utils.read_balance_files([name])
+    time, columns = bal._read_balance_files([name])
     np.testing.assert_array_equal(time, [0.0])
     np.testing.assert_array_equal(columns["mom_err"], [0.0])
 
@@ -1257,7 +1283,7 @@ class TestReadBalanceFiles:
     name = str(tmp_path / "bare-balance_particle.gkyl")
     stub.add(name, np.linspace(0.0, 1.0, 3), np.zeros((3, 2)))
     with pytest.raises(ValueError, match="Columns"):
-      gk_utils.read_balance_files([name])
+      bal._read_balance_files([name])
 
 
 class TestRealFixtures:
@@ -1275,17 +1301,17 @@ class TestRealFixtures:
                                 relative_error=relative,
                                 field_dot_file="sim-field_energy_dot.gkyl")
       try:
-        np.testing.assert_array_equal(traces.time, time)
-        np.testing.assert_allclose(traces.fdot, fdot, rtol=0, atol=1e-14)
-        np.testing.assert_allclose(traces.field_dot, 0.4, rtol=0, atol=1e-14)
+        np.testing.assert_array_equal(traces["time"], time)
+        np.testing.assert_allclose(traces["fdot"], fdot, rtol=0, atol=1e-14)
+        np.testing.assert_allclose(traces["field_dot"], 0.4, rtol=0, atol=1e-14)
         if relative:
-          np.testing.assert_allclose(traces.mom_err_norm,
+          np.testing.assert_allclose(traces["mom_err_norm"],
                                      mom_err * 0.25 / 18.0,
                                      rtol=0,
                                      atol=1e-14)
-          assert traces.mom_err is None
+          assert traces["mom_err"] is None
         else:
-          np.testing.assert_allclose(traces.mom_err,
+          np.testing.assert_allclose(traces["mom_err"],
                                      mom_err,
                                      rtol=0,
                                      atol=1e-14)
@@ -1303,17 +1329,20 @@ class TestRealFixtures:
                                 path=path,
                                 relative_error=relative)
       try:
-        np.testing.assert_array_equal(traces.time, time)
-        np.testing.assert_allclose(traces.fdot, fdot, rtol=0, atol=1e-14)
-        np.testing.assert_allclose(traces.bflux_tot, 0.05, rtol=0, atol=1e-14)
+        np.testing.assert_array_equal(traces["time"], time)
+        np.testing.assert_allclose(traces["fdot"], fdot, rtol=0, atol=1e-14)
+        np.testing.assert_allclose(traces["bflux_tot"],
+                                   0.05,
+                                   rtol=0,
+                                   atol=1e-14)
         if relative:
-          np.testing.assert_allclose(traces.mom_err_norm,
+          np.testing.assert_allclose(traces["mom_err_norm"],
                                      mom_err * 0.25 / 10.0,
                                      rtol=0,
                                      atol=1e-14)
-          assert traces.mom_err is None
+          assert traces["mom_err"] is None
         else:
-          np.testing.assert_allclose(traces.mom_err,
+          np.testing.assert_allclose(traces["mom_err"],
                                      mom_err,
                                      rtol=0,
                                      atol=1e-14)
@@ -1332,21 +1361,21 @@ class TestRealFixtures:
                                 path=path,
                                 relative_error=relative)
       try:
-        np.testing.assert_array_equal(traces.time, time)
-        for actual, expected in ((traces.fdot, fdot), (traces.src, 0.3),
-                                 (traces.src_bgk,
-                                  0.04), (traces.bflux_tot,
-                                          0.1), (traces.field_dot,
-                                                 0.4), (traces.bg_dot, 0.05)):
+        np.testing.assert_array_equal(traces["time"], time)
+        for actual, expected in ((traces["fdot"], fdot), (traces["src"], 0.3),
+                                 (traces["src_bgk"],
+                                  0.04), (traces["bflux_tot"], 0.1),
+                                 (traces["field_dot"], 0.4), (traces["bg_dot"],
+                                                              0.05)):
           np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
         if relative:
-          np.testing.assert_allclose(traces.mom_err_norm,
+          np.testing.assert_allclose(traces["mom_err_norm"],
                                      mom_err * 0.25 / 18.0,
                                      rtol=0,
                                      atol=1e-14)
-          assert traces.mom_err is None
+          assert traces["mom_err"] is None
         else:
-          np.testing.assert_allclose(traces.mom_err,
+          np.testing.assert_allclose(traces["mom_err"],
                                      mom_err,
                                      rtol=0,
                                      atol=1e-14)
@@ -1368,19 +1397,19 @@ class TestRealFixtures:
                                 path=path,
                                 relative_error=relative)
       try:
-        np.testing.assert_array_equal(traces.time, time)
-        for actual, expected in ((traces.fdot, fdot), (traces.src, 0.1),
-                                 (traces.src_bgk, 0.02), (traces.bflux_tot,
-                                                          0.05)):
+        np.testing.assert_array_equal(traces["time"], time)
+        for actual, expected in ((traces["fdot"], fdot), (traces["src"], 0.1),
+                                 (traces["src_bgk"],
+                                  0.02), (traces["bflux_tot"], 0.05)):
           np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-14)
         if relative:
-          np.testing.assert_allclose(traces.mom_err_norm,
+          np.testing.assert_allclose(traces["mom_err_norm"],
                                      mom_err * 0.25 / 10.0,
                                      rtol=0,
                                      atol=1e-14)
-          assert traces.mom_err is None
+          assert traces["mom_err"] is None
         else:
-          np.testing.assert_allclose(traces.mom_err,
+          np.testing.assert_allclose(traces["mom_err"],
                                      mom_err,
                                      rtol=0,
                                      atol=1e-14)

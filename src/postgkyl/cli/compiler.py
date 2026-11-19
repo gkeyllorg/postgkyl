@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-import functools
 import inspect
 import json
 import numbers
@@ -24,7 +23,6 @@ from postgkyl.cli_spec import (
     CommandSpec,
     DatasetRef,
     Execution,
-    FlagValue,
     InfoOption,
     KeyValue,
     PipelineInput,
@@ -77,7 +75,6 @@ class ParameterModel:
   injected: bool = False
   dataset_ref: bool = False
   argument: bool = False
-  flag_value: str | None = None
 
 
 @dataclass(frozen=True)
@@ -113,11 +110,11 @@ class _GeneratedCommand(click.Command):
   """Render positional parameter docs separately from option docs."""
 
   def parse_args(self, ctx, args):
-    """Normalize optional-value options within this command's option span.
+    """Normalize optional booleans within this command's option span.
 
     Click's chain parser stops reading options at the first positional token.
-    Respect that boundary, and skip each other option's values, so a later
-    command's options (or a string value resembling a flag) stay intact.
+    Respect that boundary, and skip each nonboolean option's values, so a
+    later command's options (or a string value resembling a flag) stay intact.
     """
     options = {
         option_name: parameter
@@ -151,15 +148,6 @@ class _GeneratedCommand(click.Command):
           index += 1
         else:
           normalized.append("True")
-      elif isinstance(parameter, _FlagValueOption):
-        if attached_value:
-          continue
-        if index < len(args) and not _is_option_or_command(
-            ctx, args[index], options):
-          normalized.append(args[index])
-          index += 1
-        else:
-          normalized.append(parameter.bare_value)
       elif not parameter.is_flag and not parameter.count:
         remaining = parameter.nargs - int(attached_value)
         normalized.extend(args[index:index + remaining])
@@ -185,26 +173,6 @@ class _GeneratedCommand(click.Command):
 
 class _OptionalBooleanOption(click.Option):
   """Marker for a BOOL option whose explicit value may be omitted."""
-
-
-class _FlagValueOption(click.Option):
-  """Scalar option which, given alone, takes ``bare_value`` (``FlagValue``)."""
-
-  def __init__(self, param_decls, *, bare_value: str, **attrs):
-    super().__init__(param_decls, **attrs)
-    self.bare_value = bare_value
-
-
-def _is_option_or_command(ctx, token: str, options) -> bool:
-  """Whether ``token`` starts another option of this command, or a command
-  of the enclosing group, rather than being an option value."""
-  if token.startswith("--") or token in options or (token.startswith("-")
-                                                    and token[:2] in options):
-    return True
-  group = ctx.parent.command if ctx.parent is not None else None
-  # Exact names only: the group's own lookup may fail on ambiguous prefixes.
-  return isinstance(group, click.Group) and click.Group.get_command(
-      group, ctx.parent, token) is not None
 
 
 _NONE_TYPE = type(None)
@@ -277,7 +245,7 @@ def _codec(fn, name: str, annotation, markers: tuple[object, ...]) -> TypeCodec:
   unknown = [
       marker for marker in markers
       if not isinstance(marker, (ChoiceProvider, CliArgument, CliType, KeyValue,
-                                 DatasetRef, PipelineInput, FlagValue))
+                                 DatasetRef, PipelineInput))
   ]
   if unknown:
     raise _error(fn, name, f"unsupported Annotated marker {unknown[0]!r}")
@@ -494,11 +462,6 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
   for parameter, base, markers, injected, is_dataset_ref, is_argument in raw:
     required = parameter.default is inspect.Parameter.empty
     default = None if required else parameter.default
-    flag_values = [
-        marker.value for marker in markers if isinstance(marker, FlagValue)
-    ]
-    if len(flag_values) > 1:
-      raise _error(canonical, parameter.name, "duplicate FlagValue marker")
     codec = None
     if not injected:
       codec = (TypeCodec(CodecKind.STRING, str,
@@ -510,11 +473,6 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
       if is_argument and (codec.multiple or codec.nargs != 1):
         raise _error(canonical, parameter.name,
                      "CliArgument currently supports scalar values only")
-    if flag_values and (injected or is_argument or is_dataset_ref
-                        or codec.kind is CodecKind.BOOLEAN or codec.multiple
-                        or codec.nargs != 1):
-      raise _error(canonical, parameter.name,
-                   "FlagValue requires a scalar, non-boolean option")
     models.append(
         ParameterModel(name=parameter.name,
                        kind=parameter.kind,
@@ -525,8 +483,7 @@ def compile_callable(fn, *, name: str | None = None) -> CommandModel:
                        default=default,
                        injected=injected,
                        dataset_ref=is_dataset_ref,
-                       argument=is_argument,
-                       flag_value=flag_values[0] if flag_values else None))
+                       argument=is_argument))
 
   command_name = name or getattr(canonical, "__name__", "")
   if not command_name or command_name.startswith("-"):
@@ -712,11 +669,7 @@ def command_tokens(model: CommandModel, values: dict) -> list[str]:
                        for token in occurrence)
       continue
     for occurrence in occurrences:
-      if parameter.flag_value is not None:
-        # Attached, so a value spelled like an option is not read as a flag.
-        options.append(f"--{parameter.name}={occurrence[0]}")
-      else:
-        options.extend([f"--{parameter.name}", *occurrence])
+      options.extend([f"--{parameter.name}", *occurrence])
   if any(token.startswith("-") for token in arguments):
     # "--" ends the options, so a value such as "-1 f0 *" stays positional.
     arguments.insert(0, "--")
@@ -1023,11 +976,6 @@ def build_click_command(model: CommandModel,
       attrs["metavar"] = codec.metavar
     if codec.kind is CodecKind.BOOLEAN:
       attrs["metavar"] = "[BOOLEAN]"
-    if parameter.flag_value is not None:
-      option_class = functools.partial(_FlagValueOption,
-                                       bare_value=parameter.flag_value)
-      metavar = codec.metavar or _click_scalar(codec).name.upper()
-      attrs["metavar"] = f"[{metavar}]"
     params.append(option_class(declarations, **attrs))
 
   for option in model.spec.info_options:

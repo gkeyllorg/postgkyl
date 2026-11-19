@@ -7,10 +7,9 @@ Ported from ``src_bak/postgkyl/gk/gk_utils.py``. ``read_gfile``/
 ``read_gfile_if_present`` drops the old code's ``verb_print(ctx, ...)`` call
 (``ctx`` was never a parameter of that function in ``src_bak`` -- an existing
 bug -- and printing belongs to the CLI, not a loader) in favor of returning a
-plain ``found`` flag. ``read_time_trace_if_present`` and
-``set_tick_font_size`` are shared by the program-scale diagnostics that build
-figures directly with matplotlib (``balance``, ``nodes``) rather than each
-keeping its own private copy.
+plain ``found`` flag. ``get_block_indices`` and ``set_tick_font_size`` are
+shared by the program-scale diagnostics that build figures directly with
+matplotlib (``balance``, ``nodes``).
 """
 
 from __future__ import annotations
@@ -64,114 +63,9 @@ def read_gfile_if_present(
   return True, grid, values, gdata
 
 
-def read_time_trace_if_present(
-    file_name: str,
-) -> tuple[bool, np.ndarray | None, np.ndarray | None, GData | None]:
-  """Read a 1-D time-trace file if present: ``(found, time, values, gdata)``.
-
-  ``read_gfile_if_present`` always returns the grid as a *list* of
-  per-dimension arrays (``GDataState.grid`` never hands back a bare
-  ``ndarray``, only a list of one for 1-D data) -- this unwraps that single
-  entry into the plain time array every trace in
-  :mod:`~postgkyl.diagnostics.gk.balance` is indexed against.
-  """
-  found, grid, values, gdata = read_gfile_if_present(file_name)
-  time = grid[0] if found else None
-  return found, time, values, gdata
 
 
-def read_moment_if_present(
-    file_name: str,
-    comp: int) -> tuple[bool, np.ndarray | None, np.ndarray | None]:
-  """Read one component of an integrated-moment time trace if present:
-  ``(found, time, values)``. Unlike :func:`read_time_trace_if_present`, this
-  also handles single-component moments (e.g. ``M0``)."""
-  found, time, values, _ = read_time_trace_if_present(file_name)
-  if not found:
-    return False, None, None
-  time = np.atleast_1d(time)
-  return True, time, values.reshape(time.size, -1)[:, comp]
 
-
-def integrated_moment_file(stem: str, moments: tuple[str, ...]) -> str:
-  """Path of the first existing integrated-moment file among ``moments``.
-
-  Gkeyll writes each integrated moment to ``<stem>integrated_<moment>.gkyl``,
-  e.g. ``<name>-<species>_fdot_integrated_HamiltonianMoments.gkyl``; older
-  versions wrote a single ``<stem>integrated_moms.gkyl``, tried last.
-
-  Args:
-    stem: File path up to ``integrated_``; may contain a ``*`` glob.
-    moments: Moment names, in order of preference.
-
-  Returns:
-    The first existing candidate, or the first candidate if none exists.
-  """
-  names = [f"{stem}integrated_{m}.gkyl" for m in (*moments, "moms")]
-  return next((n for n in names if glob.glob(n)), names[0])
-
-
-def read_balance_files(
-    file_names: list[str]) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-  """Read Gkeyll balance files, one per block, summing columns over blocks.
-
-  A gyrokinetic run that requests a balance diagnostic writes its terms to
-  ``<name>-balance_<type>.gkyl`` (summed over species) and
-  ``<name>-<species>_balance_<type>.gkyl``. The columns are keyed by the
-  files' ``Columns`` metadata. Each block normalizes ``mom_err_norm`` by its
-  own conserved quantity, so normalized errors of several blocks do not add:
-  that column is only returned for a single file.
-
-  Args:
-    file_names: Balance files of the blocks to sum.
-
-  Returns:
-    ``(time, columns)``.
-
-  Raises:
-    ValueError: if a file has no ``Columns`` metadata.
-  """
-  time, columns = None, {}
-  for file_name in file_names:
-    grid, values, gdata = read_gfile(file_name)
-    names = gdata.ctx.get("Columns")
-    if names is None:
-      raise ValueError(f"No 'Columns' metadata in {file_name}")
-    # A single sample loses its time axis to the squeeze in read_gfile.
-    time, values = np.atleast_1d(grid[0]), np.atleast_2d(values)
-    for comp, column in enumerate(c.strip() for c in names.split(",")):
-      columns[column] = columns.get(column, 0.0) + values[:, comp]
-  if len(file_names) > 1:
-    del columns["mom_err_norm"]
-  return time, columns
-
-
-def balance_file_blocks(multib: str, balance_files: list[str],
-                        moment_files: list[str]) -> list[int]:
-  """Return the blocks to read from balance files instead of moment files.
-
-  Args:
-    multib: Block selection, as in :func:`get_block_indices`.
-    balance_files: Balance-file paths (e.g. one per species), with ``*`` for
-      the block index.
-    moment_files: Paths of the files the balance is otherwise computed from,
-      with ``*`` for the block index; empty if there are none.
-
-  Returns:
-    The selected blocks if every one has all ``balance_files`` but some lack
-    one of ``moment_files``; otherwise ``[]`` (read the moment files).
-  """
-
-  def _present(file_name: str, blocks: list[int]) -> bool:
-    return bool(blocks) and all(
-        os.path.exists(file_name.replace("*", str(b))) for b in blocks)
-
-  if moment_files:
-    moment_blocks = get_block_indices(multib, moment_files[0])
-    if all(_present(f, moment_blocks) for f in moment_files):
-      return []
-  blocks = get_block_indices(multib, balance_files[0])
-  return blocks if all(_present(f, blocks) for f in balance_files) else []
 
 
 def read_interpolated_gfile(
@@ -203,16 +97,6 @@ def read_interpolated_gfile(
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), interpolated
 
-
-def sum_label(terms: list[str]) -> str:
-  """Mathtext label of the sum of terms given by their own labels.
-
-  The labels are concatenated, with a ``+`` before every term but the first
-  whose label does not start with a minus sign, e.g. ``["$a$", "$b$",
-  "$-c$"]`` gives ``"$a$$+b$$-c$"`` (rendered ``a+b-c``).
-  """
-  return "".join(t if i == 0 or t.startswith("$-") else "$+" + t[1:]
-                 for i, t in enumerate(terms))
 
 
 def set_tick_font_size(ax, size: float) -> None:

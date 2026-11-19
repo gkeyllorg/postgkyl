@@ -784,27 +784,24 @@ class PostgkylSession:
 
         Reads, per species, the integrated moments
         ``<name>-<species>_<kind>integrated_<moment>.gkyl`` of the first
-        ``<moment>`` holding the balanced quantity (or the older
+        ``<moment>`` holding the quantity (or the older
         ``<kind>integrated_moms.gkyl``): the density is the first component of
         ``M0``, ``M0M1M2``, ``M0M1M2parM2perp`` and ``HamiltonianMoments``, the
-        energy the third component of ``HamiltonianMoments``. ``<kind>`` is
-        ``fdot_`` (required) and, only if the run had sources or non-periodic
-        boundaries, ``source_``, ``source_bgk_`` and ``bflux_<direction><side>_``.
-        The energy balance also requires ``<name>-field_energy_dot.gkyl`` and reads
-        ``<name>-apar_energy_dot.gkyl`` if present (electromagnetic simulations).
-        If ``relative_error`` is requested, the moments of ``f`` (no ``<kind>``)
-        and ``<name>-dt.gkyl`` are also required, and for the energy
-        ``field_energy.gkyl`` (and ``apar_energy.gkyl`` if present).
+        energy the third of ``HamiltonianMoments``. ``<kind>`` is ``fdot_``
+        (required) and, if present, ``source_``, ``source_bgk_`` and
+        ``bflux_<direction><side>_``. The energy balance also requires
+        ``<name>-field_energy_dot.gkyl`` and reads ``<name>-apar_energy_dot.gkyl``
+        if present. ``relative_error`` also requires the moments of ``f`` (no
+        ``<kind>``), ``<name>-dt.gkyl`` and, for the energy, ``field_energy.gkyl``
+        (and ``apar_energy.gkyl`` if present).
 
-        If no path override is given and one of these rate files is missing, the
-        terms are instead read from the balance files Gkeyll writes when a species
-        or the app requests the balance: ``<name>-<species>_balance_particle.gkyl``
-        summed over the species, and ``<name>-balance_energy.gkyl``, which already
-        sums over every species (``species`` is not used) and adds the
-        background-charge term ``bg_dot`` of adiabatic species to the residual.
-        Each file normalizes its relative error by its own block's or species'
-        content, so with several files (blocks or species) these are returned and
-        plotted separately (``mom_err_norm_parts``). Older balance
+        Without a path override, if one of the rate files is missing, the terms are
+        read from Gkeyll's balance files instead:
+        ``<name>-<species>_balance_particle.gkyl``, summed over the species, or
+        ``<name>-balance_energy.gkyl``, already summed over every species and with
+        the background-charge term ``bg_dot`` of adiabatic species. With several
+        files (blocks or species), each normalizes its relative error by its own
+        content, so these stay separate (``mom_err_norm_parts``). Older balance
         files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
         source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
         summed over species, is read.
@@ -818,16 +815,14 @@ class PostgkylSession:
           quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
-          multib: ``"-10"`` (default) for a single block; ``"-1"`` (a bare
-            ``--multib`` on the command line) to discover every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
-            get_block_indices`).
+          multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
+            every block; otherwise a comma list or ``'start:stop[:step]'`` slice of
+            block indices.
           fdot_file: Explicit distribution derivative moments path override.
           source_file: Explicit source moments path override (not of the BGK
             source).
           bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"`` (e.g. ``"xlower"``); unlisted boundaries use
-            the naming convention.
+            ``"<direction><side>"`` (e.g. ``"xlower"``).
           f_file: Explicit integrated distribution moments path override.
           dt_file: Explicit time-step history path override.
           field_dot_file: Explicit field-energy derivative path override (energy
@@ -836,8 +831,8 @@ class PostgkylSession:
             (energy balance only).
           field_file: Explicit field-energy path override (energy balance only).
           apar_file: Explicit parallel-vector-potential energy path override
-            (energy balance only). In path overrides, ``*`` stands for block index
-            and, for per-species files, species name.
+            (energy balance only). In path overrides, ``*`` stands for the block
+            index and, for per-species files, the species name.
           logy: Log-scale the y axis.
           absy: Take the absolute value of every trace before plotting.
           xlabel: Horizontal-axis label.
@@ -847,10 +842,16 @@ class PostgkylSession:
           saveas: If given, save the figure to this path.
 
         Returns:
-          ``(figure, traces)``.
+          ``(figure, traces)``. ``traces`` maps names to 1-D arrays aligned to
+          ``traces["time"]`` (after t=0): ``fdot`` (rate of change of the quantity
+          in f), ``src``, ``src_bgk``, ``bflux_tot``, ``field_dot``, ``apar_dot``,
+          ``bg_dot`` (``None`` when absent, or zero throughout in a balance file),
+          and the residual ``mom_err``, or with ``relative_error`` its relative
+          value ``mom_err_norm`` or, per balance file, ``mom_err_norm_parts`` (a
+          dict keyed by block and/or species).
 
         Raises:
-          FileNotFoundError: if a required file family is missing.
+          FileNotFoundError: if a required file is missing.
           ValueError: if a path override is given without ``species``, a
             field-energy override is given for the particle balance, or no step was
             taken.
