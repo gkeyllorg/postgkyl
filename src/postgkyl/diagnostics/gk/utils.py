@@ -63,11 +63,6 @@ def read_gfile_if_present(
   return True, grid, values, gdata
 
 
-
-
-
-
-
 def read_interpolated_gfile(
     file_name: str,
     poly_order: int,
@@ -96,7 +91,6 @@ def read_interpolated_gfile(
   values = interpolated.get_values()
   grid_out = [np.squeeze(grid[d]) for d in range(len(grid))]
   return grid_out, np.squeeze(values), interpolated
-
 
 
 def set_tick_font_size(ax, size: float) -> None:
