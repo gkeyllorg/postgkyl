@@ -65,7 +65,7 @@ def _validate_modal_data(data: GDataState, operation: str,
 
 
 def _num_fields(data: GDataState) -> int:
-  """Return the number of physical fields stored in raw modal data."""
+  """Return the number of fields stored in raw modal data."""
   basis_count = num_basis(data.num_dims, int(data.ctx["poly_order"]),
                           data.ctx["basis_type"])
   stored = data.values.shape[-1]
@@ -102,7 +102,7 @@ def _interpolation_grid(
 
 
 def _component_coefficients(data: GDataState, comp: int) -> np.ndarray:
-  """Return one physical field's modal coefficients, checked by the public API."""
+  """Return one field's modal coefficients, checked by the public API."""
   count = num_basis(data.num_dims, int(data.ctx["poly_order"]),
                     data.ctx["basis_type"])
   return np.asarray(data.values)[..., comp * count:(comp + 1) * count]

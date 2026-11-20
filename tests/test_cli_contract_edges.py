@@ -121,6 +121,17 @@ def _compiled_option(annotation):
             "consumes_inputs": True,
         }, "only MAP_APPEND and COMBINE"),
         ({
+            "section": Section.VERBS,
+            "execution": Execution.MAP_APPEND,
+            "deactivate_inputs": True,
+        }, "non-consuming COMBINE"),
+        ({
+            "section": Section.VERBS,
+            "execution": Execution.COMBINE,
+            "deactivate_inputs": True,
+            "consumes_inputs": True,
+        }, "non-consuming COMBINE"),
+        ({
             "section": Section.UTILITY,
             "execution": Execution.TERMINAL_ALL,
         }, "non-DATA"),
@@ -832,6 +843,25 @@ def test_combine_can_consume_unreferenced_inputs():
 
   _, space = _invoke_pipeline(combine, [_Dataset("one"), _Dataset("two")])
   assert [dataset.tag for dataset in space.datasets] == ["combined"]
+
+
+def test_combine_can_deactivate_inputs_for_later_activation():
+
+  @command(CommandSpec(Section.VERBS, Execution.COMBINE,
+                       deactivate_inputs=True))
+  def measure(*datasets: object):
+    """Measure the current datasets.
+
+    Args:
+      datasets: Current working set.
+    """
+    return _Dataset("result")
+
+  originals = [_Dataset("raw"), _Dataset("raw")]
+  _, space = _invoke_pipeline(measure, originals)
+  assert [dataset.tag for dataset in space.datasets] == ["result"]
+  assert space.set_aside == originals
+  assert all(dataset not in space.datasets for dataset in originals)
 
 
 def test_combine_and_terminal_all_apply_their_result_policies():

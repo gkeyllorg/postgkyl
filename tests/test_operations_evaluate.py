@@ -34,7 +34,7 @@ def _field(value, grid=None):
 # -------------------------------------------------------- parity with verbs
 def test_add_two_datasets_matches_direct_arithmetic():
   """The grammar's dataset-index tokens are plain 'fN' (no brackets --
-  'fN[c]' is the *component* selector, per the module docstring); this is
+  'fN[c]' is the *field* selector, per the module docstring); this is
   the byte-compatible spelling for combining two whole datasets."""
   a, b = _field(2.0), _field(3.0)
   out = operations.evaluate("f0 f1 +", a, b)
@@ -47,7 +47,7 @@ def test_default_f_means_f0():
   np.testing.assert_allclose(out.get_values().flatten(), 8.0)
 
 
-def test_component_bracket_selects_a_component():
+def test_field_bracket_selects_a_point_value_field():
   a = _make([np.linspace(0.0, 1.0, 5)], np.tile([1.0, 2.0, 3.0], (4, 1)))
   out = operations.evaluate("f0[1] sq", a)
   np.testing.assert_allclose(out.get_values().flatten(), 4.0)
@@ -364,3 +364,30 @@ def test_domain_queries_reject_curvilinear_coordinates(expression, message):
   data = _make(grid, np.ones((3, 4, 1)), mapped_axes={0: 0, 1: 0})
   with pytest.raises(ValueError, match=message):
     operations.evaluate(expression, data)
+
+
+@needs_gkeyll
+@pytest.mark.parametrize("selector, indices", [("1", [1]), ("0:2", [0, 1]),
+                                               ("1,0,1", [1, 0, 1])])
+def test_field_brackets_preserve_complete_modal_blocks(selector, indices):
+  # f=1+2*x and g=3-x on [-1,0] and [0,1], orthonormal p1 basis.
+  data = pg.load(
+      os.path.join(DATA, "generated", "representation_affine_1d.gkyl"))
+  centers = np.array([-0.5, 0.5])
+  coefficients = np.stack([
+      np.column_stack(
+          [np.sqrt(2) * (1 + 2 * centers),
+           np.full(2, np.sqrt(2 / 3))]),
+      np.column_stack(
+          [np.sqrt(2) * (3 - centers),
+           np.full(2, -0.5 * np.sqrt(2 / 3))])
+  ],
+                          axis=1)
+  result = operations.evaluate(f"f0[{selector}] 2 *", data)
+  assert result.backend == "gkyl"
+  assert result.ctx["value_form"] == "modal"
+  assert result.ctx["poly_order"] == 1
+  np.testing.assert_allclose(result.values,
+                             2 * coefficients[:, indices, :].reshape(2, -1),
+                             rtol=2e-14,
+                             atol=2e-14)

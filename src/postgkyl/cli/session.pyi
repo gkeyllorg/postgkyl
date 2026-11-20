@@ -577,7 +577,10 @@ class PostgkylSession:
     r"""Evaluate an RPN expression over an explicit list of datasets.
 
         ``f``/``fN`` tokens in ``chain`` refer to ``datasets[N]`` (``f`` == ``f0``);
-        see the module docstring for the token grammar. The result is built via
+        ``fN[c]`` selects field ``c`` (also accepting slices and comma-separated
+        indices), retaining its complete DG block just like ``select(field=c)``.
+        Use ``select(comp=c)`` before evaluating to extract raw stored components.
+        See the module docstring for the token grammar. The result is built via
         ``datasets[0]._result(...)`` (so it stays the caller's concrete dataset
         class) and holds the single value left on top of the stack.
 
@@ -745,79 +748,137 @@ class PostgkylSession:
             ``data``'s, or ``dims`` is empty, repeated, or out of range.
         """
 
-  def gk_energy_balance(self,
-                        name: str,
-                        species: list[str] | tuple[str, ...],
-                        *,
-                        path: str = './',
-                        relative_error: bool = False,
-                        multib: str = '-10',
-                        field_dot_file: str | None = None,
-                        apar_dot_file: str | None = None,
-                        fdot_file: str | None = None,
-                        source_file: str | None = None,
-                        bflux_files: Mapping[str, str] | None = None,
-                        f_file: str | None = None,
-                        field_file: str | None = None,
-                        apar_file: str | None = None,
-                        dt_file: str | None = None,
-                        logy: bool = False,
-                        absy: bool = False,
-                        xlabel: str = 'Time (s)',
-                        ylabel: str | None = None,
-                        title: str | None = None,
-                        indent_left: float = 0.0,
-                        add_width: float = 0.0,
-                        show: bool = False,
-                        saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
+  def frequency(self,
+                *,
+                spectrum: bool = False,
+                dir: int | None = None,
+                tag: str | None = None,
+                fft: bool = False,
+                guess: str | None = None,
+                min_n: int | None = None,
+                time_norm: str | float | None = None,
+                time_window: tuple[float, float] | None = None,
+                space_norm: str | float | None = None,
+                interpolated: bool = False,
+                inplace: bool = False,
+                label: str | None = None) -> PostgkylSession:
+    r"""Print dominant angular frequencies and return curves or spectra.
 
-        Requires, per species (named ``<name>-<species_name>``): an
-        ``_fdot_integrated_moms.gkyl`` file, and (only if the run had sources or
-        non-periodic boundaries) ``_source_integrated_moms.gkyl`` and
-        ``_bflux_<direction><side>_integrated_HamiltonianMoments.gkyl`` files. A
-        ``<name>-field_energy_dot.gkyl`` file is required; ``<name>-apar_energy_dot
-        .gkyl`` is read if present (electromagnetic simulations). If
-        ``relative_error`` is requested, the corresponding non-``_dot``
-        (``_integrated_moms.gkyl``/``field_energy.gkyl``/``apar_energy.gkyl``) and
-        ``<name>-dt.gkyl`` files are also required.
+        Args:
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Measure frequency versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
+          fft: Use a temporal FFT peak for plain time traces.
+          guess: Initial sinusoid parameters ``amplitude,omega,phase,offset``.
+          min_n: Minimum length of an automatic leading fit window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
+          inplace: Mutate a plain fitted trace instead of creating one.
+          label: Optional label for the returned dataset.
+        """
+
+  def gk_balance(self,
+                 name: str,
+                 species: list[str] | tuple[str, ...] | None = None,
+                 *,
+                 quantity: Literal['particle', 'energy'] = 'particle',
+                 path: str = './',
+                 relative_error: bool = False,
+                 multib: str = '-10',
+                 fdot_file: str | None = None,
+                 source_file: str | None = None,
+                 bflux_files: Mapping[str, str] | None = None,
+                 f_file: str | None = None,
+                 dt_file: str | None = None,
+                 field_dot_file: str | None = None,
+                 apar_dot_file: str | None = None,
+                 field_file: str | None = None,
+                 apar_file: str | None = None,
+                 logy: bool = False,
+                 absy: bool = False,
+                 xlabel: str = 'Time (s)',
+                 ylabel: str | None = None,
+                 title: str | None = None,
+                 show: bool = False,
+                 saveas: str | None = None) -> PostgkylSession:
+    r"""Plot (and compute) the particle or energy balance of a gyrokinetic run.
+
+        Reads, per species, the integrated moments
+        ``<name>-<species>_<kind>integrated_<moment>.gkyl`` of the first
+        ``<moment>`` holding the quantity (or the older
+        ``<kind>integrated_moms.gkyl``): the density is the first component of
+        ``M0``, ``M0M1M2``, ``M0M1M2parM2perp`` and ``HamiltonianMoments``, the
+        energy the third of ``HamiltonianMoments``. ``<kind>`` is ``fdot_``
+        (required) and, if present, ``source_``, ``source_bgk_`` and
+        ``bflux_<direction><side>_``. The energy balance also requires
+        ``<name>-field_energy_dot.gkyl`` and reads ``<name>-apar_energy_dot.gkyl``
+        if present. ``relative_error`` also requires the moments of ``f`` (no
+        ``<kind>``), ``<name>-dt.gkyl`` and, for the energy, ``field_energy.gkyl``
+        (and ``apar_energy.gkyl`` if present).
+
+        Without a path override, if one of the rate files is missing, the terms are
+        read from Gkeyll's balance files instead:
+        ``<name>-<species>_balance_particle.gkyl``, summed over the species, or
+        ``<name>-balance_energy.gkyl``, already summed over every species and with
+        the background-charge term ``bg_dot`` of adiabatic species. With several
+        files (blocks or species), each normalizes its relative error by its own
+        content, so these stay separate (``mom_err_norm_parts``). Older balance
+        files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
+        source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
+        summed over species, is read.
+
+        The rates are only defined once a step has been taken, so t=0 is skipped.
 
         Args:
           name: Simulation name (also the file prefix).
-          species: Species names to sum over.
+          species: Species names to sum over; if omitted, only the app's balance
+            file (summed over species) is read.
+          quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
           multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
-            get_block_indices`).
-          field_dot_file: Explicit field-energy derivative path override.
-          apar_dot_file: Explicit parallel-vector-potential energy derivative path.
+            every block; otherwise a comma list or ``'start:stop[:step]'`` slice of
+            block indices.
           fdot_file: Explicit distribution derivative moments path override.
-          source_file: Explicit source moments path override.
+          source_file: Explicit source moments path override (not of the BGK
+            source).
           bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"`` (e.g. ``"xlower"``); unlisted boundaries use
-            the naming convention.
+            ``"<direction><side>"`` (e.g. ``"xlower"``).
           f_file: Explicit integrated distribution moments path override.
-          field_file: Explicit field-energy path override.
-          apar_file: Explicit parallel-vector-potential energy path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for block index and, for per-species files, species name.
+          dt_file: Explicit time-step history path override.
+          field_dot_file: Explicit field-energy derivative path override (energy
+            balance only).
+          apar_dot_file: Explicit parallel-vector-potential energy derivative path
+            (energy balance only).
+          field_file: Explicit field-energy path override (energy balance only).
+          apar_file: Explicit parallel-vector-potential energy path override
+            (energy balance only). In path overrides, ``*`` stands for the block
+            index and, for per-species files, the species name.
           logy: Log-scale the y axis.
           absy: Take the absolute value of every trace before plotting.
           xlabel: Horizontal-axis label.
           ylabel: Vertical-axis label; use the derived formula when ``None``.
           title: Figure title; use the balance description when ``None``.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
           show: Call ``plt.show()`` before returning.
           saveas: If given, save the figure to this path.
 
         Returns:
-          ``(figure, traces)``.
+          ``(figure, traces)``. ``traces`` maps names to 1-D arrays aligned to
+          ``traces["time"]`` (after t=0): ``fdot`` (rate of change of the quantity
+          in f), ``src``, ``src_bgk``, ``bflux_tot``, ``field_dot``, ``apar_dot``,
+          ``bg_dot`` (``None`` when absent, or zero throughout in a balance file),
+          and the residual ``mom_err``, or with ``relative_error`` its relative
+          value ``mom_err_norm`` or, per balance file, ``mom_err_norm_parts`` (a
+          dict keyed by block and/or species).
 
         Raises:
-          FileNotFoundError: if a required file family is missing.
+          FileNotFoundError: if a required file is missing.
+          ValueError: if a path override is given without ``species``, a
+            field-energy override is given for the particle balance, or no step was
+            taken.
         """
 
   def gk_load_distf(self,
@@ -876,15 +937,13 @@ class PostgkylSession:
 
   def gk_load_quantity(
       self,
-      quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag',
-                        'E_field_contra', 'E_field_cov', 'E_field_mag',
+      quantity: Literal['B_tot', 'B_tot_mag', 'E_field', 'E_field_mag',
                         'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3',
                         'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta',
-                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
-                        'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag',
-                        'debye_length', 'diamag_vel', 'distf', 'field',
-                        'flux_energy', 'flux_energy_ExB', 'flux_energy_dB',
-                        'flux_particle', 'flux_particle_ExB',
+                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp',
+                        'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf',
+                        'field', 'flux_energy', 'flux_energy_ExB',
+                        'flux_energy_dB', 'flux_particle', 'flux_particle_ExB',
                         'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag',
                         'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo',
                         'geo_int_jacobgeo_inv', 'geo_int_jacobtot',
@@ -902,7 +961,8 @@ class PostgkylSession:
       path: str = './',
       tag: str = 'default',
       label: str | None = None,
-      direction: int | None = None,
+      direction: str | None = None,
+      rep: Literal['covar', 'contra', 'cyl', 'cart', 'norm'] | None = None,
       mass: float | None = None,
       charge: float | None = None,
       gamma_e: float | None = None,
@@ -915,15 +975,19 @@ class PostgkylSession:
       nu_frac: float | None = None,
       conv: float | None = None,
       fluct: Literal['none', 'y', 'yz'] | None = None,
-      read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+      options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Load and compute a pre-named gyrokinetic quantity.
+
+        Derived vector names have no representation suffix: use ``B_tot``, for
+        example, and select components with ``rep`` and ``direction``. The catalog
+        lists each quantity once and states its default representation.
 
         Modal source files retain their DG representation through the calculation:
         products, inverses, square roots, and derivatives use native DG operations.
         Call ``interpolate()`` on the returned datasets when point samples are needed.
 
         Args:
-          quantity: Registered quantity name (see :func:`available_quantities`).
+          quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
           species: Species name, or a comma-separated list of them; ``None`` for
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -934,9 +998,14 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
-            component of a vector, or the direction of a gradient length, flux, or
-            diffusivity. Required by those quantities, which assume no direction.
+          direction: Numeric component index 0,1,2 (Python also accepts integers).
+            For covar/contra these are computational components; for cyl the order
+            is R,phi,Z; for cart it is X,Y,Z; norm selects increasing-coordinate
+            unit normals. In 2x the full indices remain 0=radial, 1=binormal,
+            2=parallel.
+          rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
+            uses the quantity's native representation, shown by ``quantity_catalog()``.
+            Only for vector quantities.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -959,8 +1028,9 @@ class PostgkylSession:
             removed from the energy flux to form the heat flux (default 3/2).
           fluct: For cross-field fluxes, keep only the turbulent part: the
             correlation of the fluctuations about the Jacobian-weighted ``y`` or
-            ``(y, z)`` average; ``none`` (default) keeps the total flux.
-          read_options: Additional provider options as repeated key/value entries.
+            ``(y, z)`` average in 3x. In 2x, both ``y`` and ``yz`` average along
+            stored dimension 1 (z). ``none`` (default) keeps the total flux.
+          options: Additional provider options as repeated key/value entries.
 
         Returns:
           A list of computed ``GDataState`` datasets.
@@ -1030,8 +1100,7 @@ class PostgkylSession:
                ylabel: str = 'Z (m)',
                zlabel: str = '$\\psi$',
                title: str | None = None,
-               shift_axis: tuple[float, float] = (0.0, 0.0),
-               stretch_axis: tuple[float, float] = (1.0, 1.0),
+               aspect: float = 1.0,
                multib_unicolor: bool = False,
                no_show: bool = False,
                saveas: str | None = None) -> PostgkylSession:
@@ -1066,80 +1135,14 @@ class PostgkylSession:
           ylabel: Vertical-axis label.
           zlabel: Poloidal-flux colorbar label.
           title: Figure title.
-          shift_axis: Horizontal and vertical shifts of the displayed axes, as fractions
-            of the figure width and height.
-          stretch_axis: Factors for displayed axes width and height. Values other than
-            ``(1, 1)`` intentionally change the displayed R/Z scaling.
+          aspect: Displayed length of a unit of Z relative to a unit of R; ``1``
+            draws the geometry to scale.
           multib_unicolor: Use one color for every block instead of cycling.
           no_show: Return without opening a plot window.
           saveas: If given, save the figure to this path.
 
         Returns:
           The populated Figure.
-        """
-
-  def gk_particle_balance(self,
-                          name: str,
-                          species: str,
-                          *,
-                          path: str = './',
-                          relative_error: bool = False,
-                          multib: str = '-10',
-                          fdot_file: str | None = None,
-                          source_file: str | None = None,
-                          bflux_files: Mapping[str, str] | None = None,
-                          f_file: str | None = None,
-                          dt_file: str | None = None,
-                          logy: bool = False,
-                          absy: bool = False,
-                          xlabel: str = 'Time (s)',
-                          ylabel: str | None = None,
-                          title: str | None = None,
-                          indent_left: float = 0.0,
-                          add_width: float = 0.0,
-                          show: bool = False,
-                          saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the particle balance of a single species.
-
-        Requires ``<name>-<species>_fdot_integrated_moms.gkyl``; and (only if the
-        run had sources or non-periodic boundaries)
-        ``<name>-<species>_source_integrated_moms.gkyl`` and
-        ``<name>-<species>_bflux_<direction><side>_integrated_HamiltonianMoments
-        .gkyl`` files. If ``relative_error`` is requested,
-        ``<name>-<species>_integrated_moms.gkyl`` and ``<name>-dt.gkyl`` are also
-        required.
-
-        Args:
-          name: Simulation name (also the file prefix).
-          species: Species name.
-          path: Directory holding the simulation output.
-          relative_error: Plot the relative error instead of every balance term.
-          multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices.
-          fdot_file: Explicit distribution derivative moments path override.
-          source_file: Explicit source moments path override.
-          bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"``; unlisted boundaries use the naming
-            convention.
-          f_file: Explicit integrated distribution moments path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for the block index.
-          logy: Log-scale the y axis.
-          absy: Take the absolute value of every trace before plotting.
-          xlabel: Horizontal-axis label.
-          ylabel: Vertical-axis label.
-          title: Figure title.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
-          show: Call ``plt.show()`` before returning.
-          saveas: If given, save the figure to this path.
-
-        Returns:
-          ``(figure, traces)``.
-
-        Raises:
-          FileNotFoundError: if a required file family is missing.
         """
 
   def grid(self,
@@ -1172,19 +1175,31 @@ class PostgkylSession:
 
   def growth(self,
              *,
+             spectrum: bool = False,
+             dir: int | None = None,
+             tag: str | None = None,
              guess: str | None = None,
              min_n: int | None = None,
+             time_norm: str | float | None = None,
+             time_window: tuple[float, float] | None = None,
+             space_norm: str | float | None = None,
+             interpolated: bool = False,
              inplace: bool = False,
-             tag: str | None = None,
              label: str | None = None) -> PostgkylSession:
-    r"""Fit exponential growth on the best leading data window.
+    r"""Print growth rates and return fitted curves, or a spatial rate spectrum.
 
         Args:
-          data: One-dimensional point-value dataset to fit.
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Compute growth rate versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
           guess: Initial ``amplitude,rate`` parameter guess.
           min_n: Minimum number of points in the fitted leading window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
           inplace: Mutate and return ``data`` instead of creating a dataset.
-          tag: Optional tag for the fitted curve.
           label: Optional label for the fitted curve.
 
         Returns:
@@ -1299,7 +1314,7 @@ class PostgkylSession:
            z4: str | None = None,
            z5: str | None = None,
            component: str | None = None,
-           read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+           options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -1360,7 +1375,7 @@ class PostgkylSession:
           z4: Partial-load selector for coordinate direction 4.
           z5: Partial-load selector for coordinate direction 5.
           component: Partial-load component selector.
-          read_options: Reader-specific options as repeated key/value entries.
+          options: Reader-specific options as repeated key/value entries.
         """
 
   def local_poly(self,
@@ -1476,6 +1491,34 @@ class PostgkylSession:
             dimensionality; if the mapping has no ``basis_type``/``poly_order``
             metadata (and none was given at load time); or if its component
             count does not match the expected ``m * num_basis``.
+        """
+
+  def map_interp(self,
+                 *,
+                 axes: str | float,
+                 dest: str,
+                 source: str | None = None,
+                 psi_file: str | None = None,
+                 inplace: bool = False,
+                 tag: str | None = None,
+                 label: str | None = None,
+                 optional: Mapping[str, str] | None = None) -> PostgkylSession:
+    r"""Map one or multiple coordinates of an interpolated dataset.
+
+        See ``--avail_maps`` for a list of currently available maps.
+
+        Args:
+          data: Interpolated dataset.
+          axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
+          dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+          source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
+          psi_file: Optional path to Gkeyll's psi field.
+          optional: Normalization inputs as metadata names or numeric values. At the
+            CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
+            ``-o rho_s=rho_s0 -o Cy=0.2``; ``-o rho_s=1.1`` uses a literal value.
+          inplace: Mutate and return ``data`` when true.
+          tag: Optional tag for the result.
+          label: Optional display label for the result.
         """
 
   def map_to_torus_3d(self,
@@ -3975,6 +4018,7 @@ class PostgkylSession:
   def select(self,
              *,
              comp: str | float | None = None,
+             field: str | float | None = None,
              z0: str | float | None = None,
              z1: str | float | None = None,
              z2: str | float | None = None,
@@ -3992,9 +4036,12 @@ class PostgkylSession:
         the legacy behaviour. Floats snap to the nearest stored point, or cell
         center on an edge grid; ties choose the first index and out-of-domain
         coordinates snap to an endpoint. No values are evaluated or interpolated.
-        Modal DG selection copies whole cells with every coefficient unchanged.
-        ``comp`` on modal DG data selects whole physical fields, retaining each
-        field's complete basis coefficient block. Slice stops are exclusive.
+        Coordinate selection copies whole DG cells with every coefficient unchanged.
+        ``comp`` indexes the stored array's last axis directly. On packed DG data,
+        this extracts raw coefficients (or nodes) as ordinary cell arrays, without
+        evaluating or normalizing them; the result no longer carries a DG basis.
+        Use ``field`` to retain each field's complete DG block instead.
+        ``comp`` and ``field`` are mutually exclusive. Slice stops are exclusive.
 
         A curvilinear axis (a multi-dimensional grid array, produced by ``.map()``
         with ``space="conf"``) has no single 1-D coordinate array of its own to
@@ -4024,7 +4071,8 @@ class PostgkylSession:
 
         Args:
           data: Dataset whose cells or point values are selected.
-          comp: Component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+          comp: Stored last-axis component selector such as ``"0"``, ``"0:3"``, or ``"0,2"``.
+          field: Field selector, retaining complete DG blocks.
           z0: Selector for coordinate direction 0.
           z1: Selector for coordinate direction 1.
           z2: Selector for coordinate direction 2.
@@ -4060,6 +4108,28 @@ class PostgkylSession:
 
         Returns:
           The same datasets, reordered by their source filename's natural sort key.
+        """
+
+  def units(self,
+            *,
+            source: str,
+            dest: str,
+            inplace: bool = False,
+            tag: str | None = None,
+            label: str | None = None) -> PostgkylSession:
+    r"""Scale dataset values from ``source`` units to ``dest`` units.
+
+        Source and destination must describe the same dimension. Use ``units
+        --avail`` to list supported translations. The grid is not converted. Native
+        modal coefficients are scaled without interpolation.
+
+        Args:
+          data: Dataset to convert.
+          source: Unit currently used by the values.
+          dest: Unit desired for the values.
+          inplace: Mutate and return ``data`` instead of a new dataset.
+          tag: Optional tag for the result.
+          label: Optional display label, overriding an automatic unit replacement.
         """
 
   def val2coord(self,

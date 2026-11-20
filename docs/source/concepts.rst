@@ -57,6 +57,26 @@ Plotting raw modal data draws the stored coefficients as separate channels
 on the cell grid, without changing the representation. For example,
 ``pgkyl file.gkyl pl`` plots coefficients. To plot the evaluated field, use
 ``pgkyl file.gkyl interpolate pl`` or ``pgkyl file.gkyl local_poly pl``.
+
+Convert value units
+-------------------
+
+``units`` scales dataset values while preserving the grid and data
+representation. State the units currently used by the values explicitly::
+
+   pgkyl sim-elc_M0_0.gkyl units --source 'm^-3' --dest 'cm^-3'
+   pgkyl gk_load_q -n sim -s elc -q temp -f 0 units --source J --dest keV
+   pgkyl sim-field_0.gkyl units --source V --dest kV
+
+In Python, use ``pg.units(data, source='J', dest='eV')`` or
+``data.units(source='m/s', dest='km/s')``. Supported families are
+``m^-3``/``cm^-3``, ``J``/``eV``/``keV``, ``m/s``/``km/s``, ``V``/``kV``,
+``V/m``/``kV/m``, and ``T``/``G``. Every conversion works in both
+directions; energy units can also convert among each other. A matching
+unit in the display label is updated, and the result records
+``ctx['value_units']``. Coordinate units are unchanged.
+Run ``pgkyl units --avail`` to list the available translations without
+loading a dataset.
 ``represent(to='nodal')`` and ``represent(to='quad')`` also provide field values
 at basis nodes and quadrature points respectively.
 
@@ -94,7 +114,15 @@ lifted back onto the full basis, constant along the averaged directions, so
 ``--dims 1``. ``eval_at_coord_proj`` evaluates at
 specified coordinates and projects into the basis of the surviving directions.
 
-After interpolation, ``select(comp=...)`` selects components and
+``select(comp=...)`` (CLI ``select -c``) indexes the stored array's last
+axis. Before interpolation this selects individual DG coefficients, returned
+as ordinary cell arrays suitable for plotting; it does not evaluate the field
+or normalize the constant coefficient. For example, on scalar 1D p1 data,
+``select -c0`` extracts the constant coefficient and ``select -c1`` the linear
+coefficient. Use ``select(field=...)`` (CLI ``select --field``) to retain an
+array's complete DG expansion for further DG operations.
+
+After interpolation, ``select(comp=...)`` selects array components and
 ``select(z0=..., z1=...)`` selects positions. A selected axis may retain a
 singleton dimension. Rendering squeezes it as needed.
 Use ``local_poly()`` when the plot must preserve jumps between DG cells.

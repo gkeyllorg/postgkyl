@@ -83,7 +83,7 @@ def test_rpn_addition_of_independent_loads_has_analytic_values():
 @needs_gkeyll
 def test_weighted_average_checks_collocation_and_accepts_one_weight_field():
   data = pg.load(GEN / "polynomial_1d_ms_p1.gkyl")
-  weight = data.select(comp=0)
+  weight = data.select(field=0)
   result = data.average([0], weight=weight)
   # int(f^2)=21, int(f*g)=28.5, int(f)=7.5.
   np.testing.assert_allclose(result, [2.8, 3.8], **ROUND_OFF)
@@ -100,12 +100,12 @@ def test_grid_collocation_is_independent_of_units_and_origin(
     scale, offset, shift):
   data = pg.load(GEN / "polynomial_1d_ms_p1.gkyl")
   data.grid = [data.grid[0] * scale + offset]
-  weight = data.select(comp=0)
+  weight = data.select(field=0)
   weight.grid = [weight.grid[0] + shift]
   with pytest.raises(ValueError, match="different grids"):
     data.average([0], weight=weight)
   with pytest.raises(ValueError, match="different grids"):
-    data.select(comp=0) * weight
+    data.select(field=0) * weight
 
 
 @needs_gkeyll
@@ -113,7 +113,7 @@ def test_native_average_rejects_nonuniform_cells_before_uniform_grid_kernel():
   data = pg.load(GEN / "polynomial_1d_ms_p1.gkyl")
   data.grid[0][1] += 0.25
   with pytest.raises(ValueError, match="uniform Cartesian cell edges"):
-    data.average([0], weight=data.select(comp=0))
+    data.average([0], weight=data.select(field=0))
 
 
 @needs_gkeyll
@@ -134,7 +134,7 @@ def test_native_uniform_grid_accepts_coordinate_roundoff_at_large_origin():
   # reconstructed from its bounds. In xi=x-1e9, f=1+3*xi, g=4.25-0.75*xi.
   assert np.ptp(np.diff(data.grid[0])) > 1e-8
   np.testing.assert_allclose(data.integrate(), [2.5, 3.875], **ROUND_OFF)
-  average = data.average([0], weight=data.select(comp=0))
+  average = data.average([0], weight=data.select(field=0))
   # int(f*f)/int(f)=2.8; int(f*g)/int(f)=3.8, invariant under this affine map.
   np.testing.assert_allclose(average, [2.8, 3.8], **ROUND_OFF)
 

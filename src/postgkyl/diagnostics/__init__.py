@@ -122,8 +122,7 @@ command(
 for _function in (
     gk.load_distf,
     gk.load_quantity,
-    gk.energy_balance,
-    gk.particle_balance,
+    gk.balance,
     gk.nodes,
 ):
   _resolve(_function)
@@ -135,9 +134,9 @@ for _name in (
     "resolve_frames",
     "available_quantities",
     "fetch_beta_from_bmag_press",
-    "fetch_diamag_vel",
-    "fetch_ExB_vel",
-    "fetch_gradB_vel",
+    "fetch_diamag_vel_contra",
+    "fetch_ExB_vel_contra",
+    "fetch_gradB_vel_contra",
     "fetch_M1_from_H",
     "fetch_press_from_BiMax",
     "fetch_press_from_Max",
@@ -148,8 +147,7 @@ for _name in (
     "fetch_temp_from_Tpar_Tperp",
     "fetch_Tperp_from_BiMax",
     "fetch_Tperp_from_M0_M2perp",
-    "energy_balance_error",
-    "particle_balance_error",
+    "balance_error",
     "multib_tag",
     "nodes_to_RZ",
 ):

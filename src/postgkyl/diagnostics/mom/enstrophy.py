@@ -28,8 +28,8 @@ def _enstrophy_terms(data: GData) -> tuple[float, float]:
     raise ValueError("enstrophy requires two or three spatial dimensions")
   if data.backend == "gkyl" and data.ctx.get("value_form") != "modal":
     data = data.represent(to="modal")
-  rho = data.select(comp=0)
-  velocity = [data.select(comp=i) / rho for i in (1, 2, 3)]
+  rho = data.select(field=0)
+  velocity = [data.select(field=i) / rho for i in (1, 2, 3)]
   gradient = [[
       component.differentiate(direction=d) for d in range(data.num_dims)
   ] for component in velocity]

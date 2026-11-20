@@ -285,35 +285,23 @@ class TestGkNodesSynthetic:
     finally:
       plt.close(fig)
 
-  def test_stretch_and_shift_resize_and_move_displayed_axes(
-      self, stub, tmp_path):
+  @pytest.mark.parametrize("aspect", [1.0, 0.5, 2.0])
+  def test_aspect_scales_displayed_z_relative_to_r(self, stub, tmp_path,
+                                                   aspect):
+    """A unit of Z is drawn ``aspect`` times as long as a unit of R."""
     path = str(tmp_path) + "/"
     stub.add(f"{path}sim-geo_corn_nodes.gkyl", [np.arange(3.0)] * 2,
              _square_nodes())
-    figures = [
-        nodes.nodes("sim", path=path, no_show=True),
-        nodes.nodes("sim", path=path, stretch_axis=(1.1, 0.8), no_show=True),
-        nodes.nodes("sim", path=path, shift_axis=(0.03, 0.02), no_show=True),
-        nodes.nodes("sim", path=path, shift_axis=(-0.02, -0.03), no_show=True),
-    ]
+    fig = nodes.nodes("sim", path=path, aspect=aspect, no_show=True)
     try:
-      for fig in figures:
-        fig.canvas.draw()
-      base, stretched, shifted, back = [
-          fig.axes[0].get_position() for fig in figures
-      ]
-      assert stretched.width == pytest.approx(1.1 * base.width)
-      assert stretched.height == pytest.approx(0.8 * base.height)
-      assert figures[1].axes[0].get_aspect() == "auto"
-      assert shifted.x0 == pytest.approx(base.x0 + 0.03)
-      assert shifted.y0 == pytest.approx(base.y0 + 0.02)
-      assert shifted.width == pytest.approx(base.width)
-      assert figures[2].axes[0].get_aspect() == 1.0
-      assert back.x0 == pytest.approx(base.x0 - 0.02)
-      assert back.y0 == pytest.approx(base.y0 - 0.03)
+      fig.canvas.draw()
+      ax = fig.axes[0]
+      box = ax.get_window_extent()
+      (r0, r1), (z0, z1) = ax.get_xlim(), ax.get_ylim()
+      assert (box.height / (z1 - z0)) / (box.width /
+                                         (r1 - r0)) == pytest.approx(aspect)
     finally:
-      for fig in figures:
-        plt.close(fig)
+      plt.close(fig)
 
   def test_cli_surf_nodes_is_a_bare_flag(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -334,8 +322,8 @@ class TestGkNodesSynthetic:
     stub.add(f"{path}sim-geo_int_nodes.gkyl", [np.arange(3.0)] * 2,
              np.ones((4, 4, 3)))
     result = CliRunner().invoke(cli, [
-        "gk_nodes", "-n", "sim", "-p", path, "-i", "--shift_axis", "0.02",
-        "-0.01", "--stretch_axis", "1.5", "0.8", "--no_show"
+        "gk_nodes", "-n", "sim", "-p", path, "-i", "--aspect", "0.8",
+        "--no_show"
     ])
     assert result.exit_code == 0, result.output
 
@@ -418,13 +406,10 @@ class TestGkNodesSynthetic:
     with pytest.raises(ValueError, match="Surface nodes require 2D or 3D"):
       nodes.nodes("sim", path=path, surf_nodes=True)
 
-  @pytest.mark.parametrize("option,value,match", [
-      ("stretch_axis", (1.0, 0.0), "stretch_axis"),
-      ("shift_axis", (float("nan"), 0.0), "shift_axis"),
-  ])
-  def test_invalid_axis_layout_raises(self, option, value, match):
-    with pytest.raises(ValueError, match=match):
-      nodes.nodes("sim", **{option: value})
+  @pytest.mark.parametrize("aspect", [0.0, -1.0, float("nan"), float("inf")])
+  def test_invalid_aspect_raises(self, aspect):
+    with pytest.raises(ValueError, match="aspect"):
+      nodes.nodes("sim", aspect=aspect)
 
   def test_interior_shape_must_match_corner_grid(self, stub, tmp_path):
     path = str(tmp_path) + "/"
@@ -453,6 +438,21 @@ class TestGkNodesSynthetic:
       plt.close(fig)
 
 
+def _assert_colorbar(fig) -> None:
+  """One colorbar, as tall as the plot, and every label inside the figure."""
+  fig.canvas.draw()
+  renderer = fig.canvas.get_renderer()
+  (ax, ) = fig.axes
+  (cbar_ax, ) = ax.child_axes
+  assert cbar_ax.get_window_extent().height == pytest.approx(
+      ax.get_window_extent().height)
+  # The axes' tight box includes its labels, ticks and the colorbar.
+  tight = ax.get_tightbbox(renderer)
+  assert fig.bbox.x0 <= tight.x0 and tight.x1 <= fig.bbox.x1
+  assert fig.bbox.y0 <= tight.y0 and tight.y1 <= fig.bbox.y1
+  assert tight.x1 >= cbar_ax.get_tightbbox(renderer).x1
+
+
 class TestGkNodesPsiOverlay:
   """The ``psi_file`` overlay path, stubbed through ``gk_utils.GData`` (its
   ``.interpolate()`` returns itself, carrying the already pre-shaped
@@ -472,7 +472,7 @@ class TestGkNodesPsiOverlay:
     self._add_psi(stub, path)
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl")
     try:
-      assert len(fig.axes) == 2
+      _assert_colorbar(fig)
     finally:
       plt.close(fig)
 
@@ -483,7 +483,7 @@ class TestGkNodesPsiOverlay:
     self._add_psi(stub, path)
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", contour=True)
     try:
-      assert len(fig.axes) == 2
+      _assert_colorbar(fig)
     finally:
       plt.close(fig)
 
@@ -495,6 +495,7 @@ class TestGkNodesPsiOverlay:
     fig = nodes.nodes("sim", path=path, psi_file="sim-psi.gkyl", clevels="0.5")
     try:
       assert len(fig.axes) == 1
+      assert fig.axes[0].child_axes == []
     finally:
       plt.close(fig)
 
@@ -507,7 +508,7 @@ class TestGkNodesPsiOverlay:
     stub.add(abs_psi, psi_grid, np.ones((3, 2)))
     fig = nodes.nodes("sim", path=path, psi_file=abs_psi)
     try:
-      assert len(fig.axes) == 2
+      _assert_colorbar(fig)
     finally:
       plt.close(fig)
 
@@ -525,11 +526,10 @@ class TestGkNodesPsiOverlayRealFixtures:
                       path=path,
                       psi_file=os.path.join(GENERATED, "2d_mt_p2.gkyl"),
                       contour=contour,
-                      stretch_axis=(1.1, 0.8),
+                      aspect=0.7,
                       no_show=True)
     try:
-      assert len(fig.axes) == 2
-      assert fig.axes[1].get_position().width > 0
+      _assert_colorbar(fig)
       if contour:
         assert len(fig.axes[0].collections) > 2
       else:

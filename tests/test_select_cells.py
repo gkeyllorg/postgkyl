@@ -71,11 +71,11 @@ def test_modal_ranges(modal, selector, expected):
 
 
 def test_fields_keep_complete_coefficient_blocks(modal):
-  np.testing.assert_array_equal(modal.select(comp=0).values, modal.values)
-  doubled = modal.select(comp="0,0")
+  np.testing.assert_array_equal(modal.select(field=0).values, modal.values)
+  doubled = modal.select(field="0,0")
   np.testing.assert_array_equal(doubled.values,
                                 np.concatenate([modal.values] * 2, axis=-1))
-  np.testing.assert_array_equal(doubled.select(comp="1:").values, modal.values)
+  np.testing.assert_array_equal(doubled.select(field="1:").values, modal.values)
   np.testing.assert_allclose(doubled.interpolate().values[..., 1],
                              modal.interpolate().values[..., 0])
 
@@ -110,10 +110,10 @@ def test_repeated_and_inplace_selection(modal):
         "z1": np.inf
     }, ValueError),
     ({
-        "comp": "1:1"
+        "field": "1:1"
     }, ValueError),
     ({
-        "comp": 1
+        "field": 1
     }, IndexError),
 ])
 def test_invalid_selection_preserves_input(modal, kwargs, error):
@@ -135,7 +135,7 @@ def test_cli_modal_selection_retains_dimension(modal):
 
 
 def test_interpolated_multicomponent_selection_copies_nearest_point(modal):
-  field = modal.select(comp="0,0").interpolate()
+  field = modal.select(field="0,0").interpolate()
   selected = field.select(z1=0.22, z2=-1)
   np.testing.assert_array_equal(selected.values, field.values[:, 1:2, -1:])
   assert selected.values.shape == (8, 1, 1, 2)
@@ -144,3 +144,70 @@ def test_interpolated_multicomponent_selection_copies_nearest_point(modal):
 def test_nonuniform_edges_snap_to_centers():
   # At x=1.1 the containing cell is index 1, but the nearest center is 0.5.
   assert idx_parser(1.1, np.array([0., 1., 5.])) == 0
+
+
+@pytest.mark.skipif(not gpython.available(), reason="needs compiled Gkeyll")
+@pytest.mark.parametrize("backend", ["gkyl", "numpy"])
+@pytest.mark.parametrize("comp,indices", [(0, [0]), (1, [1]), (-1, [3]),
+                                          ("1:3", [1, 2]),
+                                          ("3,0,3", [3, 0, 3])])
+def test_raw_components_extract_analytic_coefficients(backend, comp, indices):
+  # f=1+2*x, g=3-x on [-1,0] and [0,1], orthonormal p1 basis.
+  data = pg.load(
+      Path(__file__).parent /
+      "test_data/generated/representation_affine_1d.gkyl")
+  if backend == "numpy":
+    data.values = data.values.copy()
+  centers = np.array([-0.5, 0.5])
+  expected = np.column_stack(
+      (np.sqrt(2) * (1 + 2 * centers), np.full(2, np.sqrt(2 / 3)),
+       np.sqrt(2) * (3 - centers), np.full(2, -0.5 * np.sqrt(2 / 3))))
+  result = data.select(comp=comp)
+  np.testing.assert_allclose(result.values,
+                             expected[:, indices],
+                             rtol=2e-14,
+                             atol=2e-14)
+  assert result.backend == "numpy"
+  assert result.ctx["basis_type"] is None
+  np.testing.assert_array_equal(np.asarray(result), result.values)
+  assert data.ctx["value_form"] == "modal"
+  assert not np.shares_memory(result.values, data.values)
+
+
+@pytest.mark.skipif(not gpython.available(), reason="needs compiled Gkeyll")
+@pytest.mark.parametrize("comp", [0, 1])
+def test_cli_raw_coefficient_plot(comp):
+  from click.testing import CliRunner
+  from postgkyl.cli.app import cli
+  import matplotlib.pyplot as plt
+  path = Path(__file__).parent / "test_data/generated/1d_ms_p1.gkyl"
+  result = CliRunner().invoke(
+      cli, [str(path), "sel", f"-c{comp}", "pl", "--no_show"])
+  assert result.exit_code == 0, result.output
+  figure = plt.gcf()
+  np.testing.assert_array_equal(figure.axes[0].lines[0].get_ydata(),
+                                pg.load(path).values[:, comp])
+  plt.close(figure)
+
+
+def test_component_and_field_are_mutually_exclusive(modal):
+  with pytest.raises(ValueError, match="mutually exclusive"):
+    modal.select(comp=0, field=0, inplace=True)
+
+
+@pytest.mark.parametrize("comp,error", [(8, IndexError), ("1:1", ValueError)])
+def test_invalid_raw_component_preserves_input(modal, comp, error):
+  original = modal.values.copy()
+  with pytest.raises(error):
+    modal.select(comp=comp, inplace=True)
+  np.testing.assert_array_equal(modal.values, original)
+  assert modal.backend == "gkyl"
+
+
+def test_raw_component_with_coordinate_selection_inplace(modal):
+  expected = modal.values[:, 1:2, :, 1:2].copy()
+  result = modal.select(z1=1, comp=1, inplace=True)
+  assert result is modal
+  np.testing.assert_array_equal(result.values, expected)
+  np.testing.assert_array_equal(result.ctx["cells"], [4, 1, 4])
+  assert result.backend == "numpy"

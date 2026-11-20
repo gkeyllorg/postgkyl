@@ -128,7 +128,7 @@ def test_capability_guardrails_on_modal_data():
   with pytest.raises(ValueError):
     np.asarray(a)  # coefficients are not point values
   np.testing.assert_allclose(
-      a.select(comp=0).interpolate().values,
+      a.select(field=0).interpolate().values,
       a.interpolate().select(comp=0).values)
   with pytest.raises(ValueError):
     _ = a + a.interpolate()  # mixed modal + field domains
@@ -515,10 +515,9 @@ _ALLOWED = {
     # programs.md for future program-scale
     # diagnostics that may want render's
     # generic plot() -- as of this layer's
-    # landing, none of the six program
-    # modules (energy_balance, particle_
-    # balance, nodes, trajectory, enstrophy,
-    # ke_dke) actually import it, each
+    # landing, none of the five program
+    # modules (balance, nodes, trajectory,
+    # enstrophy, ke_dke) actually import it, each
     # building its own bespoke figure
     # directly with matplotlib instead;
     # render imports only gdatastate/numerics,
