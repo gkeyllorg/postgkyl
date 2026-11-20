@@ -41,6 +41,7 @@ from .represent import apply, represent
 
 from .fft import fft
 from .magsq import magsq
+from .units import available_units, units
 from .relchange import relchange
 from .mask import mask
 from .collect import collect
@@ -95,6 +96,15 @@ command(
     CommandSpec(Section.VERBS,
                 Execution.MAP_REPLACE,
                 info_options=(InfoOption(
+                    "avail",
+                    available_units,
+                    "List available value-unit translations, then exit.",
+                    heading="Supported unit translations:"), )))(units)
+hidden("Python unit catalog; exposed through units --avail")(available_units)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_REPLACE,
+                info_options=(InfoOption(
                     "avail_maps",
                     available_maps,
                     "List available coordinate maps, then exit.",
@@ -144,11 +154,12 @@ __all__ = [
     "interpolate", "local_poly", "select", "info", "print", "integrate",
     "average", "fluctuation", "eval_at_coord_proj", "plot", "animate", "plotly",
     "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
-    "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
-    "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "map_interp", "available_maps",
-    "growth", "frequency", "map_to_torus_rz", "resolve_rz_projection",
-    "map_to_torus_3d", "resolve_torus_projection", "map_to_torus_phitheta",
-    "resolve_phitheta_projection", "resolve_geometry", "Geometry",
-    "RzProjection", "TorusProjection", "PhiThetaProjection", "project_vector"
+    "magsq", "units", "available_units", "relchange", "mask", "collect", "sort",
+    "activate", "grid", "val2coord", "extract_input", "fit", "differentiate",
+    "evaluate", "available_evaluate_operators", "map", "map_interp",
+    "available_maps", "growth", "frequency", "map_to_torus_rz",
+    "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
+    "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
+    "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection",
+    "project_vector"
 ]

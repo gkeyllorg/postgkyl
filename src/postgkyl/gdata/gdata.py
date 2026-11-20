@@ -107,6 +107,7 @@ class GData(GDataState):
   eval_at_coord_proj = operations.eval_at_coord_proj
   fft = operations.fft
   magsq = operations.magsq
+  units = operations.units
   mask = operations.mask
   extract_input = operations.extract_input
   fit = operations.fit

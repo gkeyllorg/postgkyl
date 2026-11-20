@@ -4060,6 +4060,28 @@ class PostgkylSession:
           The same datasets, reordered by their source filename's natural sort key.
         """
 
+  def units(self,
+            *,
+            source: str,
+            dest: str,
+            inplace: bool = False,
+            tag: str | None = None,
+            label: str | None = None) -> PostgkylSession:
+    r"""Scale dataset values from ``source`` units to ``dest`` units.
+
+        Source and destination must describe the same dimension. Use ``units
+        --avail`` to list supported translations. The grid is not converted. Native
+        modal coefficients are scaled without interpolation.
+
+        Args:
+          data: Dataset to convert.
+          source: Unit currently used by the values.
+          dest: Unit desired for the values.
+          inplace: Mutate and return ``data`` instead of a new dataset.
+          tag: Optional tag for the result.
+          label: Optional display label, overriding an automatic unit replacement.
+        """
+
   def val2coord(self,
                 *,
                 x: str,
