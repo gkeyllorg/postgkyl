@@ -35,8 +35,7 @@ from .registry import gk_quant_registry
 from .moments import mom_gyrokinetic
 
 # Layer 13: program-scale diagnostics ported from src_bak's apps/gk_*.py.
-from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_balance
-from .particle_balance import ParticleBalanceTraces, particle_balance, particle_balance_error
+from .balance import balance, balance_error
 from .nodes import nodes, multib_tag, nodes_to_RZ
 
 from typing import Annotated
@@ -68,12 +67,9 @@ command(
             "avail_quant", quantity_catalog,
             "List available quantities and their descriptions, then exit."),
                       )))(load_quantity)
-energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
-                                                          KeyValue()]
-particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
-                                                            | None,
-                                                            KeyValue()]
-for _function in (energy_balance, particle_balance, nodes):
+balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
+                                                   KeyValue()]
+for _function in (balance, nodes):
   command(_REPORT_SPEC)(_function)
 
 __all__ = [
@@ -98,12 +94,8 @@ __all__ = [
     "fetch_temp_from_Tpar_Tperp",
     "fetch_Tperp_from_BiMax",
     "fetch_Tperp_from_M0_M2perp",
-    "EnergyBalanceTraces",
-    "energy_balance_error",
-    "energy_balance",
-    "ParticleBalanceTraces",
-    "particle_balance",
-    "particle_balance_error",
+    "balance",
+    "balance_error",
     "nodes",
     "multib_tag",
     "nodes_to_RZ",

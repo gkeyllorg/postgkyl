@@ -122,8 +122,7 @@ command(
 for _function in (
     gk.load_distf,
     gk.load_quantity,
-    gk.energy_balance,
-    gk.particle_balance,
+    gk.balance,
     gk.nodes,
 ):
   _resolve(_function)
@@ -148,8 +147,7 @@ for _name in (
     "fetch_temp_from_Tpar_Tperp",
     "fetch_Tperp_from_BiMax",
     "fetch_Tperp_from_M0_M2perp",
-    "energy_balance_error",
-    "particle_balance_error",
+    "balance_error",
     "multib_tag",
     "nodes_to_RZ",
 ):

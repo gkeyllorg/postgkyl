@@ -7,11 +7,9 @@ Ported from ``src_bak/postgkyl/gk/gk_utils.py``. ``read_gfile``/
 ``read_gfile_if_present`` drops the old code's ``verb_print(ctx, ...)`` call
 (``ctx`` was never a parameter of that function in ``src_bak`` -- an existing
 bug -- and printing belongs to the CLI, not a loader) in favor of returning a
-plain ``found`` flag. ``read_time_trace_if_present`` and
-``set_tick_font_size`` are shared by the three program-scale diagnostics that
-build figures directly with matplotlib (``energy_balance``,
-``particle_balance``, ``nodes``) rather than each keeping its own private
-copy.
+plain ``found`` flag. ``get_block_indices`` and ``set_tick_font_size`` are
+shared by the program-scale diagnostics that build figures directly with
+matplotlib (``balance``, ``nodes``).
 """
 
 from __future__ import annotations
@@ -63,24 +61,6 @@ def read_gfile_if_present(
     return False, None, None, None
   grid, values, gdata = read_gfile(file_name)
   return True, grid, values, gdata
-
-
-def read_time_trace_if_present(
-    file_name: str,
-) -> tuple[bool, np.ndarray | None, np.ndarray | None, GData | None]:
-  """Read a 1-D time-trace file if present: ``(found, time, values, gdata)``.
-
-  ``read_gfile_if_present`` always returns the grid as a *list* of
-  per-dimension arrays (``GDataState.grid`` never hands back a bare
-  ``ndarray``, only a list of one for 1-D data) -- this unwraps that single
-  entry into the plain time array every trace in
-  :mod:`~postgkyl.diagnostics.gk.energy_balance`/
-  :mod:`~postgkyl.diagnostics.gk.particle_balance` is indexed
-  against.
-  """
-  found, grid, values, gdata = read_gfile_if_present(file_name)
-  time = grid[0] if found else None
-  return found, time, values, gdata
 
 
 def read_interpolated_gfile(
