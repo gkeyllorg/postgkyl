@@ -49,7 +49,8 @@ def uniform_cartesian_grid(data) -> dict:
     # by several ulps. Compare against reconstructed edges at coordinate
     # precision, rather than requiring those subtractions to agree exactly.
     expected = np.linspace(coord[0], coord[-1], count + 1)
-    if not numerics.grids_compatible([coord], [expected], rtol=0):
+    if not numerics.grids_compatible([coord], [expected],
+                                     rtol=8 * np.finfo(float).eps):
       raise ValueError(message)
   return {
       "ndim": len(cells),

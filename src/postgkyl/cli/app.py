@@ -28,6 +28,7 @@ from postgkyl.cli.compiler import (
 )
 from postgkyl.cli.discovery import discover_public_surface
 from postgkyl.cli.state import DataSpace
+from postgkyl.cli import gui_launch
 
 # Compilation validates the complete discovered surface before registration.
 # These aliases add spellings only; they never replace a generated command or
@@ -86,6 +87,13 @@ class PgkylGroup(click.Group):
       if rows:
         with formatter.section(section):
           formatter.write_dl(rows)
+
+  def format_epilog(self, ctx, formatter) -> None:
+    """List the separate programs installed with the package after the
+    commands: they are run on their own, not chained."""
+    super().format_epilog(ctx, formatter)
+    with formatter.section("Programs"):
+      formatter.write_dl([(gui_launch.PROGRAM, gui_launch.DESCRIPTION)])
 
 
 def _print_version(ctx, param, value) -> None:

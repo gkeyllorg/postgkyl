@@ -336,6 +336,15 @@ class TestSelectCurvilinearGuard:
     # grid holds edges (2 bound one cell) even along a curvilinear axis
     assert out.grid[0].shape[0] == 2
 
+  def test_integer_string_selector_is_the_same_index(self):
+    """The CLI passes ``--z0 1`` as the string '1': an index, which needs no
+    coordinate, so the rotation's coupling does not refuse it."""
+    mapped = self._mapped()
+    by_string, by_int = mapped.select(z0="1"), mapped.select(z0=1)
+    np.testing.assert_array_equal(by_string.values, by_int.values)
+    for got, want in zip(by_string.grid, by_int.grid):
+      np.testing.assert_array_equal(got, want)
+
   def test_coordinate_selector_works_on_a_separable_joint_map(self):
     """A conf-space map stored jointly (m*num_basis components) but whose
     physical coordinates each happen to depend on only one computational

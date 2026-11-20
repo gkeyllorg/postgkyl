@@ -16,10 +16,18 @@ def _find_nearest_index(array, value):
   return int(np.argmin(np.abs(np.asarray(array) - value)))
 
 
+def is_index(value: int | float | str) -> bool:
+  """Whether a single selector is an index rather than a coordinate: an int,
+  or an integer string such as ``"3"`` or ``"-1"`` (as the CLI passes one)."""
+  if isinstance(value, (int, np.integer)):
+    return True
+  return isinstance(value, str) and value.lstrip("-").isdigit()
+
+
 def _string_to_index(value: str, array: np.ndarray | None) -> int:
   if not isinstance(value, str):
     raise TypeError("Value is not a string")
-  if value.lstrip("-").isdigit():
+  if is_index(value):
     return int(value)
   return _find_nearest_index(array, float(value))
 

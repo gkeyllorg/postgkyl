@@ -56,6 +56,24 @@ def default_axis_labels(axes: tuple[int, ...],
   return [rf"${symbol}_{i}$" for i in axes]
 
 
+def centred_range(lower: float | None, upper: float | None,
+                  values) -> tuple[float, float]:
+  """The colour range of a diverging map, centred on zero.
+
+  A typed bound fixes the half-width: ``±max(|lower|, |upper|)`` over the
+  bounds given (``None`` when not given). Without bounds the half-width is
+  the largest finite ``|values|``, ignoring NaN/inf entries such as the cell
+  separators ``local_poly`` inserts (zero when no value is finite).
+  """
+  given = [abs(v) for v in (lower, upper) if v is not None]
+  if given:
+    top = max(given)
+  else:
+    values = np.asarray(values, dtype=float)
+    top = float(np.max(np.abs(values), initial=0.0, where=np.isfinite(values)))
+  return -top, top
+
+
 def format_axis_label(label: str, shift: float, scale: float) -> str:
   """Annotate an axis label with its shift/scale, matching the old style."""
   if shift != 0.0 and scale != 1.0:

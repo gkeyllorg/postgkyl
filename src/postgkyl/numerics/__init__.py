@@ -1,6 +1,6 @@
 """Pure NumPy/SciPy helpers -- no internal imports (the leaf-most layer)."""
 
-from .idx_parser import idx_parser
+from .idx_parser import idx_parser, is_index
 from .elementwise import grids_compatible, grid_is_prefix
 from .calculus import integrate
 from .mag_sq import mag_sq
@@ -41,6 +41,7 @@ from .natural_sort import natural_sort_key
 
 __all__ = [
     "idx_parser",
+    "is_index",
     "grids_compatible",
     "grid_is_prefix",
     "integrate",

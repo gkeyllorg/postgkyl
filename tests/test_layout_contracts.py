@@ -71,6 +71,20 @@ def test_native_grid_rejects_nonfinite_or_nonincreasing_edges(coordinates):
     uniform_cartesian_grid(data)
 
 
+def test_native_grid_accepts_uniform_edges_with_an_edge_at_zero():
+  # A cell sub-range of [-pi, pi] containing z = 0: linspace rebuilds that
+  # edge as ~1e-16, which is roundoff relative to the extent, not
+  # nonuniformity.
+  edges = np.linspace(-np.pi, np.pi, 13)[4:9]
+  data = pg.GData().push([edges], np.zeros((4, 1)))
+  assert uniform_cartesian_grid(data)["cells"][0] == 4
+  edges = edges.copy()
+  edges[2] += 1e-6 * (edges[1] - edges[0])
+  data = pg.GData().push([edges], np.zeros((4, 1)))
+  with pytest.raises(ValueError, match="uniform Cartesian cell edges"):
+    uniform_cartesian_grid(data)
+
+
 def test_native_grid_rejects_inconsistent_cell_dimensions():
   data = pg.GData().push([np.arange(3.)], np.zeros((2, 1)))
   data.ctx["cells"] = [2, 3]

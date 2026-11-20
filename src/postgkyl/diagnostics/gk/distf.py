@@ -31,10 +31,9 @@ from typing import Annotated
 from postgkyl import operations
 from postgkyl.cli_spec import CliType
 from postgkyl.gdata import GData, GDataGroup, load
+from postgkyl.io.naming import FrameSpec, select_frames
 
 from .. import discovery
-
-FrameSpec = int | str | list[int] | tuple[int, ...]
 
 
 def resolve_frames(
@@ -48,10 +47,10 @@ def resolve_frames(
   """Expand a frame specification into a concrete sorted list of frame indices.
 
   Args:
-    frame: An ``int`` (single frame); a ``list``/``tuple`` of ints; a string
-      with a single number (``"7"``) or comma-separated numbers
-      (``"0,2,4"``); or a ``'start:stop[:step]'`` / ``':'`` range (range
-      bounds default to the first/last frame discovered on disk).
+    frame: A frame specification (:func:`postgkyl.io.naming.select_frames`):
+      a frame number, frame numbers, or a ``'start:stop[:step]'`` range of
+      the frames on disk; negative values count back from the last frame
+      (``'-10:'`` the last ten).
     name: Simulation name prefix.
     species: Species name.
     suffix: Distribution-file suffix (see :func:`load_distf`).
@@ -60,41 +59,17 @@ def resolve_frames(
   Returns:
     A sorted list of concrete frame indices.
   """
-  if isinstance(frame, int):
-    return [frame]
-  if isinstance(frame, (list, tuple)):
-    return [int(f) for f in frame]
-
-  frame_spec = str(frame).strip()
-  if "," in frame_spec:
-    return [int(f.strip()) for f in frame_spec.split(",")]
-  if ":" not in frame_spec:
-    return [int(frame_spec)]
-
   prefix = f"{name}_b{block_idx}" if block_idx is not None else name
   frame_infix = f"{suffix}_" if suffix else ""
   stem = f"{prefix}-{species}_{frame_infix}"
   available = sorted(discovery.available_frames(stem))
-  if not available:
+  frames = select_frames(frame, available)
+  if not frames:
     raise ValueError(
+        f"Frame {frame!r} matches no files for '{stem}<frame>.gkyl'."
+        if available else
         f"No distribution frames found matching '{stem}<frame>.gkyl'.")
-  parts = frame_spec.split(":")
-  if len(parts) > 3:
-    raise ValueError(
-        f"Invalid frame range {frame_spec!r}; expected start:stop[:step].")
-  lower = int(parts[0]) if parts[0] else available[0]
-  upper = int(parts[1]) if parts[1] else available[-1] + 1
-  step = int(parts[2]) if len(parts) == 3 and parts[2] else 1
-  if step <= 0:
-    raise ValueError("Frame range step must be a positive integer.")
-  resolved = [
-      f for f in available if lower <= f < upper and (f - lower) % step == 0
-  ]
-  if not resolved:
-    raise ValueError(
-        f"Frame range {frame_spec!r} matches no files for '{stem}<frame>.gkyl'."
-    )
-  return resolved
+  return frames
 
 
 def load_distf(
@@ -127,7 +102,8 @@ def load_distf(
     name: Simulation name prefix.
     species: Species name.
     frame: Frame index, comma-separated indices, or a
-      ``start:stop[:step]`` range; ``:`` selects every available frame.
+      ``start:stop[:step]`` range; ``:`` selects every available frame, and
+      negative values count back from the last one (``-10:`` the last ten).
     tag: Tag for the resulting dataset.
     suffix: Use ``<name>-<species>_<suffix>_<frame>.gkyl`` as the input.
     use_c2p_vel: Convert velocity-space computational coordinates to
