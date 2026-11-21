@@ -41,6 +41,7 @@ from .represent import apply, represent
 
 from .fft import fft
 from .magsq import magsq
+from .cell_average import cell_average
 from .units import available_units, units
 from .relchange import relchange
 from .mask import mask
@@ -88,9 +89,10 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
                         Execution.TERMINAL_ALL,
                         result=ResultPolicy.VALUE)
 
-for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
-                  magsq, grid, differentiate, map, map_to_torus_rz,
-                  map_to_torus_3d, map_to_torus_phitheta, fluctuation):
+for _function in (interpolate, local_poly, cell_average, select,
+                  eval_at_coord_proj, fft, magsq, grid, differentiate, map,
+                  map_to_torus_rz, map_to_torus_3d, map_to_torus_phitheta,
+                  fluctuation):
   command(_MAP)(_function)
 command(
     CommandSpec(Section.VERBS,
@@ -151,13 +153,13 @@ for _function in (resolve_geometry, resolve_rz_projection,
   hidden("constructs geometry or projections for the Python API")(_function)
 
 __all__ = [
-    "interpolate", "local_poly", "select", "info", "print", "integrate",
-    "average", "fluctuation", "eval_at_coord_proj", "plot", "animate", "plotly",
-    "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
-    "magsq", "units", "available_units", "relchange", "mask", "collect", "sort",
-    "activate", "grid", "val2coord", "extract_input", "fit", "differentiate",
-    "evaluate", "available_evaluate_operators", "map", "map_interp",
-    "available_maps", "growth", "frequency", "map_to_torus_rz",
+    "interpolate", "local_poly", "cell_average", "select", "info", "print",
+    "integrate", "average", "fluctuation", "eval_at_coord_proj", "plot",
+    "animate", "plotly", "plotly_animate", "pyvista", "arithmetic", "represent",
+    "apply", "fft", "magsq", "units", "available_units", "relchange", "mask",
+    "collect", "sort", "activate", "grid", "val2coord", "extract_input", "fit",
+    "differentiate", "evaluate", "available_evaluate_operators", "map",
+    "map_interp", "available_maps", "growth", "frequency", "map_to_torus_rz",
     "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
     "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
     "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection",

@@ -98,14 +98,12 @@ def _read(
     required: bool = False) -> tuple[np.ndarray | None, np.ndarray | None]:
   """``(time, values)`` of component ``comp`` of a time trace, or
   ``(None, None)`` if the file is absent and not ``required``."""
-  found, grid, values, _ = utils.read_gfile_if_present(file_name)
-  if not found:
+  if not os.path.exists(file_name):
     if required:
       raise FileNotFoundError(f"Required file not found: {file_name}")
     return None, None
-  # A single sample is squeezed to 0-D.
-  time = np.atleast_1d(grid[0])
-  return time, values.reshape(time.size, -1)[:, comp]
+  time, values = utils.read_time_trace(file_name)
+  return time, values[:, comp]
 
 
 def _moment_file(stem: str, quantity: str) -> str:

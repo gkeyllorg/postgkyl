@@ -107,7 +107,8 @@ def _read_node_coordinates(file_name: str, expected: tuple[int, ...]):
   return _surface_rz(values, is_geo_mapc2p(gdata.ctx))
 
 
-def _read_surface(prefix: str, direction: int, corner_shape: tuple[int, ...]):
+def read_surface_nodes(prefix: str, direction: int, corner_shape: tuple[int,
+                                                                        ...]):
   expected = tuple(n if d == direction else 2 * (n - 1)
                    for d, n in enumerate(corner_shape))
   return _read_node_coordinates(f"{prefix}-geo_surf{direction}_nodes.gkyl",
@@ -250,7 +251,8 @@ def nodes(
         raise ValueError("Surface nodes require 2D or 3D geometry.")
       directions = (0, 1) if spatial_dim == 2 else (0, 2)
       for direction in directions:
-        surfaces[direction] = _read_surface(prefix, direction, nodes.shape[:-1])
+        surfaces[direction] = read_surface_nodes(prefix, direction,
+                                                 nodes.shape[:-1])
     block_nodes[block_idx] = (major_r, vert_z, _surface_rz(nodes, mapc2p),
                               surfaces, interior)
     major_r_ex = [

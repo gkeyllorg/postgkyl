@@ -124,6 +124,23 @@ for _function in (
     gk.load_quantity,
     gk.balance,
     gk.nodes,
+    gk.multib_layout,
+    gk.dt_limits,
+    gk.cell_edges,
+    gk.flux_surfaces,
+    gk.poloidal_lengths,
+    gk.sheath_frames,
+    gk.sheath_entrance,
+    gk.midplane_profile,
+    gk.target_profiles,
+    gk.target_fluxes,
+    gk.balance_intervals,
+    gk.frame_times,
+    gk.region_average,
+    gk.region_median_change,
+    gk.nonpositive_cells,
+    gk.anomalous_diffusivity,
+    gk.midplane_diffusivity,
 ):
   _resolve(_function)
 

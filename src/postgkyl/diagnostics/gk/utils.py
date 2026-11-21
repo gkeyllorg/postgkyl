@@ -63,6 +63,14 @@ def read_gfile_if_present(
   return True, grid, values, gdata
 
 
+def read_time_trace(file_name: str) -> tuple[np.ndarray, np.ndarray]:
+  """``(time, values (n_samples, n_components))`` of a dynvector file (a
+  single sample is not squeezed away)."""
+  grid, values, _ = read_gfile(file_name)
+  time = np.atleast_1d(grid[0])
+  return time, np.asarray(values).reshape(time.size, -1)
+
+
 def read_interpolated_gfile(
     file_name: str,
     poly_order: int,

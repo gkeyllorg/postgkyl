@@ -10,13 +10,17 @@ from __future__ import annotations
 import os.path
 from copy import deepcopy
 
+import numpy as np
+
 from . import geometry, mapping
 from .naming import OutputName, parse_output_name
 from .gkyl_c_reader import GkylCReader
 from .gkyl_reader import GkylReader
 from .gkyl_h5_reader import GkylH5Reader
 from .flash_h5_reader import FlashH5Reader
+from .metadata import unpack_gkyl_metadata
 from .writer import save
+from .geqdsk import GeqdskHeader, read_geqdsk_header, read_geqdsk_limiter
 from .surface import surface_direction, unpack_surface
 
 # Reader registry -- tried in order; extend by adding (name, reader) entries.
@@ -76,8 +80,28 @@ def read(file_name: str, ctx: dict | None = None, **kwargs):
       f"'{file_name}' cannot be read with any known reader: {list(_READERS)}")
 
 
+def read_metadata(file_name: str) -> dict:
+  """The metadata in a ``.gkyl`` file's header, without reading its data.
+
+  A multiblock run's block-topology file (``<name>-block_topo.gkyl``) holds
+  only metadata (``num_blocks``, ``ndim``, ``connections``), so ``read``
+  cannot load it.
+  """
+  if not os.path.exists(file_name):
+    raise FileNotFoundError(f"No such file: '{file_name}'")
+  with open(file_name, "rb") as fh:
+    head = fh.read(29)
+    if len(head) < 29 or head[:5] != b"gkyl0":
+      raise ValueError(f"'{file_name}' is not a version-1 .gkyl file")
+    # magic (5 bytes), then version, file type and metadata size (int64 each)
+    meta_size = int(np.frombuffer(head, dtype="<i8", count=1, offset=21)[0])
+    metadata = unpack_gkyl_metadata(fh.read(meta_size))
+  return dict(metadata) if isinstance(metadata, dict) else {}
+
+
 __all__ = [
-    "read", "save", "geometry", "mapping", "naming", "OutputName",
+    "read", "read_metadata", "read_geqdsk_header", "read_geqdsk_limiter",
+    "GeqdskHeader", "save", "geometry", "mapping", "naming", "OutputName",
     "parse_output_name", "GkylCReader", "GkylReader", "GkylH5Reader",
     "FlashH5Reader"
 ]

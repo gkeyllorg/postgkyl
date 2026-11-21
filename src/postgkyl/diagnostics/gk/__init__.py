@@ -38,6 +38,25 @@ from .moments import mom_gyrokinetic
 from .balance import balance, balance_error
 from .nodes import nodes, multib_tag, nodes_to_RZ
 
+# Multiblock tokamak diagnostics (moved here from the Gkeyll run viewer, whose
+# GUI only calls Postgkyl).
+from .multib_layout import (MidplaneStack, MultibLayout, Target, ThetaChain,
+                            multib_layout)
+from .dt_limits import DtLimits, dt_limits
+from .flux_coords import (CellEdges, ChainLengths, FluxSurfaces,
+                          PoloidalLengths, cell_edges, flux_surfaces,
+                          poloidal_lengths)
+from .sheath import (SheathEntrance, SheathProfile, sheath_entrance,
+                     sheath_frames)
+from .sol_profiles import (MidplaneProfile, TargetProfile, midplane_profile,
+                           target_profiles)
+from .budgets import (BalanceIntervals, PlateFlux, TargetFluxes,
+                      balance_intervals, frame_times, target_fluxes)
+from .regions import (RegionSeries, nonpositive_cells, region_average,
+                      region_median_change)
+from .diffusivity import (AnomalousDiffusivity, MidplaneDiffusivity,
+                          anomalous_diffusivity, midplane_diffusivity)
+
 from typing import Annotated
 
 from postgkyl.cli_spec import (
@@ -69,7 +88,12 @@ command(
                       )))(load_quantity)
 balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                    KeyValue()]
-for _function in (balance, nodes):
+for _function in (balance, nodes, multib_layout, dt_limits, cell_edges,
+                  flux_surfaces, poloidal_lengths, sheath_frames,
+                  sheath_entrance, midplane_profile, target_profiles,
+                  target_fluxes, balance_intervals, frame_times, region_average,
+                  region_median_change, nonpositive_cells,
+                  anomalous_diffusivity, midplane_diffusivity):
   command(_REPORT_SPEC)(_function)
 
 __all__ = [
@@ -99,4 +123,40 @@ __all__ = [
     "nodes",
     "multib_tag",
     "nodes_to_RZ",
+    "multib_layout",
+    "MultibLayout",
+    "MidplaneStack",
+    "Target",
+    "ThetaChain",
+    "dt_limits",
+    "DtLimits",
+    "cell_edges",
+    "flux_surfaces",
+    "poloidal_lengths",
+    "CellEdges",
+    "FluxSurfaces",
+    "ChainLengths",
+    "PoloidalLengths",
+    "sheath_frames",
+    "sheath_entrance",
+    "SheathEntrance",
+    "SheathProfile",
+    "midplane_profile",
+    "target_profiles",
+    "MidplaneProfile",
+    "TargetProfile",
+    "target_fluxes",
+    "balance_intervals",
+    "frame_times",
+    "TargetFluxes",
+    "PlateFlux",
+    "BalanceIntervals",
+    "region_average",
+    "region_median_change",
+    "nonpositive_cells",
+    "RegionSeries",
+    "anomalous_diffusivity",
+    "midplane_diffusivity",
+    "AnomalousDiffusivity",
+    "MidplaneDiffusivity",
 ]

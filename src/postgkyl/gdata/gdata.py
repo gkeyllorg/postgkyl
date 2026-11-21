@@ -96,6 +96,7 @@ class GData(GDataState):
   # implementation in one canonical function while remaining discoverable by
   # static language servers such as VS Code/Pylance.
   interpolate = operations.interpolate
+  cell_average = operations.cell_average
   local_poly = operations.local_poly
   map_to_torus_rz = operations.map_to_torus_rz
   map_to_torus_3d = operations.map_to_torus_3d
