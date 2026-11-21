@@ -261,6 +261,32 @@ class PostgkylSession:
             dataset-only options are used for a full average.
         """
 
+  def cell_average(self,
+                   *,
+                   inplace: bool = False,
+                   tag: str | None = None,
+                   label: str | None = None) -> PostgkylSession:
+    r"""The average of each field over each cell: one value per cell.
+
+        Every orthonormal basis function but the constant ``b_0 = 2^(-ndim/2)``
+        integrates to zero over a cell, so the average is ``b_0`` times each
+        field's coefficient 0, for any basis and polynomial order. (The cell-centre
+        value, ``interpolate --num_interp 1``, equals it only for p = 1.)
+
+        Args:
+          data: Modal DG coefficients.
+          inplace: Mutate and return ``data`` instead of creating a dataset.
+          tag: Optional tag for the returned dataset.
+          label: Optional label for the returned dataset.
+
+        Returns:
+          Point values, one per cell and field, on the cells' grid; flagged
+          ``interpolated`` so they are safe for element-wise math.
+
+        Raises:
+          ValueError: if ``data`` holds no modal volume coefficients.
+        """
+
   def collect(self,
               *,
               sumdata: bool = False,
@@ -724,79 +750,305 @@ class PostgkylSession:
             ``data``'s, or ``dims`` is empty, repeated, or out of range.
         """
 
-  def gk_energy_balance(self,
-                        name: str,
-                        species: list[str] | tuple[str, ...],
-                        *,
-                        path: str = './',
-                        relative_error: bool = False,
-                        multib: str = '-10',
-                        field_dot_file: str | None = None,
-                        apar_dot_file: str | None = None,
-                        fdot_file: str | None = None,
-                        source_file: str | None = None,
-                        bflux_files: Mapping[str, str] | None = None,
-                        f_file: str | None = None,
-                        field_file: str | None = None,
-                        apar_file: str | None = None,
-                        dt_file: str | None = None,
-                        logy: bool = False,
-                        absy: bool = False,
-                        xlabel: str = 'Time (s)',
-                        ylabel: str | None = None,
-                        title: str | None = None,
-                        indent_left: float = 0.0,
-                        add_width: float = 0.0,
-                        show: bool = False,
-                        saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the energy balance of a gyrokinetic simulation.
+  def frequency(self,
+                *,
+                spectrum: bool = False,
+                dir: int | None = None,
+                tag: str | None = None,
+                fft: bool = False,
+                guess: str | None = None,
+                min_n: int | None = None,
+                time_norm: str | float | None = None,
+                time_window: tuple[float, float] | None = None,
+                space_norm: str | float | None = None,
+                interpolated: bool = False,
+                inplace: bool = False,
+                label: str | None = None) -> PostgkylSession:
+    r"""Print dominant angular frequencies and return curves or spectra.
 
-        Requires, per species (named ``<name>-<species_name>``): an
-        ``_fdot_integrated_moms.gkyl`` file, and (only if the run had sources or
-        non-periodic boundaries) ``_source_integrated_moms.gkyl`` and
-        ``_bflux_<direction><side>_integrated_HamiltonianMoments.gkyl`` files. A
-        ``<name>-field_energy_dot.gkyl`` file is required; ``<name>-apar_energy_dot
-        .gkyl`` is read if present (electromagnetic simulations). If
-        ``relative_error`` is requested, the corresponding non-``_dot``
-        (``_integrated_moms.gkyl``/``field_energy.gkyl``/``apar_energy.gkyl``) and
-        ``<name>-dt.gkyl`` files are also required.
+        Args:
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Measure frequency versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
+          fft: Use a temporal FFT peak for plain time traces.
+          guess: Initial sinusoid parameters ``amplitude,omega,phase,offset``.
+          min_n: Minimum length of an automatic leading fit window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
+          inplace: Mutate a plain fitted trace instead of creating one.
+          label: Optional label for the returned dataset.
+        """
+
+  def gk_anomalous_diffusivity(
+      self,
+      name: str,
+      species: str,
+      *,
+      path: str = './',
+      geqdsk: str | None = None,
+      diffusivity: float | None = None) -> PostgkylSession:
+    r"""The anomalous diffusivity a run used for a species, per block.
+
+        Reads each block's ``<species>_anom_diff_0`` and ``geo_int_gxxj`` and
+        weak-divides the first by the second; or, with ``diffusivity``, reads no
+        file and gives that uniform value everywhere.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species.
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
+          diffusivity: The run's uniform diffusivity (m^2/s), for a run that
+            wrote no ``anom_diff`` file.
+
+        Returns:
+          The :class:`AnomalousDiffusivity`.
+        """
+
+  def gk_balance(self,
+                 name: str,
+                 species: list[str] | tuple[str, ...] | None = None,
+                 *,
+                 quantity: Literal['particle', 'energy'] = 'particle',
+                 path: str = './',
+                 relative_error: bool = False,
+                 source_moments: Literal[
+                     'HamiltonianMoments', 'M0M1M2',
+                     'M0M1M2parM2perp'] = 'HamiltonianMoments',
+                 multib: str = '-10',
+                 fdot_file: str | None = None,
+                 source_file: str | None = None,
+                 bflux_files: Mapping[str, str] | None = None,
+                 f_file: str | None = None,
+                 dt_file: str | None = None,
+                 field_dot_file: str | None = None,
+                 apar_dot_file: str | None = None,
+                 field_file: str | None = None,
+                 apar_file: str | None = None,
+                 logy: bool = False,
+                 absy: bool = False,
+                 xlabel: str = 'Time (s)',
+                 ylabel: str | None = None,
+                 title: str | None = None,
+                 show: bool = False,
+                 saveas: str | None = None) -> PostgkylSession:
+    r"""Plot (and compute) the particle or energy balance of a gyrokinetic run.
+
+        Reads, per species, the integrated moments
+        ``<name>-<species>_<kind>integrated_<moment>.gkyl`` of the first
+        ``<moment>`` holding the quantity (or the older
+        ``<kind>integrated_moms.gkyl``): the density is the first component of
+        ``M0``, ``M0M1M2``, ``M0M1M2parM2perp`` and ``HamiltonianMoments``, the
+        energy the third of ``HamiltonianMoments``. ``<kind>`` is ``fdot_``
+        (required) and, if present, ``source_``, ``source_bgk_`` and
+        ``bflux_<direction><side>_``. The energy balance also requires
+        ``<name>-field_energy_dot.gkyl`` and reads ``<name>-apar_energy_dot.gkyl``
+        if present. ``relative_error`` also requires the moments of ``f`` (no
+        ``<kind>``), ``<name>-dt.gkyl`` and, for the energy, ``field_energy.gkyl``
+        (and ``apar_energy.gkyl`` if present).
+
+        Without a path override, if one of the rate files is missing, the terms are
+        read from Gkeyll's balance files instead:
+        ``<name>-<species>_balance_particle.gkyl``, summed over the species, or
+        ``<name>-balance_energy.gkyl``, already summed over every species and with
+        the background-charge term ``bg_dot`` of adiabatic species. With several
+        files (blocks or species), each normalizes its relative error by its own
+        content, so these stay separate (``mom_err_norm_parts``). Older balance
+        files have no ``src_bgk_mom`` column: their ``src_mom`` includes the BGK
+        source. Without ``species``, only ``<name>-balance_<quantity>.gkyl``,
+        summed over species, is read.
+
+        The rates are only defined once a step has been taken, so t=0 is skipped.
 
         Args:
           name: Simulation name (also the file prefix).
-          species: Species names to sum over.
+          species: Species names to sum over; if omitted, only the app's balance
+            file (summed over species) is read.
+          quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
+          source_moments: What an older ``<species>_source[_bgk]_integrated_moms``
+            file holds (its name does not say): for the energy balance, its
+            Hamiltonian moments, or ``M0M1M2``/``M0M1M2parM2perp`` moments whose
+            energy is ``m/2 M2``. Files named for their moments are unaffected.
           multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices (see :func:`~postgkyl.diagnostics.gk.utils.
-            get_block_indices`).
-          field_dot_file: Explicit field-energy derivative path override.
-          apar_dot_file: Explicit parallel-vector-potential energy derivative path.
+            every block; otherwise a comma list or ``'start:stop[:step]'`` slice of
+            block indices.
           fdot_file: Explicit distribution derivative moments path override.
-          source_file: Explicit source moments path override.
+          source_file: Explicit source moments path override (not of the BGK
+            source).
           bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"`` (e.g. ``"xlower"``); unlisted boundaries use
-            the naming convention.
+            ``"<direction><side>"`` (e.g. ``"xlower"``).
           f_file: Explicit integrated distribution moments path override.
-          field_file: Explicit field-energy path override.
-          apar_file: Explicit parallel-vector-potential energy path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for block index and, for per-species files, species name.
+          dt_file: Explicit time-step history path override.
+          field_dot_file: Explicit field-energy derivative path override (energy
+            balance only).
+          apar_dot_file: Explicit parallel-vector-potential energy derivative path
+            (energy balance only).
+          field_file: Explicit field-energy path override (energy balance only).
+          apar_file: Explicit parallel-vector-potential energy path override
+            (energy balance only). In path overrides, ``*`` stands for the block
+            index and, for per-species files, the species name.
           logy: Log-scale the y axis.
           absy: Take the absolute value of every trace before plotting.
           xlabel: Horizontal-axis label.
           ylabel: Vertical-axis label; use the derived formula when ``None``.
           title: Figure title; use the balance description when ``None``.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
           show: Call ``plt.show()`` before returning.
           saveas: If given, save the figure to this path.
 
         Returns:
-          ``(figure, traces)``.
+          ``(figure, traces)``. ``traces`` maps names to 1-D arrays aligned to
+          ``traces["time"]`` (after t=0): ``fdot`` (rate of change of the quantity
+          in f), ``src``, ``src_bgk``, ``bflux_tot``, ``field_dot``, ``apar_dot``,
+          ``bg_dot`` (``None`` when absent, or zero throughout in a balance file),
+          and the residual ``mom_err``, or with ``relative_error`` its relative
+          value ``mom_err_norm`` or, per balance file, ``mom_err_norm_parts`` (a
+          dict keyed by block and/or species).
 
         Raises:
-          FileNotFoundError: if a required file family is missing.
+          FileNotFoundError: if a required file is missing.
+          ValueError: if a path override is given without ``species``, a
+            field-energy override is given for the particle balance, or no step was
+            taken.
+        """
+
+  def gk_balance_intervals(self,
+                           name: str,
+                           species: list[str] | tuple[str, ...],
+                           *,
+                           quantity: Literal['particle', 'energy'] = 'particle',
+                           path: str = './',
+                           edges: list[float] | tuple[float, ...] | None = None,
+                           source_moments: Literal[
+                               'HamiltonianMoments', 'M0M1M2',
+                               'M0M1M2parM2perp'] = 'HamiltonianMoments',
+                           whole_device: bool = False) -> PostgkylSession:
+    r"""A run's particle or energy budget over each interval between frames.
+
+        The rate traces are :func:`balance`'s (summed over ``species`` and every
+        block, after t=0): the source is ``src + src_bgk``, the outflow
+        ``bflux_tot``, the residual ``mom_err``, and the content's gain what is
+        left (``fdot``, net of the field terms for the energy). Each is integrated
+        over each interval between the output frames (:func:`interval_budget`).
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species to sum over.
+          quantity: The budget's conserved quantity.
+          path: Directory holding the run's output.
+          edges: The intervals' edges (s); default: the times of the output frames
+            of ``species[0]``'s ``M0``.
+          source_moments: What the run's older ``*_source_integrated_moms`` files
+            hold (see :func:`balance`).
+          whole_device: Give the amounts for the whole device (2 pi, times 2 for a
+            half domain) instead of per radian.
+
+        Returns:
+          The :class:`BalanceIntervals`.
+        """
+
+  def gk_cell_edges(self,
+                    name: str,
+                    *,
+                    path: str = './',
+                    geqdsk: str | None = None) -> PostgkylSession:
+    r"""Every block's cell edges as curves through the Gauss surface nodes (or
+        chords where a block lacks them), rows inside out.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file; its magnetic axis orients the rows
+            where the topology does not (:func:`multib_layout`).
+
+        Returns:
+          The :class:`CellEdges`.
+        """
+
+  def gk_dt_limits(self,
+                   name: str,
+                   species: list[str] | tuple[str, ...],
+                   *,
+                   path: str = './',
+                   frame: str | float = ':',
+                   cfl_frac: float | None = None,
+                   cfl_frac_omegaH: float | None = None,
+                   drifts: Literal['auto', 'on', 'off'] = 'auto',
+                   diffusivity: float | None = None) -> PostgkylSession:
+    r"""Rebuild what limits a gyrokinetic run's time step at its frames.
+
+        Per frame: the CFL limit with each term's share of the binding cell's rate
+        (streaming, E x B, magnetic drifts, parallel electric field, mirror force,
+        BGK collisions, anomalous diffusion), the omega_H limit, and the step the
+        run actually took, so the rebuild can be checked against the run.
+
+        Reads, per block (``<name>_b<k>``, or ``<name>`` for a single-block run):
+        the geometry (``geo_int_{gxxj, cmag, jacobtot_inv, bmag,
+        dualcurlbhatoverB, bioverJB, B3overB or B3}``, ``geo_corn_bmag``), each
+        species' ``mapc2p_vel``, and per frame ``field``, ``<s>_M0`` and, if
+        present, ``<s>_bgk_nu_sum``; ``<s>_anom_diff_0`` if present;
+        ``field_energy`` (for omega_H) and ``<name>-dt.gkyl`` (the steps taken).
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species; neutral ones (charge 0) are left out.
+          path: Directory holding the run's output.
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range of the
+            frames to rebuild (``':'``: all).
+          cfl_frac: The run's ``cfl_frac``; ``None``: the library's default (1).
+          cfl_frac_omegaH: The run's ``cfl_frac_omegaH``; ``None``: the library's
+            default (1.7).
+          drifts: Whether the run had the magnetic and E x B drifts; ``'auto'``
+            picks the choice whose rebuilt step at the run's second frame is
+            nearer the step it took.
+          diffusivity: A uniform anomalous diffusivity D (m^2/s) for a run that
+            wrote no ``<s>_anom_diff_0`` file; ``None``: no diffusion term there.
+
+        Returns:
+          The :class:`DtLimits`.
+        """
+
+  def gk_flux_surfaces(self,
+                       name: str,
+                       *,
+                       path: str = './',
+                       geqdsk: str) -> PostgkylSession:
+    r"""psi_N of every block's node rows and cell rows.
+
+        psi_N = (psi - simag) / (sibry - simag) with the geqdsk's axis and
+        boundary flux, so measurements mapped by the same geqdsk compare.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file.
+
+        Returns:
+          The :class:`FluxSurfaces`.
+        """
+
+  def gk_frame_times(self,
+                     name: str,
+                     species: str,
+                     *,
+                     path: str = './') -> PostgkylSession:
+    r"""The frame numbers and times of a run's output frames.
+
+        The frames of ``<block 0 prefix>-<species>_M0_<frame>.gkyl`` and the time
+        each file records.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species whose ``M0`` files mark the frames.
+          path: Directory holding the run's output.
+
+        Returns:
+          ``(frames, times)``: the frame numbers and their times (s).
         """
 
   def gk_load_distf(self,
@@ -854,15 +1106,13 @@ class PostgkylSession:
 
   def gk_load_quantity(
       self,
-      quantity: Literal['B_tot_contra', 'B_tot_cov', 'B_tot_mag',
-                        'E_field_contra', 'E_field_cov', 'E_field_mag',
+      quantity: Literal['B_tot', 'B_tot_mag', 'E_field', 'E_field_mag',
                         'ExB_vel', 'M0', 'M1', 'M2', 'M2par', 'M2perp', 'M3',
                         'M3par', 'M3perp', 'Tpar', 'Tperp', 'apar', 'beta',
-                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq',
-                        'dB_perp_contra', 'dB_perp_cov', 'dB_perp_mag',
-                        'debye_length', 'diamag_vel', 'distf', 'field',
-                        'flux_energy', 'flux_energy_ExB', 'flux_energy_dB',
-                        'flux_particle', 'flux_particle_ExB',
+                        'c_s_cold_i', 'c_s_hot_i', 'collision_freq', 'dB_perp',
+                        'dB_perp_mag', 'debye_length', 'diamag_vel', 'distf',
+                        'field', 'flux_energy', 'flux_energy_ExB',
+                        'flux_energy_dB', 'flux_particle', 'flux_particle_ExB',
                         'flux_particle_dB', 'geo_int_b_i', 'geo_int_bmag',
                         'geo_int_g_ij', 'geo_int_gij', 'geo_int_jacobgeo',
                         'geo_int_jacobgeo_inv', 'geo_int_jacobtot',
@@ -880,7 +1130,8 @@ class PostgkylSession:
       path: str = './',
       tag: str = 'default',
       label: str | None = None,
-      direction: int | None = None,
+      direction: str | None = None,
+      rep: Literal['covar', 'contra', 'cyl', 'cart', 'norm'] | None = None,
       mass: float | None = None,
       charge: float | None = None,
       gamma_e: float | None = None,
@@ -893,15 +1144,19 @@ class PostgkylSession:
       nu_frac: float | None = None,
       conv: float | None = None,
       fluct: Literal['none', 'y', 'yz'] | None = None,
-      read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+      options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Load and compute a pre-named gyrokinetic quantity.
+
+        Derived vector names have no representation suffix: use ``B_tot``, for
+        example, and select components with ``rep`` and ``direction``. The catalog
+        lists each quantity once and states its default representation.
 
         Modal source files retain their DG representation through the calculation:
         products, inverses, square roots, and derivatives use native DG operations.
         Call ``interpolate()`` on the returned datasets when point samples are needed.
 
         Args:
-          quantity: Registered quantity name (see :func:`available_quantities`).
+          quantity: Quantity to load, see ``quantity_catalog()`` for names and descriptions.
           species: Species name, or a comma-separated list of them; ``None`` for
             species-independent quantities.
           name: Simulation name prefix (e.g. ``'gk_sheath_2x2v_p1'``).
@@ -911,9 +1166,14 @@ class PostgkylSession:
           tag: Tag for the output dataset(s); suffixed with the species when more
             than one species is requested.
           label: Label override; defaults to the quantity's registered label.
-          direction: Direction ``k`` (0: x, 1: y, 2: z) of the quantity: the
-            component of a vector, or the direction of a gradient length, flux, or
-            diffusivity. Required by those quantities, which assume no direction.
+          direction: Numeric component index 0,1,2 (Python also accepts integers).
+            For covar/contra these are computational components; for cyl the order
+            is R,phi,Z; for cart it is X,Y,Z; norm selects increasing-coordinate
+            unit normals. In 2x the full indices remain 0=radial, 1=binormal,
+            2=parallel.
+          rep: Vector representation: covar, contra, cyl, cart, or norm. Omission
+            uses the quantity's native representation, shown by ``quantity_catalog()``.
+            Only for vector quantities.
           mass: Species mass used by quantities that require it.
           charge: Species charge used by quantities that require it.
           gamma_e: Electron adiabatic index for sound-speed quantities.
@@ -936,8 +1196,9 @@ class PostgkylSession:
             removed from the energy flux to form the heat flux (default 3/2).
           fluct: For cross-field fluxes, keep only the turbulent part: the
             correlation of the fluctuations about the Jacobian-weighted ``y`` or
-            ``(y, z)`` average; ``none`` (default) keeps the total flux.
-          read_options: Additional provider options as repeated key/value entries.
+            ``(y, z)`` average in 3x. In 2x, both ``y`` and ``yz`` average along
+            stored dimension 1 (z). ``none`` (default) keeps the total flux.
+          options: Additional provider options as repeated key/value entries.
 
         Returns:
           A list of computed ``GDataState`` datasets.
@@ -945,6 +1206,82 @@ class PostgkylSession:
         Raises:
           ValueError: if ``quantity`` is not registered, or it is an
             ``is_multi_species`` quantity requested without a species list.
+        """
+
+  def gk_midplane_diffusivity(
+      self,
+      name: str,
+      species: str,
+      side: Literal['outboard', 'inboard'],
+      *,
+      path: str = './',
+      geqdsk: str | None = None,
+      diffusivity: float | None = None) -> PostgkylSession:
+    r"""The anomalous diffusivity at Z = 0 along one side's midplane.
+
+        The node values of :func:`anomalous_diffusivity` along the midplane stack
+        (the core block, then the SOL block over it), interpolated to Z = 0 as
+        :func:`midplane_node_profile` does.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species.
+          side: ``'outboard'`` or ``'inboard'``.
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
+          diffusivity: The run's uniform diffusivity (m^2/s), for a run that
+            wrote no ``anom_diff`` file.
+
+        Returns:
+          The :class:`MidplaneDiffusivity` of the diffusivity (m^2/s).
+
+        Raises:
+          KeyError: if the run has no midplane on that side.
+        """
+
+  def gk_midplane_profile(self,
+                          quantity: list[str] | tuple[str, ...],
+                          name: str,
+                          frame: int,
+                          *,
+                          species: list[str] | tuple[str, ...] | None = None,
+                          path: str = './',
+                          side: Literal['outboard', 'inboard'] = 'outboard',
+                          geqdsk: str | None = None,
+                          gamma_e: float | None = None,
+                          gamma_i: float | None = None) -> PostgkylSession:
+    r"""A quantity at the midplane (Z = 0) of a tokamak run across its flux
+        surfaces, from the core edge out through the SOL, with each surface's R and
+        distance from the separatrix.
+
+        The quantity is the sum of the listed registry quantities over the listed
+        species, each block's datasets summed in their modal form, reduced to cell
+        averages. Through the side's midplane stack (the core block, then the SOL
+        block), each cell row's value at Z = 0 is linear in theta between the two
+        cells whose centres bracket Z = 0 (at a reflecting midplane, the cell next
+        to it), at the R where the row crosses Z = 0.
+
+        Args:
+          quantity: Registry quantities to sum (``quantity_catalog()`` lists
+            them): ``['M0']`` the density, ``['temp']`` the temperature (J),
+            ``['field']`` the potential, ``['qpar', 'qperp']`` the parallel flux of
+            kinetic energy.
+          name: The run's file prefix (without ``_b<k>``).
+          frame: The frame.
+          species: Species to sum over; ``None`` for species-independent
+            quantities. A quantity combining several species (``mach_hot_i``) reads
+            the whole list once.
+          path: Directory holding the run's output.
+          side: The midplane: ``'outboard'`` or ``'inboard'``.
+          geqdsk: The run's equilibrium file, for its layout (see
+            :func:`~.multib_layout.multib_layout`).
+
+          gamma_e: The electrons' adiabatic index in the sound-speed quantities
+            (``c_s_hot_i``, ``mach_hot_i``); ``None``: their default (1).
+          gamma_i: The ions' adiabatic index there; ``None``: their default (3).
+        Returns:
+          The :class:`MidplaneProfile`.
         """
 
   def gk_mom_gyrokinetic(self,
@@ -987,6 +1324,28 @@ class PostgkylSession:
           label: Result label.
         """
 
+  def gk_multib_layout(self,
+                       name: str,
+                       *,
+                       path: str = './',
+                       geqdsk: str | None = None,
+                       frame: int | None = None) -> PostgkylSession:
+    r"""The layout of a run's blocks: regions, theta chains, targets and
+        midplanes, derived from its topology and corner nodes.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file; its magnetic axis tells inboard from
+            outboard where the run has no core block, and the psi direction where
+            no closed chain says it. ``None``: the nodes' mean R.
+          frame: The frame whose sheath files mark a limited run's LCFS (default:
+            the first frame written).
+
+        Returns:
+          The :class:`MultibLayout`.
+        """
+
   def gk_nodes(self,
                name: str,
                *,
@@ -1007,8 +1366,7 @@ class PostgkylSession:
                ylabel: str = 'Z (m)',
                zlabel: str = '$\\psi$',
                title: str | None = None,
-               shift_axis: tuple[float, float] = (0.0, 0.0),
-               stretch_axis: tuple[float, float] = (1.0, 1.0),
+               aspect: float = 1.0,
                multib_unicolor: bool = False,
                no_show: bool = False,
                saveas: str | None = None) -> PostgkylSession:
@@ -1043,10 +1401,8 @@ class PostgkylSession:
           ylabel: Vertical-axis label.
           zlabel: Poloidal-flux colorbar label.
           title: Figure title.
-          shift_axis: Horizontal and vertical shifts of the displayed axes, as fractions
-            of the figure width and height.
-          stretch_axis: Factors for displayed axes width and height. Values other than
-            ``(1, 1)`` intentionally change the displayed R/Z scaling.
+          aspect: Displayed length of a unit of Z relative to a unit of R; ``1``
+            draws the geometry to scale.
           multib_unicolor: Use one color for every block instead of cycling.
           no_show: Return without opening a plot window.
           saveas: If given, save the figure to this path.
@@ -1055,68 +1411,241 @@ class PostgkylSession:
           The populated Figure.
         """
 
-  def gk_particle_balance(self,
-                          name: str,
-                          species: str,
-                          *,
-                          path: str = './',
-                          relative_error: bool = False,
-                          multib: str = '-10',
-                          fdot_file: str | None = None,
-                          source_file: str | None = None,
-                          bflux_files: Mapping[str, str] | None = None,
-                          f_file: str | None = None,
-                          dt_file: str | None = None,
-                          logy: bool = False,
-                          absy: bool = False,
-                          xlabel: str = 'Time (s)',
-                          ylabel: str | None = None,
-                          title: str | None = None,
-                          indent_left: float = 0.0,
-                          add_width: float = 0.0,
-                          show: bool = False,
-                          saveas: str | None = None) -> PostgkylSession:
-    r"""Plot (and compute) the particle balance of a single species.
+  def gk_nonpositive_cells(self,
+                           quantity: str,
+                           species: str,
+                           name: str,
+                           frame: str = ':',
+                           *,
+                           path: str = './',
+                           region: Literal['core', 'sol', 'pf', 'all'] = 'all',
+                           geqdsk: str | None = None) -> PostgkylSession:
+    r"""How many of a region's cells have a cell mean that is not positive.
 
-        Requires ``<name>-<species>_fdot_integrated_moms.gkyl``; and (only if the
-        run had sources or non-periodic boundaries)
-        ``<name>-<species>_source_integrated_moms.gkyl`` and
-        ``<name>-<species>_bflux_<direction><side>_integrated_HamiltonianMoments
-        .gkyl`` files. If ``relative_error`` is requested,
-        ``<name>-<species>_integrated_moms.gkyl`` and ``<name>-dt.gkyl`` are also
-        required.
+        For the density (``M0``), the cells where it went negative or to zero.
 
         Args:
-          name: Simulation name (also the file prefix).
-          species: Species name.
-          path: Directory holding the simulation output.
-          relative_error: Plot the relative error instead of every balance term.
-          multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
-            every block; otherwise a comma list or ``'start:stop[:step]'`` slice
-            of block indices.
-          fdot_file: Explicit distribution derivative moments path override.
-          source_file: Explicit source moments path override.
-          bflux_files: Optional per-boundary path overrides, keyed by
-            ``"<direction><side>"``; unlisted boundaries use the naming
-            convention.
-          f_file: Explicit integrated distribution moments path override.
-          dt_file: Explicit time-step history path override. In path overrides,
-            ``*`` stands for the block index.
-          logy: Log-scale the y axis.
-          absy: Take the absolute value of every trace before plotting.
-          xlabel: Horizontal-axis label.
-          ylabel: Vertical-axis label.
-          title: Figure title.
-          indent_left: Horizontal axes-position adjustment in figure units.
-          add_width: Axes-width adjustment in figure units.
-          show: Call ``plt.show()`` before returning.
-          saveas: If given, save the figure to this path.
+          quantity: The quantity (see :func:`load_quantity`).
+          species: Its species, or ``None`` for a species-independent quantity.
+          name: The run's file prefix (without ``_b<k>``).
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all).
+          path: Directory holding the run's output.
+          region: ``'core'``, ``'sol'``, ``'pf'`` or ``'all'``.
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
 
         Returns:
-          ``(figure, traces)``.
+          The :class:`RegionSeries` of counts.
+        """
+
+  def gk_poloidal_lengths(self,
+                          name: str,
+                          *,
+                          path: str = './',
+                          geqdsk: str | None = None) -> PostgkylSession:
+    r"""L_theta, the poloidal length along each cell row of the open theta
+        chains (SOL legs and main SOL, private flux) from the chain's target end.
+
+        Measured along the cell-centre line of each cell row (the mean of its two
+        node rows' edges: curves through the Gauss surface nodes, or chords where
+        the run lacks them), from the chain's target end, an outer target before
+        an inner one, a lower before an upper.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file; its magnetic axis tells an outboard
+            midplane crossing from an inboard one (default: the core blocks'
+            mean R).
+
+        Returns:
+          The :class:`PoloidalLengths`.
+        """
+
+  def gk_region_average(self,
+                        quantity: str,
+                        species: str,
+                        name: str,
+                        frame: str = ':',
+                        *,
+                        path: str = './',
+                        region: Literal['core', 'sol', 'pf', 'all'] = 'all',
+                        geqdsk: str | None = None,
+                        gamma_e: float | None = None,
+                        gamma_i: float | None = None) -> PostgkylSession:
+    r"""The volume average of a quantity over a region of a run, per frame.
+
+        ``int_region q J dx / int_region J dx``, ``J`` each block's
+        ``geo_int_jacobgeo``: a cell contributes the cell mean of the weak product
+        ``q J`` and of ``J`` times its logical size (cells where either is not
+        finite are left out).
+
+        Args:
+          quantity: The quantity (see :func:`load_quantity`).
+          species: Its species, or ``None`` for a species-independent quantity.
+          name: The run's file prefix (without ``_b<k>``).
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all).
+          path: Directory holding the run's output.
+          region: ``'core'``, ``'sol'``, ``'pf'`` or ``'all'``.
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
+
+          gamma_e: The electrons' adiabatic index in the sound-speed quantities
+            (``c_s_hot_i``, ``mach_hot_i``); ``None``: their default (1).
+          gamma_i: The ions' adiabatic index there; ``None``: their default (3).
+        Returns:
+          The :class:`RegionSeries` of volume averages.
+        """
+
+  def gk_region_median_change(self,
+                              quantity: str,
+                              species: str,
+                              name: str,
+                              frame: str = ':',
+                              *,
+                              path: str = './',
+                              region: Literal['core', 'sol', 'pf',
+                                              'all'] = 'all',
+                              reference: int | None = None,
+                              geqdsk: str | None = None,
+                              gamma_e: float | None = None,
+                              gamma_i: float | None = None) -> PostgkylSession:
+    r"""The median over a region's cells of each cell mean's relative change.
+
+        Per frame, the median of ``q / q_ref - 1`` over the region's cells, with
+        ``q`` and ``q_ref`` the cell means at the frame and at the reference frame
+        (cells where it is not finite are left out).
+
+        Args:
+          quantity: The quantity (see :func:`load_quantity`).
+          species: Its species, or ``None`` for a species-independent quantity.
+          name: The run's file prefix (without ``_b<k>``).
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all).
+          path: Directory holding the run's output.
+          region: ``'core'``, ``'sol'``, ``'pf'`` or ``'all'``.
+          reference: The reference frame; default: the run's first frame (of
+            ``<block 0 prefix>-field_<frame>.gkyl``).
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
+
+          gamma_e: The electrons' adiabatic index in the sound-speed quantities
+            (``c_s_hot_i``, ``mach_hot_i``); ``None``: their default (1).
+          gamma_i: The ions' adiabatic index there; ``None``: their default (3).
+        Returns:
+          The :class:`RegionSeries` of median relative changes.
+        """
+
+  def gk_sheath_entrance(self,
+                         name: str,
+                         frame: int,
+                         *,
+                         path: str = './',
+                         geqdsk: str | None = None,
+                         electron: str = 'elc',
+                         ion: str = 'ion') -> PostgkylSession:
+    r"""The sheath entrance at every target plate: e (phi_se - phi_wall) / T_e
+        from the sheath boundary condition's electron cutoff, the textbook
+        floating-sheath drop, the ion Mach number toward the plate, T_e and T_i, per
+        open SOL cell row of each target's leg.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          frame: A frame with the sheath files (:func:`sheath_frames`).
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file, for psi_N of the rows (and the
+            layout's orientation where the topology does not fix it).
+          electron: The electron species (negative charge).
+          ion: The ion species (positive charge).
+
+        Returns:
+          The :class:`SheathEntrance`.
 
         Raises:
-          FileNotFoundError: if a required file family is missing.
+          ValueError: The species' charges have the wrong signs, or no target's
+            leg wrote the electrons' sheath file at ``frame``.
+        """
+
+  def gk_sheath_frames(self,
+                       name: str,
+                       *,
+                       path: str = './',
+                       electron: str = 'elc') -> PostgkylSession:
+    r"""The frames at which a run wrote its sheath boundary condition's files
+        (the electrons' ``_bc_z{lower,upper}_vcutsq``, with its phase-space
+        output), from its first target's leg block.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          path: Directory holding the run's output.
+          electron: The electron species.
+        """
+
+  def gk_target_fluxes(self,
+                       name: str,
+                       species: list[str] | tuple[str, ...],
+                       *,
+                       path: str = './',
+                       geqdsk: str | None = None,
+                       full_torus: bool = False) -> PostgkylSession:
+    r"""The power and particle flux through each target plate of a run.
+
+        A plate is the theta face (``ylower`` at a leg's theta-lower end,
+        ``yupper`` at its upper end) of the leg block and of the private-flux
+        block under it. Reads, per species and plate block,
+        ``<block prefix>-<species>_bflux_<face>_integrated_HamiltonianMoments.gkyl``:
+        the particle flux is its first component, the power its third (the
+        Hamiltonian). A block that wrote no such file adds nothing; a target none
+        of whose blocks wrote one is left out. Where the files' lengths differ, the
+        shortest sets the samples. Like :func:`balance`, the first sample (t=0,
+        before a step) is skipped.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          species: The species to sum over.
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file, for the layout (see
+            :func:`multib_layout`).
+          full_torus: Give each plate's flux over its whole toroidal ring
+            (``2 pi`` radians) instead of per radian.
+
+        Returns:
+          The :class:`TargetFluxes`.
+        """
+
+  def gk_target_profiles(self,
+                         name: str,
+                         frame: int,
+                         *,
+                         species: list[str] | tuple[str, ...],
+                         path: str = './',
+                         geqdsk: str | None = None,
+                         fraction: float = 0.63) -> PostgkylSession:
+    r"""The heat flux onto each target plate of a tokamak run per SOL flux
+        surface, with each surface's distance from the separatrix at the midplane
+        and along the plate, and the heat-flux width lambda_q.
+
+        The heat flux is ``|q|`` in the plate cell, ``q`` the parallel flux of
+        kinetic energy (``qpar + qperp``) summed over the species, reduced to cell
+        averages. lambda_q is the midplane distance holding ``fraction`` of its
+        integral over the midplane distance, constant between the surfaces' node
+        rows; it is nan where no block of the leg's chain reaches the midplane, or
+        where the node rows' midplane distances do not increase outward.
+
+        Args:
+          name: The run's file prefix (without ``_b<k>``).
+          frame: The frame.
+          species: Species to sum over.
+          path: Directory holding the run's output.
+          geqdsk: The run's equilibrium file, for its layout (see
+            :func:`~.multib_layout.multib_layout`).
+          fraction: The fraction of the integral lambda_q holds.
+
+        Returns:
+          One :class:`TargetProfile` per target, in the layout's order (lower
+          outer, upper outer, lower inner, upper inner first).
         """
 
   def grid(self,
@@ -1149,19 +1678,31 @@ class PostgkylSession:
 
   def growth(self,
              *,
+             spectrum: bool = False,
+             dir: int | None = None,
+             tag: str | None = None,
              guess: str | None = None,
              min_n: int | None = None,
+             time_norm: str | float | None = None,
+             time_window: tuple[float, float] | None = None,
+             space_norm: str | float | None = None,
+             interpolated: bool = False,
              inplace: bool = False,
-             tag: str | None = None,
              label: str | None = None) -> PostgkylSession:
-    r"""Fit exponential growth on the best leading data window.
+    r"""Print growth rates and return fitted curves, or a spatial rate spectrum.
 
         Args:
-          data: One-dimensional point-value dataset to fit.
+          *datasets: One-dimensional time traces, or field frames for a spectrum.
+          spectrum: Compute growth rate versus positive spatial wavenumber.
+          dir: Zero-based FFT direction, required with spectrum.
+          tag: Optional tag for resulting dataset(s).
           guess: Initial ``amplitude,rate`` parameter guess.
           min_n: Minimum number of points in the fitted leading window.
+          time_norm: Positive time scale, metadata name, or arithmetic expression.
+          time_window: Inclusive normalized or unnormalized time bounds.
+          space_norm: Positive length scale, metadata name, or arithmetic expression.
+          interpolated: Interpolate modal fields before the spatial FFT.
           inplace: Mutate and return ``data`` instead of creating a dataset.
-          tag: Optional tag for the fitted curve.
           label: Optional label for the fitted curve.
 
         Returns:
@@ -1275,7 +1816,7 @@ class PostgkylSession:
            z4: str | None = None,
            z5: str | None = None,
            component: str | None = None,
-           read_options: Mapping[str, str] | None = None) -> PostgkylSession:
+           options: Mapping[str, str] | None = None) -> PostgkylSession:
     r"""Read Gkeyll output into a fluent ``GData`` or ``GDataGroup``.
 
         ``pg.load('elc_M0_0.gkyl').interpolate().select(z0=0.0).plot()``
@@ -1329,7 +1870,7 @@ class PostgkylSession:
           z4: Partial-load selector for coordinate direction 4.
           z5: Partial-load selector for coordinate direction 5.
           component: Partial-load component selector.
-          read_options: Reader-specific options as repeated key/value entries.
+          options: Reader-specific options as repeated key/value entries.
         """
 
   def local_poly(self,
@@ -1445,6 +1986,34 @@ class PostgkylSession:
             dimensionality; if the mapping has no ``basis_type``/``poly_order``
             metadata (and none was given at load time); or if its component
             count does not match the expected ``m * num_basis``.
+        """
+
+  def map_interp(self,
+                 *,
+                 axes: str | float,
+                 dest: str,
+                 source: str | None = None,
+                 psi_file: str | None = None,
+                 inplace: bool = False,
+                 tag: str | None = None,
+                 label: str | None = None,
+                 optional: Mapping[str, str] | None = None) -> PostgkylSession:
+    r"""Map one or multiple coordinates of an interpolated dataset.
+
+        See ``--avail_maps`` for a list of currently available maps.
+
+        Args:
+          data: Interpolated dataset.
+          axes: Computational axes, e.g. ``0`` or ``0,1`` at the CLI.
+          dest: Matching destinations, e.g. ``R_omp,rho_s`` at the CLI.
+          source: Incoming coordinates, e.g. ``psi_pol,alpha``; defaults by axis.
+          psi_file: Optional path to Gkeyll's psi field.
+          optional: Normalization inputs as metadata names or numeric values. At the
+            CLI, use ``-o rho_s=rho_s0,Cy=0.2`` or repeat the option as
+            ``-o rho_s=rho_s0 -o Cy=0.2``; ``-o rho_s=1.1`` uses a literal value.
+          inplace: Mutate and return ``data`` when true.
+          tag: Optional tag for the result.
+          label: Optional display label for the result.
         """
 
   def map_to_torus_3d(self,
@@ -4018,6 +4587,28 @@ class PostgkylSession:
 
         Returns:
           The same datasets, reordered by their source filename's natural sort key.
+        """
+
+  def units(self,
+            *,
+            source: str,
+            dest: str,
+            inplace: bool = False,
+            tag: str | None = None,
+            label: str | None = None) -> PostgkylSession:
+    r"""Scale dataset values from ``source`` units to ``dest`` units.
+
+        Source and destination must describe the same dimension. Use ``units
+        --avail`` to list supported translations. The grid is not converted. Native
+        modal coefficients are scaled without interpolation.
+
+        Args:
+          data: Dataset to convert.
+          source: Unit currently used by the values.
+          dest: Unit desired for the values.
+          inplace: Mutate and return ``data`` instead of a new dataset.
+          tag: Optional tag for the result.
+          label: Optional display label, overriding an automatic unit replacement.
         """
 
   def val2coord(self,

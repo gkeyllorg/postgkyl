@@ -21,6 +21,15 @@ def num_basis(dim: int, poly_order: int, basis_type: str,
   return gpython_basis.num_basis(basis_type, dim, poly_order, **basis_kwargs)
 
 
+def basis_matrix(basis_type: str, ndim: int, poly_order: int,
+                 points: np.ndarray, **basis_kwargs) -> np.ndarray:
+  """``(npts, num_basis)`` values of Gkeyll's basis functions at points of
+  the reference cell [-1, 1]^ndim: ``coeffs @ basis_matrix(...).T``
+  evaluates a field's expansion there."""
+  return gpython_basis.eval_matrix(basis_type, ndim, poly_order,
+                                   np.atleast_2d(points), **basis_kwargs)
+
+
 def _validate_coefficients(values, grid, block_size, surface_dir=None):
   if values.shape[-1] == 0 or values.shape[-1] % block_size:
     raise ValueError(f"component count {values.shape[-1]} must contain "

@@ -56,6 +56,9 @@ from . import verbs
 class GDataGroup(GDataStateGroup):
   """A group whose members' fluent verbs broadcast over the whole group."""
 
+  growth = operations.growth
+  frequency = operations.frequency
+
   # ------------------------------------------------------- data lifecycle
   def load(self,
            file_name: str,

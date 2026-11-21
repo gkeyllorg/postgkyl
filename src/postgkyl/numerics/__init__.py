@@ -38,8 +38,10 @@ from .ev_ops import cmds as ev_cmds
 from .grid_centering import nodal_to_cell_centered_grid
 from .downsample import downsample
 from .natural_sort import natural_sort_key
+from .frame_match import match_frames
 
 __all__ = [
+    "match_frames",
     "idx_parser",
     "grids_compatible",
     "grid_is_prefix",

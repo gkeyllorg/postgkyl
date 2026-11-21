@@ -25,6 +25,7 @@ this namespace re-exports their exact canonical callables from
 :mod:`postgkyl.render` without wrapping them.
 """
 
+from .vector_projection import project_vector
 from . import arithmetic
 from .interpolate import interpolate
 from .local_poly import local_poly
@@ -40,6 +41,8 @@ from .represent import apply, represent
 
 from .fft import fft
 from .magsq import magsq
+from .cell_average import cell_average
+from .units import available_units, units
 from .relchange import relchange
 from .mask import mask
 from .collect import collect
@@ -50,9 +53,11 @@ from .val2coord import val2coord
 from .extract_input import extract_input
 from .fit import fit
 from .growth import growth
+from .frequency import frequency
 from .differentiate import differentiate
 from .evaluate import available_operators as available_evaluate_operators, evaluate
 from .map import map
+from .map_interp import available_maps, map_interp
 from .map_to_torus_rz import map_to_torus_rz, resolve_rz_projection, RzProjection
 from .map_to_torus_3d import (map_to_torus_3d, resolve_torus_projection,
                               TorusProjection)
@@ -67,6 +72,7 @@ from .geometry import Geometry, resolve_geometry
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    InfoOption,
     ResultPolicy,
     Section,
     command,
@@ -83,10 +89,30 @@ _TERM_ALL = CommandSpec(Section.UTILITY,
                         Execution.TERMINAL_ALL,
                         result=ResultPolicy.VALUE)
 
-for _function in (interpolate, local_poly, select, eval_at_coord_proj, fft,
-                  magsq, grid, differentiate, map, map_to_torus_rz,
-                  map_to_torus_3d, map_to_torus_phitheta, fluctuation):
+for _function in (interpolate, local_poly, cell_average, select,
+                  eval_at_coord_proj, fft, magsq, grid, differentiate, map,
+                  map_to_torus_rz, map_to_torus_3d, map_to_torus_phitheta,
+                  fluctuation):
   command(_MAP)(_function)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_REPLACE,
+                info_options=(InfoOption(
+                    "avail",
+                    available_units,
+                    "List available value-unit translations, then exit.",
+                    heading="Supported unit translations:"), )))(units)
+hidden("Python unit catalog; exposed through units --avail")(available_units)
+command(
+    CommandSpec(Section.VERBS,
+                Execution.MAP_REPLACE,
+                info_options=(InfoOption(
+                    "avail_maps",
+                    available_maps,
+                    "List available coordinate maps, then exit.",
+                    heading="Supported mappings:"), )))(map_interp)
+hidden("Python map catalog; exposed through map_interp --avail_maps")(
+    available_maps)
 command(_APPEND)(val2coord)
 command(_COMBINE)(relchange)
 command(_COMBINE)(collect)
@@ -96,7 +122,9 @@ command(CommandSpec(Section.UTILITY, Execution.ACTIVATE))(activate)
 command(_COMBINE)(evaluate)
 command(_MAP)(mask)
 command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(fit)
-command(CommandSpec(Section.VERBS, Execution.MAP_APPEND))(growth)
+_MEASURE = CommandSpec(Section.VERBS, Execution.COMBINE, deactivate_inputs=True)
+command(_MEASURE)(growth)
+command(_MEASURE)(frequency)
 command(
     CommandSpec(Section.UTILITY,
                 Execution.TERMINAL_ALL,
@@ -113,6 +141,9 @@ for _function in (integrate, average):
 command(_TERM_EACH)(extract_input)
 command(_MAP)(represent)
 
+hidden("requires explicit vector components and geometry datasets")(
+    project_vector)
+
 hidden("requires a Python callable and cannot be lowered losslessly")(apply)
 hidden("registry provider used by evaluate help and validation")(
     available_evaluate_operators)
@@ -122,13 +153,15 @@ for _function in (resolve_geometry, resolve_rz_projection,
   hidden("constructs geometry or projections for the Python API")(_function)
 
 __all__ = [
-    "interpolate", "local_poly", "select", "info", "print", "integrate",
-    "average", "fluctuation", "eval_at_coord_proj", "plot", "animate", "plotly",
-    "plotly_animate", "pyvista", "arithmetic", "represent", "apply", "fft",
-    "magsq", "relchange", "mask", "collect", "sort", "activate", "grid",
-    "val2coord", "extract_input", "fit", "differentiate", "evaluate",
-    "available_evaluate_operators", "map", "growth", "map_to_torus_rz",
+    "interpolate", "local_poly", "cell_average", "select", "info", "print",
+    "integrate", "average", "fluctuation", "eval_at_coord_proj", "plot",
+    "animate", "plotly", "plotly_animate", "pyvista", "arithmetic", "represent",
+    "apply", "fft", "magsq", "units", "available_units", "relchange", "mask",
+    "collect", "sort", "activate", "grid", "val2coord", "extract_input", "fit",
+    "differentiate", "evaluate", "available_evaluate_operators", "map",
+    "map_interp", "available_maps", "growth", "frequency", "map_to_torus_rz",
     "resolve_rz_projection", "map_to_torus_3d", "resolve_torus_projection",
     "map_to_torus_phitheta", "resolve_phitheta_projection", "resolve_geometry",
-    "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection"
+    "Geometry", "RzProjection", "TorusProjection", "PhiThetaProjection",
+    "project_vector"
 ]

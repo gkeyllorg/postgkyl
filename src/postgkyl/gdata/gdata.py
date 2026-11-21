@@ -96,6 +96,7 @@ class GData(GDataState):
   # implementation in one canonical function while remaining discoverable by
   # static language servers such as VS Code/Pylance.
   interpolate = operations.interpolate
+  cell_average = operations.cell_average
   local_poly = operations.local_poly
   map_to_torus_rz = operations.map_to_torus_rz
   map_to_torus_3d = operations.map_to_torus_3d
@@ -107,12 +108,15 @@ class GData(GDataState):
   eval_at_coord_proj = operations.eval_at_coord_proj
   fft = operations.fft
   magsq = operations.magsq
+  units = operations.units
   mask = operations.mask
   extract_input = operations.extract_input
   fit = operations.fit
   growth = operations.growth
+  frequency = operations.frequency
   differentiate = operations.differentiate
   map = operations.map
+  map_interp = operations.map_interp
   represent = operations.represent
   apply = operations.apply
   save = io.save

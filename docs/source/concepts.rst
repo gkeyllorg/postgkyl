@@ -57,6 +57,26 @@ Plotting raw modal data draws the stored coefficients as separate channels
 on the cell grid, without changing the representation. For example,
 ``pgkyl file.gkyl pl`` plots coefficients. To plot the evaluated field, use
 ``pgkyl file.gkyl interpolate pl`` or ``pgkyl file.gkyl local_poly pl``.
+
+Convert value units
+-------------------
+
+``units`` scales dataset values while preserving the grid and data
+representation. State the units currently used by the values explicitly::
+
+   pgkyl sim-elc_M0_0.gkyl units --source 'm^-3' --dest 'cm^-3'
+   pgkyl gk_load_q -n sim -s elc -q temp -f 0 units --source J --dest keV
+   pgkyl sim-field_0.gkyl units --source V --dest kV
+
+In Python, use ``pg.units(data, source='J', dest='eV')`` or
+``data.units(source='m/s', dest='km/s')``. Supported families are
+``m^-3``/``cm^-3``, ``J``/``eV``/``keV``, ``m/s``/``km/s``, ``V``/``kV``,
+``V/m``/``kV/m``, and ``T``/``G``. Every conversion works in both
+directions; energy units can also convert among each other. A matching
+unit in the display label is updated, and the result records
+``ctx['value_units']``. Coordinate units are unchanged.
+Run ``pgkyl units --avail`` to list the available translations without
+loading a dataset.
 ``represent(to='nodal')`` and ``represent(to='quad')`` also provide field values
 at basis nodes and quadrature points respectively.
 

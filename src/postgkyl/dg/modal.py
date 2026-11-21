@@ -40,6 +40,17 @@ def constant_mode_shift(ndim: int, val: float) -> float:
   return float(val) * 2.0**(ndim / 2.0)
 
 
+def cell_means(values: np.ndarray, ndim: int, num_basis: int) -> np.ndarray:
+  """Cell average of each field of modal coefficients.
+
+  ``values`` holds ``nfields * num_basis`` coefficients per cell on its last
+  axis; the result holds ``nfields``. Every basis function but the constant
+  ``b_0 = 2^(-ndim/2)`` integrates to zero over a cell, so the average is
+  ``b_0`` times each field's coefficient 0, for any basis and order.
+  """
+  return np.asarray(values)[..., ::num_basis] / constant_mode_shift(ndim, 1.0)
+
+
 def shift_mean(basis_type: str,
                ndim: int,
                poly_order: int,

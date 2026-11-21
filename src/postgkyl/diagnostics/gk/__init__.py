@@ -14,12 +14,12 @@ mapping are owned by I/O and operations, respectively.
 from __future__ import annotations
 
 from .distf import load_distf, resolve_frames
-from .load_quantity import available_quantities, load_quantity
+from .load_quantity import available_quantities, load_quantity, quantity_catalog
 from .quantities import (
     fetch_beta_from_bmag_press,
-    fetch_diamag_vel,
-    fetch_ExB_vel,
-    fetch_gradB_vel,
+    fetch_diamag_vel_contra,
+    fetch_ExB_vel_contra,
+    fetch_gradB_vel_contra,
     fetch_M1_from_H,
     fetch_press_from_BiMax,
     fetch_press_from_Max,
@@ -35,33 +35,65 @@ from .registry import gk_quant_registry
 from .moments import mom_gyrokinetic
 
 # Layer 13: program-scale diagnostics ported from src_bak's apps/gk_*.py.
-from .energy_balance import EnergyBalanceTraces, energy_balance_error, energy_balance
-from .particle_balance import ParticleBalanceTraces, particle_balance, particle_balance_error
+from .balance import balance, balance_error
 from .nodes import nodes, multib_tag, nodes_to_RZ
+
+# Multiblock tokamak diagnostics (moved here from the Gkeyll run viewer, whose
+# GUI only calls Postgkyl).
+from .multib_layout import (MidplaneStack, MultibLayout, Target, ThetaChain,
+                            multib_layout)
+from .dt_limits import DtLimits, dt_limits
+from .flux_coords import (CellEdges, ChainLengths, FluxSurfaces,
+                          PoloidalLengths, cell_edges, flux_surfaces,
+                          poloidal_lengths)
+from .sheath import (SheathEntrance, SheathProfile, sheath_entrance,
+                     sheath_frames)
+from .sol_profiles import (MidplaneProfile, TargetProfile, midplane_profile,
+                           target_profiles)
+from .budgets import (BalanceIntervals, PlateFlux, TargetFluxes,
+                      balance_intervals, frame_times, target_fluxes)
+from .regions import (RegionSeries, nonpositive_cells, region_average,
+                      region_median_change)
+from .diffusivity import (AnomalousDiffusivity, MidplaneDiffusivity,
+                          anomalous_diffusivity, midplane_diffusivity)
 
 from typing import Annotated
 
 from postgkyl.cli_spec import (
     CommandSpec,
     Execution,
+    InfoOption,
     KeyValue,
     ResultPolicy,
     Section,
     command,
+    hidden,
 )
+
+hidden("Python quantity catalog; CLI uses it through avail_quant")(
+    quantity_catalog)
 
 _LOAD_SPEC = CommandSpec(Section.DIAGNOSTICS, Execution.LOAD)
 _REPORT_SPEC = CommandSpec(Section.DIAGNOSTICS,
                            Execution.LOAD,
                            result=ResultPolicy.VALUE)
 command(_LOAD_SPEC)(load_distf)
-command(_LOAD_SPEC)(load_quantity)
-energy_balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
-                                                          KeyValue()]
-particle_balance.__annotations__["bflux_files"] = Annotated[dict[str, str]
-                                                            | None,
-                                                            KeyValue()]
-for _function in (energy_balance, particle_balance, nodes):
+command(
+    CommandSpec(
+        Section.DIAGNOSTICS,
+        Execution.LOAD,
+        info_options=(InfoOption(
+            "avail_quant", quantity_catalog,
+            "List available quantities and their descriptions, then exit."),
+                      )))(load_quantity)
+balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
+                                                   KeyValue()]
+for _function in (balance, nodes, multib_layout, dt_limits, cell_edges,
+                  flux_surfaces, poloidal_lengths, sheath_frames,
+                  sheath_entrance, midplane_profile, target_profiles,
+                  target_fluxes, balance_intervals, frame_times, region_average,
+                  region_median_change, nonpositive_cells,
+                  anomalous_diffusivity, midplane_diffusivity):
   command(_REPORT_SPEC)(_function)
 
 __all__ = [
@@ -69,12 +101,13 @@ __all__ = [
     "load_distf",
     "resolve_frames",
     "available_quantities",
+    "quantity_catalog",
     "load_quantity",
     "gk_quant_registry",
     "fetch_beta_from_bmag_press",
-    "fetch_diamag_vel",
-    "fetch_ExB_vel",
-    "fetch_gradB_vel",
+    "fetch_diamag_vel_contra",
+    "fetch_ExB_vel_contra",
+    "fetch_gradB_vel_contra",
     "fetch_M1_from_H",
     "fetch_press_from_BiMax",
     "fetch_press_from_Max",
@@ -85,13 +118,45 @@ __all__ = [
     "fetch_temp_from_Tpar_Tperp",
     "fetch_Tperp_from_BiMax",
     "fetch_Tperp_from_M0_M2perp",
-    "EnergyBalanceTraces",
-    "energy_balance_error",
-    "energy_balance",
-    "ParticleBalanceTraces",
-    "particle_balance",
-    "particle_balance_error",
+    "balance",
+    "balance_error",
     "nodes",
     "multib_tag",
     "nodes_to_RZ",
+    "multib_layout",
+    "MultibLayout",
+    "MidplaneStack",
+    "Target",
+    "ThetaChain",
+    "dt_limits",
+    "DtLimits",
+    "cell_edges",
+    "flux_surfaces",
+    "poloidal_lengths",
+    "CellEdges",
+    "FluxSurfaces",
+    "ChainLengths",
+    "PoloidalLengths",
+    "sheath_frames",
+    "sheath_entrance",
+    "SheathEntrance",
+    "SheathProfile",
+    "midplane_profile",
+    "target_profiles",
+    "MidplaneProfile",
+    "TargetProfile",
+    "target_fluxes",
+    "balance_intervals",
+    "frame_times",
+    "TargetFluxes",
+    "PlateFlux",
+    "BalanceIntervals",
+    "region_average",
+    "region_median_change",
+    "nonpositive_cells",
+    "RegionSeries",
+    "anomalous_diffusivity",
+    "midplane_diffusivity",
+    "AnomalousDiffusivity",
+    "MidplaneDiffusivity",
 ]

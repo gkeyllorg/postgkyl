@@ -15,11 +15,11 @@ Four modules, one per domain boundary:
   at a target's own grid points (see ``MAPPING.md``).
 """
 
-from .interpolate import interpolate, local_poly, num_basis
+from .interpolate import basis_matrix, interpolate, local_poly, num_basis
 from .map import eval_at_points, map_grid, map_grid_separable
 from . import modal, rep
 
 __all__ = [
-    "interpolate", "local_poly", "num_basis", "modal", "rep", "eval_at_points",
-    "map_grid", "map_grid_separable"
+    "basis_matrix", "interpolate", "local_poly", "num_basis", "modal", "rep",
+    "eval_at_points", "map_grid", "map_grid_separable"
 ]

@@ -417,12 +417,14 @@ class GDataState:
         out += f"│  ├─ Changeset: {self.ctx['changeset']}\n"
       if "builddate" in self.ctx:
         out += f"│  └─ Build Date: {self.ctx['builddate']}\n"
-    if "geometry_type" in self.ctx or "geqdsk_sign_convention" in self.ctx:
+    geometry_info = [(title, self.ctx[key])
+                     for key, title in self._INFO_GEOMETRY_LABELS.items()
+                     if key in self.ctx]
+    if geometry_info:
       out += "├─ Geometry info:\n"
-      if "geometry_type" in self.ctx:
-        out += f"│  ├─ Type: {self.ctx['geometry_type']}\n"
-      if "geqdsk_sign_convention" in self.ctx:
-        out += f"│  ├─ GEQDSK sign convention: {self.ctx['geqdsk_sign_convention']:d}\n"
+      for i, (title, value) in enumerate(geometry_info):
+        branch = "└" if i == len(geometry_info) - 1 else "├"
+        out += f"│  {branch}─ {title}: {value}\n"
     if any(k in self.ctx for k in ("mass", "charge", "gas_gamma", "vdim")):
       out += "├─ Species properties:\n"
       if "mass" in self.ctx:
@@ -433,8 +435,19 @@ class GDataState:
         out += f"│  ├─ Adiabatic index: {self.ctx['gas_gamma']:e}\n"
       if "vdim" in self.ctx:
         out += f"│  ├─ Velocity dimensions: {self.ctx['vdim']:d}\n"
+    input_keys = self.ctx.get("input_metadata_keys", ())
+    input_info = {
+        key: self.ctx[key]
+        for key in input_keys
+        if key in self.ctx and key not in self._INFO_HANDLED_CTX_KEYS
+    }
+    if input_info:
+      out += "├─ From input file:\n"
+      for i, (key, value) in enumerate(input_info.items()):
+        branch = "└" if i == len(input_info) - 1 else "├"
+        out += f"│  {branch}─ {key}: {value}\n"
     for key, val in self.ctx.items():
-      if key not in self._INFO_HANDLED_CTX_KEYS:
+      if key not in self._INFO_HANDLED_CTX_KEYS and key not in input_info:
         out += f"├─ {key}: {val}\n"
     if all and (provenance := self.ctx.get("_load_metadata")):
       out += "├─ Metadata sources (at load; summary above is current state):\n"
@@ -468,6 +481,17 @@ class GDataState:
     print(out)
     return out
 
+  _INFO_GEOMETRY_LABELS = {
+      "geometry_type": "Type",
+      "geqdsk_sign_convention": "GEQDSK sign convention",
+      "equilibrium_cocos": "Equilibrium COCOS",
+      "parallel_coordinate": "Parallel coordinate",
+      "tokamak_geo_type": "Tokamak geometry type",
+      "geqdsk_file": "GEQDSK file",
+      "half_domain": "Half domain",
+      "geometry_generator": "Geometry generator",
+  }
+
   # Keys already rendered above; remaining context is shown in the current
   # summary without claiming that it came directly from a file.
   _INFO_HANDLED_CTX_KEYS = frozenset({
@@ -489,14 +513,13 @@ class GDataState:
       "interpolated",
       "changeset",
       "builddate",
-      "geometry_type",
-      "geqdsk_sign_convention",
       "mass",
       "charge",
       "gas_gamma",
       "vdim",
       "_load_metadata",
-  })
+      "input_metadata_keys",
+  }).union(_INFO_GEOMETRY_LABELS)
 
   # --------------------------------------------------------------- summary
   def _summary(self) -> str:
