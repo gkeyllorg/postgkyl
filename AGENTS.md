@@ -18,6 +18,7 @@ For code changes, read the design skill and the task-relevant skills below:
 - [Native bridge](.agents/skills/native/SKILL.md): Gkeyll integration and ownership.
 - [Development](.agents/skills/development/SKILL.md): setup, formatting, checks, and agent configuration.
 - [Testing](.agents/skills/testing/SKILL.md): How to write good unit tests.
+- [GUI](.agents/skills/gui/SKILL.md): GUIs call Postgkyl commands and display results; they never calculate.
 
 Shared skills live in `.agents/skills/`, which Codex reads directly. `.claude`
 links to `.agents/`; `CLAUDE.md` links here. Keep `.codex/` a real directory for

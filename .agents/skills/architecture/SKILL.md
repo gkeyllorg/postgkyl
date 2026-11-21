@@ -12,7 +12,7 @@ in the same change if ownership changes. Do not maintain a second import matrix.
 
 | Layer | Owns |
 | --- | --- |
-| `__init__.py`, `cli/`, `gui/` | Public surfaces; the facade only re-exports, with no function/class definitions |
+| `__init__.py`, `cli/`, `gui/` | Public surfaces; the facade only re-exports, with no function/class definitions; a GUI only calls public callables ([GUI skill](../gui/SKILL.md)) |
 | `diagnostics/` | Equation-specific physical conclusions and compositions |
 | `gdata/` | Fluent GData/GDataGroup API and load entry point |
 | `operations/` | Data transformations; flat equation-blind verbs |
