@@ -1415,3 +1415,37 @@ class TestRealFixtures:
                                      atol=1e-14)
       finally:
         plt.close(fig)
+
+
+@pytest.mark.parametrize("source_moments, columns, energy", [
+    ("HamiltonianMoments", (0.0, 0.0, 4.0), 4.0),
+    ("M0M1M2", (0.0, 0.0, 4.0), 0.5 * 2.0 * 4.0),
+    ("M0M1M2parM2perp", (0.0, 0.0, 3.0, 1.0), 0.5 * 2.0 * (3.0 + 1.0)),
+])
+def test_energy_source_of_an_older_moments_file(stub, tmp_path, source_moments,
+                                                columns, energy):
+  # ``<species>_source_integrated_moms`` does not name its moments: for
+  # M0M1M2 kinds the energy is m/2 M2 (mass 2 here), for the Hamiltonian its
+  # third component.
+  path = _build_energy_sim(stub, tmp_path, with_src=False)
+  time = np.linspace(0.0, 1.0, 5)
+  stub.add(f"{path}sim-ion_source_integrated_moms.gkyl", time,
+           np.tile(columns, (5, 1)), {"mass": 2.0})
+  fig, traces = bal.balance("sim", ["ion"],
+                            quantity="energy",
+                            path=path,
+                            source_moments=source_moments)
+  plt.close(fig)
+  np.testing.assert_allclose(traces["src"], energy, rtol=1e-15)
+
+
+def test_source_moments_leaves_named_and_particle_files_alone(stub, tmp_path):
+  # A file named for its moments says what it holds; the particle balance
+  # reads M0 whatever the kind.
+  path = _build_energy_sim(stub, tmp_path)
+  fig, traces = bal.balance("sim", ["ion"],
+                            quantity="energy",
+                            path=path,
+                            source_moments="M0M1M2")
+  plt.close(fig)
+  np.testing.assert_allclose(traces["src"], 0.1, rtol=1e-15)

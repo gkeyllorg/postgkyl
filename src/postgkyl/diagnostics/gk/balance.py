@@ -118,9 +118,43 @@ def _moment_file(stem: str, quantity: str) -> str:
   return next((n for n in names if glob.glob(n)), names[0])
 
 
-def _moment_file_traces(path: str, file_prefix: str, species: list[str],
-                        quantity: str, multib: str, relative_error: bool,
-                        overrides: dict[str, str | None]) -> dict:
+SourceMoments = Literal["HamiltonianMoments", "M0M1M2", "M0M1M2parM2perp"]
+
+
+def _source_rate(file_name: str, quantity: str,
+                 source_moments: SourceMoments) -> np.ndarray | None:
+  """A source's rate of the quantity, or ``None`` if the file is absent.
+
+  An older ``<kind>integrated_moms.gkyl`` file does not say which moments it
+  integrates (the app names it so whatever the input chose), so for the
+  energy ``source_moments`` says: the Hamiltonian's third component, or
+  ``m/2`` times ``M2`` (``M0M1M2``) or ``M2par + M2perp``
+  (``M0M1M2parM2perp``), with the species mass from the file's metadata.
+  The latter two leave out ``int q phi S``, which vanishes for a
+  quasineutral source.
+  """
+  comp = _MOMENTS[quantity][1]
+  legacy = file_name.endswith("integrated_moms.gkyl")
+  if quantity != "energy" or source_moments == "HamiltonianMoments" or not legacy:
+    return _read(file_name, comp)[1]
+  if not os.path.exists(file_name):
+    return None
+  grid, values, gdata = utils.read_gfile(file_name)
+  values = np.asarray(values).reshape(np.atleast_1d(grid[0]).size, -1)
+  m2 = values[:, 2] + (values[:, 3]
+                       if source_moments == "M0M1M2parM2perp" else 0.0)
+  return 0.5 * float(gdata.ctx["mass"]) * m2
+
+
+def _moment_file_traces(
+    path: str,
+    file_prefix: str,
+    species: list[str],
+    quantity: str,
+    multib: str,
+    relative_error: bool,
+    overrides: dict[str, str | None],
+    source_moments: SourceMoments = "HamiltonianMoments") -> dict:
   """Traces from the integrated-moment (and, for the energy, field-energy)
   files, summed over species and blocks. ``overrides`` maps a file's kind
   (``fdot_``, ``source_``, ``bflux_<boundary>_``, ``""`` for f, or the
@@ -163,7 +197,9 @@ def _moment_file_traces(path: str, file_prefix: str, species: list[str],
       for key, kinds in (("src", ("source_", )), ("src_bgk", ("source_bgk_", )),
                          ("bflux_tot", [f"bflux_{b}_" for b in _BOUNDARIES])):
         for kind in kinds:
-          _, values = _read(moment(block_prefix, kind, sp, block), comp)
+          file_name = moment(block_prefix, kind, sp, block)
+          values = (_source_rate(file_name, quantity, source_moments)
+                    if key != "bflux_tot" else _read(file_name, comp)[1])
           if values is not None:
             found.add(key)
           add(key, 0.0 * fdot if values is None else values)
@@ -342,6 +378,7 @@ def balance(
     quantity: Literal["particle", "energy"] = "particle",
     path: str = "./",
     relative_error: bool = False,
+    source_moments: SourceMoments = "HamiltonianMoments",
     multib: str = "-10",
     fdot_file: str | None = None,
     source_file: str | None = None,
@@ -395,6 +432,10 @@ def balance(
     quantity: The conserved quantity whose balance is computed.
     path: Directory holding the simulation output.
     relative_error: Plot the relative error instead of every balance term.
+    source_moments: What an older ``<species>_source[_bgk]_integrated_moms``
+      file holds (its name does not say): for the energy balance, its
+      Hamiltonian moments, or ``M0M1M2``/``M0M1M2parM2perp`` moments whose
+      energy is ``m/2 M2``. Files named for their moments are unaffected.
     multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
       every block; otherwise a comma list or ``'start:stop[:step]'`` slice of
       block indices.
@@ -492,7 +533,7 @@ def balance(
     raise FileNotFoundError(f"Required file not found: {balance_names[None]}")
   else:
     traces = _moment_file_traces(path, file_prefix, species, quantity, multib,
-                                 relative_error, overrides)
+                                 relative_error, overrides, source_moments)
 
   if traces["time"].size == 0:
     raise ValueError("No time step was taken: the balance is only defined "

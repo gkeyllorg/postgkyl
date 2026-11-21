@@ -763,6 +763,9 @@ class PostgkylSession:
                  quantity: Literal['particle', 'energy'] = 'particle',
                  path: str = './',
                  relative_error: bool = False,
+                 source_moments: Literal[
+                     'HamiltonianMoments', 'M0M1M2',
+                     'M0M1M2parM2perp'] = 'HamiltonianMoments',
                  multib: str = '-10',
                  fdot_file: str | None = None,
                  source_file: str | None = None,
@@ -815,6 +818,10 @@ class PostgkylSession:
           quantity: The conserved quantity whose balance is computed.
           path: Directory holding the simulation output.
           relative_error: Plot the relative error instead of every balance term.
+          source_moments: What an older ``<species>_source[_bgk]_integrated_moms``
+            file holds (its name does not say): for the energy balance, its
+            Hamiltonian moments, or ``M0M1M2``/``M0M1M2parM2perp`` moments whose
+            energy is ``m/2 M2``. Files named for their moments are unaffected.
           multib: ``"-10"`` (default) for a single block; ``"-1"`` to discover
             every block; otherwise a comma list or ``'start:stop[:step]'`` slice of
             block indices.
