@@ -568,6 +568,31 @@ def test_sequence_options_accept_json_arrays(annotation, arguments, expected):
   assert received == [expected]
 
 
+@pytest.mark.parametrize("arguments, expected", [
+    ([], None),
+    (["--items", "[]"], []),
+    (["--items", "3", "--items", "[4]"], [3, 4]),
+])
+def test_optional_sequence_is_none_only_when_not_given(arguments, expected):
+  received = []
+
+  @command(
+      CommandSpec(Section.UTILITY, Execution.LOAD, result=ResultPolicy.SILENT))
+  def sample(*, items: list[int] | None = None):
+    """Receive optional integers.
+
+    Args:
+      items: Integer entries.
+    """
+    received.append(items)
+
+  result = CliRunner().invoke(build_click_command(compile_callable(sample)),
+                              arguments,
+                              obj=DataSpace())
+  assert result.exit_code == 0, result.output
+  assert received == [expected]
+
+
 @pytest.mark.parametrize("value, message", [
     ("[old,new]", "invalid JSON array"),
     ('["old",]', "invalid JSON array"),

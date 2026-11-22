@@ -569,6 +569,9 @@ def _convert(value, codec: TypeCodec):
   if value is None:
     return None
   if codec.kind is CodecKind.SEQUENCE:
+    # No entry: the option was not given (``--items []`` is one empty entry).
+    if codec.optional and not value:
+      return None
     return [
         _convert_scalar(item, codec.items[0]) for entry in value
         for item in entry
