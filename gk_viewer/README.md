@@ -91,7 +91,8 @@ line to run on your machine. A terminal that VS Code revived after a window relo
 (`$VSCODE_IPC_HOOK_CLI`, gone): view.sh then opens the page through another live VS Code socket on this login node, or
 prints the URL. The access token stays on: anyone on a shared login node can reach 127.0.0.1. Ctrl-C
 stops the server. Python: the venv of Setup (marimo 0.25.2, plotly 7.1.0, anywidget 0.11.0, imageio-ffmpeg 0.6.0,
-h5py 3.16.0, numpy 1.26.4, matplotlib 3.11.0; full list in `requirements.lock.txt`).
+h5py 3.16.0, numpy 2.5.4, matplotlib 3.11.0, and postgkyl's scipy 1.17.1, tables 3.11.1, msgpack 1.2.0; full list in
+`requirements.lock.txt`).
 
 ## A blank start (2026-11-16)
 With nothing to show (no `viewer.json`, `"sims": []`, or simulations whose directories are missing or hold no run
