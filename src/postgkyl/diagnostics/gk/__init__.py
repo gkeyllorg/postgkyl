@@ -48,6 +48,7 @@ from .flux_coords import (CellEdges, ChainLengths, FluxSurfaces,
                           poloidal_lengths)
 from .sheath import (SheathEntrance, SheathProfile, sheath_entrance,
                      sheath_frames)
+from .cell_values import CellValues, cell_values
 from .sol_profiles import (MidplaneProfile, TargetProfile, midplane_profile,
                            target_profiles)
 from .budgets import (BalanceIntervals, PlateFlux, TargetFluxes,
@@ -90,10 +91,11 @@ balance.__annotations__["bflux_files"] = Annotated[dict[str, str] | None,
                                                    KeyValue()]
 for _function in (balance, nodes, multib_layout, dt_limits, cell_edges,
                   flux_surfaces, poloidal_lengths, sheath_frames,
-                  sheath_entrance, midplane_profile, target_profiles,
-                  target_fluxes, balance_intervals, frame_times, region_average,
-                  region_median_change, nonpositive_cells,
-                  anomalous_diffusivity, midplane_diffusivity):
+                  sheath_entrance, cell_values, midplane_profile,
+                  target_profiles, target_fluxes, balance_intervals,
+                  frame_times, region_average, region_median_change,
+                  nonpositive_cells, anomalous_diffusivity,
+                  midplane_diffusivity):
   command(_REPORT_SPEC)(_function)
 
 __all__ = [
@@ -141,6 +143,8 @@ __all__ = [
     "sheath_entrance",
     "SheathEntrance",
     "SheathProfile",
+    "cell_values",
+    "CellValues",
     "midplane_profile",
     "target_profiles",
     "MidplaneProfile",

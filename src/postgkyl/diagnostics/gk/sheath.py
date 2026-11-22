@@ -1,6 +1,7 @@
 """The sheath entrance at a gyrokinetic tokamak run's target plates.
 
-At each target's plate face (the theta face of its leg block's end cell
+At the frames with the sheath boundary condition's files, at each target's
+plate face (the theta face of its leg block's end cell
 column), per open SOL cell row:
 
 - e (phi_se - phi_wall) / T_e, the potential drop the sheath boundary
@@ -17,6 +18,9 @@ The moments M0, M1, M2 enter as their expansions averaged over the plate face
 (where the boundary condition acts), not as cell averages; T and u_par are
 formed from those face averages pointwise, T = m (M2 - M1^2 / M0) / (3 M0),
 which for point values equals the registry's temp = (T_par + 2 T_perp) / 3.
+
+:func:`sheath_entrance` takes a frame specification and builds the run's
+layout once for all its frames.
 """
 
 from __future__ import annotations
@@ -24,15 +28,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 import itertools
 import os
+from typing import Annotated
 
 import numpy as np
 
 from postgkyl import dg, io
+from postgkyl.cli_spec import CliType
 from postgkyl.diagnostics import discovery
 from postgkyl.gdata import GData
 
+from .distf import FrameSpec, resolve_frames
 from .flux_coords import layout_flux_surfaces
-from .multib_layout import block_prefixes, multib_layout, psi_cells
+from .multib_layout import (MultibLayout, Target, block_prefixes, multib_layout,
+                            psi_cells)
 
 _FACE = {0: "lower", -1: "upper"}  # a target's theta end -> its face
 _MOMENTS = ("M0", "M1", "M2")
@@ -115,13 +123,17 @@ def sheath_terms(
 # ------------------------------------------------------------- the records
 @dataclass(frozen=True, eq=False)
 class SheathProfile:
-  """The sheath entrance along one target plate, per open SOL cell row.
+  """The sheath entrance along one target plate at a run's frames, per open
+  SOL cell row.
+
+  The per-frame fields are ``(n_f, n_rows)``, one row per frame of the
+  :class:`SheathEntrance`; nan or inf at a frame where a moment vanishes.
 
   Attributes:
     target: The target's name.
     block: Its leg block.
     rows: The leg's cell rows (inside out) the values are for: its open rows
-      where the sheath files give a finite drop.
+      where the sheath files give a finite drop at some frame.
     psi_n: psi_N of those rows, or ``None`` without a geqdsk.
     drop: e (phi_se - phi_wall) / T_e from the boundary condition's cutoff.
     floating: The textbook floating-sheath drop for the same T_e, T_i.
@@ -140,43 +152,71 @@ class SheathProfile:
   te: np.ndarray
   ti: np.ndarray
 
+  def __post_init__(self):
+    n = len(self.rows)
+    shapes = {
+        np.shape(v)
+        for v in (self.drop, self.floating, self.mach, self.te, self.ti)
+    }
+    shape = shapes.pop() if len(shapes) == 1 else ()
+    if len(shape) != 2 or shape[1] != n or (self.psi_n is not None
+                                            and len(self.psi_n) != n):
+      raise ValueError(f"SheathProfile {self.target}: drop, floating, mach, "
+                       f"te and ti must share one shape (frames, {n} rows) "
+                       f"and psi_n have {n} rows")
+
 
 def _span(v: np.ndarray) -> str:
+  """The range of the finite values."""
+  v = v[np.isfinite(v)]
   return f"{np.min(v):.4g}..{np.max(v):.4g}" if len(v) else "-"
 
 
 @dataclass(frozen=True, eq=False)
 class SheathEntrance:
-  """The sheath entrance at every target plate of a run at one frame.
+  """The sheath entrance at every target plate of a run at its frames.
 
   Attributes:
     name: The run's file prefix.
     path: Its directory.
-    frame: The frame.
+    frames: The frames ``(n_f,)``.
+    time: Each frame's time (s) ``(n_f,)``.
     electron: The electron species.
     ion: The ion species.
     targets: Each target whose leg wrote the electrons' sheath file at the
-      frame, in the layout's target order.
+      frames, in the layout's target order.
   """
 
   name: str
   path: str
-  frame: int
+  frames: np.ndarray
+  time: np.ndarray
   electron: str
   ion: str
   targets: tuple[SheathProfile, ...]
 
+  def __post_init__(self):
+    n = len(self.frames)
+    if len(self.time) != n or any(len(p.drop) != n for p in self.targets):
+      raise ValueError(f"SheathEntrance: time and each target's values must "
+                       f"cover the {n} frames")
+
   def __str__(self) -> str:
+    n = len(self.frames)
     lines = [
-        f"{self.name} frame {self.frame}: sheath entrance "
-        f"({self.electron}, {self.ion})"
+        f"{self.name}: sheath entrance ({self.electron}, {self.ion}), " +
+        (f"frame {self.frames[0]}"
+         if n == 1 else f"{n} frames ({self.frames[0]} to {self.frames[-1]})")
     ]
     for p in self.targets:
-      lines.append(
-          f"  {p.target} (block {p.block}, {len(p.rows)} rows): "
-          f"e dphi/T_e {_span(p.drop)} (floating {_span(p.floating)}), "
-          f"Mach {_span(p.mach)}, T_e {_span(p.te)} eV, T_i {_span(p.ti)} eV" +
-          ("" if p.psi_n is None else f", psi_N {_span(p.psi_n)}"))
+      lines.append(f"  {p.target} (block {p.block}, {len(p.rows)} rows" +
+                   ("" if p.psi_n is None else f", psi_N {_span(p.psi_n)}") +
+                   "):")
+      for i, (k, t) in enumerate(zip(self.frames, self.time)):
+        lines.append(
+            f"    frame {k} (t = {t:.5e} s): e dphi/T_e {_span(p.drop[i])} "
+            f"(floating {_span(p.floating[i])}), Mach {_span(p.mach[i])}, "
+            f"T_e {_span(p.te[i])} eV, T_i {_span(p.ti[i])} eV")
     return "\n".join(lines)
 
 
@@ -221,8 +261,51 @@ def sheath_frames(name: str,
               f"{prefix}-{electron}_bc_z{_FACE[t.theta_end]}_vcutsq_")))
 
 
+def _vcut_file(layout: MultibLayout, target: Target, electron: str,
+               frame: int) -> str:
+  """A target's sheath file: its leg's electron cutoff at the plate face."""
+  return layout.file_name(target.leg,
+                          f"{electron}_bc_z{_FACE[target.theta_end]}_vcutsq",
+                          frame)
+
+
+def _plate_terms(layout: MultibLayout, target: Target, frame: int,
+                 electron: str, ion: str,
+                 meta: dict[str, dict]) -> tuple[np.ndarray, ...]:
+  """:func:`sheath_terms` at one frame over a target leg's open rows, inside
+  out (nan where its sheath file does not reach); ``meta`` holds each
+  species' mass and charge."""
+  b, side = target.leg, -1 if target.theta_end == 0 else 1
+  vcut, vctx = _modal(_vcut_file(layout, target, electron, frame))
+  nb = dg.num_basis(vcut.ndim - 1, vctx["poly_order"], vctx["basis_type"])
+  vcut_sq = dg.modal.cell_means(vcut, vcut.ndim - 1, nb)[..., 0].mean(axis=1)
+  face = {
+      (s, m):
+      _face_values(layout.file_name(b, f"{s}_{m}", frame), target.theta_end,
+                   side)
+      for s in (electron, ion)
+      for m in _MOMENTS
+  }
+  r0 = psi_cells(face[electron, "M0"][1], vctx).start
+  covered = slice(r0, r0 + len(vcut_sq))
+  values = sheath_terms(vcut_sq,
+                        tuple(face[electron, m][0][covered] for m in _MOMENTS),
+                        tuple(face[ion, m][0][covered] for m in _MOMENTS),
+                        elc_mass=meta[electron]["mass"],
+                        ion_mass=meta[ion]["mass"],
+                        elementary_charge=-meta[electron]["charge"],
+                        toward=side)
+  nr = layout.nodes[b].shape[0] - 1
+  rows = []
+  for v in values:
+    full = np.full(nr, np.nan)
+    full[covered] = v
+    rows.append(layout.rows(b, full)[target.open_row:])
+  return tuple(rows)
+
+
 def sheath_entrance(name: str,
-                    frame: int,
+                    frame: Annotated[FrameSpec, CliType(str)] = ":",
                     *,
                     path: str = "./",
                     geqdsk: str | None = None,
@@ -231,11 +314,18 @@ def sheath_entrance(name: str,
   """The sheath entrance at every target plate: e (phi_se - phi_wall) / T_e
   from the sheath boundary condition's electron cutoff, the textbook
   floating-sheath drop, the ion Mach number toward the plate, T_e and T_i, per
-  open SOL cell row of each target's leg.
+  open SOL cell row of each target's leg, at the run's frames with the
+  sheath files.
+
+  The frames are those of ``frame`` at which the run wrote the sheath files
+  (:func:`sheath_frames`); the others are skipped. The layout is built once,
+  from the run's first frame (the sheath boundary condition's rows do not
+  change in time).
 
   Args:
     name: The run's file prefix (without ``_b<k>``).
-    frame: A frame with the sheath files (:func:`sheath_frames`).
+    frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+      (``':'``: all the sheath frames).
     path: Directory holding the run's output.
     geqdsk: The run's equilibrium file, for psi_N of the rows (and the
       layout's orientation where the topology does not fix it).
@@ -246,61 +336,63 @@ def sheath_entrance(name: str,
     The :class:`SheathEntrance`.
 
   Raises:
-    ValueError: The species' charges have the wrong signs, or no target's
-      leg wrote the electrons' sheath file at ``frame``.
+    ValueError: No frame of ``frame`` has the sheath files, the species'
+      charges have the wrong signs, or a target's leg wrote its sheath file
+      at some of the frames but not all.
   """
-  layout = multib_layout(name, path=path, geqdsk=geqdsk, frame=frame)
+  layout = multib_layout(name, path=path, geqdsk=geqdsk)
+  if not layout.targets:
+    raise ValueError(f"{name}: the layout has no target plate")
+  first = layout.targets[0]
+  frames = [
+      k for k in resolve_frames(
+          frame,
+          name=os.path.join(layout.path, layout.name),
+          species=electron,
+          suffix=f"bc_z{_FACE[first.theta_end]}_vcutsq",
+          block_idx=None if layout.single_block else first.leg)
+      if os.path.exists(_vcut_file(layout, first, electron, k))
+  ]
+  if not frames:
+    raise ValueError(f"{name}: the run wrote no '{electron}' sheath files at "
+                     f"frame {frame!r}")
   meta = {
-      s: io.read_metadata(layout.file_name(0, f"{s}_M0", frame))
+      s: io.read_metadata(layout.file_name(0, f"{s}_M0", frames[0]))
       for s in (electron, ion)
   }
   if not meta[electron]["charge"] < 0 < meta[ion]["charge"]:
     raise ValueError(f"'{electron}' must be negatively charged and '{ion}' "
                      "positively")
+  time = [
+      io.read_metadata(layout.file_name(0, f"{electron}_M0",
+                                        k)).get("time", np.nan) for k in frames
+  ]
   psi_n = layout_flux_surfaces(layout, geqdsk).cells if geqdsk else None
   profiles = []
   for t in layout.targets:
-    b, side = t.leg, -1 if t.theta_end == 0 else 1
-    vfile = layout.file_name(b, f"{electron}_bc_z{_FACE[t.theta_end]}_vcutsq",
-                             frame)
-    if not os.path.exists(vfile):
+    missing = [
+        k for k in frames
+        if not os.path.exists(_vcut_file(layout, t, electron, k))
+    ]
+    if len(missing) == len(frames):
       continue
-    vcut, vctx = _modal(vfile)
-    nb = dg.num_basis(vcut.ndim - 1, vctx["poly_order"], vctx["basis_type"])
-    vcut_sq = dg.modal.cell_means(vcut, vcut.ndim - 1, nb)[..., 0].mean(axis=1)
-    face = {
-        (s, m):
-        _face_values(layout.file_name(b, f"{s}_{m}", frame), t.theta_end, side)
-        for s in (electron, ion)
-        for m in _MOMENTS
-    }
-    r0 = psi_cells(face[electron, "M0"][1], vctx).start
-    covered = slice(r0, r0 + len(vcut_sq))
-    values = sheath_terms(vcut_sq,
-                          tuple(face[electron, m][0][covered]
-                                for m in _MOMENTS),
-                          tuple(face[ion, m][0][covered] for m in _MOMENTS),
-                          elc_mass=meta[electron]["mass"],
-                          ion_mass=meta[ion]["mass"],
-                          elementary_charge=-meta[electron]["charge"],
-                          toward=side)
-    nr = layout.nodes[b].shape[0] - 1
-    rows = []
-    for v in values:  # the leg's open rows, inside out
-      full = np.full(nr, np.nan)
-      full[covered] = v
-      rows.append(layout.rows(b, full)[t.open_row:])
-    ok = np.isfinite(rows[0])
+    if missing:
+      raise ValueError(f"{name}: {t.name}'s leg (block {t.leg}) wrote no "
+                       f"'{electron}' sheath file at frames {missing}")
+    values = [
+        np.array(v)
+        for v in zip(*(_plate_terms(layout, t, k, electron, ion, meta)
+                       for k in frames))
+    ]
+    ok = np.isfinite(values[0]).any(axis=0)
+    nr = layout.nodes[t.leg].shape[0] - 1
     profiles.append(
-        SheathProfile(t.name, b,
+        SheathProfile(t.name, t.leg,
                       np.arange(t.open_row, nr)[ok],
-                      None if psi_n is None else psi_n[b][t.open_row:][ok],
-                      *(v[ok] for v in rows)))
-  if not profiles:
-    raise ValueError(f"{name}: no target's leg wrote '{electron}' sheath files "
-                     f"at frame {frame}")
-  return SheathEntrance(layout.name, layout.path, frame, electron, ion,
-                        tuple(profiles))
+                      None if psi_n is None else psi_n[t.leg][t.open_row:][ok],
+                      *(v[:, ok] for v in values)))
+  return SheathEntrance(layout.name, layout.path, np.array(frames),
+                        np.array(time), electron, ion, tuple(profiles))
 
 
 __all__ = [

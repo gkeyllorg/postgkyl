@@ -970,6 +970,53 @@ class PostgkylSession:
           The :class:`CellEdges`.
         """
 
+  def gk_cell_values(self,
+                     quantity: list[str] | tuple[str, ...],
+                     name: str,
+                     frame: str | float = ':',
+                     *,
+                     species: list[str] | tuple[str, ...] | None = None,
+                     path: str = './',
+                     blocks: list[int] | tuple[int, ...] | None = None,
+                     geqdsk: str | None = None,
+                     gamma_e: float | None = None,
+                     gamma_i: float | None = None) -> PostgkylSession:
+    r"""Cell averages of a quantity in each block of a tokamak run, at its
+        frames, rows inside out (from the core or private flux side outward).
+
+        The quantity is the sum of the listed registry quantities over the listed
+        species, each block's datasets summed in their modal form at each frame,
+        reduced to cell averages. The layout is built once for all the frames.
+
+        Args:
+          quantity: Registry quantities to sum (``quantity_catalog()`` lists
+            them): ``['M0']`` the density, ``['temp']`` the temperature,
+            ``['field']`` the potential, ``['qpar', 'qperp']`` the parallel flux of
+            kinetic energy.
+          name: The run's file prefix (without ``_b<k>``).
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all); frames without the quantity's files are skipped.
+          species: Species to sum over; ``None`` for species-independent
+            quantities. A quantity combining several species (``mach_hot_i``) reads
+            the whole list once.
+          path: Directory holding the run's output.
+          blocks: The blocks to read; ``None``: all.
+          geqdsk: The run's equilibrium file, for its layout (the psi direction
+            where no closed chain fixes it; see :func:`~.multib_layout.
+            multib_layout`).
+          gamma_e: The electrons' adiabatic index in the sound-speed quantities
+            (``c_s_hot_i``, ``mach_hot_i``); ``None``: their default (1).
+          gamma_i: The ions' adiabatic index there; ``None``: their default (3).
+
+        Returns:
+          The :class:`CellValues`.
+
+        Raises:
+          ValueError: The blocks hold different frames of the quantity, or none of
+            ``frame``; the species are not all written at the same frames; the
+            quantity has more than one component; or a block does not exist.
+        """
+
   def gk_dt_limits(self,
                    name: str,
                    species: list[str] | tuple[str, ...],
@@ -1243,7 +1290,7 @@ class PostgkylSession:
   def gk_midplane_profile(self,
                           quantity: list[str] | tuple[str, ...],
                           name: str,
-                          frame: int,
+                          frame: str | float = ':',
                           *,
                           species: list[str] | tuple[str, ...] | None = None,
                           path: str = './',
@@ -1253,14 +1300,15 @@ class PostgkylSession:
                           gamma_i: float | None = None) -> PostgkylSession:
     r"""A quantity at the midplane (Z = 0) of a tokamak run across its flux
         surfaces, from the core edge out through the SOL, with each surface's R and
-        distance from the separatrix.
+        distance from the separatrix, at the run's frames.
 
         The quantity is the sum of the listed registry quantities over the listed
         species, each block's datasets summed in their modal form, reduced to cell
         averages. Through the side's midplane stack (the core block, then the SOL
         block), each cell row's value at Z = 0 is linear in theta between the two
         cells whose centres bracket Z = 0 (at a reflecting midplane, the cell next
-        to it), at the R where the row crosses Z = 0.
+        to it), at the R where the row crosses Z = 0. The layout and the cell edges
+        are built once for all the frames.
 
         Args:
           quantity: Registry quantities to sum (``quantity_catalog()`` lists
@@ -1268,7 +1316,8 @@ class PostgkylSession:
             ``['field']`` the potential, ``['qpar', 'qperp']`` the parallel flux of
             kinetic energy.
           name: The run's file prefix (without ``_b<k>``).
-          frame: The frame.
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all); frames without the quantity's files are skipped.
           species: Species to sum over; ``None`` for species-independent
             quantities. A quantity combining several species (``mach_hot_i``) reads
             the whole list once.
@@ -1282,6 +1331,10 @@ class PostgkylSession:
           gamma_i: The ions' adiabatic index there; ``None``: their default (3).
         Returns:
           The :class:`MidplaneProfile`.
+
+        Raises:
+          ValueError: The stack's blocks hold different frames of the quantity,
+            or none of ``frame``.
         """
 
   def gk_mom_gyrokinetic(self,
@@ -1540,7 +1593,7 @@ class PostgkylSession:
 
   def gk_sheath_entrance(self,
                          name: str,
-                         frame: int,
+                         frame: str | float = ':',
                          *,
                          path: str = './',
                          geqdsk: str | None = None,
@@ -1549,11 +1602,18 @@ class PostgkylSession:
     r"""The sheath entrance at every target plate: e (phi_se - phi_wall) / T_e
         from the sheath boundary condition's electron cutoff, the textbook
         floating-sheath drop, the ion Mach number toward the plate, T_e and T_i, per
-        open SOL cell row of each target's leg.
+        open SOL cell row of each target's leg, at the run's frames with the
+        sheath files.
+
+        The frames are those of ``frame`` at which the run wrote the sheath files
+        (:func:`sheath_frames`); the others are skipped. The layout is built once,
+        from the run's first frame (the sheath boundary condition's rows do not
+        change in time).
 
         Args:
           name: The run's file prefix (without ``_b<k>``).
-          frame: A frame with the sheath files (:func:`sheath_frames`).
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all the sheath frames).
           path: Directory holding the run's output.
           geqdsk: The run's equilibrium file, for psi_N of the rows (and the
             layout's orientation where the topology does not fix it).
@@ -1564,8 +1624,9 @@ class PostgkylSession:
           The :class:`SheathEntrance`.
 
         Raises:
-          ValueError: The species' charges have the wrong signs, or no target's
-            leg wrote the electrons' sheath file at ``frame``.
+          ValueError: No frame of ``frame`` has the sheath files, the species'
+            charges have the wrong signs, or a target's leg wrote its sheath file
+            at some of the frames but not all.
         """
 
   def gk_sheath_frames(self,
@@ -1617,7 +1678,7 @@ class PostgkylSession:
 
   def gk_target_profiles(self,
                          name: str,
-                         frame: int,
+                         frame: str | float = ':',
                          *,
                          species: list[str] | tuple[str, ...],
                          path: str = './',
@@ -1625,18 +1686,20 @@ class PostgkylSession:
                          fraction: float = 0.63) -> PostgkylSession:
     r"""The heat flux onto each target plate of a tokamak run per SOL flux
         surface, with each surface's distance from the separatrix at the midplane
-        and along the plate, and the heat-flux width lambda_q.
+        and along the plate, and the heat-flux width lambda_q, at the run's frames.
 
         The heat flux is ``|q|`` in the plate cell, ``q`` the parallel flux of
         kinetic energy (``qpar + qperp``) summed over the species, reduced to cell
         averages. lambda_q is the midplane distance holding ``fraction`` of its
         integral over the midplane distance, constant between the surfaces' node
         rows; it is nan where no block of the leg's chain reaches the midplane, or
-        where the node rows' midplane distances do not increase outward.
+        where the node rows' midplane distances do not increase outward. The layout
+        and the cell edges are built once for all the frames.
 
         Args:
           name: The run's file prefix (without ``_b<k>``).
-          frame: The frame.
+          frame: Frame number, comma list, or ``'start:stop[:step]'`` range
+            (``':'``: all); frames without the heat-flux files are skipped.
           species: Species to sum over.
           path: Directory holding the run's output.
           geqdsk: The run's equilibrium file, for its layout (see
@@ -1646,6 +1709,10 @@ class PostgkylSession:
         Returns:
           One :class:`TargetProfile` per target, in the layout's order (lower
           outer, upper outer, lower inner, upper inner first).
+
+        Raises:
+          ValueError: The legs hold different frames of the heat flux, or none of
+            ``frame``.
         """
 
   def grid(self,

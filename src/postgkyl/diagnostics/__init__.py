@@ -131,6 +131,7 @@ for _function in (
     gk.poloidal_lengths,
     gk.sheath_frames,
     gk.sheath_entrance,
+    gk.cell_values,
     gk.midplane_profile,
     gk.target_profiles,
     gk.target_fluxes,
