@@ -20,6 +20,9 @@ bilinear ``a + b x + c y + e x y`` with closed-form coefficients on the
 orthonormal 2D p = 1 serendipity basis ``1/2, sqrt(3) xi / 2,
 sqrt(3) eta / 2, 3 xi eta / 2``. Dynvectors are written with their full time
 series. No production code computes any of this.
+
+:func:`write_plate_files` adds, on the leg, the moments of the sheath
+entrance and the heat flux onto the plate (:func:`write_run` leaves them out).
 """
 
 from __future__ import annotations
@@ -182,4 +185,83 @@ def write_run(path: Path, rates: dict[str, np.ndarray] | None = None) -> Path:
   for what, values in (rates or {}).items():
     write_gkyl_dynvector(path / f"{NAME}_{what}.gkyl", SAMPLES, values,
                          {"mass": 1.0})
+  return path
+
+
+# ---------------------------------------------------- the plate (block 2)
+LEG = 2
+# The sheath boundary condition writes its electron cutoff with the
+# phase-space output: every other frame.
+SHEATH_FRAMES = (0, 2)
+ELEMENTARY_CHARGE = -CHARGE["elc"]
+# Per frame: uniform T_e, T_i (eV), the ions' flow toward the plate in units
+# of c_s, and e (phi_se - phi_wall) / T_e per cell row of the leg.
+TE_EV = (20.0, 30.0, 40.0)
+TI_EV = (30.0, 35.0, 40.0)
+MACH = (1.0, 1.1, 1.2)
+DROP = ((2.5, 3.0), (2.6, 3.1), (2.7, 3.2))
+# Per frame: (h0, h1) of the parallel flux of kinetic energy summed over the
+# species in the plate cell column, h0 + h1 x (W/m^2); the other column
+# differs by HEAT_FLUX_Y (y - Y_PLATE), Y_PLATE its cell centre y.
+HEAT_FLUX = ((6.0e6, -2.0e6), (3.0e6, -4.0e6), (3.0e6, 0.0))
+HEAT_FLUX_Y, Y_PLATE = 1.0e6, 2.75
+# Each species' share of HEAT_FLUX: (par, perp).
+HEAT_FLUX_SHARE = {"elc": (0.25, 0.25), "ion": (0.5, 0.0)}
+
+
+def temperature(species: str, frame: int) -> float:
+  """T (J), uniform."""
+  return (TE_EV if species == "elc" else TI_EV)[frame] * ELEMENTARY_CHARGE
+
+
+def flow(species: str, frame: int) -> float:
+  """u_par (m/s), uniform: the electrons at rest, the ions toward the plate
+  (+theta) at MACH c_s, c_s^2 = (T_e + T_i) / m_i."""
+  if species == "elc":
+    return 0.0
+  return MACH[frame] * np.sqrt(
+      (temperature("elc", frame) + temperature("ion", frame)) / MASS["ion"])
+
+
+def _scaled(poly, s) -> tuple[float, ...]:
+  return tuple(s * c for c in poly)
+
+
+def write_plate_files(path: Path) -> Path:
+  """Add to a run written by :func:`write_run`, on the leg: each species' M1
+  and M2 of a drifting Maxwellian over its M0 (uniform u = :func:`flow`,
+  T = :func:`temperature`: M1 = u M0, M2 = (u^2 + 3 T / m) M0), M3par and
+  M3perp with (m/2)(M3par + M3perp) summed over the species = HEAT_FLUX, and
+  at SHEATH_FRAMES the electrons' cutoff velocity squared at the plate face,
+  m_e v_cut^2 / 2 = DROP T_e per cell row. Returns the directory."""
+  pre = path / f"{NAME}_b{LEG}"
+  (nr, _), lo, up = BLOCKS[LEG][2:]
+  for k, t in enumerate(FRAME_TIMES):
+    meta = {"time": t, "frame": k}
+    h0, h1 = HEAT_FLUX[k]
+    heat = (h0 - HEAT_FLUX_Y * Y_PLATE, h1, HEAT_FLUX_Y, 0.0)
+    for s in MASS:
+      species = {**meta, "mass": MASS[s], "charge": CHARGE[s]}
+      n, u = density(LEG, k), flow(s, k)
+      moments = {
+          "M1": _scaled(n, u),
+          "M2": _scaled(n, u**2 + 3 * temperature(s, k) / MASS[s]),
+          "M3par": _scaled(heat, 2 / MASS[s] * HEAT_FLUX_SHARE[s][0]),
+          "M3perp": _scaled(heat, 2 / MASS[s] * HEAT_FLUX_SHARE[s][1]),
+      }
+      for m, poly in moments.items():
+        _field(Path(f"{pre}-{s}_{m}_{k}.gkyl"), LEG,
+               bilinear_coefficients(LEG, poly), **species)
+    if k in SHEATH_FRAMES:
+      vcut_sq = 2 * np.array(DROP[k]) * temperature("elc", k) / MASS["elc"]
+      values = np.zeros((nr, 1, 4))
+      values[:, 0, 0] = 2 * vcut_sq  # the cell mean is c0 / 2
+      write_gkyl_field(Path(f"{pre}-elc_bc_zupper_vcutsq_{k}.gkyl"), [nr, 1],
+                       [lo[0], up[1]], [up[0], up[1] + 1.0],
+                       values,
+                       poly_order=1,
+                       basis_type="serendipity",
+                       time=t,
+                       frame=k,
+                       metadata={"value_form": "modal"})
   return path

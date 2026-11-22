@@ -5,6 +5,8 @@ orthonormal serendipity p = 1 basis and of polynomials projected onto p = 2
 and 3D bases; the sheath terms against drifting Maxwellian moments with known
 n, u and T, the floating drop against the zero-current flux balance it
 solves, and the Mach number against a flow set to a known multiple of c_s.
+:func:`sheath.sheath_entrance` is checked over frames on the synthetic run of
+``gk_tokamak_fixture``, whose plate moments are those of drifting Maxwellians.
 
 Run: PYTHONPATH=src pytest tests/test_diagnostics_gk_sheath.py -v
 """
@@ -16,6 +18,7 @@ import itertools
 import numpy as np
 import pytest
 
+import gk_tokamak_fixture as fx
 from postgkyl import dg, gpython
 from postgkyl.diagnostics.gk import sheath
 
@@ -147,3 +150,74 @@ class TestSheathTerms:
                                                         toward=1)
     np.testing.assert_array_equal(np.isfinite(drop), [True, False, True])
     assert not np.isfinite(te[1])
+
+
+def floating(te, ti, elc_mass, ion_mass):
+  """The drop at which the electrons' flux n v_e / 4 exp(-drop), v_e =
+  sqrt(8 T_e / (pi m_e)), equals the ions' Bohm flux n c_s."""
+  v_e = np.sqrt(8 * te / (np.pi * elc_mass))
+  return np.log(v_e / (4 * np.sqrt((te + ti) / ion_mass)))
+
+
+@pytest.fixture
+def run(tmp_path):
+  return str(fx.write_plate_files(fx.write_run(tmp_path / "run")))
+
+
+@needs_gkeyll
+class TestSheathEntrance:
+  """The fixture run writes its sheath files at frames 0 and 2 only."""
+
+  def test_sheath_frames(self, run):
+    assert sheath.sheath_frames(fx.NAME, path=run) == fx.SHEATH_FRAMES
+
+  def test_every_sheath_frame(self, run):
+    got = sheath.sheath_entrance(fx.NAME, ":", path=run)
+    np.testing.assert_array_equal(got.frames, fx.SHEATH_FRAMES)
+    np.testing.assert_array_equal(got.time, np.array(fx.FRAME_TIMES)[[0, 2]])
+    (p, ) = got.targets
+    assert (p.target, p.block, p.psi_n) == ("lower inner target", fx.LEG, None)
+    np.testing.assert_array_equal(p.rows, [0, 1])
+    for i, k in enumerate(fx.SHEATH_FRAMES):
+      ones = np.ones(2)
+      np.testing.assert_allclose(p.drop[i], fx.DROP[k], rtol=1e-13, atol=0)
+      np.testing.assert_allclose(p.te[i], fx.TE_EV[k] * ones, rtol=1e-13)
+      np.testing.assert_allclose(p.ti[i], fx.TI_EV[k] * ones, rtol=1e-13)
+      np.testing.assert_allclose(p.mach[i], fx.MACH[k] * ones, rtol=1e-13)
+      te, ti = (fx.temperature(s, k) for s in ("elc", "ion"))
+      np.testing.assert_allclose(
+          p.floating[i],
+          floating(te, ti, fx.MASS["elc"], fx.MASS["ion"]) * ones,
+          rtol=1e-13)
+    assert "2 frames (0 to 2)" in str(got)
+
+  @pytest.mark.parametrize("frame,want", [("0,1,2", [0, 2]), ("1:3", [2]),
+                                          ([0], [0])])
+  def test_frames_without_sheath_files_are_skipped(self, run, frame, want):
+    got = sheath.sheath_entrance(fx.NAME, frame, path=run)
+    np.testing.assert_array_equal(got.frames, want)
+    np.testing.assert_allclose(got.targets[0].drop, [fx.DROP[k] for k in want],
+                               rtol=1e-13)
+
+  def test_a_frame_without_them_is_refused(self, run):
+    with pytest.raises(ValueError, match="no 'elc' sheath files at frame 1"):
+      sheath.sheath_entrance(fx.NAME, 1, path=run)
+
+
+class TestRecords:
+
+  def test_profile_values_share_frames_by_rows(self):
+    good = np.ones((2, 3))
+    with pytest.raises(ValueError, match=r"\(frames, 3 rows\)"):
+      sheath.SheathProfile("t", 0, np.arange(3), None, good, good, good, good,
+                           np.ones((2, 2)))
+    with pytest.raises(ValueError, match=r"\(frames, 3 rows\)"):
+      sheath.SheathProfile("t", 0, np.arange(3), np.ones(2), good, good, good,
+                           good, good)
+
+  def test_entrance_covers_its_frames(self):
+    p = sheath.SheathProfile("t", 0, np.arange(3), None,
+                             *(np.ones((2, 3)), ) * 5)
+    with pytest.raises(ValueError, match="cover the 3 frames"):
+      sheath.SheathEntrance("run", ".", np.arange(3), np.zeros(3), "elc", "ion",
+                            (p, ))
